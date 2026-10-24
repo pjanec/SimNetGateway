@@ -45,7 +45,7 @@ public sealed partial class ConvoyAmbushScript
     private static List<Recorded<TOut>> Select<TIn, TOut>(IEnumerable<Recorded<TIn>> source)
         where TOut : TIn =>
         source.Where(r => r.Message is TOut)
-            .Select(r => new Recorded<TOut>((TOut)(object)r.Message!, r.Tick, r.WallTime, r.SimTime, r.Sequence))
+            .Select(r => new Recorded<TOut>((TOut)(object)r.Message!, r.Tick, r.WallTime, r.SimTime, r.Sequence, r.Correlation))
             .ToList();
 
     /// <summary>

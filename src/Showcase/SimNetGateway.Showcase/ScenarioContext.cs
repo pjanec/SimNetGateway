@@ -151,7 +151,7 @@ public sealed class ScenarioContext
         {
             if (recorded.Message is TSpecific specific)
             {
-                result.Add(new Recorded<TSpecific>(specific, recorded.Tick, recorded.WallTime, recorded.SimTime, recorded.Sequence));
+                result.Add(new Recorded<TSpecific>(specific, recorded.Tick, recorded.WallTime, recorded.SimTime, recorded.Sequence, recorded.Correlation));
             }
         }
 

@@ -15,6 +15,16 @@ public interface IIdentityMap
 
     /// <summary>Whether the entity has a (committed) key in this map.</summary>
     bool Contains(EntityId id);
+
+    /// <summary>
+    /// The entity's committed key as text (the key's <c>ToString()</c>; allocates only here); false when it has none. The
+    /// default (for an implementation that cannot describe its keys) knows no key.
+    /// </summary>
+    bool TryDescribeKey(EntityId id, out string text)
+    {
+        text = string.Empty;
+        return false;
+    }
 }
 
 /// <summary>What the engine and the query engine need of a map beyond <see cref="IIdentityMap"/>.</summary>

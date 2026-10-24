@@ -10,11 +10,15 @@ internal static class OutboundSequence
     public static int Next() => Interlocked.Increment(ref s_value);
 }
 
-/// <summary>One message captured by <see cref="InMemoryOutbound{T}"/> with the engine times at which it was sent.</summary>
-public readonly record struct Recorded<T>(T Message, long Tick, double WallTime, double SimTime, int Sequence);
+/// <summary>
+/// One message captured by <see cref="InMemoryOutbound{T}"/> with the engine times at which it was sent and the correlation
+/// the engine was dispatching at that moment (none when sent outside a dispatch or without an engine, R-078).
+/// </summary>
+public readonly record struct Recorded<T>(T Message, long Tick, double WallTime, double SimTime, int Sequence,
+    CorrelationId Correlation = default);
 
 /// <summary>
-/// An outbound channel that records what is sent (tests, showcase). Sent from the engine thread; the stamps come from
+/// An outbound channel that records what is sent (tests, showcase). Sent from the engine thread; the stamps (and, when it is a <see cref="GatewayEngine"/>, the current correlation) come from
 /// <see cref="Context"/> (zeros while it is null). <see cref="Sequence"/> numbers all recorders of the process in
 /// one global order, so messages of several sides can be ordered against each other.
 /// </summary>
@@ -36,9 +40,10 @@ public sealed class InMemoryOutbound<T> : IOutboundChannel<T>
     {
         var context = Context;
         int sequence = OutboundSequence.Next();
+        var correlation = (context as GatewayEngine)?.CurrentCorrelation ?? default;
         _messages.Add(context is null
             ? new Recorded<T>(message, 0, 0, 0, sequence)
-            : new Recorded<T>(message, context.TickCount, context.WallTime, context.SimTime, sequence));
+            : new Recorded<T>(message, context.TickCount, context.WallTime, context.SimTime, sequence, correlation));
         Tap?.Invoke(message);
     }
 

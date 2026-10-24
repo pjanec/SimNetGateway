@@ -322,4 +322,27 @@ P-53 -> R-076, P-54 -> R-077, P-55 -> R-078.
 
 ## 10. As-built notes
 
-(To be filled in during T-007.)
+### Stage 8a - engine hooks and Engine.Monitoring (T-007, 2026-10-24)
+
+- **Engine** (R-077, R-078): public `IEntityTable` (`Name`, `TryDescribe`) and `GatewayEngine.EntityTables`;
+  `IIdentityMap.TryDescribeKey` (default method returning false); `IDispatchObserver` set through
+  `GatewayOptions.DispatchObserver` or `GatewayEngine.DispatchObserver` (not while a handler or drain runs),
+  `GatewayEngine.CurrentCorrelation`; `Recorded<T>.Correlation` stamped by the in-memory outbound recorders;
+  `ScenarioRunner.OnStart` / `OnTick` hooks. With a null observer every call site is one branch; all earlier
+  tests, including the 0-byte ones, unchanged and green.
+- The observer interface is richer than section 5: `InputUnhandled`, `InputAborted`, `EventPublished`,
+  `CommitRejected`, a `CommitSummary` struct. Every unit of work - ingress message, host Publish, host
+  Execute, host commit, timer or tick-end firing - is bracketed by `InputStarted` / `InputFinished` (host
+  Execute and timers carry correlation None). `TriggerRaised` fires for every delta even without matching
+  rules.
+- `DispatchTracer` records each unit into pooled scratch traces and keeps the unit if it touched a watched
+  entity or correlation, `WatchAll` is on, or it failed and `KeepFailures` is on; kept traces are immutable.
+  The host reports outbound messages with `OutboundSent(CurrentCorrelation, side, text)` (check `IsActive`).
+- Models (`MetricsSampler`, `EntityTableModel` with `EntityTableOptions` for name/parent attributes,
+  `InspectorModel`, `RuleTableModel`, `JournalModel`, `IdentityModel`, `DiagnosticsModel`, `VocabularyModel`)
+  hold no engine objects - verified by a reflection walk over every model and the tracer. "Removed at t" comes
+  from the journal when it still holds the removal, else from the refresh that noticed it.
+- Tests: `tests/SimNetGateway.Engine.Monitoring.Tests` (60) and `DispatchObserverTests` (14): models equal a
+  brute-force oracle after every tick of seeded runs, Convoy Ambush (8,400 ticks) and benchmark traffic; the
+  tracer equals a reference probe per correlation; the Convoy Ambush report is identical with and without the
+  observer; an idle tracer allocates 0 bytes. 15 mutation checks, all killed.

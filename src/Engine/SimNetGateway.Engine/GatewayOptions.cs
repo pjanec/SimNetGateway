@@ -19,4 +19,7 @@ public sealed class GatewayOptions
 
     /// <summary>Who may write which entity (R-057); null = permissive.</summary>
     public IWriteAuthorityPolicy? WriteAuthority { get; init; }
+
+    /// <summary>Optional listener on the dispatch (DD-005 P-55, R-078); null = none. Also settable at runtime on the engine.</summary>
+    public IDispatchObserver? DispatchObserver { get; init; }
 }

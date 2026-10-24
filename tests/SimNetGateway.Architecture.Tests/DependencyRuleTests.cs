@@ -24,7 +24,7 @@ public class DependencyRuleTests
     {
         string[] expected =
         [
-            "SimNetGateway.Engine", "SimNetGateway.Engine.InMemory", "SimNetGateway.Common",
+            "SimNetGateway.Engine", "SimNetGateway.Engine.InMemory", "SimNetGateway.Engine.Monitoring", "SimNetGateway.Common",
             "SimNetGateway.Protocol.Ned", "SimNetGateway.Protocol.Rpr", "SimNetGateway.Protocol.Display",
             "SimNetGateway.Gateway.NedRpr", "SimNetGateway.Showcase", "SimNetGateway.Demo",
         ];

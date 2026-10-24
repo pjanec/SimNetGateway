@@ -27,35 +27,47 @@ internal sealed class Rule<TTrigger> : Rule where TTrigger : class
 
     /// <summary>
     /// Runs the rule: skipped silently when disabled; a false condition counts a reject; an exception is
-    /// caught, counted and diagnosed (the remaining rules still run).
+    /// caught, counted and diagnosed (the remaining rules still run). The outcome is reported to the observer
+    /// (null: nobody listens) after the rule ran, outside the exception handling.
     /// </summary>
-    public void Invoke(TTrigger trigger, Diagnostics diagnostics)
+    public void Invoke(TTrigger trigger, Diagnostics diagnostics, IDispatchObserver? observer, CorrelationId correlation)
     {
         var info = Info;
         if (!info.Enabled)
         {
+            observer?.RuleEvaluated(info, RuleOutcome.Disabled, correlation);
             return;
         }
 
+        RuleOutcome outcome;
         try
         {
-            var conditions = _conditions;
-            for (int i = 0; i < conditions.Length; i++)
-            {
-                if (!conditions[i](trigger))
-                {
-                    info.ConditionRejects++;
-                    return;
-                }
-            }
-
-            _action(trigger);
-            info.FireCount++;
+            outcome = Run(trigger, info);
         }
         catch (Exception ex)
         {
             info.Failures++;
             diagnostics.RuleFailed(info.FullName, ex.Message);
+            outcome = RuleOutcome.Failed;
         }
+
+        observer?.RuleEvaluated(info, outcome, correlation);
+    }
+
+    private RuleOutcome Run(TTrigger trigger, RuleInfo info)
+    {
+        var conditions = _conditions;
+        for (int i = 0; i < conditions.Length; i++)
+        {
+            if (!conditions[i](trigger))
+            {
+                info.ConditionRejects++;
+                return RuleOutcome.ConditionRejected;
+            }
+        }
+
+        _action(trigger);
+        info.FireCount++;
+        return RuleOutcome.Fired;
     }
 }
