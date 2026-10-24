@@ -1848,7 +1848,9 @@ rulings:
 | P-21 Cardinality via finest-granularity pivot, relations, reverse index, `OnChangeSetEnd` | approved | **R-041** |
 | P-22 Formation example in the PoC | approved | **R-042** |
 
-### Open proposal (found during stage 4)
+### Proposal found during stage 4
+
+Approved on 2026-10-24: P-40 -> R-068.
 
 The stale-entity reaper as designed in 6.5 (`Query().FromOrigin(side).NotWrittenWithin(timeout)`) does
 not work together with the DR extrapolation processor of section 8: `NotWrittenWithin` uses the
