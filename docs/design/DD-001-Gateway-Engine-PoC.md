@@ -1862,6 +1862,27 @@ moving is therefore never reaped and its prediction runs on forever (S-9.2 would
 |---|---|---|
 | **P-40** | **Staleness counts only writes by the side itself.** The engine keeps, per entity, `LastOriginWriteWallTime` (and sim time): the time of the last commit by a change set whose source is the entity's `Origin` (or its `Owner`, R-057, when ownership moved), maintained at commit in a third intrusive recency list; queries get `OriginWrittenWithin(span)` / `NotOriginWrittenWithin(span)`, served by that list like the other window filters (cost proportional to the result, allocation-free). `StaleEntityReaper` uses `FromOrigin(side).NotOriginWrittenWithin(timeout)`. Derived writes by processors (and engine writes) no longer keep an entity alive. Generic and vocabulary-free (R-034): it uses sources only. | (a) Reaper parameterised with liveness attribute ids and checks their slot `Meta.Source`/`WallTime` by scanning all entities of the side each period (no engine change; O(entities of the side) per check). (b) Processors' change sets marked "derived" and excluded from `LastWriteWallTime` (changes the meaning of an existing field for every query). (c) Ingress writes a dedicated `<Side>.LastHeard` attribute on every message (vocabulary + one extra slot write per message). |
 
+### Proposals from the stage 6 benchmark investigation (T-015)
+
+Evidence (Release, 10k entities, 4 vCPU; full numbers in T-015's report, summarised in section 15):
+every tick at or above p95 is a 10 Hz DR tick (~31 ms: display egress 43 %, commit/apply 25 %,
+prediction 16 %, query 6 %); normal ticks ~0.8 ms. The 150-450 ms maxima are GC stalls: the benchmark's
+journal (32,768 records, a DR record holding 9,000 deltas) keeps ~0.5-0.8 GB of pooled deltas alive and
+was still growing after the 5 s warm-up (that growth is also the whole 2x allocation of the 5 m run), and
+every DR commit regrows a pooled record's delta list into the large-object heap, triggering background
+gen2 collections that stall a tick for ~330 ms. JIT and GC settings were ruled out as causes. Measured
+prototypes (steady state): slicing the DR processor by 6: p95 ~8 ms, p99 ~9 ms; plus the inline display:
+p95 ~4-5 ms, p99 ~6-8 ms, max ~9 ms; size-classed record pool + slicing: max 12-35 ms instead of
+334-384 ms.
+
+| ID | Proposal (lean) | Main alternatives |
+|---|---|---|
+| **P-41** | **The benchmark measures steady state**: it uses the engine's default journal capacity (1024) instead of 32,768, warms up until the journal and pools are full (at least one journal window, minimum 30 s) and reports the growth phase separately from the steady-state measurement. | Keep the 5 s warm-up and report the growth phase as part of the result. |
+| **P-42** | **Time-sliced DR extrapolation**: `DrExtrapolationProcessor` gets a `slices` parameter N (default 1 in Common = today's behaviour): its timer runs at period/N, takes a snapshot of the selected entities at slice 0 and predicts slice k of N per firing (skipping entities no longer alive), so every entity is still predicted once per period. Section 8 point 4 then reads "one transaction per timer firing; a full cycle is N transactions". `NedRprSettings.DrSlices` defaults to **6** (60 Hz host, 10 Hz display). R-020, R-024, R-029 unchanged. | Adaptive slicing by a per-tick time budget; or keep bursts and accept p95 ~30 ms. |
+| **P-43** | **Size-classed record pool**: the engine pools `ChangeSetRecord`s (and their delta lists) by size class, so a large commit reuses a large record and the commit path never reallocates into the large-object heap; observable behaviour unchanged, R-033 improved. | Pre-size every record's list to the largest seen (memory x pool size). |
+| **P-44** | **Journal bounded by deltas as well as records**: `GatewayOptions.JournalDeltaBudget` (default 65,536 deltas): the oldest records are evicted while the retained delta count exceeds the budget (pinned/queued records excepted, as today), so a few huge records cannot keep hundreds of MB alive. DD-001 3.3 amended accordingly. | Only lower `JournalCapacity` per configuration and document the memory risk. |
+| **P-45** | **Inline display variant as a second configuration** `ned-rpr/inline-display`: `DisplayPositionEgress` predicts itself on a sliced timer (section 8 "inline variant", which section 8 foresees when the benchmark shows a problem) and the DR processor is not registered; the **default** configuration keeps the R-029 demonstration (processor -> derived attributes -> display), so R-029 is unchanged. Also: one geodetic conversion per display message instead of two (pure optimisation). | Replace the R-029 default with the inline variant (needs R-029 superseded); or no inline variant. |
+
 DD-004 adds spatial queries, write authority, entity tables, session veto and the
 predictor registry (R-056 .. R-060); the API reference above includes them.
 
