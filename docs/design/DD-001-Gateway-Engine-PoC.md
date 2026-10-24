@@ -2239,3 +2239,13 @@ then none - the "only changed predictions" rule. `NedRprSettings.DrSlices = 6`. 
 setup as stage 6 (5 s warm-up): p95 11.1-12.1 ms (was 31-34), p99 14.8-15.7 ms (was 39-49) at 1 m;
 p95 14.4 / p99 19.7 ms at 5 m; the 160-220 ms maxima remain - the GC growth stalls identified in T-015
 (addressed by P-41, P-43/P-44 or their replacement), not the DR burst.
+
+### T-017 - journal switchable off (R-070, 2026-10-24)
+
+`GatewayOptions.JournalCapacity = 0` / `EventLogCapacity = 0` (and the repository constructor) switch
+the history off; negative values throw, defaults stay 1024 / 256. Adding to a zero-capacity journal is
+an immediate eviction: under the engine the record is pinned **before** `Add` (`StateRepository.Commit`)
+and recycled by `Unpin` right after its dispatch; a standalone repository keeps the last record readable
+until the next commit, then recycles it. With the event log off, events and payloads return to their
+pools right after dispatch. Journal queries find nothing, the event log is empty. 19 behaviour scenarios
+give identical trigger logs and final state with history on and off; 0-byte round trip with it off.

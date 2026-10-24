@@ -26,7 +26,12 @@ public readonly struct CommitResult
 
     public CommitStatus Status { get; }
 
-    /// <summary>The journaled record; non-null only for <see cref="CommitStatus.Committed"/>.</summary>
+    /// <summary>
+    /// The journaled record; non-null only for <see cref="CommitStatus.Committed"/>. With a journal capacity of 0
+    /// (history off, R-070) nothing is retained: on a standalone <see cref="StateRepository"/> the record is valid
+    /// only until the next commit; under the engine it is recycled when its dispatch has finished, so it must not
+    /// be used after the commit call returned (the commit dispatches synchronously when the engine is idle).
+    /// </summary>
     public ChangeSetRecord? Record { get; }
 
     /// <summary>Why the transaction was rejected; non-null only for <see cref="CommitStatus.Rejected"/>.</summary>

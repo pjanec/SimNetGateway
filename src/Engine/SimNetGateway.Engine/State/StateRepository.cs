@@ -139,6 +139,11 @@ public sealed partial class StateRepository : IStateView
             return CommitResult.Empty();
         }
 
+        if (observer is not null)
+        {
+            record.Pinned = true; // queued for dispatch: a journal of capacity 0 must not recycle it yet
+        }
+
         _journal.Add(record);
         observer?.Committed(changeSet, record);
         return CommitResult.Committed(record);

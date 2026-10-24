@@ -42,4 +42,4 @@ progress and done.
 | **T-014** | done | Origin-write recency (`LastOriginWriteWallTime`, `OriginWrittenWithin` / `NotOriginWrittenWithin`) in the engine and `StaleEntityReaper` switched to it | DD-001 | R-068 (P-40); stage 4; as-built notes in DD-001 section 15 |
 | **T-015** | done | Attribute the stage 6 benchmark tick-time spikes (10 Hz DR/display burst, 250-290 ms maxima) and allocations (incl. why threshold 5 m allocates 2x), then propose fixes | DD-001 | Root causes found; P-42 -> R-069 (T-016), P-44 dropped (R-070); P-41, P-43, P-45 open, low priority |
 | **T-016** | done | Time-sliced DR extrapolation processor (`slices`, NedRprSettings.DrSlices = 6) | DD-001 | R-069 (P-42); as-built notes in DD-001 section 15 |
-| **T-017** | in-progress | Journal switchable off (`JournalCapacity` / `EventLogCapacity` 0: records and events recycled right after dispatch) | DD-001 | R-070 |
+| **T-017** | done | Journal switchable off (`JournalCapacity` / `EventLogCapacity` 0: records and events recycled right after dispatch) | DD-001 | R-070; as-built notes in DD-001 section 15 |

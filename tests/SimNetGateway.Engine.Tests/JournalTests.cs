@@ -120,8 +120,11 @@ public class JournalTests
     }
 
     [Fact]
-    public void Zero_capacity_is_rejected()
+    public void Negative_capacities_are_rejected()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new StateRepository(new AttributeRegistry(), null, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new StateRepository(new AttributeRegistry(), null, -1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new StateRepository(new AttributeRegistry(), null, 8, -1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new GatewayEngine(new SimNetGateway.Engine.InMemory.ManualClock(), new GatewayOptions { JournalCapacity = -1 }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new GatewayEngine(new SimNetGateway.Engine.InMemory.ManualClock(), new GatewayOptions { EventLogCapacity = -1 }));
     }
 }

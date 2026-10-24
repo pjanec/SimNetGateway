@@ -6,6 +6,8 @@ public readonly record struct JournalWrite(EntityId Entity, AttrChange Change);
 /// <summary>
 /// Bounded ring of the most recent change-set records, indexed by correlation id. When the ring is full the
 /// oldest record is evicted and recycled: a record is valid only while it is in the journal.
+/// A capacity of 0 switches the history off (R-070): nothing is retained, queries find nothing, and every
+/// record counts as evicted the moment it is added.
 /// </summary>
 public sealed class ChangeJournal
 {
@@ -14,6 +16,7 @@ public sealed class ChangeJournal
     private readonly RecordPools _pools;
     private int _head;   // index of the oldest record
     private int _count;
+    private ChangeSetRecord? _unretained; // capacity 0, not queued: recycled at the next Add
 
     // The bounded event log (what was dispatched, not state; DD-001 5.2).
     private readonly SimEvent?[] _events;
@@ -22,8 +25,8 @@ public sealed class ChangeJournal
 
     internal ChangeJournal(int capacity, RecordPools pools, int eventCapacity = 256)
     {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(capacity);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(eventCapacity);
+        ArgumentOutOfRangeException.ThrowIfNegative(capacity);
+        ArgumentOutOfRangeException.ThrowIfNegative(eventCapacity);
         _events = new SimEvent?[eventCapacity];
         _ring = new ChangeSetRecord?[capacity];
         _byCorrelation = new Dictionary<CorrelationId, ChangeSetRecord>(capacity);
@@ -36,6 +39,27 @@ public sealed class ChangeJournal
 
     internal void Add(ChangeSetRecord record)
     {
+        if (_ring.Length == 0)
+        {
+            // Immediate eviction. A queued (pinned) record is recycled by the engine after its dispatch; a
+            // standalone record stays readable until the next commit and is recycled then.
+            if (record.Pinned)
+            {
+                record.EvictedWhilePinned = true;
+            }
+            else
+            {
+                if (_unretained is not null)
+                {
+                    _pools.ReturnRecord(_unretained);
+                }
+
+                _unretained = record;
+            }
+
+            return;
+        }
+
         if (_count == _ring.Length)
         {
             var oldest = _ring[_head]!;
@@ -65,9 +89,15 @@ public sealed class ChangeJournal
     /// <summary>The last dispatched events, oldest first; an event is valid only while it is in the log.</summary>
     public EventEnumerator RecentEvents => new(this);
 
-    /// <summary>Adds a dispatched event; the evicted oldest event and its payload return to the pools.</summary>
+    /// <summary>Adds a dispatched event; the evicted oldest event and its payload return to the pools (with capacity 0 the event itself).</summary>
     internal void AddEvent(SimEvent ev)
     {
+        if (_events.Length == 0)
+        {
+            _pools.ReturnEvent(ev); // event log off: recycled right after dispatch
+            return;
+        }
+
         if (_eventCount == _events.Length)
         {
             var oldest = _events[_eventHead]!;
