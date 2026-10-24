@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | in review - proposals P-48 .. P-55 await the user |
+| **Status** | approved (R-071 .. R-078) |
 | **Tasks** | T-007 (viewer; this design first) |
 | **Rulings honoured** | R-002, R-006, R-012, R-018, R-030, R-033, R-038, R-046, R-049, R-053, R-063 .. R-067, R-070 |
 | **Date** | 2026-10-24 |
@@ -305,6 +305,10 @@ module state becomes visible without the engine or the viewer knowing any module
 
 ## 9. Proposals
 
+All approved on 2026-10-24: P-48 -> R-071, P-49 -> R-072, P-50 -> R-073, P-51 -> R-074, P-52 -> R-075,
+P-53 -> R-076, P-54 -> R-077, P-55 -> R-078.
+
+
 | ID | Proposal (lean) | Main alternative |
 |---|---|---|
 | **P-48** | **Scope**: the viewer hosts the gateway in-process (scenarios: Convoy Ambush with live S-*/G-* status, the default demo, the benchmark traffic generator with adjustable size, an empty gateway) and ticks it from its frame loop on a fixed 60 Hz simulated step with play/pause/step/speed. Attaching to a separately running gateway is later work (own design: snapshot/event protocol). | Build the remote-attach protocol now. |
@@ -315,3 +319,7 @@ module state becomes visible without the engine or the viewer knowing any module
 | **P-53** | **Testing without a display**: models, sampler and tracer tested headless; the viewer gets `--headless --frames N` (frame loop without raylib) used by a smoke test running Convoy Ambush; no GPU/screenshot tests in the suite. | Screenshot tests under a virtual X server. |
 | **P-54** | **Module state visible generically**: `IEntityTable` gets `Name` and `TryDescribe(EntityId, out string)` (the entry's `ToString()`), and the engine exposes its entity tables read-only, so the inspector shows every module's per-entity state (e.g. RPR publication None/Pending/Bound) without knowing module types. Small engine addition. | Gateway-specific inspector code in the viewer reaching into module internals. |
 | **P-55** | **Opt-in dispatch observer**: `GatewayOptions.DispatchObserver` (`IDispatchObserver`, null by default) notified of input start/finish, commit/reject, triggers raised and rule outcomes (fired / condition rejected / failed / disabled), plus `GatewayEngine.CurrentCorrelation` so outbound recorders can stamp the correlation that caused each message. Null observer = no behaviour or allocation change (tested). Powers the Trace panel. | Diagnose from the journal only (no rule outcomes, nothing when the journal is off). |
+
+## 10. As-built notes
+
+(To be filled in during T-007.)
