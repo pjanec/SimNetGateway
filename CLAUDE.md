@@ -29,7 +29,11 @@ commits. Keep design decisions, `P-n` proposals and design-doc writing in the ma
 
 The main session does **not rerun the build or the tests** (R-066): the implementing agent must
 have run the full build and test suite as its last step and put the result lines (warnings,
-errors, passed/failed per test project) in its report; the commit relies on that report. If a
+errors, passed/failed per test project) in its report; the commit relies on that report. The agent
+**never hands back work with build errors, warnings or failing tests** (R-067): fixing them is part
+of its task, and it keeps working until the full build is clean and every test passes. Briefs say
+so explicitly. (Only a genuine contradiction in the design that it cannot resolve is handed back,
+as a question about the design, not as delivered work.) If a
 report lacks them, or the state to be committed was never tested as a whole (e.g. merging the work
 of parallel agents, or a correction), send a Sonnet agent to make the change and/or run the full
 suite and report, instead of running it in the main session.
