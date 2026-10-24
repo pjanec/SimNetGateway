@@ -1,0 +1,6 @@
+# Line endings are normalised to LF everywhere so the repository works unchanged on Linux and
+# Windows (shell scripts with CRLF fail under bash). Editors and the .NET SDK handle LF fine.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary

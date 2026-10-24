@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          { "type": "command", "command": "bash scripts/session-brief.sh", "timeout": 30 }
+        ]
+      },
+      {
+        "matcher": "resume",
+        "hooks": [
+          { "type": "command", "command": "bash scripts/session-brief.sh", "timeout": 30 }
+        ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          { "type": "command", "command": "bash scripts/session-brief.sh", "timeout": 30 }
+        ]
+      }
+    ]
+  }
+}
