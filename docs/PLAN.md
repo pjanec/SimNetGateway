@@ -1,6 +1,6 @@
 # Implementation Plan
 
-**Current stage: 5 - NED-RPR gateway (in progress; stages 1-4 reported to the user)**
+**Current stage: 5 - NED-RPR gateway (finished; stage 6 next)**
 
 The plan turns the approved designs (DD-001 .. DD-004) into code in stages. Each stage has a
 scope, the designs and rulings it implements, its tasks (`docs/TASKS.md`) and **exit criteria**.
@@ -55,4 +55,4 @@ user-authored translators from the concept document.
 | 2 | 2026-10-24 | 2026-10-24 | build + test green on Linux; 136 engine tests incl. 0-byte message round trip; deviations in DD-001 section 15 |
 | 3 | 2026-10-24 | 2026-10-24 | build + test green on Linux; 235 engine tests incl. randomized index-vs-scan checks and 0-byte queries/round trip; deviations in DD-001 section 15 |
 | 4 | 2026-10-24 | 2026-10-24 | composition, in-memory transports, Common, R-068 staleness; build + test green on Linux (Engine 271, Common 116, Architecture 77, reported by the agents); mutation-checked; notes in DD-001 / DD-003 |
-| 5 | 2026-10-24 | - | - |
+| 5 | 2026-10-24 | 2026-10-24 | build + test green on Linux (Engine 271, Common 116, Gateway.NedRpr 202, Architecture 77, reported by the agent); DD-002 invariants checked every tick in the end-to-end tests; notes and Appendix A in DD-001 |

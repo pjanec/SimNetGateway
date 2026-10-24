@@ -1,0 +1,297 @@
+using SimNetGateway.Engine;
+using SimNetGateway.Engine.InMemory;
+using SimNetGateway.Protocol.Display;
+using SimNetGateway.Protocol.Ned;
+using SimNetGateway.Protocol.Rpr;
+
+namespace SimNetGateway.Gateway.NedRpr.Tests;
+
+/// <summary>
+/// The reusable end-to-end harness of the NED-RPR gateway: a manual clock, the gateway built from a configuration, one
+/// multi-type in-memory inbound channel per input side, recorders for the three outbound sides, the simulated RTI wired to
+/// the RPR recorder, and the <see cref="InvariantChecker"/> that runs after every step (G-1, G-2, G-4, G-5, G-8, diagnostics).
+/// </summary>
+public sealed class GatewayHarness
+{
+    /// <summary>One engine tick: 60 Hz.</summary>
+    public const double Dt = 1.0 / 60.0;
+
+    public GatewayHarness(
+        GatewayConfiguration? configuration = null,
+        Action<GatewayBuilder>? beforeBuild = null,
+        Action<GatewayBuilder>? beforeBind = null,
+        bool installChecker = true)
+    {
+        Clock = new ManualClock();
+        var options = new GatewayOptions { JournalCapacity = 16384, DiagnosticsCapacity = 8192, EventLogCapacity = 4096 };
+        Builder = (configuration ?? NedRprConfigurations.Default).CreateBuilder(Clock, options);
+        var ned = Builder.RequireInbound("ned");
+        var rpr = Builder.RequireInbound("rpr");
+        NedIn = new InMemoryInbound(ned.Source, "ned");
+        RprIn = new InMemoryInbound(rpr.Source, "rpr");
+        NedOut = new InMemoryOutbound<INedMessage>();
+        RprOut = new InMemoryOutbound<IRprMessage>();
+        DisplayOut = new InMemoryOutbound<IDisplayMessage>();
+        Rti = new SimulatedRti();
+        Builder.BindInbound("ned", NedIn);
+        Builder.BindInbound("rpr", RprIn);
+        Builder.BindOutbound<INedMessage>("ned", NedOut);
+        Builder.BindOutbound<IRprMessage>("rpr", RprOut);
+        Builder.BindOutbound<IDisplayMessage>("display", DisplayOut);
+        beforeBuild?.Invoke(Builder);
+        Binding = Builder.Build();
+        Engine = Binding.Engine;
+        NedOut.Context = Engine;
+        RprOut.Context = Engine;
+        DisplayOut.Context = Engine;
+        Schema = new PivotSchema(Engine.Attributes, Engine.EventTypes); // idempotent: the same ids as the gateway's
+        NedSource = ned.Source;
+        RprSource = rpr.Source;
+        NedIds = Map<ulong>("ned.entity");
+        RprHandles = Map<RprObjectHandle>("rpr.handle");
+        RprEntityIds = Map<DisEntityId>("rpr.entityId");
+        DisplayLabels = Map<string>("display.label");
+        Checker = new InvariantChecker(this);
+        if (installChecker)
+        {
+            NedOut.Tap = message =>
+            {
+                Checker.OnNedSent(message);
+                if (LoopbackNed)
+                {
+                    EnqueueNed(message);
+                }
+            };
+            RprOut.Tap = message =>
+            {
+                Rti.Observe(message);
+                Checker.OnRprSent(message);
+                if (LoopbackRpr && message is RprObjectUpdate or RprObjectRemoved or RprWeaponFire or RprMunitionDetonation)
+                {
+                    EnqueueRpr(message);
+                }
+            };
+        }
+        else
+        {
+            RprOut.Tap = Rti.Observe;
+        }
+    }
+
+    public ManualClock Clock { get; }
+
+    public GatewayBuilder Builder { get; }
+
+    public GatewayHostBinding Binding { get; }
+
+    public GatewayEngine Engine { get; }
+
+    public PivotSchema Schema { get; }
+
+    public InMemoryInbound NedIn { get; }
+
+    public InMemoryInbound RprIn { get; }
+
+    public InMemoryOutbound<INedMessage> NedOut { get; }
+
+    public InMemoryOutbound<IRprMessage> RprOut { get; }
+
+    public InMemoryOutbound<IDisplayMessage> DisplayOut { get; }
+
+    public SimulatedRti Rti { get; }
+
+    public InvariantChecker Checker { get; }
+
+    public SourceId NedSource { get; }
+
+    public SourceId RprSource { get; }
+
+    public IdentityMap<ulong> NedIds { get; }
+
+    public IdentityMap<RprObjectHandle> RprHandles { get; }
+
+    public IdentityMap<DisEntityId> RprEntityIds { get; }
+
+    public IdentityMap<string> DisplayLabels { get; }
+
+    /// <summary>When false the RTI does not answer registrations (the handle stays pending).</summary>
+    public bool DeliverRti { get; set; } = true;
+
+    /// <summary>NED outbound messages are fed back into the NED inbound channel (a DDS loopback).</summary>
+    public bool LoopbackNed { get; set; }
+
+    /// <summary>RPR outbound updates, removals and events are fed back into the RPR inbound channel.</summary>
+    public bool LoopbackRpr { get; set; }
+
+    public double SimTime => Engine.SimTime;
+
+    public double WallTime => Clock.Now;
+
+    private IdentityMap<TKey> Map<TKey>(string name)
+        where TKey : notnull, IEquatable<TKey> =>
+        (IdentityMap<TKey>)(Engine.Identities.Find(name) ?? throw new InvalidOperationException($"No identity map '{name}'."));
+
+    // ---- stepping ---------------------------------------------------------------------------------------------------
+
+    /// <summary>Advances the clock by one tick, lets the RTI answer, ticks the engine, then checks the invariants.</summary>
+    public void Step()
+    {
+        Clock.Advance(Dt);
+        if (DeliverRti)
+        {
+            Rti.DeliverPending(registered => RprIn.Enqueue(registered));
+        }
+
+        Engine.Tick();
+        Checker.Check();
+    }
+
+    public void Steps(int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            Step();
+        }
+    }
+
+    /// <summary>Runs the given number of simulated seconds of ticks.</summary>
+    public void Run(double seconds) => Steps((int)Math.Round(seconds / Dt));
+
+    /// <summary>Steps until the condition holds (checked after each step); fails after <paramref name="maxSeconds"/>.</summary>
+    public void RunUntil(Func<bool> condition, double maxSeconds = 30, string? what = null)
+    {
+        int max = (int)Math.Round(maxSeconds / Dt);
+        for (int i = 0; i < max; i++)
+        {
+            if (condition())
+            {
+                return;
+            }
+
+            Step();
+        }
+
+        Assert.True(condition(), what ?? "the condition did not hold in time");
+    }
+
+    // ---- injection --------------------------------------------------------------------------------------------------
+
+    public void Ned<T>(T message)
+        where T : INedMessage => NedIn.Enqueue(in message);
+
+    public void Rpr<T>(T message)
+        where T : IRprMessage => RprIn.Enqueue(in message);
+
+    /// <summary>Injects NED messages and runs one step.</summary>
+    public void NedStep<T>(T message)
+        where T : INedMessage
+    {
+        Ned(message);
+        Step();
+    }
+
+    public void RprStep<T>(T message)
+        where T : IRprMessage
+    {
+        Rpr(message);
+        Step();
+    }
+
+    private void EnqueueNed(INedMessage message)
+    {
+        switch (message)
+        {
+            case NedEntityMaster m: NedIn.Enqueue(in m); break;
+            case NedGeoSpatial m: NedIn.Enqueue(in m); break;
+            case NedEntityDamage m: NedIn.Enqueue(in m); break;
+            case NedWeaponStatus m: NedIn.Enqueue(in m); break;
+            case NedEntityDisposed m: NedIn.Enqueue(in m); break;
+            case NedWeaponFire m: NedIn.Enqueue(in m); break;
+            case NedDetonation m: NedIn.Enqueue(in m); break;
+            case NedSimControl m: NedIn.Enqueue(in m); break;
+            default: throw new InvalidOperationException("Unknown NED message " + message.GetType().Name);
+        }
+    }
+
+    private void EnqueueRpr(IRprMessage message)
+    {
+        switch (message)
+        {
+            case RprObjectUpdate m: RprIn.Enqueue(in m); break;
+            case RprObjectRemoved m: RprIn.Enqueue(in m); break;
+            case RprWeaponFire m: RprIn.Enqueue(in m); break;
+            case RprMunitionDetonation m: RprIn.Enqueue(in m); break;
+            default: throw new InvalidOperationException("Cannot loop back " + message.GetType().Name);
+        }
+    }
+
+    // ---- inspection ---------------------------------------------------------------------------------------------------
+
+    /// <summary>Clears the three outbound recorders (the checker keeps its own record of what it has seen).</summary>
+    public void ClearOutput()
+    {
+        NedOut.Clear();
+        RprOut.Clear();
+        DisplayOut.Clear();
+    }
+
+    public List<T> NedSent<T>()
+        where T : INedMessage => NedOut.OfType<T>().ToList();
+
+    public List<T> RprSent<T>()
+        where T : IRprMessage => RprOut.OfType<T>().ToList();
+
+    public List<T> DisplaySent<T>()
+        where T : IDisplayMessage => DisplayOut.OfType<T>().ToList();
+
+    public EntityRecord? EntityOfNed(ulong id) => NedIds.TryResolve(id, out var e) ? Engine.State.Find(e) : null;
+
+    public EntityRecord? EntityOfHandle(RprObjectHandle handle) => RprHandles.TryResolve(handle, out var e) ? Engine.State.Find(e) : null;
+
+    public RprObjectHandle HandleOf(EntityRecord entity) =>
+        RprHandles.TryGetKey(entity.Id, out var handle) ? handle : throw new InvalidOperationException("The entity has no RPR handle.");
+
+    public bool Has(EntityRecord e, AttrId attr) => e.Has(attr);
+
+    /// <summary>The retained change set records, oldest first (valid while they are in the journal).</summary>
+    public List<ChangeSetRecord> Records()
+    {
+        var list = new List<ChangeSetRecord>();
+        foreach (var record in Engine.State.Journal.Since(double.NegativeInfinity))
+        {
+            list.Add(record);
+        }
+
+        return list;
+    }
+
+    public RuleInfo Rule(string fullName) => Engine.FindRule(fullName) ?? throw new KeyNotFoundException(fullName);
+
+    /// <summary>
+    /// A snapshot of every slot version of every live entity, without the derived attributes the DR processor keeps writing:
+    /// equal snapshots mean nothing received or stored was written.
+    /// </summary>
+    public string Snapshot()
+    {
+        var parts = new List<string>();
+        foreach (var entity in Engine.State.Entities)
+        {
+            var slots = new List<string>();
+            foreach (var (attr, slot) in entity.Attributes)
+            {
+                if (attr == Schema.PredictedPosition || attr == Schema.PredictedAt)
+                {
+                    continue;
+                }
+
+                slots.Add($"{attr.Value}:{slot.Meta.Version}:{slot.Meta.Correlation.Value}");
+            }
+
+            slots.Sort(StringComparer.Ordinal);
+            parts.Add($"{entity.Id.Value}[{string.Join(",", slots)}]");
+        }
+
+        parts.Sort(StringComparer.Ordinal);
+        return string.Join(";", parts);
+    }
+}

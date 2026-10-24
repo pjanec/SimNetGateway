@@ -2032,3 +2032,138 @@ relayed traffic whose writer differs from the owner (R-061) counts as non-origin
 (R-062) must write as the owner or adjust the rule. 23 mutation checks; one equivalent survivor (the
 head-walk driver bound, re-checked by the filter). The "driven from the list" test counts filter-passing
 candidates, so it proves correct results, not that the index (rather than a scan) was used.
+
+### Stage 5 - NED-RPR gateway (T-004b, 2026-10-24)
+
+Built in two delegated parts: 5a protocols, `SimulatedRti`, `PivotSchema`, `TypeCatalog`, conversions;
+5b modules, `NedRprProfile`, `NedRprConfigurations` (Default) and end-to-end tests with the DD-002
+invariants G-1, G-2, G-4, G-5, G-8 checked after every tick. The wire model and module details that
+sections 7 and 9 left open were pinned in a spec before implementation - **Appendix A** below, as built.
+`Validate()` on the Default configuration reports no errors and no warnings. Mutation checks: 101 (5a)
+and 99 (5b), survivors behaviour-neutral. Decisions made during implementation:
+
+- **Asynchronous RTI registration through messages**: `RprRegisterObject(token)` out, `RprObjectRegistered`
+  in; the gateway references no transport interface (DD-003 section 7 satisfied without one). A
+  bind-only transaction commits `Empty` (no change-set-end trigger), so `RprObjectRegisteredIngress`
+  publishes an internal event `RprPublication.HandleBound` handled by the extra rule
+  `RprEntityEgress/Registered`, which sends the one full update. An entity removed while its
+  registration is pending gets `RprObjectRemoved` when the handle arrives (no object leaked at the RTI).
+- **Heartbeat**: any send (partial or full) resets the 5 s timer (11.4); the heartbeat sends the position
+  predicted to now (R-028). (The spec draft said "only full sends" - corrected before 5b.)
+- **NED introduction**: when an entity first gets a NED id, `NedIdentityEgress` sends master, then the
+  known geo-spatial and damage, in that order; the `GeoSpatial`/`Damage` rules skip that change set.
+  NED id exhaustion warns once per entity; the `Master` rule also listens to `Spatial.Position` so the
+  entity is published on a later update once an id is free.
+- `NedWeaponStatusIngress` creates the entity on first sight (descriptors in any order); damage,
+  dispose and fire do not create. Out-of-range NED force, detonation result, target damage and RPR damage
+  state abort the transaction; an invalid RPR force is not stored. Unknown DIS types/munitions map to
+  TKB 0 with one warning per value; a fire with no munition given and none stored warns every time.
+- **Echo**: every NED and RPR ingress (including RPR fire by a non-RPR shooter) ignores input naming an
+  entity of another origin.
+- **Limitation**: RPR registration is queued by the contributor rules; disabling `RprEntityEgress/Spatial`
+  *before* an entity's first publication means it is never registered. Disabling a contributor after
+  publication works (the DD-002 act 6 override swaps the `Damage` contributor only).
+- The display heading is the local heading of the stored orientation seen from the predicted position
+  (drifts ~0.002 deg over 2 s at 100 m/s).
+
+## Appendix A - NED-RPR wire model and module spec (stage 5, as built)
+
+Refines DD-001 sections 7 and 9 and DD-002 section 7 (basic parts only). Everything here is binding
+for stage 5a and 5b. Deviations are reported, never silently chosen.
+
+#### 1. Protocol projects (pure wire models, reference nothing - R-050)
+
+Use `readonly record struct` for messages without arrays/lists (so ingress of such messages does not
+allocate), `sealed record` (class) otherwise. Every message implements its side's marker interface
+(`INedMessage`, `IRprMessage`, `IDisplayMessage`); outbound ports are typed with the marker interface.
+
+#### SimNetGateway.Protocol.Ned (geodetic degrees, TKB type ids, damage 0..3)
+- `enum NedForce : byte { Unknown = 0, Friendly = 1, Opposing = 2, Neutral = 3 }`
+- `NedEntityMaster(ulong Id, string Name, int TkbType, NedForce Force)`
+- `NedGeoSpatial(ulong Id, double LatitudeDeg, double LongitudeDeg, double Altitude, double HeadingDeg, double PitchDeg, double RollDeg, double Speed)` - speed (m/s) along heading/pitch.
+- `NedEntityDamage(ulong Id, int Level)` - 0 none, 1 light, 2 heavy, 3 destroyed; anything else is out of range.
+- `NedWeaponStatus(ulong Id, int SelectedMunitionTkb, int Ammo)`
+- `NedEntityDisposed(ulong Id)`
+- `NedWeaponFire(Guid FireId, ulong Shooter, ulong Target, int MunitionTkb, double LatitudeDeg, double LongitudeDeg, double Altitude, int Quantity)` - MunitionTkb 0 = the shooter's selected weapon; Target 0 = none.
+- `NedDetonation(Guid DetonationId, ulong Target, int MunitionTkb, double LatitudeDeg, double LongitudeDeg, double Altitude, NedDetonationResult Result, int TargetDamage)` - TargetDamage -1 = not reported; `enum NedDetonationResult : byte { Other = 0, EntityImpact = 1, GroundImpact = 2, Detonation = 3 }`.
+- `NedSimControl(NedControlKind Kind, string? Scenario)` - `enum NedControlKind : byte { Load, LoadDebrief, Start, Pause, Resume, Unload }`.
+
+#### SimNetGateway.Protocol.Rpr (ECEF metres, radians, DIS types)
+- `readonly record struct RprObjectHandle(uint Value)`; `readonly record struct DisEntityId(ushort Site, ushort Application, ushort Entity)`; `readonly record struct DisEntityType(byte Kind, byte Domain, ushort Country, byte Category, byte Subcategory, byte Specific, byte Extra)`; `readonly record struct WorldLocation(double X, double Y, double Z)`; `readonly record struct RprOrientation(double Psi, double Theta, double Phi)`; `readonly record struct RprVector(double X, double Y, double Z)`.
+- `enum RprDamageState : byte { NoDamage = 0, SlightDamage = 1, ModerateDamage = 2, Destroyed = 3 }`; `enum RprForceId : byte { Other = 0, Friendly = 1, Opposing = 2, Neutral = 3 }`.
+- `sealed record RprObjectUpdate(RprObjectHandle Handle)` with init-only nullable properties (only present attributes are reflected): `string? Marking`, `DisEntityType? EntityType`, `RprForceId? ForceId`, `DisEntityId? EntityIdentifier`, `WorldLocation? WorldLocation`, `RprOrientation? Orientation`, `RprVector? VelocityVector`, `RprVector? AccelerationVector`, `RprVector? AngularVelocity`, `byte? DeadReckoningAlgorithm` (DIS numbering), `RprDamageState? DamageState`.
+- `RprObjectRemoved(RprObjectHandle Handle)`
+- `RprWeaponFire(Guid EventId, RprObjectHandle? FiringObject, RprObjectHandle? TargetObject, WorldLocation Location, DisEntityType Munition, int Quantity)` - null handle = "no object".
+- `RprMunitionDetonation(Guid EventId, RprObjectHandle? FiringObject, RprObjectHandle? TargetObject, WorldLocation Location, DisEntityType Munition, RprDetonationResult Result)`; `enum RprDetonationResult : byte { Other = 0, EntityImpact = 1, GroundImpact = 2, Detonation = 3 }`.
+- `RprSimulationControl(RprControlKind Kind)`; `enum RprControlKind : byte { StartResume, StopFreeze }`.
+- **Asynchronous registration, uniform through messages** (DD-003 section 7 alternative chosen so the gateway needs no transport interface): the gateway sends `RprRegisterObject(long Token)` (an `IRprMessage`, token opaque to the RTI) on the RPR outbound port; the RTI answers later with the inbound message `RprObjectRegistered(long Token, RprObjectHandle Handle)`.
+- `SimulatedRti` (PoC, in Protocol.Rpr, references nothing): `void Observe(IRprMessage outbound)` (wired by the host as the RPR outbound recorder's tap; it reacts to `RprRegisterObject` and ignores everything else), `int DeliverPending(Action<RprObjectRegistered> deliver)` (called by the host/test once per tick before `Tick()`, delivers every registration requested before this call - so handles arrive one tick later), handles allocated sequentially from 0x2A01, `IReadOnlyCollection<RprObjectHandle> Registered`, plus `Exhaust()`-style hooks are NOT needed in stage 5.
+
+#### SimNetGateway.Protocol.Display
+- `DisplayEntityPosition(string Label, double LatitudeDeg, double LongitudeDeg, double Altitude, double HeadingDeg)`, `DisplayEntityRemoved(string Label)`.
+
+#### 2. Gateway.NedRpr
+
+#### Schema (`Schema/PivotSchema.cs`, R-037) - one class registering everything, exposing the ids
+Attributes (name, kind, unit/notes):
+- `Identity.Name` String; `Identity.TypeTkb` Int (TKB numbering is the pivot numbering for types); `Identity.Force` Int (NedForce numbering).
+- `Spatial.Position` Vec3 ECEF m, `AttrOptions.SpatialIndex` cell 1000 m; `Spatial.Velocity` Vec3 ECEF m/s; `Spatial.Acceleration` Vec3 ECEF m/s^2; `Spatial.Orientation` Vec3 geocentric Euler (psi, theta, phi) rad; `Spatial.AngularVelocity` Vec3 body rad/s; `Spatial.DrAlgorithm` Int (DIS numbering); `Spatial.StateTime` Double sim time s.
+- `Status.Damage` Int 0..3 (NED scale is the pivot scale).
+- `Weapon.SelectedMunition` Int TKB; `Weapon.Ammo` Int.
+- `Derived.PredictedPosition` Vec3; `Derived.PredictedAt` Double.
+- Event payload: `Event.Id` Object (boxed Guid), `Event.Shooter` EntityRef, `Event.Target` EntityRef, `Event.MunitionTkb` Int (0 = not given), `Event.Location` Vec3 ECEF, `Event.Quantity` Int, `Event.Result` Int (detonation result numbering, identical on both sides).
+- Event types: `WeaponFire`, `Detonation`.
+Sources: `ned`, `rpr`, `display` (registered by the ports), `proc.dr`, `proc.reaper`.
+
+#### Services
+- `TypeCatalog` (hardcoded table, PoC): TKB <-> DisEntityType for at least: 100 main battle tank (1,1,225,1,1,3,0), 101 truck (1,1,225,6,1,0,0), 102 APC (1,1,225,2,1,0,0), 200 UAV (1,2,225,50,1,0,0), 300 checkpoint/structure (1,1,225,9,0,0,0), 400 enemy tank (1,1,222,1,2,1,0), munitions 501 (2,9,225,2,1,1,0), 502 (2,9,225,2,14,1,0). `bool TryToDis(int tkb, out DisEntityType)`, `bool TryToTkb(DisEntityType, out int)`; unknown -> the caller uses a default (TKB 0 / DIS (0,0,0,0,0,0,0)) and warns once per unknown value.
+- Mappings: damage NED level n <-> RprDamageState n; force NedForce n <-> RprForceId n; detonation result identical numbering.
+- Geo conversions only through Common (`Wgs84`, `Orientation`, `Velocity`, `Angles`).
+
+#### Identity maps (R-040)
+- `ned.entity` `IdentityMap<ulong>` with `RangeAllocator(settings.NedIdRange)` - wire ids from NED are bound with Bind (not allocated); ids for entities the gateway introduces to NED come from TryGetOrAllocate.
+- `rpr.handle` `IdentityMap<RprObjectHandle>`, no allocator (external, via RprObjectRegistered).
+- `rpr.entityId` `IdentityMap<DisEntityId>` with `MappedAllocator<DisEntityId>(NumberPool(1, 65534, clock, settings.DisQuarantineSeconds), n => new DisEntityId(site, app, (ushort)n), k => k.Entity)`; for RPR-origin entities bound from the received EntityIdentifier.
+- `display.label` `IdentityMap<string>`, no allocator: the display egress binds `Identity.Name` on first publish; if the name is taken or absent, the label is `"E" + id` of an internal counter (never the EntityId).
+- Showcase maps (`ned.member`, `ned.fire`) are stage 7.
+
+#### Modules (R-003: each one class, registered independently; names as below, rule names stable)
+NED ingress (source ned; echo rule: a wire id that resolves to an entity whose Origin != ned is our own publication looped back -> the handler does nothing):
+- `NedEntityMasterIngress` - resolve/create (bind ned.entity), set Name, TypeTkb, Force.
+- `NedGeoSpatialIngress` - resolve/create; convert to ECEF position, geocentric orientation, ECEF velocity (Common.Velocity from speed/heading/pitch); DrAlgorithm = FPW (2) if speed > 0 else Static (1); StateTime = ctx.SimTime; Acceleration and AngularVelocity are not written by NED.
+- `NedDamageIngress` - level outside 0..3 -> `ctx.Abort("damage level N out of range")`; unknown id -> ignore.
+- `NedWeaponStatusIngress` - Weapon.SelectedMunition, Weapon.Ammo.
+- `NedDisposeIngress` - destroy; unknown id ignored.
+- `NedWeaponFireIngress` - shooter must resolve (else Abort "unknown shooter"); shooter Weapon.Ammo -= Quantity if Ammo is present (not below 0); publish WeaponFire with Id, Shooter, Target (absent when 0 or unknown), MunitionTkb as given (0 = selected weapon, resolved by the egress), Location, Quantity.
+- `NedDetonationIngress` - if TargetDamage in 0..3 and target resolves: set target Status.Damage (state effect, dispatched before the event); publish Detonation with Id, Target, MunitionTkb, Location, Result.
+- `NedControlIngress` - Load(scenario, Live), LoadDebrief(scenario, Replay), Start, Pause, Resume, Unload -> ctx.Command.
+NED egress (only entities with Origin != ned; events with Source != ned):
+- `NedIdentityEgress` (rule `Master`) on Identity.* changed: needs Name and TypeTkb; ned id via TryGetOrAllocate - exhaustion -> warning diagnostic, nothing sent, retried on the next trigger of that entity; sends NedEntityMaster.
+- `NedSpatialEgress` (rule `GeoSpatial`) on Spatial.Position/Orientation/Velocity changed: only when the entity already has a ned id; converts back to degrees / local heading-pitch-roll / speed.
+- `NedDamageEgress` (rule `Damage`) on Status.Damage changed, entity has a ned id.
+- `NedLifecycleEgress` (rule `Dispose`) on entity removed with a ned id -> NedEntityDisposed.
+- `NedWeaponFireEgress` (rule `Fire`) on WeaponFire from a source != ned -> NedWeaponFire with ned ids of shooter/target (0 when unknown), munition TKB (default 0), position, quantity.
+RPR ingress (source rpr):
+- `RprObjectUpdateIngress` - resolve rpr.handle or create (origin rpr) and bind; ignore if it resolves to an entity whose Origin != rpr; write only present attributes: Marking->Name, EntityType->TypeTkb (catalog), ForceId->Force, EntityIdentifier -> bind rpr.entityId (buffered, first time only), WorldLocation, Orientation, Velocity, Acceleration, AngularVelocity, DR algorithm, DamageState->Damage; StateTime = ctx.SimTime whenever a spatial attribute is present.
+- `RprObjectRemovedIngress` - destroy if known.
+- `RprWeaponFireIngress` - publish WeaponFire (shooter/target from rpr.handle when known, munition via catalog to TKB).
+- `RprObjectRegisteredIngress` - binds rpr.handle to the entity that requested the token (token map held by the RPR publication service) - buffered Bind in its transaction; the flush happens through the egress (below).
+RPR egress (R-045 contributors; only entities with Origin != rpr; events with Source != rpr):
+- `RprPublication` service (constructed by the profile, shared by RprEntityEgress, RprHeartbeatEgress, the registration ingress and later CustomerDamagePercent): an `EntityTable<RprPublicationState>` per entity (state None/Pending/Bound, token, last send wall time (any update), dirty flags + pending field values of one update), the token -> EntityId map, and `Flush` logic.
+- `RprEntityEgress` contributor rules, each filling the pending update of the entity:
+  `Identity` (on Identity.* changed: Marking, EntityType, ForceId), `Spatial` (on Spatial.* changed: WorldLocation, Orientation, Velocity, Acceleration, AngularVelocity, DR algorithm), `Damage` (on Status.Damage changed: DamageState). Rule `Flush` on OnChangeSetEnd: for each entity with a pending update: state None and the entity has TypeTkb and Position -> allocate rpr.entityId (TryGetOrAllocate; exhaustion -> warning, retry later), token, state Pending, send `RprRegisterObject(token)`; state Pending -> keep accumulating; state Bound -> send one RprObjectUpdate with the pending fields. When the handle is bound (rule on the registration transaction, e.g. OnChangeSetEnd seeing the newly bound entity), send ONE full RprObjectUpdate with every known attribute plus EntityIdentifier (coalescing everything that happened while pending). Removed entity with a handle -> RprObjectRemoved (rule `Remove`); removed while Pending -> drop, nothing sent.
+- `RprHeartbeatEgress` (rule `Heartbeat`, Every(settings.HeartbeatCheckPeriod)): for every Bound entity for which **nothing** (full or partial update) was sent for >= settings.HeartbeatPeriod (DD-001 11.4 "nothing sent for >= 5 s"; it stays quiet while updates flow), send a full update with the position predicted to now (Common PredictorRegistry, entity's DrAlgorithm, sim time - R-028) and every other value as stored; every send (egress or heartbeat) records the entity's last send time.
+- `RprWeaponFireEgress` (rule `Fire`): WeaponFire from source != rpr -> RprWeaponFire; munition from Event.MunitionTkb, else the shooter's Weapon.SelectedMunition, else default DIS type + warning; handles of shooter/target when bound, else null ("no object") - the hold-until-handle rule (R-047) is stage 7.
+- `RprDetonationEgress` (rule `Detonation`) analogous -> RprMunitionDetonation.
+- `RprControlEgress` (rule `Control`): session changed from a source != rpr: Start/Resume -> StartResume, Pause -> StopFreeze; nothing for Load/Unload.
+Display:
+- `DisplayPositionEgress` (rules `Position`, `Remove`): on Derived.PredictedPosition changed, for entities with Identity.Name (or already labelled): label via display.label, convert to degrees, heading from Spatial.Orientation (local heading) -> DisplayEntityPosition; on removed with a label -> DisplayEntityRemoved.
+Processors (from Common):
+- `DrExtrapolationProcessor("DrExtrapolation", proc.dr, settings.DrProcessorPeriod, ...)` with selector "has Identity.Name" (entities the display can show).
+- `StaleEntityReaper("RprStaleReaper", rpr, settings.StaleTimeout, settings.ReaperCheckPeriod, proc.reaper)` (R-068).
+
+#### Profile and configurations (R-051, R-052, R-054)
+- `NedRprSettings : GatewaySettings` record: `HeartbeatPeriod` 5 s, `HeartbeatCheckPeriod` 1 s, `DrProcessorPeriod` 0.1 s, `StaleTimeout` 12 s, `ReaperCheckPeriod` 1 s, `NedIdRange` (first 1_000_000, last 1_999_999), `DisSite` 1, `DisApplication` 3001, `DisQuarantineSeconds` 60.
+- `NedRprProfile : IGatewayProfile` (Name "ned-rpr"): ports inbound "ned", "rpr"; outbound `INedMessage` "ned", `IRprMessage` "rpr", `IDisplayMessage` "display"; registers schema, maps, services and all modules above.
+- `static class NedRprConfigurations { Default ("ned-rpr/default"); All }` (Showcase variants come in stage 7).
+- Every module declares Produces/Consumes so that `Validate()` reports **no errors and no warnings** for the Default configuration.

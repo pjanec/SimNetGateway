@@ -28,7 +28,7 @@ progress and done.
 | **T-003c** | done | Engine: identities and allocators, query indexes (recency, presence, reverse refs, spatial), EntityQuery, EntityTable, vocabulary validation | DD-001, DD-004 | Stage 3; as-built notes in DD-001 section 15 |
 | **T-004** | dropped | Common and NED-RPR gateway (split into T-004a, T-004b) | DD-001 | Split by stage, see docs/PLAN.md |
 | **T-004a** | done | Common: geo, predictor registry (DIS), allocators, generic DR-extrapolation processor and stale reaper | DD-001, DD-004 | Stage 4; as-built notes in DD-001 section 15; reaper staleness rule changed by R-068 -> T-014 |
-| **T-004b** | in-progress | Protocol projects, PivotSchema, NED/RPR/display modules, NedRprProfile and configurations | DD-001, DD-002, DD-003 | Stage 5 |
+| **T-004b** | done | Protocol projects, PivotSchema, NED/RPR/display modules, NedRprProfile and configurations | DD-001, DD-002, DD-003 | Stage 5; as-built notes and Appendix A in DD-001 |
 | **T-005** | todo | Automated test suite (xUnit) covering engine and module behaviour including edge cases (see DD-001 section 12) | DD-001 | Written in every stage alongside the code |
 | **T-006** | todo | Console demo host assembling the pieces, 10k-entity benchmark (`Hosts/SimNetGateway.Demo`) | DD-001, DD-003 | Stage 6 |
 | **T-007** | todo | ImGui (raylib-cs) visualization of the central repository content | needs DD | Stage 8; R-006: only after the engine is proven; needs its own design doc |
