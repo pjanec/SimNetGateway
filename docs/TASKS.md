@@ -31,7 +31,7 @@ progress and done.
 | **T-004b** | done | Protocol projects, PivotSchema, NED/RPR/display modules, NedRprProfile and configurations | DD-001, DD-002, DD-003 | Stage 5; as-built notes and Appendix A in DD-001 |
 | **T-005** | done | Automated test suite (xUnit) covering engine and module behaviour including edge cases (see DD-001 section 12) | DD-001 | Written in every stage; through stage 7: Engine 309, Common 144, Gateway.NedRpr 560, Architecture 77 tests |
 | **T-006** | done | Console demo host assembling the pieces, 10k-entity benchmark (`Hosts/SimNetGateway.Demo`) | DD-001, DD-003 | Stage 6; results and findings in DD-001 section 15 -> T-015 |
-| **T-007** | review | ImGui (raylib-cs) visualization of the central repository content - gateway monitor and diagnostics viewer | DD-005 | Design DD-005 written; P-48 .. P-55 await the user (R-006: only after the engine is proven - stages 1-7 done) |
+| **T-007** | in-progress | ImGui (raylib-cs) visualization of the central repository content - gateway monitor and diagnostics viewer | DD-005 | Approved (R-071 .. R-078); 8a engine hooks + Engine.Monitoring, 8b viewer host |
 | **T-008** | done | Make infrastructure cross-platform: portable hook wrapper, LF line endings, no Windows-specific paths | - | R-012 |
 | **T-009** | done | Design of the showcase scenario "Convoy Ambush" exercising all engine capabilities on complex sides | DD-002 | Approved (R-043..R-047) |
 | **T-010** | done | Implement the showcase harness, protocol extensions and acceptance test + `Demo --showcase` report | DD-002 | Stage 7: 48/48 conditions PASS, no invariant violation; as-built notes and Appendix B in DD-002; P-47 (S-4.5/S-9.3 wording) awaits the user |

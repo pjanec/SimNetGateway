@@ -1,6 +1,6 @@
 # Implementation Plan
 
-**Current stage: 7 - Showcase "Convoy Ambush" (finished; stage 8 viewer needs its design first)**
+**Current stage: 8 - Viewer (DD-005 approved; in progress)**
 
 The plan turns the approved designs (DD-001 .. DD-004) into code in stages. Each stage has a
 scope, the designs and rulings it implements, its tasks (`docs/TASKS.md`) and **exit criteria**.
@@ -58,3 +58,4 @@ user-authored translators from the concept document.
 | 5 | 2026-10-24 | 2026-10-24 | build + test green on Linux (Engine 271, Common 116, Gateway.NedRpr 202, Architecture 77, reported by the agent); DD-002 invariants checked every tick in the end-to-end tests; notes and Appendix A in DD-001 |
 | 6 | 2026-10-24 | 2026-10-24 | demo + benchmark run (Release, 10k entities: 2.7-2.9x real time, p95 31-34 ms, 3.7-17 KB/inbound message); findings reviewed against R-005/R-033 -> T-015; Gateway.NedRpr 302 tests |
 | 7 | 2026-10-24 | 2026-10-24 | 48/48 success conditions PASS, no G-* violation in 8,400 ticks, final state empty; Engine 309, Common 144, Gateway.NedRpr 560, Architecture 77 tests (reported by the agents); P-47 open |
+| 8 | 2026-10-24 | - | - |
