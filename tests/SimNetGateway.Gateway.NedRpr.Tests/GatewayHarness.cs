@@ -3,6 +3,7 @@ using SimNetGateway.Engine.InMemory;
 using SimNetGateway.Protocol.Display;
 using SimNetGateway.Protocol.Ned;
 using SimNetGateway.Protocol.Rpr;
+using SimNetGateway.Showcase;
 
 namespace SimNetGateway.Gateway.NedRpr.Tests;
 
@@ -14,7 +15,7 @@ namespace SimNetGateway.Gateway.NedRpr.Tests;
 public sealed class GatewayHarness
 {
     /// <summary>One engine tick: 60 Hz.</summary>
-    public const double Dt = 1.0 / 60.0;
+    public const double Dt = NedRprHost.Dt;
 
     public GatewayHarness(
         GatewayConfiguration? configuration = null,
@@ -24,34 +25,11 @@ public sealed class GatewayHarness
     {
         Clock = new ManualClock();
         var options = new GatewayOptions { JournalCapacity = 16384, DiagnosticsCapacity = 8192, EventLogCapacity = 4096 };
-        Builder = (configuration ?? NedRprConfigurations.Default).CreateBuilder(Clock, options);
-        var ned = Builder.RequireInbound("ned");
-        var rpr = Builder.RequireInbound("rpr");
-        NedIn = new InMemoryInbound(ned.Source, "ned");
-        RprIn = new InMemoryInbound(rpr.Source, "rpr");
-        NedOut = new InMemoryOutbound<INedMessage>();
-        RprOut = new InMemoryOutbound<IRprMessage>();
-        DisplayOut = new InMemoryOutbound<IDisplayMessage>();
-        Rti = new SimulatedRti();
-        Builder.BindInbound("ned", NedIn);
-        Builder.BindInbound("rpr", RprIn);
-        Builder.BindOutbound<INedMessage>("ned", NedOut);
-        Builder.BindOutbound<IRprMessage>("rpr", RprOut);
-        Builder.BindOutbound<IDisplayMessage>("display", DisplayOut);
-        beforeBuild?.Invoke(Builder);
-        Binding = Builder.Build();
-        Engine = Binding.Engine;
-        NedOut.Context = Engine;
-        RprOut.Context = Engine;
-        DisplayOut.Context = Engine;
-        Schema = new PivotSchema(Engine.Attributes, Engine.EventTypes); // idempotent: the same ids as the gateway's
-        NedSource = ned.Source;
-        RprSource = rpr.Source;
-        NedIds = Map<ulong>("ned.entity");
-        RprHandles = Map<RprObjectHandle>("rpr.handle");
-        RprEntityIds = Map<DisEntityId>("rpr.entityId");
-        DisplayLabels = Map<string>("display.label");
-        Checker = new InvariantChecker(this);
+        Host = new NedRprHost(configuration ?? NedRprConfigurations.Default, Clock, new NedRprHostOptions { EngineOptions = options }, beforeBuild);
+        NedOut = Host.NedOut!;
+        RprOut = Host.RprOut!;
+        DisplayOut = Host.DisplayOut!;
+        Checker = new InvariantChecker(Host);
         if (installChecker)
         {
             NedOut.Tap = message =>
@@ -72,25 +50,24 @@ public sealed class GatewayHarness
                 }
             };
         }
-        else
-        {
-            RprOut.Tap = Rti.Observe;
-        }
     }
+
+    /// <summary>The shared host assembly the harness wraps.</summary>
+    public NedRprHost Host { get; }
 
     public ManualClock Clock { get; }
 
-    public GatewayBuilder Builder { get; }
+    public GatewayBuilder Builder => Host.Builder;
 
-    public GatewayHostBinding Binding { get; }
+    public GatewayHostBinding Binding => Host.Binding;
 
-    public GatewayEngine Engine { get; }
+    public GatewayEngine Engine => Host.Engine;
 
-    public PivotSchema Schema { get; }
+    public PivotSchema Schema => Host.Schema;
 
-    public InMemoryInbound NedIn { get; }
+    public InMemoryInbound NedIn => Host.NedIn;
 
-    public InMemoryInbound RprIn { get; }
+    public InMemoryInbound RprIn => Host.RprIn;
 
     public InMemoryOutbound<INedMessage> NedOut { get; }
 
@@ -98,24 +75,28 @@ public sealed class GatewayHarness
 
     public InMemoryOutbound<IDisplayMessage> DisplayOut { get; }
 
-    public SimulatedRti Rti { get; }
+    public SimulatedRti Rti => Host.Rti;
 
     public InvariantChecker Checker { get; }
 
-    public SourceId NedSource { get; }
+    public SourceId NedSource => Host.NedSource;
 
-    public SourceId RprSource { get; }
+    public SourceId RprSource => Host.RprSource;
 
-    public IdentityMap<ulong> NedIds { get; }
+    public IdentityMap<ulong> NedIds => Host.NedIds;
 
-    public IdentityMap<RprObjectHandle> RprHandles { get; }
+    public IdentityMap<RprObjectHandle> RprHandles => Host.RprHandles;
 
-    public IdentityMap<DisEntityId> RprEntityIds { get; }
+    public IdentityMap<DisEntityId> RprEntityIds => Host.RprEntityIds;
 
-    public IdentityMap<string> DisplayLabels { get; }
+    public IdentityMap<string> DisplayLabels => Host.DisplayLabels;
 
     /// <summary>When false the RTI does not answer registrations (the handle stays pending).</summary>
-    public bool DeliverRti { get; set; } = true;
+    public bool DeliverRti
+    {
+        get => Host.DeliverRti;
+        set => Host.DeliverRti = value;
+    }
 
     /// <summary>NED outbound messages are fed back into the NED inbound channel (a DDS loopback).</summary>
     public bool LoopbackNed { get; set; }
@@ -127,22 +108,12 @@ public sealed class GatewayHarness
 
     public double WallTime => Clock.Now;
 
-    private IdentityMap<TKey> Map<TKey>(string name)
-        where TKey : notnull, IEquatable<TKey> =>
-        (IdentityMap<TKey>)(Engine.Identities.Find(name) ?? throw new InvalidOperationException($"No identity map '{name}'."));
-
     // ---- stepping ---------------------------------------------------------------------------------------------------
 
     /// <summary>Advances the clock by one tick, lets the RTI answer, ticks the engine, then checks the invariants.</summary>
     public void Step()
     {
-        Clock.Advance(Dt);
-        if (DeliverRti)
-        {
-            Rti.DeliverPending(registered => RprIn.Enqueue(registered));
-        }
-
-        Engine.Tick();
+        Host.Step(Dt);
         Checker.Check();
     }
 

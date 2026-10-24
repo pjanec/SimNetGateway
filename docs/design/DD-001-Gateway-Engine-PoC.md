@@ -2167,3 +2167,39 @@ Processors (from Common):
 - `NedRprProfile : IGatewayProfile` (Name "ned-rpr"): ports inbound "ned", "rpr"; outbound `INedMessage` "ned", `IRprMessage` "rpr", `IDisplayMessage` "display"; registers schema, maps, services and all modules above.
 - `static class NedRprConfigurations { Default ("ned-rpr/default"); All }` (Showcase variants come in stage 7).
 - Every module declares Produces/Consumes so that `Validate()` reports **no errors and no warnings** for the Default configuration.
+
+### Stage 6 - demo host and 10k benchmark (T-006, 2026-10-24)
+
+`Hosts/SimNetGateway.Demo` is a thin wrapper over `DemoRunner` in `SimNetGateway.Showcase`, which
+also holds the shared host assembly `NedRprHost` (DD-003: demo, showcase test and viewer share it;
+the test harness now wraps it), `DemoCommandLine` (`--config`, `--list`, `--schema`, `--bench` with
+`--entities/--seconds/--seed/--threshold`, `--help`; errors exit 2), a deterministic 20 s
+`DemoScenario` and the `BenchmarkRunner`. The end-to-end invariant G-5 accepts, for fire/detonation
+events, an RPR handle bound in `rpr.handle` by RPR ingress (a NED fire at an RPR-origin target uses
+that side's own handle). 48 mutation checks, 3 behaviour-neutral survivors.
+
+**Benchmark** (Release, 4 vCPU Intel Xeon 2.10 GHz, .NET SDK 8.0.426; ManualClock 60 Hz, 10,000
+entities: 7,000 NED-origin, 3,000 RPR-origin, 10 % static; sender-side FPW thinning; 30 s measured
+after 5 s warm-up; the DR processor feeds the display at 10 Hz for every named moving entity):
+
+| | threshold 1 m | threshold 5 m |
+|---|---|---|
+| messages in | 3,980/s (0.40 per entity/s) | 1,830/s (0.18 per entity/s) |
+| messages out | NED 1,193/s, RPR 3,037/s, display 90,000/s | NED 631/s, RPR 1,804/s, display 90,000/s |
+| derived writes | 90,000/s | 90,000/s |
+| tick time mean / p50 / p95 / p99 / max (ms) | 5.8 / 0.7 / 31.1 / 38.7 / 259.7 | 6.1 / 0.3 / 34.4 / 48.5 / 288.1 |
+| real-time factor | 2.9x | 2.7x |
+| allocated | 445 MB = 3.7 KB per inbound message | 954 MB = 17.4 KB per inbound message |
+| GC gen0 / gen1 / gen2 | 4 / 4 / 1 | 9 / 9 / 2 |
+| published / diagnostics | all 10,000 to the other side / 0 warnings | same |
+
+**Review against R-005 / R-033** (findings, follow-up in T-015):
+1. Throughput is sufficient (2.7-2.9x real time on average), but the tick-time tail is not: every 6th
+   tick the 10 Hz DR processor writes ~9,000 derived positions in one transaction and the display
+   egress sends ~9,000 messages, giving p95 31-34 ms and p99 39-49 ms against a 16.7 ms frame; the
+   250-290 ms maxima are unexplained (GC or first-growth suspected). This is the cost section 8
+   anticipated ("if the benchmark shows a problem, high-rate consumers use the inline variant").
+2. Allocations are kilobytes per inbound message, dominated by the derived/display path (allowed module
+   allocations: outbound records), but **unexplained**: the 5 m run allocates twice as much in total as
+   the 1 m run despite less input and identical derived/display rates. Needs attribution before any
+   claim about R-033 beyond the engine's own 0-byte tests.

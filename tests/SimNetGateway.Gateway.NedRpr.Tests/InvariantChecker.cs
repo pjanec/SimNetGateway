@@ -1,6 +1,7 @@
 using SimNetGateway.Engine;
 using SimNetGateway.Protocol.Ned;
 using SimNetGateway.Protocol.Rpr;
+using SimNetGateway.Showcase;
 
 namespace SimNetGateway.Gateway.NedRpr.Tests;
 
@@ -30,7 +31,7 @@ public sealed class InvariantViolationException : Exception
 /// </summary>
 public sealed class InvariantChecker
 {
-    private readonly GatewayHarness _h;
+    private readonly NedRprHost _h;
     private readonly List<string> _violations = new();
     private readonly HashSet<RprObjectHandle> _removed = new();
     private readonly HashSet<EntityId> _destroyed = new();
@@ -44,7 +45,7 @@ public sealed class InvariantChecker
     private int _diagnosticsSeen;
     private long _checks;
 
-    public InvariantChecker(GatewayHarness harness)
+    public InvariantChecker(NedRprHost harness)
     {
         _h = harness;
     }
@@ -170,7 +171,9 @@ public sealed class InvariantChecker
 
     private void CheckOptionalHandle(RprObjectHandle? handle, string what)
     {
-        if (handle is { } h && !_h.Rti.Registered.Contains(h))
+        // a handle is valid when the RTI delivered it (an object the gateway registered) or when the RPR side announced it itself
+        // (an RPR-origin object that is bound in rpr.handle), e.g. the target of a NED weapon fire
+        if (handle is { } h && !_h.Rti.Registered.Contains(h) && !_h.RprHandles.TryResolve(h, out _))
         {
             _violations.Add($"G-5: {what} uses handle {h.Value}, which the RTI never delivered");
         }

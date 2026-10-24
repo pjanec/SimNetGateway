@@ -30,7 +30,7 @@ progress and done.
 | **T-004a** | done | Common: geo, predictor registry (DIS), allocators, generic DR-extrapolation processor and stale reaper | DD-001, DD-004 | Stage 4; as-built notes in DD-001 section 15; reaper staleness rule changed by R-068 -> T-014 |
 | **T-004b** | done | Protocol projects, PivotSchema, NED/RPR/display modules, NedRprProfile and configurations | DD-001, DD-002, DD-003 | Stage 5; as-built notes and Appendix A in DD-001 |
 | **T-005** | todo | Automated test suite (xUnit) covering engine and module behaviour including edge cases (see DD-001 section 12) | DD-001 | Written in every stage alongside the code |
-| **T-006** | todo | Console demo host assembling the pieces, 10k-entity benchmark (`Hosts/SimNetGateway.Demo`) | DD-001, DD-003 | Stage 6 |
+| **T-006** | done | Console demo host assembling the pieces, 10k-entity benchmark (`Hosts/SimNetGateway.Demo`) | DD-001, DD-003 | Stage 6; results and findings in DD-001 section 15 -> T-015 |
 | **T-007** | todo | ImGui (raylib-cs) visualization of the central repository content | needs DD | Stage 8; R-006: only after the engine is proven; needs its own design doc |
 | **T-008** | done | Make infrastructure cross-platform: portable hook wrapper, LF line endings, no Windows-specific paths | - | R-012 |
 | **T-009** | done | Design of the showcase scenario "Convoy Ambush" exercising all engine capabilities on complex sides | DD-002 | Approved (R-043..R-047) |
@@ -40,3 +40,4 @@ progress and done.
 | **T-012b** | done | Composition: Engine.InMemory, IGatewayProfile, GatewayBuilder, ports, settings records and configuration registries | DD-003 | Stage 4; as-built notes in DD-003 section 9 (configuration registries per gateway come with T-004b) |
 | **T-013** | done | Analyse the WAN RTI concept's impact on the engine design | DD-004 | Approved (R-056..R-062) |
 | **T-014** | done | Origin-write recency (`LastOriginWriteWallTime`, `OriginWrittenWithin` / `NotOriginWrittenWithin`) in the engine and `StaleEntityReaper` switched to it | DD-001 | R-068 (P-40); stage 4; as-built notes in DD-001 section 15 |
+| **T-015** | in-progress | Attribute the stage 6 benchmark tick-time spikes (10 Hz DR/display burst, 250-290 ms maxima) and allocations (incl. why threshold 5 m allocates 2x), then propose fixes | DD-001 | Findings of T-006; investigation only, fixes go through P-n proposals |
