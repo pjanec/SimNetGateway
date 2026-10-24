@@ -1992,3 +1992,28 @@ brute-force scan. Refinements:
   `PresenceCount`, `ReferrerCount`, `OccupiedCellCount`, `CellEntityCount`; `EntityRecord`
   `LastWriteSimTime` / `LastChangeSimTime`; `IdentityRegistry` constructible over a standalone
   repository.
+
+### Stage 4 - Common library (T-004a, 2026-10-24)
+
+Implemented in `src/Common/SimNetGateway.Common` (`Geo/`, `DeadReckoning/`, `Allocators/`,
+`Processors/`), tests in `tests/SimNetGateway.Common.Tests`; about 120 mutation checks (R-065) - all
+killed except three behaviour-neutral ones (an absent-key `HashSet.Remove`, a redundant list `Clear`
+before `CopyTo`, optional `Consumes` entries not observable through a public API). Refinements:
+
+- **Geo**: `Geodetic` in radians/metres; `Wgs84.ToGeodetic` iterates latitude to convergence, stable at
+  the poles (longitude 0 on the polar axis), longitude normalised to (-pi, pi]; reference values
+  checked against an independent implementation. Local frame class `NorthEastDown` (CLAUDE.md naming);
+  minimal `Matrix3`. Geocentric Euler angles: psi, phi in (-pi, pi], theta in [-pi/2, pi/2]; gimbal lock
+  reports phi = 0 (a level aircraft heading north at lat 0 / lon 0 is such a case: (0, -90 deg, 0)).
+- **Predictors** (R-060): one `DisPredictor` class for all nine DIS algorithms (strategy id = DIS
+  number; `Other` = 0 has no predictor, entities with it are skipped with one warning). Static returns
+  zero velocity. Body-axis variants (FPB, RPB, RVB, FVB) use the exact closed-form integral of
+  `R0 exp([w] s) (v + a s)` (the integrals the standard's R1/R2 matrices express), with small-angle
+  series; verified against numerical integration and hand-computed turns, **not against the printed
+  IEEE 1278.1 formulas** (not available). The PoC uses the world-coordinate algorithms.
+- **Allocators**: `RangeAllocator` (next-fit, ulong), `NumberPool` (never-used numbers ascending
+  first, then released numbers FIFO by release time; available when `now - releasedAt >= quarantine`),
+  `MappedAllocator<TKey>` (pool number -> protocol key, used by the gateway for DIS identifiers).
+- **Processors**: `DrExtrapolationProcessor` also requires `StateTime`; opens its change set only when
+  something is to be written; 0 bytes per firing over 1000 moving entities after engine pool warm-up.
+  `StaleEntityReaper` as designed in 6.5 - superseded by R-068 (P-40), switched in T-014.

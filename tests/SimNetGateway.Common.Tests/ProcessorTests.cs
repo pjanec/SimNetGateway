@@ -290,6 +290,59 @@ public class ProcessorTests
     }
 
     [Fact]
+    public void Entities_lacking_algorithm_or_state_time_are_ignored_without_a_warning()
+    {
+        var r = new Rig();
+        r.AddDr(periodSeconds: 1.0);
+        var cs = r.Engine.BeginChange(r.Net);
+        var noAlg = cs.CreateEntity();
+        cs.Set(noAlg, r.Pos, AttrValue.From(Vec3.Zero));
+        cs.Set(noAlg, r.Vel, AttrValue.From(new Vec3(1, 0, 0)));
+        cs.Set(noAlg, r.StateTime, AttrValue.From(0.0));
+        var noTime = cs.CreateEntity();
+        cs.Set(noTime, r.Pos, AttrValue.From(Vec3.Zero));
+        cs.Set(noTime, r.Vel, AttrValue.From(new Vec3(1, 0, 0)));
+        cs.Set(noTime, r.Alg, AttrValue.From((long)DisDeadReckoning.Fpw));
+        Assert.True(cs.Commit().Succeeded);
+
+        r.TickAt(1.0);
+        r.TickAt(2.0);
+
+        Assert.False(r.Engine.State.Find(noAlg)!.Has(r.PredPos));
+        Assert.False(r.Engine.State.Find(noTime)!.Has(r.PredPos));
+        foreach (var e in r.Engine.Diagnostics.Recent)
+        {
+            Assert.True(e.Severity == DiagnosticSeverity.Info, $"{e.Severity}: {e.Message}");
+        }
+    }
+
+    [Fact]
+    public void Orientation_and_angular_velocity_inputs_are_read_for_the_body_axis_algorithms()
+    {
+        var r = new Rig();
+        r.AddDr(periodSeconds: 1.0);
+        var basis = new PredictionBasis(new Vec3(1, 2, 3), new Vec3(10, 0, 0), Vec3.Zero, new Vec3(0.5, 0, 0), new Vec3(0, 0, 0.5), 0);
+        var cs = r.Engine.BeginChange(r.Net);
+        var id = cs.CreateEntity();
+        cs.Set(id, r.Pos, AttrValue.From(basis.Position));
+        cs.Set(id, r.Vel, AttrValue.From(basis.Velocity));
+        cs.Set(id, r.Ori, AttrValue.From(basis.Orientation));
+        cs.Set(id, r.AngVel, AttrValue.From(basis.AngularVelocity));
+        cs.Set(id, r.Alg, AttrValue.From((long)DisDeadReckoning.Rpb));
+        cs.Set(id, r.StateTime, AttrValue.From(0.0));
+        Assert.True(cs.Commit().Succeeded);
+
+        r.TickAt(4.0);
+
+        var expected = new DisPredictor(DisDeadReckoning.Rpb).Predict(in basis, 4.0).Position;
+        Assert.Equal(expected, r.PredictedPosition(id));
+        var noRotation = new DisPredictor(DisDeadReckoning.Rpb).Predict(basis with { AngularVelocity = Vec3.Zero }, 4.0).Position;
+        var noOrientation = new DisPredictor(DisDeadReckoning.Rpb).Predict(basis with { Orientation = Vec3.Zero }, 4.0).Position;
+        Assert.NotEqual(noRotation, expected);
+        Assert.NotEqual(noOrientation, expected);
+    }
+
+    [Fact]
     public void An_unknown_strategy_is_skipped_with_one_warning_per_id()
     {
         var r = new Rig();
@@ -565,6 +618,20 @@ public class ProcessorTests
         Assert.NotNull(r.Engine.State.Find(a1));
         rule.Enabled = true;
         r.TickAt(50.5);       // enabled: fires at the next tick (due is in the past)
+        Assert.Null(r.Engine.State.Find(a1));
+    }
+
+    [Fact]
+    public void The_reaper_fires_every_check_period()
+    {
+        var r = ReaperRig(out var a1, out _, out _);
+        var rule = r.Engine.FindRule("reaper/Reap");
+        Assert.NotNull(rule);
+        r.TickAt(4.0);
+        Assert.NotNull(r.Engine.State.Find(a1));
+        long fired = rule!.FireCount;
+        r.TickAt(5.5);   // due at 5.0 with a 1 s period; the entities are 5.5 s old
+        Assert.Equal(fired + 1, rule.FireCount);
         Assert.Null(r.Engine.State.Find(a1));
     }
 

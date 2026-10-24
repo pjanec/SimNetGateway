@@ -46,6 +46,8 @@ public class PredictorTests
         Assert.Equal(9, Dis(DisDeadReckoning.Fvb).StrategyId);
         Assert.Equal("FPW", Dis(DisDeadReckoning.Fpw).Name);
         Assert.Equal("Static", Dis(DisDeadReckoning.Static).Name);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new DisPredictor((DisDeadReckoning)10));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new DisPredictor((DisDeadReckoning)(-1)));
         Assert.Throws<ArgumentOutOfRangeException>(() => new DisPredictor(DisDeadReckoning.Other));
     }
 
@@ -250,6 +252,16 @@ public class PredictorTests
         var expectedPb = noAcc.Position + IntegratePb(noAcc, r0, dt);
         AssertVec(expectedPb, Dis(DisDeadReckoning.Rpb).Predict(in noAcc, 5 + dt).Position, 1e-8);
         AssertVec(Dis(DisDeadReckoning.Rpb).Predict(in basis, 5 + dt).Position, Dis(DisDeadReckoning.Rpb).Predict(in noAcc, 5 + dt).Position, 1e-12);
+    }
+
+    [Fact]
+    public void Rpb_velocity_ignores_the_acceleration_and_is_the_body_velocity_in_the_predicted_orientation()
+    {
+        var s = Dis(DisDeadReckoning.Rpb).Predict(in Basis, 14);
+        var rt = Orientation.ToMatrix(s.Orientation);
+        AssertVec(rt * Basis.Velocity, s.Velocity, 1e-9);
+        var noAcc = Dis(DisDeadReckoning.Rpb).Predict(Basis with { Acceleration = Vec3.Zero }, 14);
+        AssertVec(noAcc.Velocity, s.Velocity, 1e-12);
     }
 
     private static Vec3 IntegratePb(PredictionBasis b, Matrix3 r0, double dt)

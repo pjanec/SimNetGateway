@@ -117,6 +117,14 @@ public class GeoTests
     }
 
     [Fact]
+    public void The_polar_axis_with_negative_zero_components_still_gives_longitude_zero()
+    {
+        Assert.Equal(0.0, Wgs84.ToGeodetic(new Vec3(-0.0, 0.0, Wgs84.B + 10)).Longitude);
+        Assert.Equal(0.0, Wgs84.ToGeodetic(new Vec3(-0.0, -0.0, -Wgs84.B)).Longitude);
+        Assert.Equal(0.0, Wgs84.ToGeodetic(new Vec3(0.0, -0.0, Wgs84.B)).Longitude);
+    }
+
+    [Fact]
     public void Longitude_is_normalised_to_minus_pi_exclusive_pi_inclusive()
     {
         var east = Wgs84.ToGeodetic(Wgs84.ToEcef(Geodetic.FromDegrees(10, 180, 0)));

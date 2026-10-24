@@ -194,6 +194,43 @@ public class AllocatorTests
     }
 
     [Fact]
+    public void Pool_keeps_release_order_when_its_queue_grows_while_wrapped()
+    {
+        var clock = new ManualClock();
+        var pool = new NumberPool(1, 40, clock, 5);
+        for (int i = 0; i < 40; i++)
+        {
+            Alloc(pool);
+        }
+
+        // Move the ring head off zero first, then fill the ring beyond its initial size of 16.
+        for (int n = 1; n <= 3; n++)
+        {
+            pool.Release(n);
+        }
+
+        clock.Now = 10;
+        for (int n = 1; n <= 3; n++)
+        {
+            Assert.Equal(n, Alloc(pool));
+        }
+
+        for (int n = 10; n < 30; n++)
+        {
+            clock.Now = 20 + n;
+            pool.Release(n);
+        }
+
+        clock.Now = 100;
+        for (int n = 10; n < 30; n++)
+        {
+            Assert.Equal(n, Alloc(pool));
+        }
+
+        Assert.False(pool.TryAllocate(out _));
+    }
+
+    [Fact]
     public void Pool_with_zero_quarantine_reuses_at_once()
     {
         var pool = new NumberPool(1, 1, new ManualClock(), 0);
