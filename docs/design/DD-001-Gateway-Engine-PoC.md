@@ -1853,4 +1853,47 @@ predictor registry (R-056 .. R-060); the API reference above includes them.
 
 ## 15. As-built notes
 
-(To be filled in after T-003 .. T-006.)
+### Stage 1 - values, registries, repository, transactions, journal (T-003a, 2026-10-24)
+
+Implemented in `src/Engine/SimNetGateway.Engine` (folders `Values/`, `Registries/`, `State/`,
+`Transactions/`, `Authority/`, one namespace `SimNetGateway.Engine`); tests in
+`tests/SimNetGateway.Engine.Tests`. Steady-state commits of entity updates allocate 0 bytes (changed
+and unchanged values, journal cycling). Refinements of section 10.3, all within its latitude:
+
+- **Ids** have `None = default` (value 0); real ids start at 1. `SourceRegistry` pre-registers
+  `engine` as `SourceRegistry.Engine` (id 1) for the engine's own change sets (unload).
+- **`AttrKind.None = 0`** added, so `default(AttrValue)` is the absent value. Equality: kinds must
+  match; doubles and `Vec3` components use `double.Equals` (NaN equals NaN, 0.0 equals -0.0) so a
+  repeated NaN or a sign flip of zero is not a change; strings ordinal; `Object` by `Equals`.
+- **Programming errors throw at once** (`ArgumentException` / `InvalidOperationException`): unknown
+  attribute, kind mismatch or `None` in `Set`, wrong-kind `As*`, conflicting re-registration (kind or
+  options differ), `Begin` while a change set is open, commands on a closed change set. Designed
+  failures do not throw (R-026): `Commit` returns `CommitResult { Committed | Empty | Rejected }`.
+- **`Empty`**: nothing to apply (no commands, or only effects that cancel: create + destroy in one
+  transaction, `Clear` of an absent attribute, transfer to the current owner, `Set` + `Clear` of an
+  absent attribute). No record, nothing journaled.
+- **Stage 1 has no dispatcher**: `StateRepository.Begin(source, wallTime, simTime, causedBy)`
+  allocates the correlation id and `Commit` returns the record; stage 2 puts the engine (clock,
+  dispatch, `IGatewayContext.BeginChange`) on top.
+- **One write per slot per transaction**: only the last `Set`/`Clear` of an (entity, attribute) in a
+  transaction is applied, so `Version`, `ChangedWallTime` and the entity's `LastChangeWallTime` move
+  only when the final value differs from the value before the transaction, and every delta has one
+  `AttrChange` per attribute (Old = before the transaction, New = final). Found in review: the first
+  implementation incremented `Version` per intermediate `Set`.
+- **`TryGetPending`** returns false for a slot whose last pending command is a `Clear`, or whose
+  entity is pending destruction.
+- **Write authority** (R-057): `IWriteAuthorityPolicy` has `CanWrite(entity, writer, attr)` as
+  designed plus default-interface methods `CanDestroy(entity, writer)` and
+  `CanTransferOwner(entity, writer, newOwner)`. `SingleWriterPolicy` allows the owner, the trusted
+  sources and `SourceRegistry.Engine`. Checks use the owner **before** the transaction (a
+  `TransferOwner` earlier in the same transaction does not change who may write later in it);
+  commands on an entity **created in the same transaction** are not checked, so a relaying ingress
+  may create an entity with another site as origin/owner and fill it in one transaction (R-061).
+- **Destroy** keeps the dead record's slots (readable by triggers, complete inverse) and sets its
+  `LastWriteWallTime`/`LastChangeWallTime`.
+- **`ChangeSetRecord.Entities` / `EntityDelta.Changes`** are a public struct
+  `ReadOnlyListView<T>` (indexer, struct enumerator; also `IReadOnlyList<T>`, which boxes - use the
+  struct). Records and deltas come from internal pools and return to them when evicted from the
+  journal ring; a record is valid only while it is in the journal.
+- `StateRepository.Commit(ChangeSet)` / `Discard(ChangeSet)` are public as in 10.1 and reject a change
+  set of another repository; `ChangeSet.Discard()` on a closed change set is a no-op.

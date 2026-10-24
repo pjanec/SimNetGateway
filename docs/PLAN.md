@@ -1,6 +1,6 @@
 # Implementation Plan
 
-**Current stage: 1 - Repository and transactions (in progress)**
+**Current stage: 2 - Dispatch, ingress, session, events (in progress; stage 1 reported to the user)**
 
 The plan turns the approved designs (DD-001 .. DD-004) into code in stages. Each stage has a
 scope, the designs and rulings it implements, its tasks (`docs/TASKS.md`) and **exit criteria**.
@@ -51,4 +51,5 @@ user-authored translators from the concept document.
 | Stage | Started | Finished | Result |
 |---|---|---|---|
 | 0 | 2026-10-24 | 2026-10-24 | build + test green on Linux (.NET 8.0.426); 77 architecture tests; a forbidden `Protocol.Ned -> Engine` reference failed 3 of them (checked once, reverted); deviations in DD-003 section 9; approved by user |
-| 1 | 2026-10-24 | - | - |
+| 1 | 2026-10-24 | 2026-10-24 | build + test green on Linux; 62 engine tests incl. 0-byte steady-state commits; deviations in DD-001 section 15 |
+| 2 | 2026-10-24 | - | - |
