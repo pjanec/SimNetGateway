@@ -1865,7 +1865,7 @@ moving is therefore never reaped and its prediction runs on forever (S-9.2 would
 
 ### Proposals from the stage 6 benchmark investigation (T-015)
 
-Approved on 2026-10-24: P-42 -> R-069. P-41, P-43, P-44, P-45 open (a ring-buffer journal, P-46, is under discussion as a replacement for P-43/P-44).
+Approved on 2026-10-24: P-42 -> R-069. P-44 dropped by R-070 (the journal is diagnostics only and can be switched off; no ring-buffer redesign). P-41, P-43, P-45 open, low priority.
 
 Evidence (Release, 10k entities, 4 vCPU; full numbers in T-015's report, summarised in section 15):
 every tick at or above p95 is a 10 Hz DR tick (~31 ms: display egress 43 %, commit/apply 25 %,

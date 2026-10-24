@@ -34,11 +34,12 @@ progress and done.
 | **T-007** | todo | ImGui (raylib-cs) visualization of the central repository content | needs DD | Stage 8; R-006: only after the engine is proven; needs its own design doc |
 | **T-008** | done | Make infrastructure cross-platform: portable hook wrapper, LF line endings, no Windows-specific paths | - | R-012 |
 | **T-009** | done | Design of the showcase scenario "Convoy Ambush" exercising all engine capabilities on complex sides | DD-002 | Approved (R-043..R-047) |
-| **T-010** | todo | Implement the showcase harness, protocol extensions and acceptance test + `Demo --showcase` report | DD-002 | Stage 7 |
+| **T-010** | in-progress | Implement the showcase harness, protocol extensions and acceptance test + `Demo --showcase` report | DD-002 | Stage 7 |
 | **T-011** | done | Design of the solution structure: folders, projects, dependency rules, gateway profiles and ports, host assembly | DD-003 | Approved (R-049..R-054) |
 | **T-012** | done | Solution skeleton per DD-003: projects, references, central packages, architecture tests, build/test scripts, CLAUDE.md paths | DD-003 | Stage 0 built: build + test green on Linux, forbidden-reference check done; deviations in DD-003 section 9; stage approved by user 2026-10-24 |
 | **T-012b** | done | Composition: Engine.InMemory, IGatewayProfile, GatewayBuilder, ports, settings records and configuration registries | DD-003 | Stage 4; as-built notes in DD-003 section 9 (configuration registries per gateway come with T-004b) |
 | **T-013** | done | Analyse the WAN RTI concept's impact on the engine design | DD-004 | Approved (R-056..R-062) |
 | **T-014** | done | Origin-write recency (`LastOriginWriteWallTime`, `OriginWrittenWithin` / `NotOriginWrittenWithin`) in the engine and `StaleEntityReaper` switched to it | DD-001 | R-068 (P-40); stage 4; as-built notes in DD-001 section 15 |
-| **T-015** | review | Attribute the stage 6 benchmark tick-time spikes (10 Hz DR/display burst, 250-290 ms maxima) and allocations (incl. why threshold 5 m allocates 2x), then propose fixes | DD-001 | Investigated (root causes: DR burst, journal-retained pooled deltas, LOH regrowth in the record pool); proposals P-41 .. P-45 in DD-001 section 14 await the user |
+| **T-015** | done | Attribute the stage 6 benchmark tick-time spikes (10 Hz DR/display burst, 250-290 ms maxima) and allocations (incl. why threshold 5 m allocates 2x), then propose fixes | DD-001 | Root causes found; P-42 -> R-069 (T-016), P-44 dropped (R-070); P-41, P-43, P-45 open, low priority |
 | **T-016** | done | Time-sliced DR extrapolation processor (`slices`, NedRprSettings.DrSlices = 6) | DD-001 | R-069 (P-42); as-built notes in DD-001 section 15 |
+| **T-017** | in-progress | Journal switchable off (`JournalCapacity` / `EventLogCapacity` 0: records and events recycled right after dispatch) | DD-001 | R-070 |
