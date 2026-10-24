@@ -29,12 +29,12 @@ progress and done.
 | **T-004** | dropped | Common and NED-RPR gateway (split into T-004a, T-004b) | DD-001 | Split by stage, see docs/PLAN.md |
 | **T-004a** | done | Common: geo, predictor registry (DIS), allocators, generic DR-extrapolation processor and stale reaper | DD-001, DD-004 | Stage 4; as-built notes in DD-001 section 15; reaper staleness rule changed by R-068 -> T-014 |
 | **T-004b** | done | Protocol projects, PivotSchema, NED/RPR/display modules, NedRprProfile and configurations | DD-001, DD-002, DD-003 | Stage 5; as-built notes and Appendix A in DD-001 |
-| **T-005** | todo | Automated test suite (xUnit) covering engine and module behaviour including edge cases (see DD-001 section 12) | DD-001 | Written in every stage alongside the code |
+| **T-005** | done | Automated test suite (xUnit) covering engine and module behaviour including edge cases (see DD-001 section 12) | DD-001 | Written in every stage; through stage 7: Engine 309, Common 144, Gateway.NedRpr 560, Architecture 77 tests |
 | **T-006** | done | Console demo host assembling the pieces, 10k-entity benchmark (`Hosts/SimNetGateway.Demo`) | DD-001, DD-003 | Stage 6; results and findings in DD-001 section 15 -> T-015 |
 | **T-007** | todo | ImGui (raylib-cs) visualization of the central repository content | needs DD | Stage 8; R-006: only after the engine is proven; needs its own design doc |
 | **T-008** | done | Make infrastructure cross-platform: portable hook wrapper, LF line endings, no Windows-specific paths | - | R-012 |
 | **T-009** | done | Design of the showcase scenario "Convoy Ambush" exercising all engine capabilities on complex sides | DD-002 | Approved (R-043..R-047) |
-| **T-010** | in-progress | Implement the showcase harness, protocol extensions and acceptance test + `Demo --showcase` report | DD-002 | Stage 7 |
+| **T-010** | done | Implement the showcase harness, protocol extensions and acceptance test + `Demo --showcase` report | DD-002 | Stage 7: 48/48 conditions PASS, no invariant violation; as-built notes and Appendix B in DD-002; P-47 (S-4.5/S-9.3 wording) awaits the user |
 | **T-011** | done | Design of the solution structure: folders, projects, dependency rules, gateway profiles and ports, host assembly | DD-003 | Approved (R-049..R-054) |
 | **T-012** | done | Solution skeleton per DD-003: projects, references, central packages, architecture tests, build/test scripts, CLAUDE.md paths | DD-003 | Stage 0 built: build + test green on Linux, forbidden-reference check done; deviations in DD-003 section 9; stage approved by user 2026-10-24 |
 | **T-012b** | done | Composition: Engine.InMemory, IGatewayProfile, GatewayBuilder, ports, settings records and configuration registries | DD-003 | Stage 4; as-built notes in DD-003 section 9 (configuration registries per gateway come with T-004b) |

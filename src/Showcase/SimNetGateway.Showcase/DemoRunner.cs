@@ -6,7 +6,7 @@ namespace SimNetGateway.Showcase;
 
 /// <summary>
 /// The demo host's behaviour behind <c>Program.Main</c>: parses the command line, runs the chosen mode, prints, and returns
-/// the exit code (0 success, 2 bad command line or a mode that is not available yet). Kept here so that it is testable.
+/// the exit code (0 success, 1 a showcase that failed, 2 bad command line). Kept here so that it is testable.
 /// </summary>
 public static class DemoRunner
 {
@@ -40,8 +40,9 @@ public static class DemoRunner
                 output.Write(Schema(line.Configuration!));
                 return 0;
             case DemoMode.Showcase:
-                error.Write("--showcase is not available before stage 7.\n");
-                return 2;
+                var report = new ScenarioRunner().Run(ConvoyAmbushScript.Create());
+                output.Write(report.Render());
+                return report.Passed ? 0 : 1;
             case DemoMode.Bench:
                 var result = BenchmarkRunner.Run(new BenchmarkOptions
                 {

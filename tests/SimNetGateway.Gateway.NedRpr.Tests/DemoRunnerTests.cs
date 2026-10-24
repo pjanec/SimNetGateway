@@ -53,12 +53,37 @@ public class DemoRunnerTests
     }
 
     [Fact]
-    public void Showcase_is_not_available_before_stage_7()
+    public void Showcase_prints_the_timeline_and_the_PASS_table_and_exits_0()
     {
         var (exit, output, error) = Run("--showcase");
-        Assert.Equal(2, exit);
-        Assert.Contains("not available before stage 7", error);
-        Assert.Equal(string.Empty, output);
+        Assert.Equal(0, exit);
+        Assert.Equal(string.Empty, error);
+        Assert.Contains("Showcase \"Convoy Ambush\"", output);
+        Assert.Contains("== GW      Act 5 - Engagement", output);
+        Assert.Contains("S-5.3  PASS", output);
+        Assert.Contains("S-11.3 PASS", output);
+        Assert.DoesNotContain("FAIL", output.Split("Success conditions")[1].Split("Design questions")[0]);
+        Assert.EndsWith("Result: PASS\n", output);
+    }
+
+    [Fact]
+    public void Showcase_ignores_the_config_option_and_always_runs_the_showcase_configuration()
+    {
+        var (exit, output, error) = Run("--showcase", "--config", "ned-rpr/default");
+        Assert.Equal(0, exit);
+        Assert.Equal(string.Empty, error);
+        Assert.EndsWith("Result: PASS\n", output);
+        Assert.Equal(Run("--showcase").Out, output);
+        Assert.Null(DemoCommandLine.Parse(["--showcase", "--config", "does/not-exist"]).Error); // ignored, not even validated
+    }
+
+    [Fact]
+    public void Help_says_that_showcase_ignores_config()
+    {
+        var (_, output, _) = Run("--help");
+        Assert.Contains("--showcase", output);
+        Assert.Contains("--config is ignored", output);
+        Assert.Contains(NedRprConfigurations.Showcase.Name, output);
     }
 
     [Fact]

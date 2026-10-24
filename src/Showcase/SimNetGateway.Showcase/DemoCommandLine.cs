@@ -28,7 +28,7 @@ public static class DemoConfigurations
 
 /// <summary>
 /// The parsed command line of the demo host: <c>--config &lt;name&gt;</c>, <c>--list</c>, <c>--schema</c>, <c>--bench</c> with
-/// <c>--entities N --seconds S --seed K --threshold M</c>, <c>--showcase</c> (stage 7) and <c>--help</c>. A bad command line
+/// <c>--entities N --seconds S --seed K --threshold M</c>, <c>--showcase</c> (the DD-002 showcase; it ignores <c>--config</c>) and <c>--help</c>. A bad command line
 /// has <see cref="ExitCode"/> 2 and an <see cref="Error"/> text that lists the valid values.
 /// </summary>
 public sealed class DemoCommandLine
@@ -150,7 +150,7 @@ public sealed class DemoCommandLine
             }
         }
 
-        if (line.Error is null && line.Configuration is null)
+        if (line.Error is null && line.Mode != DemoMode.Showcase && line.Configuration is null)
         {
             line.Error = $"Unknown configuration '{line.ConfigName}'. Valid configurations: " +
                 string.Join(", ", configurations.Select(c => c.Name)) + ".";
@@ -175,7 +175,8 @@ public sealed class DemoCommandLine
         sb.Append(string.Create(CultureInfo.InvariantCulture, $"      --seconds S       simulated seconds measured (default {DefaultSeconds})\n"));
         sb.Append(string.Create(CultureInfo.InvariantCulture, $"      --seed K          random seed (default {DefaultSeed})\n"));
         sb.Append(string.Create(CultureInfo.InvariantCulture, $"      --threshold M     sender dead-reckoning threshold in metres (default {DefaultThreshold})\n"));
-        sb.Append("  --showcase          the DD-002 showcase (stage 7)\n");
+        sb.Append("  --showcase          run the DD-002 showcase \"Convoy Ambush\" and print its timeline and PASS/FAIL table;\n");
+        sb.Append("                      exit code 0 on PASS, 1 on FAIL; --config is ignored (always ").Append(NedRprConfigurations.Showcase.Name).Append(")\n");
         sb.Append("  --help              this text\n");
         sb.Append("Configurations: ").Append(string.Join(", ", configurations.Select(c => c.Name))).Append('\n');
         return sb.ToString();

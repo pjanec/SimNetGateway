@@ -38,6 +38,12 @@ public sealed class IdentityMap<TKey> : IIdentityMapInternal, IChangeParticipant
     public string Name { get; }
     public Type KeyType => typeof(TKey);
 
+    /// <summary>
+    /// The allocator that creates keys for entities introduced to this side; null for a map whose keys only come from the
+    /// wire. Read-only access for diagnostics (the showcase checks that an unload gives every key back).
+    /// </summary>
+    public IIdAllocator<TKey>? Allocator => _allocator;
+
     /// <summary>Number of committed bindings.</summary>
     public int Count => _byEntity.Count;
 

@@ -24,6 +24,9 @@ public sealed class MappedAllocator<TKey> : IIdAllocator<TKey>
         _toNumber = toNumber;
     }
 
+    /// <summary>The allocator of the numbers this one maps (read-only access for diagnostics: pool occupancy, quarantine).</summary>
+    public IIdAllocator<int> Numbers => _numbers;
+
     public bool TryAllocate(out TKey key)
     {
         if (_numbers.TryAllocate(out int number))

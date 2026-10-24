@@ -470,6 +470,12 @@ P-27 -> R-047.
 | **P-26** | Operator reconfiguration in the PoC is rule enable/disable at runtime; adding new modules while running is not part of the PoC. | Also support registering modules while the engine runs. |
 | **P-27** | An outbound event that refers to an entity whose RPR handle is still pending (asynchronous registration) is **held** until the handle arrives (at most 1 s, then sent with "no object" and a warning). | Send immediately with "no object". |
 
+Proposal from stage 7 (awaiting approval):
+
+| ID | Proposal (lean) | Main alternative |
+|---|---|---|
+| **P-47** | Amend two success conditions to what the approved design actually allows: **S-4.5** - `AttributeChangedWithin(Spatial.Position, 3 s)` returns exactly the entities the script updated in [47, 50]; `ChangedWithin(3 s)` returns those plus every entity whose `Derived.*` prediction changed (the DR processor writes moving entities at 10 Hz, R-029); `NotWrittenWithin(10 s).FromOrigin(RPR)` unchanged. **S-9.3** - a released DIS entity number stays unavailable for the quarantine and becomes available afterwards (a reuse itself is not observable because the pool hands out never-used numbers first). | Keep the original wording and change the gateway (e.g. exclude derived writes from `ChangedWithin`, or reuse numbers LIFO) - contradicts R-029 / the approved pool policy. |
+
 ## 10. As-built notes
 
 ### Stage 7a - protocol extensions and gateway modules (T-010, 2026-10-24)
@@ -502,6 +508,31 @@ scan after every tick. Decisions made during implementation and review:
 - A late-linked aggregate member is introduced to NED as an individual and withdrawn within the same tick
   (the linker runs after the creation record); the end-of-tick state is correct.
 - On assembly timeout the munition is the shooter's selected one, else the first part's.
+
+### Stage 7b - harness, script, acceptance test (T-010, 2026-10-24)
+
+`src/Showcase/SimNetGateway.Showcase`: ScenarioScript/Runner/Context/Report, ProbeModule, FaultyModule,
+RogueProcessor, UnknownNedMessage, the InvariantChecker (G-1 .. G-8, moved from the test project) and
+`ConvoyAmbushScript` (acts 0-11); `Demo --showcase` (always the Showcase configuration). Result: **48 of
+48 conditions PASS** (the 47 of section 5 plus S-9.5), **no invariant violation in 8,400 ticks**, final
+state empty (repository, identity maps, NED range; DIS numbers in quarantine), deterministic report.
+Mutation checks of the gateway fail the acceptance test at the expected S-/G-ids. Engine/Common: two
+read-only accessors (`IdentityMap.Allocator`, `MappedAllocator.Numbers`) for S-10.2. Decisions:
+
+- Steps run on the runner clock (tick k at k/60 s; steps before, checks after the tick); Load 6.0 s,
+  Start 6.5 s, Pause 90 s, Resume 99 s; the report shows runner and sim time.
+- **S-9.5 added** (R-047): a replacement NED entity (Kestrel) fires in the tick it is created, so the fire is
+  held until its RPR handle arrives; it also realises act 9 item 3 (new entity within the DIS quarantine).
+- "RPR got X and nothing else" ignores 5 s heartbeats. RPR entities send quiet keep-alive updates so the
+  12 s reaper keeps them (Wolf-1/2 go silent for 11.3 s around t = 50 for S-4.5; Wolf-3 moves at 2 m/s and
+  goes silent at 101.1 s for S-9.2, proving R-068). RPR aggregate members are numbered from 1 on the RPR
+  side, NED sees indexes 0-3. The act 6 override stays active during the replay. After Unload, Idle sim
+  time runs free again (S-10.2 checks that, not 0). A throwing step fails the run instead of aborting it.
+  G-8 lets a record and its events share one correlation, record first.
+- **Wording conflicts, checked in the closest faithful way and put to the user as P-47**: S-4.5 and S-9.3
+  (see section 9).
+- Known test gap: the CausedBy half of G-8 has no injected-violation test (the engine sets CausedBy
+  itself); the dispatch-order half has one.
 
 ## Appendix B - showcase spec (stage 7, pinned before implementation)
 

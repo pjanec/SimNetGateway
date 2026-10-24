@@ -10,7 +10,8 @@ namespace SimNetGateway.Gateway.NedRpr.Tests;
 /// <summary>
 /// The reusable end-to-end harness of the NED-RPR gateway: a manual clock, the gateway built from a configuration, one
 /// multi-type in-memory inbound channel per input side, recorders for the three outbound sides, the simulated RTI wired to
-/// the RPR recorder, and the <see cref="InvariantChecker"/> that runs after every step (G-1, G-2, G-4, G-5, G-8, diagnostics).
+/// the RPR recorder, and the <see cref="InvariantChecker"/> of the showcase project that runs after every step (G-1 .. G-8 as far as
+/// the harness has the data: no probe is registered, so the probe parts of G-6 and G-8 are left to the showcase runner).
 /// </summary>
 public sealed class GatewayHarness
 {

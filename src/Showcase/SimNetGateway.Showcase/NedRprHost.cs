@@ -139,6 +139,28 @@ public sealed class NedRprHost
     /// <summary>Called at the end of every <see cref="Step"/>.</summary>
     public Action<NedRprHost>? AfterTick { get; set; }
 
+    /// <summary>Called by <see cref="SendNed{T}"/> with every message injected on the NED side (the showcase runner logs and inspects it).</summary>
+    public Action<INedMessage>? OnNedInput { get; set; }
+
+    /// <summary>Called by <see cref="SendRpr{T}"/> with every message injected on the RPR side.</summary>
+    public Action<IRprMessage>? OnRprInput { get; set; }
+
+    /// <summary>Enqueues a message on the NED inbound channel (after telling <see cref="OnNedInput"/>).</summary>
+    public void SendNed<T>(T message)
+        where T : INedMessage
+    {
+        OnNedInput?.Invoke(message);
+        NedIn.Enqueue(in message);
+    }
+
+    /// <summary>Enqueues a message on the RPR inbound channel (after telling <see cref="OnRprInput"/>).</summary>
+    public void SendRpr<T>(T message)
+        where T : IRprMessage
+    {
+        OnRprInput?.Invoke(message);
+        RprIn.Enqueue(in message);
+    }
+
     /// <summary>Messages the gateway has sent to NED so far (recorded or counted).</summary>
     public long NedSentCount => NedOut?.Count ?? _nedNull!.Sent;
 
