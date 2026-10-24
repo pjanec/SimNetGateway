@@ -346,3 +346,29 @@ P-53 -> R-076, P-54 -> R-077, P-55 -> R-078.
   brute-force oracle after every tick of seeded runs, Convoy Ambush (8,400 ticks) and benchmark traffic; the
   tracer equals a reference probe per correlation; the Convoy Ambush report is identical with and without the
   observer; an idle tracer allocates 0 bytes. 15 mutation checks, all killed.
+
+### Stage 8b - viewer host (T-007, 2026-10-24)
+
+- **Packages** (R-073): Raylib-cs 7.0.1, ImGui.NET 1.91.6.1, rlImgui-cs 3.2.0 (rlImgui-cs pins exactly the
+  other two); natives verified: `libraylib.so` / `raylib.dll`, `libcimgui.so` / `cimgui.dll` for linux-x64 and
+  win-x64. The project allows unsafe code only for ImGui.NET's list clipper.
+- `Hosts/SimNetGateway.Viewer`: headless `ViewerSession` (scenario, fixed 60 Hz step, play/pause/step/speed,
+  per-frame budget with backlog/dropped accounting `played + backlog + dropped = owed`, refresh policy,
+  operator action queue applied between ticks, models and tracer) and a raylib/rlImGui `ViewerFrontend` with
+  Dashboard, Entities, Inspector, Map, Rules, Trace, Journal/Events, Identities, Diagnostics, Vocabulary,
+  Scenario and Controls panels. `ScenarioRunner` and `DemoScenario` got steppable `Start()` runs (no worker
+  thread). An `IngressCounter` observer counts inputs per side. `imgui.ini` is not written.
+- Command line: `--scenario convoy|demo|traffic|empty`, `--entities`, `--speed`, `--headless --frames N`,
+  window-only `--advance S`, `--map-focus NAME[,M]`, `--select`, `--trace-all`, `--screenshot-after S PATH`.
+  Without a display: clear message, exit code 2. Headless Convoy Ambush prints the acceptance report (PASS,
+  48/48). Verified windowed under Xvfb with Mesa llvmpipe (OpenGL 4.5), 60 fps.
+- Review fixes: every `EntityTable` entry type overrides `ToString` (RPR publication state, formation units,
+  NED id exhaustion) so module state is readable (R-077), checked for every live entry of a Convoy Ambush
+  run; sized/wrapping table columns with tooltips; map fit view, labels at moderate zoom and for the
+  selected entity, visible formation links with a centroid marker for parents without a position.
+- **Defect fixed in Engine.Monitoring**: `DispatchTracer` read `Type.Name` per input; the runtime's name cache
+  sits behind a weak handle cleared by a GC, so the first read after a collection allocated ~192 bytes
+  (the flaky 0-byte test). The tracer caches type names; a deterministic regression test forces a GC between
+  warm-up and measurement. 50 + 40 repeated runs under CPU load without a failure.
+- The tracer records nothing until an entity or correlation is watched or "trace everything" is on.
+- Known cosmetic issue: at whole-cast zoom, labels of clustered entities overlap.

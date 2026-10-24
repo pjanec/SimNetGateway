@@ -13,6 +13,8 @@ public sealed class NedIdentityEgress : IGatewayModule
     private struct Exhausted
     {
         public bool Warned;
+
+        public override readonly string ToString() => $"id range exhaustion warned {Warned}";
     }
 
     private readonly PivotSchema _schema;

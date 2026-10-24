@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- ImGui.NET exposes the list clipper only through native pointers -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Raylib-cs" />
+    <PackageReference Include="ImGui.NET" />
+    <PackageReference Include="rlImgui-cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Engine/SimNetGateway.Engine/SimNetGateway.Engine.csproj" />
+    <ProjectReference Include="../../Engine/SimNetGateway.Engine.InMemory/SimNetGateway.Engine.InMemory.csproj" />
+    <ProjectReference Include="../../Engine/SimNetGateway.Engine.Monitoring/SimNetGateway.Engine.Monitoring.csproj" />
+    <ProjectReference Include="../../Common/SimNetGateway.Common/SimNetGateway.Common.csproj" />
+    <ProjectReference Include="../../Gateways/SimNetGateway.Gateway.NedRpr/SimNetGateway.Gateway.NedRpr.csproj" />
+    <ProjectReference Include="../../Showcase/SimNetGateway.Showcase/SimNetGateway.Showcase.csproj" />
+  </ItemGroup>
+
+</Project>

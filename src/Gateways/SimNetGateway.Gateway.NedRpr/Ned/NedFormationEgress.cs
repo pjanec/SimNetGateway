@@ -31,6 +31,8 @@ public sealed class NedFormationEgress : IGatewayModule
         public bool Dirty;
         public bool Sent;
         public bool Warned;
+
+        public override readonly string ToString() => $"dirty {Dirty}, sent {Sent}, warned {Warned}";
     }
 
     private readonly PivotSchema _schema;

@@ -233,6 +233,7 @@ public sealed class DispatchTracer : IDispatchObserver
     private readonly List<DispatchTrace> _ring = new();
     private readonly Stack<DispatchTrace> _pool = new();
     private readonly Dictionary<CorrelationId, DispatchTrace> _open = new();
+    private readonly Dictionary<Type, string> _typeNames = new();
     private readonly List<DispatchTrace> _segment = new();
     private DispatchTrace? _current;
     private bool _segmentActive;
@@ -438,7 +439,7 @@ public sealed class DispatchTracer : IDispatchObserver
             : TraceKind.Input;
         var trace = NewTrace(correlation, kind);
         trace.Source = source;
-        trace.InputType = messageType.Name;
+        trace.InputType = TypeName(messageType);
         _current = trace;
         if (_correlations.Contains(correlation))
         {
@@ -459,7 +460,7 @@ public sealed class DispatchTracer : IDispatchObserver
         trace.Status = TraceStatus.Unhandled;
         trace.Source = source;
         trace.SourceName = Names.Source(_sources, source);
-        trace.InputType = messageType.Name;
+        trace.InputType = TypeName(messageType);
         Keep(trace);
     }
 
@@ -637,6 +638,19 @@ public sealed class DispatchTracer : IDispatchObserver
         }
 
         return "event#" + type.Value;
+    }
+
+    // Type.Name is not free in steady state: the runtime keeps a type's name cache behind a weak handle that a collection
+    // clears, so reading the name again after a GC allocates (a few hundred bytes, once per type and GC). Names are kept here.
+    private string TypeName(Type type)
+    {
+        if (!_typeNames.TryGetValue(type, out string? name))
+        {
+            name = type.Name;
+            _typeNames[type] = name;
+        }
+
+        return name;
     }
 
     private DispatchTrace? Find(CorrelationId correlation)

@@ -113,6 +113,38 @@ public sealed class DemoResult
     }
 }
 
+/// <summary>One demo run that is advanced tick by tick (see <see cref="DemoScenario.Start"/>).</summary>
+public sealed class DemoRun
+{
+    private readonly Func<bool> _step;
+    private readonly Func<int> _ticks;
+    private readonly Func<DemoResult> _finish;
+
+    internal DemoRun(NedRprHost host, int totalTicks, Func<bool> step, Func<int> ticks, Func<DemoResult> finish)
+    {
+        Host = host;
+        TotalTicks = totalTicks;
+        _step = step;
+        _ticks = ticks;
+        _finish = finish;
+    }
+
+    public NedRprHost Host { get; }
+
+    public int TotalTicks { get; }
+
+    /// <summary>Ticks done so far.</summary>
+    public int Ticks => _ticks();
+
+    public bool Finished => Ticks >= TotalTicks;
+
+    /// <summary>Runs the next tick (script, senders, host step); false when the demo has ended.</summary>
+    public bool Step() => _step();
+
+    /// <summary>The result of the run so far (the whole demo once <see cref="Finished"/>).</summary>
+    public DemoResult Finish() => _finish();
+}
+
 /// <summary>
 /// The default demo: a deterministic, scripted run of about 20 simulated seconds at 60 Hz on a manual clock with a handful of
 /// entities - a NED vehicle that moves and turns, a static NED checkpoint, a second NED vehicle that is disposed, an RPR tank
@@ -128,6 +160,20 @@ public static class DemoScenario
     private static readonly TypeCatalog s_catalog = new();
 
     public static DemoResult Run(DemoOptions? options = null)
+    {
+        var run = Start(options);
+        while (run.Step())
+        {
+        }
+
+        return run.Finish();
+    }
+
+    /// <summary>
+    /// Builds the host and the script and returns the run before its first tick: the caller advances it tick by tick with
+    /// <see cref="DemoRun.Step"/> (the viewer does, from its frame loop). <see cref="Run"/> is this plus a loop.
+    /// </summary>
+    public static DemoRun Start(DemoOptions? options = null)
     {
         options ??= new DemoOptions();
         var configuration = options.Configuration ?? NedRprConfigurations.Default;
@@ -258,9 +304,17 @@ public static class DemoScenario
 
         int totalTicks = (int)Math.Round(Duration / NedRprHost.Dt);
         int next = 0;
+        int tick = 0;
         script.Sort((a, b) => a.Tick.CompareTo(b.Tick));
-        for (int tick = 1; tick <= totalTicks; tick++)
+
+        bool StepOne()
         {
+            if (tick >= totalTicks)
+            {
+                return false;
+            }
+
+            tick++;
             while (next < script.Count && script[next].Tick <= tick)
             {
                 script[next++].Action();
@@ -291,18 +345,24 @@ public static class DemoScenario
             }
 
             host.Step(NedRprHost.Dt);
+            return true;
         }
 
-        var diagnostics = new List<string>();
-        foreach (var entry in host.Engine.Diagnostics.Recent)
+        DemoResult Finish()
         {
-            if (entry.Severity != DiagnosticSeverity.Info)
+            var diagnostics = new List<string>();
+            foreach (var entry in host.Engine.Diagnostics.Recent)
             {
-                diagnostics.Add($"{entry.Severity} [{entry.Category}] {entry.Origin}: {entry.Message}");
+                if (entry.Severity != DiagnosticSeverity.Info)
+                {
+                    diagnostics.Add($"{entry.Severity} [{entry.Category}] {entry.Origin}: {entry.Message}");
+                }
             }
+
+            return new DemoResult(host, timeline, counts, diagnostics, tick, tick * NedRprHost.Dt, senderTime);
         }
 
-        return new DemoResult(host, timeline, counts, diagnostics, totalTicks, totalTicks * NedRprHost.Dt, senderTime);
+        return new DemoRun(host, totalTicks, StepOne, () => tick, Finish);
     }
 
     private static void Record(NedRprHost host, List<string> timeline, SortedDictionary<string, int> counts, string side,

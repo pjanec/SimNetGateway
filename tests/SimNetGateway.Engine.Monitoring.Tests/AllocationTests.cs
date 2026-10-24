@@ -60,11 +60,20 @@ public class AllocationTests
         public void Round(int i) => Engine.Ingest(Net, new Move(Ids[i % Entities], new Vec3(i, i + 1, i + 2)));
     }
 
-    private static long Measure(Setup s)
+    private static long Measure(Setup s, bool collectBeforeMeasuring = false)
     {
         for (int i = 0; i < Warmup; i++)
         {
             s.Round(i);
+        }
+
+        if (collectBeforeMeasuring)
+        {
+            // a collection clears the runtime's weakly held per-type caches (Type.Name and friends): steady state must not
+            // depend on them (this was the cause of a rare 192 / 400 byte failure when other tests made the GC run)
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
         }
 
         long before = GC.GetAllocatedBytesForCurrentThread();
@@ -104,6 +113,17 @@ public class AllocationTests
 
         Assert.True(tracer.IsActive);
         Assert.Equal(0, Measure(s));
+        Assert.Empty(tracer.Traces);
+    }
+
+    [Fact]
+    public void A_collection_between_warm_up_and_measurement_does_not_make_the_active_tracer_allocate()
+    {
+        var tracer = new DispatchTracer();
+        tracer.Watch(new EntityId(123_456));
+        var s = new Setup(tracer);
+
+        Assert.Equal(0, Measure(s, collectBeforeMeasuring: true));
         Assert.Empty(tracer.Traces);
     }
 

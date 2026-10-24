@@ -14,6 +14,7 @@
     <ProjectReference Include="../../src/Gateways/SimNetGateway.Gateway.NedRpr/SimNetGateway.Gateway.NedRpr.csproj" />
     <ProjectReference Include="../../src/Showcase/SimNetGateway.Showcase/SimNetGateway.Showcase.csproj" />
     <ProjectReference Include="../../src/Hosts/SimNetGateway.Demo/SimNetGateway.Demo.csproj" />
+    <ProjectReference Include="../../src/Hosts/SimNetGateway.Viewer/SimNetGateway.Viewer.csproj" />
   </ItemGroup>
 
 </Project>
