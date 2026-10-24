@@ -20,6 +20,8 @@ public sealed class EntityRecord
         LastChangeWallTime = createdWallTime;
         LastWriteSimTime = createdSimTime;
         LastChangeSimTime = createdSimTime;
+        LastOriginWriteWallTime = createdWallTime;
+        LastOriginWriteSimTime = createdSimTime;
     }
 
     public EntityId Id { get; }
@@ -37,11 +39,27 @@ public sealed class EntityRecord
     /// <summary>Sim time of the last change of any attribute value, owner or lifetime.</summary>
     public double LastChangeSimTime { get; internal set; }
 
-    // Intrusive links of the repository's recency lists (by last write, by last change); see StateRepository.
+    /// <summary>
+    /// Wall time of the last committed change set that wrote the entity (create, set, clear, transfer) and whose source
+    /// was the entity's <see cref="Owner"/> at that commit (the owner before the transaction; the owner defaults to the
+    /// origin and changes only via TransferOwner, R-057). Writes by any other source (processors, the engine) do not
+    /// move it, so it measures whether the side itself still sends the entity (R-068). A new entity starts with the
+    /// times of its creation commit even when the creating source is not its owner, so that it does not look stale at
+    /// birth. Known limitation: relayed traffic (R-061) written by a source other than the owner counts as a non-origin
+    /// write; the WAN design (out of PoC scope, R-062) must write as the owner or adjust this rule.
+    /// </summary>
+    public double LastOriginWriteWallTime { get; internal set; }
+
+    /// <summary>Sim time of the last origin write (see <see cref="LastOriginWriteWallTime"/>); not monotonic across Load.</summary>
+    public double LastOriginWriteSimTime { get; internal set; }
+
+    // Intrusive links of the repository's recency lists (by last write, by last change, by last origin write).
     internal EntityRecord? WritePrev;
     internal EntityRecord? WriteNext;
     internal EntityRecord? ChangePrev;
     internal EntityRecord? ChangeNext;
+    internal EntityRecord? OriginPrev;
+    internal EntityRecord? OriginNext;
 
     /// <summary>Number of attributes currently present.</summary>
     public int Count => _slots.Count;

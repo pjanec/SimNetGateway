@@ -32,7 +32,17 @@ public class IndexConsistencyTests
         return result;
     }
 
-    private static void Verify(QueryFixture f, Random rng, int maxId, string context)
+    /// <summary>Brute-force reference of the origin-write fields (R-068), maintained by the test from its own operations.</summary>
+    private sealed class OriginModel
+    {
+        public double Wall;
+        public double Sim;
+        public SourceId Owner;
+        public readonly HashSet<AttrId> Present = new();
+    }
+
+    private static void Verify(QueryFixture f, Random rng, int maxId, string context,
+        Dictionary<EntityId, OriginModel> model)
     {
         var repo = f.Repo;
         var live = Live(repo);
@@ -43,6 +53,7 @@ public class IndexConsistencyTests
         {
             (repo.ByLastWrite, e => e.LastWriteWallTime, "write"),
             (repo.ByLastChange, e => e.LastChangeWallTime, "change"),
+            (repo.ByLastOriginWrite, e => e.LastOriginWriteWallTime, "origin write"),
         })
         {
             var walked = Walk(list);
@@ -51,6 +62,16 @@ public class IndexConsistencyTests
             {
                 Assert.True(time(walked[i - 1]) <= time(walked[i]), $"{context}: {name} list is not ordered by time");
             }
+        }
+
+        // origin-write fields and owners equal the reference model, which has exactly the live entities
+        Assert.Equal(live.Count, model.Count);
+        foreach (var e in live)
+        {
+            var m = model[e.Id];
+            Assert.True(m.Wall == e.LastOriginWriteWallTime, $"{context}: origin wall time of {e.Id.Value}: {e.LastOriginWriteWallTime} vs model {m.Wall}");
+            Assert.True(m.Sim == e.LastOriginWriteSimTime, $"{context}: origin sim time of {e.Id.Value}: {e.LastOriginWriteSimTime} vs model {m.Sim}");
+            Assert.True(m.Owner == e.Owner, $"{context}: owner of {e.Id.Value}");
         }
 
         // presence sets
@@ -118,6 +139,14 @@ public class IndexConsistencyTests
         Assert.True(Ids(live.Where(e => e.LastChangeWallTime >= now - window)).SequenceEqual(QueryFixture.Ids(repo.Query().ChangedWithin(span))), $"{context}: ChangedWithin");
         Assert.True(Ids(live.Where(e => e.LastWriteWallTime >= now - window)).SequenceEqual(QueryFixture.Ids(repo.Query().WrittenWithin(span))), $"{context}: WrittenWithin");
         Assert.True(Ids(live.Where(e => e.LastWriteWallTime < now - window)).SequenceEqual(QueryFixture.Ids(repo.Query().NotWrittenWithin(span))), $"{context}: NotWrittenWithin");
+        Assert.True(Ids(live.Where(e => model[e.Id].Wall >= now - window)).SequenceEqual(QueryFixture.Ids(repo.Query().OriginWrittenWithin(span))), $"{context}: OriginWrittenWithin");
+        Assert.True(Ids(live.Where(e => model[e.Id].Wall < now - window)).SequenceEqual(QueryFixture.Ids(repo.Query().NotOriginWrittenWithin(span))), $"{context}: NotOriginWrittenWithin");
+        var side = rng.Next(2) == 0 ? f.A : f.B;
+        Assert.True(Ids(live.Where(e => e.Origin == side && model[e.Id].Wall < now - window)).SequenceEqual(
+            QueryFixture.Ids(repo.Query().FromOrigin(side).NotOriginWrittenWithin(span))), $"{context}: FromOrigin + NotOriginWrittenWithin");
+        double simNow = repo.SimNow;
+        Assert.True(Ids(live.Where(e => model[e.Id].Sim >= simNow - window)).SequenceEqual(QueryFixture.Ids(repo.Query().InSimTime().OriginWrittenWithin(span))), $"{context}: sim OriginWrittenWithin");
+        Assert.True(Ids(live.Where(e => model[e.Id].Sim < simNow - window)).SequenceEqual(QueryFixture.Ids(repo.Query().InSimTime().NotOriginWrittenWithin(span))), $"{context}: sim NotOriginWrittenWithin");
     }
 
     [Theory]
@@ -130,6 +159,9 @@ public class IndexConsistencyTests
         var f = new QueryFixture();
         var live = new List<EntityId>();
         var all = new List<EntityId>();
+        var model = new Dictionary<EntityId, OriginModel>();
+        var processor = f.Sources.Register("processor"); // writes derived values, owns nothing
+        var sources = new[] { f.A, f.B, processor };
         double time = 1;
         int operations = 0;
         int batches = 0;
@@ -138,14 +170,33 @@ public class IndexConsistencyTests
         {
             time += rng.Next(0, 4) == 0 ? 0 : rng.NextDouble() * 3; // non-decreasing, sometimes equal
             var destroyedNow = new HashSet<EntityId>();
-            var cs = f.Repo.Begin(rng.Next(2) == 0 ? f.A : f.B, time, time);
+            var source = sources[rng.Next(4) == 0 ? 2 : rng.Next(2)];
+            double sim = time * 0.5; // distinct from wall time, so a mix-up of the two is caught
+            var cs = f.Repo.Begin(source, time, sim);
             var createdNow = new List<EntityId>();
+            var ownerBefore = new Dictionary<EntityId, SourceId>();           // owner before the transaction, per transferred entity
+            var curOwner = new Dictionary<EntityId, SourceId>();              // owner now, per transferred entity
+            var lastOp = new Dictionary<(EntityId, AttrId), bool>();          // last command per slot: true = Set
+            var originWritten = new HashSet<EntityId>();                      // entities with a write by the owner (transfers)
+
+            void Set(EntityId id, AttrId attr, AttrValue value)
+            {
+                cs.Set(id, attr, value);
+                lastOp[(id, attr)] = true;
+            }
+
+            void Clear(EntityId id, AttrId attr)
+            {
+                cs.Clear(id, attr);
+                lastOp[(id, attr)] = false;
+            }
+
             int n = rng.Next(1, 9);
             for (int i = 0; i < n; i++)
             {
                 operations++;
                 var pool = live.Where(x => !destroyedNow.Contains(x)).Concat(createdNow.Where(x => !destroyedNow.Contains(x))).ToList();
-                int op = pool.Count < 5 ? 0 : rng.Next(0, 100);
+                int op = pool.Count < 5 ? 0 : rng.Next(0, 106);
                 if (op < 12)
                 {
                     var id = cs.CreateEntity();
@@ -153,7 +204,7 @@ public class IndexConsistencyTests
                     all.Add(id);
                     if (rng.Next(2) == 0)
                     {
-                        cs.Set(id, f.Pos, RandomPos(rng));
+                        Set(id, f.Pos, RandomPos(rng));
                     }
 
                     continue;
@@ -167,36 +218,49 @@ public class IndexConsistencyTests
                 }
                 else if (op < 40)
                 {
-                    cs.Set(target, f.Pos, RandomPos(rng));
+                    Set(target, f.Pos, RandomPos(rng));
                 }
                 else if (op < 48)
                 {
-                    cs.Set(target, f.Target, RandomPos(rng));
+                    Set(target, f.Target, RandomPos(rng));
                 }
                 else if (op < 56)
                 {
-                    cs.Clear(target, rng.Next(2) == 0 ? f.Pos : f.Target);
+                    Clear(target, rng.Next(2) == 0 ? f.Pos : f.Target);
                 }
                 else if (op < 72)
                 {
                     // re-parent: any entity ever created, alive or not
-                    cs.Set(target, f.Parent, QueryFixture.R(all[rng.Next(all.Count)]));
+                    Set(target, f.Parent, QueryFixture.R(all[rng.Next(all.Count)]));
                 }
                 else if (op < 78)
                 {
-                    cs.Clear(target, f.Parent);
+                    Clear(target, f.Parent);
                 }
                 else if (op < 90)
                 {
-                    cs.Set(target, f.Count, QueryFixture.I(rng.Next(0, 3))); // often the same value: written, not changed
+                    Set(target, f.Count, QueryFixture.I(rng.Next(0, 3))); // often the same value: written, not changed
                 }
                 else if (op < 95)
                 {
-                    cs.Set(target, f.Speed, QueryFixture.D(rng.Next(0, 3)));
+                    Set(target, f.Speed, QueryFixture.D(rng.Next(0, 3)));
                 }
-                else
+                else if (op < 100)
                 {
-                    cs.Clear(target, f.Speed);
+                    Clear(target, f.Speed);
+                }
+                else if (!createdNow.Contains(target))
+                {
+                    // ownership moves around: to another side, the processor or (a no-op) the current owner
+                    var newOwner = sources[rng.Next(3)];
+                    var current = curOwner.TryGetValue(target, out var c) ? c : model[target].Owner;
+                    ownerBefore.TryAdd(target, current);
+                    cs.TransferOwner(target, newOwner);
+                    curOwner[target] = newOwner;
+                    if (newOwner != current && source == ownerBefore[target])
+                    {
+                        originWritten.Add(target);
+                    }
                 }
             }
 
@@ -206,7 +270,79 @@ public class IndexConsistencyTests
             live.AddRange(createdNow.Where(x => !destroyedNow.Contains(x)));
             batches++;
 
-            Verify(f, rng, all.Count + 1, $"seed {seed}, batch {batches}");
+            // reference model of the origin-write fields: an owner's write (by the owner before the transaction)
+            // counts when it applied; a Set always applies (only the last command per slot), a Clear only on a
+            // present slot
+            foreach (var ((id, attr), isSet) in lastOp)
+            {
+                if (createdNow.Contains(id) || destroyedNow.Contains(id))
+                {
+                    continue;
+                }
+
+                var m = model[id];
+                var before = ownerBefore.TryGetValue(id, out var ob) ? ob : m.Owner;
+                bool applied = isSet || m.Present.Contains(attr);
+                if (applied && before == source)
+                {
+                    originWritten.Add(id);
+                }
+            }
+
+            foreach (var ((id, attr), isSet) in lastOp)
+            {
+                if (createdNow.Contains(id) || destroyedNow.Contains(id))
+                {
+                    continue;
+                }
+
+                if (isSet)
+                {
+                    model[id].Present.Add(attr);
+                }
+                else
+                {
+                    model[id].Present.Remove(attr);
+                }
+            }
+
+            foreach (var id in originWritten)
+            {
+                if (!createdNow.Contains(id) && !destroyedNow.Contains(id))
+                {
+                    model[id].Wall = time;
+                    model[id].Sim = sim;
+                }
+            }
+
+            foreach (var (id, owner) in curOwner)
+            {
+                if (!destroyedNow.Contains(id))
+                {
+                    model[id].Owner = owner;
+                }
+            }
+
+            foreach (var id in destroyedNow)
+            {
+                model.Remove(id);
+            }
+
+            foreach (var id in createdNow.Where(x => !destroyedNow.Contains(x)))
+            {
+                var m = new OriginModel { Wall = time, Sim = sim, Owner = source };
+                foreach (var ((eid, attr), isSet) in lastOp)
+                {
+                    if (eid == id && isSet)
+                    {
+                        m.Present.Add(attr);
+                    }
+                }
+
+                model[id] = m;
+            }
+
+            Verify(f, rng, all.Count + 1, $"seed {seed}, batch {batches}", model);
         }
 
         Assert.True(f.Repo.Count > 10);

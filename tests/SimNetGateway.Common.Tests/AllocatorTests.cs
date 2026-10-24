@@ -35,6 +35,33 @@ public class AllocatorTests
     }
 
     [Fact]
+    public async Task Range_exhaustion_terminates_and_never_hangs()
+    {
+        // Guard: an allocation loop on an exhausted range must end; a hang would stall the whole test run, so it runs
+        // on a worker thread and fails after a timeout instead.
+        var work = Task.Run(() =>
+        {
+            var a = new RangeAllocator(1, 1000);
+            ulong allocated = 0;
+            while (a.TryAllocate(out _))
+            {
+                allocated++;
+            }
+
+            a.Release(500UL);
+            bool again = a.TryAllocate(out var key);
+            return (allocated, again, key, again && !a.TryAllocate(out _));
+        });
+        var finished = await Task.WhenAny(work, Task.Delay(TimeSpan.FromSeconds(5)));
+        Assert.True(ReferenceEquals(finished, work), "the allocation loop on an exhausted RangeAllocator did not finish within 5 s");
+        var (count, reallocated, reused, exhaustedAgain) = await work;
+        Assert.Equal(1000UL, count);
+        Assert.True(reallocated);
+        Assert.Equal(500UL, reused);
+        Assert.True(exhaustedAgain);
+    }
+
+    [Fact]
     public void Range_is_next_fit_so_a_just_released_key_is_not_reused_at_once()
     {
         var a = new RangeAllocator(1, 4);

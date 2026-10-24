@@ -41,6 +41,10 @@ public struct EntityQuery
     internal double WrittenWithinSeconds;
     internal bool HasNotWrittenWithin;
     internal double NotWrittenWithinSeconds;
+    internal bool HasOriginWrittenWithin;
+    internal double OriginWrittenWithinSeconds;
+    internal bool HasNotOriginWrittenWithin;
+    internal double NotOriginWrittenWithinSeconds;
     internal bool HasAttrChanged;
     internal AttrId AttrChangedAttr;
     internal double AttrChangedSeconds;
@@ -113,6 +117,29 @@ public struct EntityQuery
         Once(q.HasNotWrittenWithin, nameof(NotWrittenWithin));
         q.NotWrittenWithinSeconds = Seconds(window);
         q.HasNotWrittenWithin = true;
+        return q;
+    }
+
+    /// <summary>
+    /// Entities whose last origin write (a write by the entity's owner, R-068) is not older than the window; writes
+    /// by processors and the engine do not count.
+    /// </summary>
+    public EntityQuery OriginWrittenWithin(TimeSpan window)
+    {
+        var q = this;
+        Once(q.HasOriginWrittenWithin, nameof(OriginWrittenWithin));
+        q.OriginWrittenWithinSeconds = Seconds(window);
+        q.HasOriginWrittenWithin = true;
+        return q;
+    }
+
+    /// <summary>Entities without an origin write within the window (stale for their own side, R-068).</summary>
+    public EntityQuery NotOriginWrittenWithin(TimeSpan window)
+    {
+        var q = this;
+        Once(q.HasNotOriginWrittenWithin, nameof(NotOriginWrittenWithin));
+        q.NotOriginWrittenWithinSeconds = Seconds(window);
+        q.HasNotOriginWrittenWithin = true;
         return q;
     }
 

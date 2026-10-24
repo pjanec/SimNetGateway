@@ -5,6 +5,7 @@ internal enum RecencyKind : byte
 {
     Write,
     Change,
+    OriginWrite,
 }
 
 /// <summary>Allocation-free enumeration of a recency list, oldest first (diagnostics, viewer, tests).</summary>
@@ -45,7 +46,12 @@ public struct RecencyEnumerator
         }
 
         Current = next;
-        _next = _kind == RecencyKind.Write ? next.WriteNext : next.ChangeNext;
+        _next = _kind switch
+        {
+            RecencyKind.Write => next.WriteNext,
+            RecencyKind.Change => next.ChangeNext,
+            _ => next.OriginNext,
+        };
         return true;
     }
 }

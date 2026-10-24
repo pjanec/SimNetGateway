@@ -2017,3 +2017,18 @@ before `CopyTo`, optional `Consumes` entries not observable through a public API
 - **Processors**: `DrExtrapolationProcessor` also requires `StateTime`; opens its change set only when
   something is to be written; 0 bytes per firing over 1000 moving entities after engine pool warm-up.
   `StaleEntityReaper` as designed in 6.5 - superseded by R-068 (P-40), switched in T-014.
+
+### Stage 4 - origin-write staleness (T-014, R-068, 2026-10-24)
+
+`EntityRecord.LastOriginWriteWallTime` / `LastOriginWriteSimTime`, a third intrusive recency list
+(`StateRepository.ByLastOriginWrite`) and the filters `OriginWrittenWithin` / `NotOriginWrittenWithin`
+(wall time: drive from the list; sim time: filter only). A write counts when the change set's source
+equals the entity's owner **before** the transaction (Set, Clear, TransferOwner; a no-op Clear, a
+transfer to the current owner and a Destroy do not count). A created entity always starts with its
+creation commit's times, so it is not stale at birth even when created by a relaying source.
+`StaleEntityReaper` uses `FromOrigin(side).NotOriginWrittenWithin(timeout)`: a silent moving entity is
+reaped after the timeout although the DR processor keeps writing its prediction. Known limitation:
+relayed traffic whose writer differs from the owner (R-061) counts as non-origin writes - the WAN design
+(R-062) must write as the owner or adjust the rule. 23 mutation checks; one equivalent survivor (the
+head-walk driver bound, re-checked by the filter). The "driven from the list" test counts filter-passing
+candidates, so it proves correct results, not that the index (rather than a scan) was used.

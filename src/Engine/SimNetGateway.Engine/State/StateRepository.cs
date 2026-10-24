@@ -336,6 +336,7 @@ public sealed partial class StateRepository : IStateView
                     }
 
                     MarkWritten(entity, wall, sim);
+                    MarkOriginWritten(entity, OwnerBefore(delta, entity), src, wall, sim);
                     if (changed)
                     {
                         MarkChanged(entity, wall, sim);
@@ -364,6 +365,7 @@ public sealed partial class StateRepository : IStateView
                     IndexSlotRemoved(entity, c.Attr, old);
                     var delta = GetDelta(record, entity);
                     MarkWritten(entity, wall, sim);
+                    MarkOriginWritten(entity, OwnerBefore(delta, entity), src, wall, sim);
                     MarkChanged(entity, wall, sim);
                     RecordChange(delta, c.Attr, old, default);
                     break;
@@ -386,6 +388,7 @@ public sealed partial class StateRepository : IStateView
 
                     entity.Owner = c.Source;
                     MarkWritten(entity, wall, sim);
+                    MarkOriginWritten(entity, delta.PreviousOwner, src, wall, sim);
                     MarkChanged(entity, wall, sim);
                     break;
                 }
@@ -402,6 +405,10 @@ public sealed partial class StateRepository : IStateView
 
         return record;
     }
+
+    /// <summary>The owner before the transaction: the authority checks of Validate saw this owner.</summary>
+    private static SourceId OwnerBefore(EntityDelta delta, EntityRecord entity) =>
+        delta.OwnerChanged ? delta.PreviousOwner : entity.Owner;
 
     private EntityDelta GetDelta(ChangeSetRecord record, EntityRecord entity)
     {

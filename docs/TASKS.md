@@ -28,7 +28,7 @@ progress and done.
 | **T-003c** | done | Engine: identities and allocators, query indexes (recency, presence, reverse refs, spatial), EntityQuery, EntityTable, vocabulary validation | DD-001, DD-004 | Stage 3; as-built notes in DD-001 section 15 |
 | **T-004** | dropped | Common and NED-RPR gateway (split into T-004a, T-004b) | DD-001 | Split by stage, see docs/PLAN.md |
 | **T-004a** | done | Common: geo, predictor registry (DIS), allocators, generic DR-extrapolation processor and stale reaper | DD-001, DD-004 | Stage 4; as-built notes in DD-001 section 15; reaper staleness rule changed by R-068 -> T-014 |
-| **T-004b** | todo | Protocol projects, PivotSchema, NED/RPR/display modules, NedRprProfile and configurations | DD-001, DD-002, DD-003 | Stage 5 |
+| **T-004b** | in-progress | Protocol projects, PivotSchema, NED/RPR/display modules, NedRprProfile and configurations | DD-001, DD-002, DD-003 | Stage 5 |
 | **T-005** | todo | Automated test suite (xUnit) covering engine and module behaviour including edge cases (see DD-001 section 12) | DD-001 | Written in every stage alongside the code |
 | **T-006** | todo | Console demo host assembling the pieces, 10k-entity benchmark (`Hosts/SimNetGateway.Demo`) | DD-001, DD-003 | Stage 6 |
 | **T-007** | todo | ImGui (raylib-cs) visualization of the central repository content | needs DD | Stage 8; R-006: only after the engine is proven; needs its own design doc |
@@ -39,4 +39,4 @@ progress and done.
 | **T-012** | done | Solution skeleton per DD-003: projects, references, central packages, architecture tests, build/test scripts, CLAUDE.md paths | DD-003 | Stage 0 built: build + test green on Linux, forbidden-reference check done; deviations in DD-003 section 9; stage approved by user 2026-10-24 |
 | **T-012b** | done | Composition: Engine.InMemory, IGatewayProfile, GatewayBuilder, ports, settings records and configuration registries | DD-003 | Stage 4; as-built notes in DD-003 section 9 (configuration registries per gateway come with T-004b) |
 | **T-013** | done | Analyse the WAN RTI concept's impact on the engine design | DD-004 | Approved (R-056..R-062) |
-| **T-014** | in-progress | Origin-write recency (`LastOriginWriteWallTime`, `OriginWrittenWithin` / `NotOriginWrittenWithin`) in the engine and `StaleEntityReaper` switched to it | DD-001 | R-068 (P-40); stage 4, after the Common merge |
+| **T-014** | done | Origin-write recency (`LastOriginWriteWallTime`, `OriginWrittenWithin` / `NotOriginWrittenWithin`) in the engine and `StaleEntityReaper` switched to it | DD-001 | R-068 (P-40); stage 4; as-built notes in DD-001 section 15 |

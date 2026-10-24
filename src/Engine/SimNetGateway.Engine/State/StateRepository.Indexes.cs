@@ -2,7 +2,8 @@ namespace SimNetGateway.Engine;
 
 // The indexes of the repository, all maintained by Apply() in O(1) per touched entity and allocation-free in steady
 // state (DD-001 3.4, DD-004 P-33):
-//   - two intrusive doubly linked recency lists (by last write, by last change), oldest at the head;
+//   - three intrusive doubly linked recency lists (by last write, by last change, by last origin write), oldest at
+//     the head;
 //   - a presence set per attribute;
 //   - a reverse reference index per IndexReferences attribute;
 //   - a uniform spatial grid per SpatialIndex attribute.
@@ -19,6 +20,8 @@ public sealed partial class StateRepository
     private EntityRecord? _writeTail;
     private EntityRecord? _changeHead;
     private EntityRecord? _changeTail;
+    private EntityRecord? _originHead;
+    private EntityRecord? _originTail;
 
     /// <summary>The live entities by time of last write (even with an unchanged value), oldest first.</summary>
     public RecencyEnumerable ByLastWrite => new(_writeHead, RecencyKind.Write);
@@ -26,6 +29,14 @@ public sealed partial class StateRepository
     /// <summary>The live entities by time of last change (a value, an owner or the lifetime), oldest first.</summary>
     public RecencyEnumerable ByLastChange => new(_changeHead, RecencyKind.Change);
 
+    /// <summary>
+    /// The live entities by time of last origin write (a write by the entity's owner, R-068), oldest first. Writes by
+    /// processors and the engine do not move an entity in this list.
+    /// </summary>
+    public RecencyEnumerable ByLastOriginWrite => new(_originHead, RecencyKind.OriginWrite);
+
+    internal EntityRecord? OriginHead => _originHead;
+    internal EntityRecord? OriginTail => _originTail;
     internal EntityRecord? WriteHead => _writeHead;
     internal EntityRecord? WriteTail => _writeTail;
     internal EntityRecord? ChangeTail => _changeTail;
@@ -36,6 +47,7 @@ public sealed partial class StateRepository
     {
         LinkWriteTail(e);
         LinkChangeTail(e);
+        LinkOriginTail(e);
     }
 
     private void MarkWritten(EntityRecord e, double wall, double sim)
@@ -58,6 +70,68 @@ public sealed partial class StateRepository
             UnlinkChange(e);
             LinkChangeTail(e);
         }
+    }
+
+    /// <summary>
+    /// Records a write by <paramref name="source"/> as an origin write when it is the entity's owner before the
+    /// transaction (<paramref name="ownerBefore"/>; R-068).
+    /// </summary>
+    private void MarkOriginWritten(EntityRecord e, SourceId ownerBefore, SourceId source, double wall, double sim)
+    {
+        if (source != ownerBefore)
+        {
+            return;
+        }
+
+        e.LastOriginWriteWallTime = wall;
+        e.LastOriginWriteSimTime = sim;
+        if (!ReferenceEquals(_originTail, e))
+        {
+            UnlinkOrigin(e);
+            LinkOriginTail(e);
+        }
+    }
+
+    private void LinkOriginTail(EntityRecord e)
+    {
+        e.OriginPrev = _originTail;
+        e.OriginNext = null;
+        if (_originTail is null)
+        {
+            _originHead = e;
+        }
+        else
+        {
+            _originTail.OriginNext = e;
+        }
+
+        _originTail = e;
+    }
+
+    private void UnlinkOrigin(EntityRecord e)
+    {
+        var prev = e.OriginPrev;
+        var next = e.OriginNext;
+        if (prev is null)
+        {
+            _originHead = next;
+        }
+        else
+        {
+            prev.OriginNext = next;
+        }
+
+        if (next is null)
+        {
+            _originTail = prev;
+        }
+        else
+        {
+            next.OriginPrev = prev;
+        }
+
+        e.OriginPrev = null;
+        e.OriginNext = null;
     }
 
     private void LinkWriteTail(EntityRecord e)
@@ -216,6 +290,7 @@ public sealed partial class StateRepository
 
         UnlinkWrite(e);
         UnlinkChange(e);
+        UnlinkOrigin(e);
     }
 
     private static void Grow<T>(ref T[] array, int index)

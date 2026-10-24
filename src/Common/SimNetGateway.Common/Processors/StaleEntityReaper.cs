@@ -3,11 +3,13 @@ using SimNetGateway.Engine;
 namespace SimNetGateway.Common;
 
 /// <summary>
-/// Destroys the entities of one side that were not written within a timeout (DD-001 6.5): the receiving mirror of a
-/// protocol heartbeat. Every <c>checkPeriod</c> the rule "Reap" queries
-/// <c>FromOrigin(side).NotWrittenWithin(timeout)</c> and destroys the matches in one transaction under
-/// <c>reaperSource</c>; the destruction is an ordinary removal for the other sides. Entities of other sides are never
-/// touched. Timing follows <c>NotWrittenWithin</c>: an entity exactly <c>timeout</c> old is still alive.
+/// Destroys the entities of one side that the side itself did not write within a timeout (DD-001 6.5, R-068): the
+/// receiving mirror of a protocol heartbeat. Every <c>checkPeriod</c> the rule "Reap" queries
+/// <c>FromOrigin(side).NotOriginWrittenWithin(timeout)</c> and destroys the matches in one transaction under
+/// <c>reaperSource</c>; the destruction is an ordinary removal for the other sides. Only origin writes (by the
+/// entity's owner) count, so derived writes of processors (e.g. dead-reckoning predictions) do not keep an entity
+/// alive. Entities of other sides are never touched. Timing follows <c>NotOriginWrittenWithin</c>: an entity exactly
+/// <c>timeout</c> old is still alive.
 /// </summary>
 public sealed class StaleEntityReaper : IGatewayModule
 {
@@ -48,7 +50,7 @@ public sealed class StaleEntityReaper : IGatewayModule
 
     private void Reap(TimerTrigger trigger)
     {
-        _gateway.State.Query().FromOrigin(_side).NotWrittenWithin(_timeout).CopyTo(_stale);
+        _gateway.State.Query().FromOrigin(_side).NotOriginWrittenWithin(_timeout).CopyTo(_stale);
         if (_stale.Count == 0)
         {
             return;

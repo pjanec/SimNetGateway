@@ -75,6 +75,8 @@ internal struct QueryExecutor<TSink, TState>
     private readonly double _changedMin;       // LastChange >= this
     private readonly double _writtenMin;       // LastWrite >= this
     private readonly double _staleBefore;      // LastWrite < this
+    private readonly double _originWrittenMin; // LastOriginWrite >= this
+    private readonly double _originStaleBefore; // LastOriginWrite < this
     private readonly double _attrChangedMin;   // slot ChangedTime >= this
     private readonly double _cellSize;
 
@@ -111,6 +113,8 @@ internal struct QueryExecutor<TSink, TState>
         _changedMin = changedMin;
         _writtenMin = now - q.WrittenWithinSeconds;
         _staleBefore = now - q.NotWrittenWithinSeconds;
+        _originWrittenMin = now - q.OriginWrittenWithinSeconds;
+        _originStaleBefore = now - q.NotOriginWrittenWithinSeconds;
         _attrChangedMin = now - q.AttrChangedSeconds;
 
         _hasCount = q.HasCount;
@@ -168,6 +172,17 @@ internal struct QueryExecutor<TSink, TState>
         }
 
         if (_q.HasNotWrittenWithin && (sim ? e.LastWriteSimTime : e.LastWriteWallTime) >= _staleBefore)
+        {
+            return false;
+        }
+
+        if (_q.HasOriginWrittenWithin && (sim ? e.LastOriginWriteSimTime : e.LastOriginWriteWallTime) < _originWrittenMin)
+        {
+            return false;
+        }
+
+        if (_q.HasNotOriginWrittenWithin &&
+            (sim ? e.LastOriginWriteSimTime : e.LastOriginWriteWallTime) >= _originStaleBefore)
         {
             return false;
         }
@@ -293,6 +308,32 @@ internal struct QueryExecutor<TSink, TState>
                 for (var e = repo.WriteHead; e is not null; e = e.WriteNext)
                 {
                     if (e.LastWriteWallTime >= _staleBefore || !Offer(e))
+                    {
+                        return;
+                    }
+                }
+
+                return;
+            }
+
+            if (q.HasOriginWrittenWithin)
+            {
+                for (var e = repo.OriginTail; e is not null; e = e.OriginPrev)
+                {
+                    if (e.LastOriginWriteWallTime < _originWrittenMin || !Offer(e))
+                    {
+                        return;
+                    }
+                }
+
+                return;
+            }
+
+            if (q.HasNotOriginWrittenWithin)
+            {
+                for (var e = repo.OriginHead; e is not null; e = e.OriginNext)
+                {
+                    if (e.LastOriginWriteWallTime >= _originStaleBefore || !Offer(e))
                     {
                         return;
                     }

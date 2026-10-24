@@ -568,6 +568,73 @@ public class ProcessorTests
     }
 
     [Fact]
+    public void The_reaper_ignores_the_derived_writes_of_the_dr_processor_while_a_side_that_keeps_sending_survives()
+    {
+        // R-068: staleness counts only writes by the side itself. A real engine runs the DR processor at 10 Hz and the
+        // reaper (timeout 12 s, checked every second) side by side.
+        var r = new Rig();
+        r.AddObservers();
+        r.AddDr(periodSeconds: 0.1);
+        r.Engine.AddModule(new StaleEntityReaper("reaper", r.Net, TimeSpan.FromSeconds(12), TimeSpan.FromSeconds(1), r.Reaper));
+        var silent = r.CreateMover(Vec3.Zero, new Vec3(1, 0, 0), DisDeadReckoning.Fpw, source: r.Net);
+        var talking = r.CreateMover(Vec3.Zero, new Vec3(1, 0, 0), DisDeadReckoning.Fpw, source: r.Net);
+        var foreign = r.CreateMover(Vec3.Zero, new Vec3(1, 0, 0), DisDeadReckoning.Fpw, source: r.Other);
+
+        for (int i = 1; i <= 120; i++)
+        {
+            double t = i / 10.0;
+            if (i % 10 == 5)
+            {
+                var cs = r.Engine.BeginChange(r.Net);
+                cs.Set(talking, r.Pos, AttrValue.From(new Vec3(t, 0, 0)));
+                Assert.True(cs.Commit().Succeeded);
+            }
+
+            r.TickAt(t);
+        }
+
+        // 12 s after its last (creation) write the silent entity is still alive: the edge is inclusive
+        var silentRecord = r.Engine.State.Find(silent)!;
+        Assert.NotNull(silentRecord);
+        Assert.Empty(r.Removals);
+        // ...although the processor wrote its prediction in the very last period, so the plain write time is fresh
+        Assert.True(silentRecord.LastWriteWallTime > 11.5);
+        Assert.Equal(12.0, r.Engine.State.Now);
+        Assert.Equal(0.0, silentRecord.LastOriginWriteWallTime);
+        Assert.Equal(12.0, r.PredictedPosition(silent).X, 6); // predicted to the last tick
+
+        for (int i = 121; i <= 129; i++)
+        {
+            r.TickAt(i / 10.0);
+            Assert.NotNull(r.Engine.State.Find(silent)); // the reaper checks on whole seconds: not before 13 s
+        }
+
+        Assert.Empty(r.Removals);
+        r.TickAt(13.0);
+        Assert.Null(r.Engine.State.Find(silent));
+        Assert.Equal(new[] { (silent, r.Reaper) }, r.Removals.ToArray());
+
+        // the side that keeps sending, and the other side's entity, are never reaped, also much later
+        for (int i = 131; i <= 400; i++)
+        {
+            double t = i / 10.0;
+            if (i % 10 == 5)
+            {
+                var cs = r.Engine.BeginChange(r.Net);
+                cs.Set(talking, r.Pos, AttrValue.From(new Vec3(t, 0, 0)));
+                Assert.True(cs.Commit().Succeeded);
+            }
+
+            r.TickAt(t);
+        }
+
+        Assert.NotNull(r.Engine.State.Find(talking));
+        Assert.NotNull(r.Engine.State.Find(foreign));
+        Assert.Equal(new[] { (silent, r.Reaper) }, r.Removals.ToArray());
+        Assert.True(r.PredictionWrites.Count(w => w.Entity == talking) > 300);
+    }
+
+    [Fact]
     public void Reaped_entities_leave_through_a_normal_removed_trigger_in_one_transaction()
     {
         var r = ReaperRig(out var a1, out var a2, out _);
