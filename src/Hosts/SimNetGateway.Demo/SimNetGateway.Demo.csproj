@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Gateways/SimNetGateway.Gateway.NedRpr/SimNetGateway.Gateway.NedRpr.csproj" />
+    <ProjectReference Include="../../Engine/SimNetGateway.Engine.InMemory/SimNetGateway.Engine.InMemory.csproj" />
+    <ProjectReference Include="../../Showcase/SimNetGateway.Showcase/SimNetGateway.Showcase.csproj" />
+  </ItemGroup>
+
+</Project>

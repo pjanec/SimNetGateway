@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Common/SimNetGateway.Common/SimNetGateway.Common.csproj" />
+    <ProjectReference Include="../../src/Engine/SimNetGateway.Engine.InMemory/SimNetGateway.Engine.InMemory.csproj" />
+  </ItemGroup>
+
+</Project>

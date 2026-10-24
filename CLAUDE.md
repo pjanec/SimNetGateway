@@ -68,10 +68,19 @@ deviation discovered during implementation is reported, not silently chosen. Tri
 
 - `bash scripts/setup-dotnet.sh` - installs a .NET 8 SDK into `~/.dotnet` if none is present
   (fresh Linux VMs); then `export PATH="$HOME/.dotnet:$PATH"`.
-- `dotnet build SimNetGateway.sln` - `global.json` requires any .NET 8 SDK (8.0.100 or newer 8.0.x).
-- `dotnet test` - xUnit tests in `tests/SimNetGateway.Tests` (deterministic, `ManualClock`, no
-  sleeping).
-- `dotnet run --project src/SimNetGateway.Demo` - console demo; `-- --bench` for the 10k benchmark.
+- `bash scripts/build.sh` (= `dotnet build SimNetGateway.sln`) - `global.json` requires any
+  .NET 8 SDK (8.0.100 or newer 8.0.x). Both scripts put `~/.dotnet` on PATH when needed and pass
+  extra arguments through.
+- `bash scripts/test.sh` (= `dotnet test SimNetGateway.sln`) - xUnit, one test project per layer
+  (DD-003): `tests/SimNetGateway.Engine.Tests`, `.Common.Tests`, `.Gateway.NedRpr.Tests` and
+  `tests/SimNetGateway.Architecture.Tests` (dependency rules and conventions of DD-003 section 3;
+  a forbidden project reference fails it). Deterministic, `ManualClock`, no sleeping.
+- `dotnet run --project src/Hosts/SimNetGateway.Demo` - console demo; `-- --bench` for the 10k
+  benchmark (from stage 6).
+- Layout (DD-003 section 2): `src/Engine`, `src/Common`, `src/Protocols`, `src/Gateways`,
+  `src/Transports` (later), `src/Showcase`, `src/Hosts`; folder name = project name = root
+  namespace; package versions only in `Directory.Packages.props`; test-project packages in
+  `tests/Directory.Build.props`.
 - Helper scripts are Python 3 (`scripts/*.py`) started through bash wrappers (`scripts/*.sh`)
   that pick `python3` or `python`, whichever is a real Python 3 on the machine.
 

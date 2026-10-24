@@ -311,3 +311,41 @@ hardcoded configuration registries instead of JSON, R-054), P-32 -> R-053.
 | **P-30** | Concrete gateways are packaged as `IGatewayProfile` + `GatewayBuilder` with named, typed ports declared by the profile and bound by the host; `Build()` checks bindings and runs vocabulary validation. | Hosts construct and register every module by hand. |
 | **P-31** | Gateway settings from code defaults plus an optional JSON file read by the host, including rule enable/disable lists; profiles are found through a static table in the host - no runtime plugin (DLL) loading in the PoC. | Load gateway profiles as plugins from DLLs at runtime (`AssemblyLoadContext`). |
 | **P-32** | Central package management (`Directory.Packages.props`) and one test project per layer as in section 2; DD-001 section 13 is replaced by this document. | Package versions in each project file; a single test project. |
+
+## 9. As-built notes
+
+Stage 0 (T-012, 2026-10-24). All projects of section 2 exist, empty but compiling, with exactly
+the references of the section 3 diagram; `Directory.Packages.props` holds every package version;
+`scripts/build.sh` and `scripts/test.sh` wrap `dotnet build` / `dotnet test`. Built and tested on
+Linux with .NET SDK 8.0.426. Points where the code goes beyond or interprets the text:
+
+- **Declared references are checked as well as assembly references.** Section 3 rule 7 says
+  `Architecture.Tests` inspects the assemblies' references. The C# compiler drops a project
+  reference that no code uses from the assembly metadata, so an assembly-only check would accept a
+  forbidden reference until the first type is used - in an empty skeleton, always. The tests
+  therefore check (a) the `ProjectReference` items of every `.csproj` under `src/`, (b) the
+  compiled assemblies' metadata references, and (c) for the BCL-only layers (engine, protocols)
+  that every referenced assembly is part of the shared framework and that no NuGet package is
+  used. The stage 0 exit check (a `Protocol.Ned -> Engine` reference plus one type using it) failed
+  all three; it was reverted. `LayerRulesTests` keeps forbidden/allowed pairs permanently.
+- **Rules for the layers the text does not spell out**, taken from the section 3 diagram:
+  `Engine.InMemory` ("engine support") may reference only the engine; `Showcase` may reference
+  the engine, engine support, Common, protocols and gateways (the transitive references of its
+  diagram arrows made explicit), never a transport or a host; a host may reference every layer
+  except another host; a gateway may **not** reference `Engine.InMemory` (not in the diagram -
+  in-memory channels are bound by hosts and tests). A project's layer is its folder under `src/`;
+  an unknown folder, or a reference to a project outside `src/`, fails.
+- **Extra convention tests** for section 2: folder name = project name; `AssemblyName` /
+  `RootNamespace` / `TargetFramework` not overridden in project files; layer name prefixes
+  (`SimNetGateway.Protocol.*` in `Protocols/`, ...); no `Version=` on a `PackageReference`
+  (R-053); every project is in the solution; each test project `X.Tests` references its subject
+  `X` (rule 7, "test projects mirror the layer they test").
+- **Test packages** (xUnit 2.9.2, runner 2.8.2, Test SDK 17.11.1) are referenced once in
+  `tests/Directory.Build.props`, which imports the root `Directory.Build.props`.
+- **`.sln` paths use `\`** - the solution file format requires it (`dotnet sln` writes it on Linux
+  too) and MSBuild normalises it on every OS; this is the one place R-012's "no `\`" cannot apply.
+  The file is stored with LF and without BOM; `ConventionTests` normalises when reading it.
+- **Not yet created**: the gateway's `Schema/`, `Ned/`, `Rpr/`, `Display/`, `Processors/` folders
+  (git keeps no empty folders; they come with stage 5) and `src/Transports/` (later).
+- The three layer test projects contain no tests yet; `dotnet test` prints "No test is
+  available" for them (not a failure) until stages 1, 4 and 5 fill them.
