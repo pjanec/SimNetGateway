@@ -30,6 +30,15 @@ public sealed class ScenarioRunner
         _engineOptions = engineOptions ?? new GatewayOptions { JournalCapacity = 32768, DiagnosticsCapacity = 8192, EventLogCapacity = 8192 };
     }
 
+    /// <summary>
+    /// Called after every engine tick of a run, once the runner's own bookkeeping and the invariant checker ran (the viewer
+    /// models and their tests refresh here); null = nothing.
+    /// </summary>
+    public Action<ScenarioContext>? OnTick { get; init; }
+
+    /// <summary>Called with the context before the first tick (observers, taps and monitors are installed here); null = nothing.</summary>
+    public Action<ScenarioContext>? OnStart { get; init; }
+
     /// <summary>The context of the last run (the host, recorders and checker after the script ended).</summary>
     public ScenarioContext? Context { get; private set; }
 
@@ -51,7 +60,8 @@ public sealed class ScenarioRunner
         var checker = new InvariantChecker(host) { Probe = probe };
         var ctx = new ScenarioContext(host, clock, checker, probe!, faulty, rogue);
         Context = ctx;
-        var run = new Execution(script, ctx);
+        OnStart?.Invoke(ctx);
+        var run = new Execution(script, ctx, OnTick);
         return run.Execute();
     }
 
@@ -71,8 +81,11 @@ public sealed class ScenarioRunner
         private bool _quiet;
         private string? _description;
 
-        public Execution(ScenarioScript script, ScenarioContext ctx)
+        private readonly Action<ScenarioContext>? _onTick;
+
+        public Execution(ScenarioScript script, ScenarioContext ctx, Action<ScenarioContext>? onTick)
         {
+            _onTick = onTick;
             _script = script;
             _ctx = ctx;
             _host = ctx.Host;
@@ -156,6 +169,7 @@ public sealed class ScenarioRunner
 
                 host.Engine.Tick();
                 AfterTick(tick);
+                _onTick?.Invoke(ctx);
                 while (nextCheck < checks.Count && checks[nextCheck].Tick <= tick)
                 {
                     RunCheck(checks[nextCheck].Step, tick);

@@ -1,10 +1,20 @@
 namespace SimNetGateway.Engine;
 
-/// <summary>The engine's view of an <see cref="EntityTable{T}"/>: entries are dropped when their entity is destroyed.</summary>
-internal interface IEntityTable
+/// <summary>
+/// The key-type independent face of an <see cref="EntityTable{T}"/> (R-077): its name and a textual description of an
+/// entity's entry, so that monitors can show every module's per-entity state without knowing the entry types.
+/// </summary>
+public interface IEntityTable
 {
     string Name { get; }
 
+    /// <summary>The entry's <c>ToString()</c> (allocates only here); false when the entity has no entry.</summary>
+    bool TryDescribe(EntityId id, out string text);
+}
+
+/// <summary>What the engine needs of a table beyond <see cref="IEntityTable"/>: entries are dropped when their entity is destroyed.</summary>
+internal interface IEntityTableInternal : IEntityTable
+{
     bool Remove(EntityId id);
 }
 
@@ -14,7 +24,7 @@ internal interface IEntityTable
 /// the engine after the removal dispatch, so removal rules can still read them. Create tables with
 /// <see cref="ModuleSetup.CreateEntityTable{T}"/>.
 /// </summary>
-public sealed class EntityTable<T> : IEntityTable
+public sealed class EntityTable<T> : IEntityTableInternal
     where T : struct
 {
     private readonly Dictionary<EntityId, int> _index = new();
@@ -29,6 +39,19 @@ public sealed class EntityTable<T> : IEntityTable
     public int Count => _count;
 
     public bool Contains(EntityId id) => _index.ContainsKey(id);
+
+    /// <inheritdoc />
+    public bool TryDescribe(EntityId id, out string text)
+    {
+        if (_index.TryGetValue(id, out int slot))
+        {
+            text = _values[slot].ToString() ?? string.Empty;
+            return true;
+        }
+
+        text = string.Empty;
+        return false;
+    }
 
     /// <summary>
     /// The entry of the entity, added (default value) if missing. The reference is valid only until the next

@@ -22,9 +22,9 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
     private readonly Dictionary<string, RuleInfo> _rulesByName = new(StringComparer.Ordinal);
     private readonly List<ModuleProduction> _productions = new();
     private readonly List<ModuleConsumption> _consumptions = new();
-    private readonly List<IEntityTable> _tables = new();
+    private readonly List<IEntityTableInternal> _tables = new();
     private readonly List<EntityId> _pendingRelease = new();   // destroyed in this drain, released at its end
-    private readonly Dictionary<string, IEntityTable> _tablesByName = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, IEntityTableInternal> _tablesByName = new(StringComparer.Ordinal);
 
     // Rule indexes (arrays / lists built at registration; each list is in registration order).
     private readonly List<Rule<EntityTrigger>> _createdRules = new();
@@ -57,12 +57,14 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
     private bool _busy;                  // a handler runs, a drain is in progress or a top-level rule runs
     private int _currentDepth = -1;      // depth of the item being dispatched; -1 outside any dispatch
     private CorrelationId _currentCorrelation;
+    private IDispatchObserver? _observer;
 
     public GatewayEngine(IClock clock, GatewayOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(clock);
         _clock = clock;
         _options = options ?? new GatewayOptions();
+        _observer = _options.DispatchObserver;
         _wall = clock.Now;
         Attributes = new AttributeRegistry();
         EventTypes = new EventTypeRegistry();
@@ -91,6 +93,33 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
     public double WallTime => _wall;
     public double SimTime => _session.SimTime;
     public long TickCount { get; private set; }
+
+    /// <summary>
+    /// The correlation of the item being dispatched (the record, event or command whose rules run now); none outside any
+    /// dispatch, in ingress handlers and in timer rules (R-078). Outbound recorders stamp it on what they send.
+    /// </summary>
+    public CorrelationId CurrentCorrelation => _currentCorrelation;
+
+    /// <summary>
+    /// The optional dispatch observer (R-078); starts as <see cref="GatewayOptions.DispatchObserver"/> and may be changed
+    /// between ticks (setting it while a handler runs or a drain is in progress throws).
+    /// </summary>
+    public IDispatchObserver? DispatchObserver
+    {
+        get => _observer;
+        set
+        {
+            if (_busy)
+            {
+                throw new InvalidOperationException("The dispatch observer cannot be changed while a handler runs or a drain is in progress.");
+            }
+
+            _observer = value;
+        }
+    }
+
+    /// <summary>The engine-managed entity tables of all modules, in creation order (R-077).</summary>
+    public IReadOnlyList<IEntityTable> EntityTables => _tables;
 
     /// <summary>Every registered rule, in registration order.</summary>
     public IReadOnlyList<RuleInfo> Rules => _ruleInfos;
@@ -264,6 +293,8 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
             _busy = true;
         }
 
+        var started = default(CorrelationId);
+        bool announced = false;
         try
         {
             int depth = _currentDepth + 1;
@@ -283,6 +314,19 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
             ev.CausedBy = _currentCorrelation;
             ev.WallTime = _wall;
             ev.SimTime = _session.SimTime;
+            var observer = _observer;
+            if (observer is not null)
+            {
+                if (top)
+                {
+                    started = ev.Correlation;
+                    announced = true;
+                    observer.InputStarted(started, source, typeof(SimEvent));
+                }
+
+                observer.EventPublished(ev.Correlation, ev.CausedBy, source, type, depth);
+            }
+
             var item = new WorkItem { Kind = WorkKind.Event, Depth = depth, Correlation = ev.Correlation, Event = ev };
             _queue.Enqueue(item);
             if (top)
@@ -292,6 +336,11 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
         }
         finally
         {
+            if (announced)
+            {
+                _observer?.InputFinished(started);
+            }
+
             if (top)
             {
                 ResetDispatchState();
@@ -309,6 +358,7 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
             _busy = true;
         }
 
+        bool announced = false;
         try
         {
             int depth = _currentDepth + 1;
@@ -318,7 +368,13 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
                 return false;
             }
 
-            if (!ApplySession(command, source, out var previous))
+            if (top && _observer is { } observer)
+            {
+                announced = true;
+                observer.InputStarted(default, source, typeof(SessionCommand));
+            }
+
+            if (!ApplySession(command, source, depth, out var previous))
             {
                 return false;
             }
@@ -342,6 +398,11 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
         }
         finally
         {
+            if (announced)
+            {
+                _observer?.InputFinished(default);
+            }
+
             if (top)
             {
                 ResetDispatchState();
@@ -367,6 +428,7 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
         if (handlers is null)
         {
             Diagnostics.CountUnhandled(typeof(T));
+            _observer?.InputUnhandled(source, typeof(T));
             return;
         }
 
@@ -386,6 +448,28 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
         Diagnostics.MessagesProcessed++;
         double sim = _session.SimTime;
         var changes = State.Begin(source, _wall, sim);
+        var observer = _observer;
+        if (observer is null)
+        {
+            IngestHandled(source, in message, receivedAt, handlers, changes, sim);
+            return;
+        }
+
+        var correlation = changes.Correlation;
+        observer.InputStarted(correlation, source, typeof(T));
+        try
+        {
+            IngestHandled(source, in message, receivedAt, handlers, changes, sim);
+        }
+        finally
+        {
+            observer.InputFinished(correlation);
+        }
+    }
+
+    private void IngestHandled<T>(SourceId source, in T message, double receivedAt, HandlerList<T> handlers,
+        ChangeSet changes, double sim)
+    {
         var ctx = _ingress;
         ctx.Begin(changes, source, receivedAt, _wall, sim);
 
@@ -421,6 +505,7 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
         {
             changes.Discard();
             ReleasePending(ctx);
+            _observer?.InputAborted(changes.Correlation, source, failedModule ?? SourceName(source), failure);
             Diagnostics.TransactionFailed(failedModule ?? SourceName(source),
                 "correlation " + changes.Correlation.Value + " from " + SourceName(source) + ": " + failure);
             return;
@@ -590,13 +675,22 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
         _busy = true;
         _currentDepth = 0;
         _currentCorrelation = default;
+        var observer = _observer;
         try
         {
-            rule.Invoke(trigger, Diagnostics);
+            if (observer is not null)
+            {
+                observer.InputStarted(default, SourceRegistry.Engine, typeof(TimerTrigger));
+                observer.TriggerRaised(period == TimeSpan.Zero ? DispatchTriggerKind.TickEnd : DispatchTriggerKind.Timer,
+                    default, default, default, 0);
+            }
+
+            rule.Invoke(trigger, Diagnostics, observer, default);
             DrainLoop();
         }
         finally
         {
+            observer?.InputFinished(default);
             ResetDispatchState();
         }
     }
@@ -681,7 +775,7 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
                     DispatchEvent(item.Event!);
                     break;
                 case WorkKind.Command:
-                    if (ApplySession(item.Command!, item.Source, out var previous))
+                    if (ApplySession(item.Command!, item.Source, item.Depth, out var previous))
                     {
                         DispatchSessionChanged(item.Command!, previous, _session.State, item.Source, item.Depth);
                     }
@@ -720,12 +814,17 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
     {
         var deltas = record.EntityList;
         var trigger = _entityTrigger;
+        var observer = _observer;
+        var correlation = record.Correlation;
         for (int i = 0; i < deltas.Count; i++)
         {
             var delta = deltas[i];
             var kind = delta.Created ? EntityTriggerKind.Created
                 : delta.Destroyed ? EntityTriggerKind.Removed
                 : EntityTriggerKind.Updated;
+            observer?.TriggerRaised(kind == EntityTriggerKind.Created ? DispatchTriggerKind.EntityCreated
+                : kind == EntityTriggerKind.Removed ? DispatchTriggerKind.EntityRemoved
+                : DispatchTriggerKind.EntityUpdated, delta.Id, default, correlation, _currentDepth);
             int count = CollectEntityMatches(delta, kind);
             if (count == 0)
             {
@@ -742,7 +841,7 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
             var matches = _entityMatches;
             for (int m = 0; m < count; m++)
             {
-                matches[m].Invoke(trigger, Diagnostics);
+                matches[m].Invoke(trigger, Diagnostics, observer, correlation);
             }
         }
 
@@ -750,9 +849,10 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
         if (end.Count > 0)
         {
             _changeSetTrigger.ChangeSet = record;
+            observer?.TriggerRaised(DispatchTriggerKind.ChangeSetEnd, default, default, correlation, _currentDepth);
             for (int i = 0; i < end.Count; i++)
             {
-                end[i].Invoke(_changeSetTrigger, Diagnostics);
+                end[i].Invoke(_changeSetTrigger, Diagnostics, observer, correlation);
             }
         }
     }
@@ -876,6 +976,8 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
             matches[j + 1] = current;
         }
 
+        var observer = _observer;
+        observer?.TriggerRaised(DispatchTriggerKind.Event, default, ev.Type, ev.Correlation, _currentDepth);
         if (count == 0)
         {
             Diagnostics.CountNoSubscriber(ev.Type);
@@ -890,7 +992,7 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
             trigger.Correlation = ev.Correlation;
             for (int i = 0; i < count; i++)
             {
-                matches[i].Invoke(trigger, Diagnostics);
+                matches[i].Invoke(trigger, Diagnostics, observer, ev.Correlation);
             }
         }
 
@@ -910,31 +1012,43 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
     // ---- session ----------------------------------------------------------------------------------------
 
     /// <summary>Validates, runs the veto rules and applies the command; false (with a diagnostic) when refused.</summary>
-    private bool ApplySession(SessionCommand command, SourceId source, out SessionState previous)
+    private bool ApplySession(SessionCommand command, SourceId source, int depth, out SessionState previous)
     {
         previous = _session.State;
+        var observer = _observer;
+        var correlation = _currentCorrelation;
         if (!_session.IsValid(command))
         {
-            Diagnostics.SessionRejected(SourceName(source), "invalid transition: " + command.Kind + " while " + previous);
+            string invalid = "invalid transition: " + command.Kind + " while " + previous;
+            Diagnostics.SessionRejected(SourceName(source), invalid);
+            observer?.SessionCommandRejected(command, source, correlation, invalid);
             return false;
         }
 
         var request = _requestTrigger;
         request.Reset(command, source);
         var rules = _requestRules;
+        if (rules.Count > 0)
+        {
+            observer?.TriggerRaised(DispatchTriggerKind.SessionRequest, default, default, correlation, depth);
+        }
+
         for (int i = 0; i < rules.Count; i++)
         {
-            rules[i].Invoke(request, Diagnostics);
+            rules[i].Invoke(request, Diagnostics, observer, correlation);
         }
 
         if (request.IsVetoed)
         {
-            Diagnostics.SessionRejected(SourceName(source), command.Kind + " vetoed: " + request.VetoReason);
+            string vetoed = command.Kind + " vetoed: " + request.VetoReason;
+            Diagnostics.SessionRejected(SourceName(source), vetoed);
+            observer?.SessionCommandRejected(command, source, correlation, vetoed);
             return false;
         }
 
         _session.TryApply(command);
         SyncTime(); // Load and Unload reset sim time
+        observer?.SessionCommandApplied(command, source, correlation);
         return true;
     }
 
@@ -947,10 +1061,13 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
         trigger.Previous = previous;
         trigger.Current = current;
         trigger.Source = source;
+        var observer = _observer;
+        var correlation = _currentCorrelation;
+        observer?.TriggerRaised(DispatchTriggerKind.SessionChanged, default, default, correlation, depth);
         var rules = _sessionRules;
         for (int i = 0; i < rules.Count; i++)
         {
-            rules[i].Invoke(trigger, Diagnostics);
+            rules[i].Invoke(trigger, Diagnostics, observer, correlation);
         }
 
         if (command.Kind == SessionCommandKind.Unload)
@@ -1038,19 +1155,61 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
 
     void ICommitObserver.Committed(ChangeSet changeSet, ChangeSetRecord record)
     {
+        var observer = _observer;
+        var correlation = record.Correlation;
+        bool announced = false;
+        if (observer is not null)
+        {
+            if (!_busy)
+            {
+                // a commit made from outside any dispatch (a host writing directly): it is a unit of work of its own
+                announced = true;
+                observer.InputStarted(correlation, record.Source, typeof(ChangeSet));
+            }
+
+            observer.Committed(new CommitSummary(correlation, record.CausedBy, record.Source, record.Count, record.WallTime,
+                record.SimTime));
+        }
+
         record.Pinned = true;
         _queue.Enqueue(new WorkItem
         {
             Kind = WorkKind.Record,
             Depth = _currentDepth + 1,
-            Correlation = record.Correlation,
+            Correlation = correlation,
             Record = record,
         });
-        DrainIfIdle();
+        try
+        {
+            DrainIfIdle();
+        }
+        finally
+        {
+            if (announced)
+            {
+                observer!.InputFinished(correlation);
+            }
+        }
     }
 
     void ICommitObserver.Rejected(ChangeSet changeSet, string reason)
     {
+        var observer = _observer;
+        if (observer is not null)
+        {
+            bool announced = !_busy;
+            if (announced)
+            {
+                observer.InputStarted(changeSet.Correlation, changeSet.Source, typeof(ChangeSet));
+            }
+
+            observer.CommitRejected(changeSet.Correlation, changeSet.Source, reason);
+            if (announced)
+            {
+                observer.InputFinished(changeSet.Correlation);
+            }
+        }
+
         if (ReferenceEquals(reason, CascadeOverflowReason))
         {
             return; // already diagnosed as a cascade overflow

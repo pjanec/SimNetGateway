@@ -6,6 +6,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Engine/SimNetGateway.Engine/SimNetGateway.Engine.csproj" />
     <ProjectReference Include="../../src/Engine/SimNetGateway.Engine.InMemory/SimNetGateway.Engine.InMemory.csproj" />
+    <ProjectReference Include="../../src/Engine/SimNetGateway.Engine.Monitoring/SimNetGateway.Engine.Monitoring.csproj" />
     <ProjectReference Include="../../src/Common/SimNetGateway.Common/SimNetGateway.Common.csproj" />
     <ProjectReference Include="../../src/Protocols/SimNetGateway.Protocol.Ned/SimNetGateway.Protocol.Ned.csproj" />
     <ProjectReference Include="../../src/Protocols/SimNetGateway.Protocol.Rpr/SimNetGateway.Protocol.Rpr.csproj" />

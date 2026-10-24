@@ -49,6 +49,19 @@ public sealed class IdentityMap<TKey> : IIdentityMapInternal, IChangeParticipant
 
     public bool Contains(EntityId id) => _byEntity.ContainsKey(id);
 
+    /// <inheritdoc />
+    public bool TryDescribeKey(EntityId id, out string text)
+    {
+        if (_byEntity.TryGetValue(id, out var binding))
+        {
+            text = binding.Key.ToString() ?? string.Empty;
+            return true;
+        }
+
+        text = string.Empty;
+        return false;
+    }
+
     /// <summary>The entity bound to the key (committed bindings only).</summary>
     public bool TryResolve(in TKey key, out EntityId id) => _byKey.TryGetValue(key, out id);
 
