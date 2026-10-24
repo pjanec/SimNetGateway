@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Hosts/SimNetGateway.Viewer/SimNetGateway.Viewer.csproj" />
+    <ProjectReference Include="../../src/Engine/SimNetGateway.Engine.Monitoring/SimNetGateway.Engine.Monitoring.csproj" />
+    <ProjectReference Include="../../src/Engine/SimNetGateway.Engine.InMemory/SimNetGateway.Engine.InMemory.csproj" />
+    <ProjectReference Include="../../src/Gateways/SimNetGateway.Gateway.NedRpr/SimNetGateway.Gateway.NedRpr.csproj" />
+    <ProjectReference Include="../../src/Showcase/SimNetGateway.Showcase/SimNetGateway.Showcase.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -54,6 +54,25 @@ public struct RprPublicationState
         Orientation is not null || Velocity is not null || Acceleration is not null || AngularVelocity is not null ||
         DrAlgorithm is not null || DamageState is not null || DamagePercent is not null;
 
+    /// <summary>The state as the inspector shows it (R-077): status, token, last send, queued flag and the names of the pending fields.</summary>
+    public override readonly string ToString()
+    {
+        var pending = new List<string>();
+        if (Marking is not null) { pending.Add("marking"); }
+        if (EntityType is not null) { pending.Add("type"); }
+        if (ForceId is not null) { pending.Add("force"); }
+        if (Location is not null) { pending.Add("location"); }
+        if (Orientation is not null) { pending.Add("orientation"); }
+        if (Velocity is not null) { pending.Add("velocity"); }
+        if (Acceleration is not null) { pending.Add("acceleration"); }
+        if (AngularVelocity is not null) { pending.Add("angular velocity"); }
+        if (DrAlgorithm is not null) { pending.Add("dr algorithm"); }
+        if (DamageState is not null) { pending.Add("damage state"); }
+        if (DamagePercent is not null) { pending.Add("damage percent"); }
+        return string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"status {Status}, token {Token}, last send {LastSendWall:F3} s, queued {Queued}, allocation warned {AllocationWarned}, pending: {(pending.Count == 0 ? "none" : string.Join(", ", pending))}");
+    }
+
     public void ClearPending()
     {
         Marking = null;
