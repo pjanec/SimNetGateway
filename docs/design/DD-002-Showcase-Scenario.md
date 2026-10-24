@@ -469,3 +469,177 @@ P-27 -> R-047.
 | **P-25** | Restructure `RprEntityEgress` into per-attribute-group contributor rules that fill one pending update per entity, flushed on `OnChangeSetEnd` and on handle arrival, so one group can be disabled and replaced (act 6). | Keep one rule per egress; override only whole modules. |
 | **P-26** | Operator reconfiguration in the PoC is rule enable/disable at runtime; adding new modules while running is not part of the PoC. | Also support registering modules while the engine runs. |
 | **P-27** | An outbound event that refers to an entity whose RPR handle is still pending (asynchronous registration) is **held** until the handle arrives (at most 1 s, then sent with "no object" and a warning). | Send immediately with "no object". |
+
+## 10. As-built notes
+
+### Stage 7a - protocol extensions and gateway modules (T-010, 2026-10-24)
+
+Implemented per Appendix B sections B.1-B.3 (pinned before implementation). About 150 mutation checks,
+survivors behaviour-neutral; a seeded property test keeps formation membership equal to a brute-force
+scan after every tick. Decisions made during implementation and review:
+
+- **Engine addition**: `IdentityMap<TKey>.Unbind(EntityId)` (with test) - a withdrawn RPR-origin entity
+  gives up its individual NED id, a member that changes unit or index changes its `ned.member` key.
+- **Damage notification** (`NedDamageNotificationEgress/Notify`) is registered disabled; the Showcase
+  configuration enables it (`EnabledRules`), so the Default configuration behaves exactly as in stage 5.
+- **Showcase NED id range** 1,000,000 .. 1,000,005: T-1 and the Wolf unit use two, four stay free for
+  act 7's six reinforcements (two allocation warnings).
+- **Members as weapon-status subject and shooter** (found in review - a spec gap): `NedWeaponStatus.Member`,
+  `NedWeaponFire.ShooterMember`; egress maps a member shooter/target to (unit id, member index). An RPR fire
+  by a platform of a NED-origin formation is an echo and ignored, so "member shooter reaching NED" applies
+  to RPR-origin aggregate members.
+- **Overrides govern full updates** (found in review - R-045): the first full update and heartbeats include
+  an attribute group only while its contributor rule is enabled (DamageState with `RprEntityEgress/Damage`,
+  DamagePercent with `CustomerDamagePercent/Damage`, likewise Identity and Spatial); the EntityIdentifier
+  is always sent. Remaining limitation: disabling `RprEntityEgress/Spatial` *before* an entity's first
+  position prevents its registration (tested); act 6 swaps only the Damage contributor.
+- Members of a NED formation inherit the unit's force; a disposed NED formation destroys its members; an
+  RPR aggregate that disappears turns its members back into individuals (`RprAggregateLinker/UnlinkMembers`);
+  the linker links only RPR-origin entities.
+- A formation is sent empty only if one was sent before; members without a position are left out.
+- **Held events** (R-047) also hold every later event, so RPR event order stays global; in Replay events are
+  neither held nor sent. Settings `FireAssemblyTimeout`, `EventHoldTimeout` (1 s).
+- A late-linked aggregate member is introduced to NED as an individual and withdrawn within the same tick
+  (the linker runs after the creation record); the end-of-tick state is correct.
+- On assembly timeout the munition is the shooter's selected one, else the first part's.
+
+## Appendix B - showcase spec (stage 7, pinned before implementation)
+
+Refines DD-002 (sections 2-8) on top of the stage 5 gateway (DD-001 section 15 and Appendix A). Binding
+for stages 7a and 7b; deviations are reported, never silently chosen. Rulings: R-042 .. R-047, R-068,
+R-069, R-070.
+
+### B.1 Protocol extensions (stage 7a)
+
+NED (`SimNetGateway.Protocol.Ned`):
+- `NedFormation(ulong Id, string Name, int TkbType, NedForce Force, NedFormationMember[] Members)` (sealed
+  record) with `readonly record struct NedFormationMember(int Index, double LatitudeDeg, double
+  LongitudeDeg, double Altitude, double HeadingDeg, double PitchDeg, double RollDeg, double Speed, int
+  TkbType, int Damage)`. Sent in both directions. An empty member list means "no members".
+- `NedWeaponFire` gets a trailing parameter `int TargetMember = -1` (member index of a formation target,
+  -1 = none); `NedDetonation` gets `int TargetMember = -1` likewise. Existing callers keep compiling.
+- `NedWeaponStatus` gets a trailing `int Member = -1` and `NedWeaponFire` a trailing `int ShooterMember = -1`
+  (a formation member as weapon-status subject / shooter; added in the 7a review - DD-002 act 5).
+- `NedFireAmmunition(Guid FireId, int MunitionTkb, int Quantity)` (second part of a split fire).
+- `NedDamageNotification(ulong Id, int Member, int OldLevel, int NewLevel)` (outbound; Member -1 = none).
+- `NedIffStatus(ulong Id, int Mode)` (exists only so the harness's FaultyModule has a message to throw on).
+
+RPR (`SimNetGateway.Protocol.Rpr`):
+- `RprAggregateEntity(RprObjectHandle Handle, string Marking, DisEntityType EntityType, RprForceId ForceId,
+  DisEntityId[] MemberIds)` (sealed record, inbound; a unit published by the RPR side). The gateway does
+  not publish aggregates to RPR (a NED formation unit has no position -> no RPR object, S-3.2).
+- `RprObjectUpdate` gets `byte? DamagePercent` (the customer federation's damage in percent, used only by
+  the CustomerDamagePercent contributor; S-6.1 is checked as "DamagePercent = 33 and no DamageState").
+
+### B.2 Pivot additions (PivotSchema)
+- `Structure.Parent` EntityRef with `AttrOptions.IndexReferences`; `Structure.MemberIndex` Int.
+- `RprAggregate.MemberIds` Object (immutable `DisEntityId[]`, the aggregate's last received member list -
+  module-private attribute, prefixed with the module name per DD-001 3.5).
+- Fire assembly (module-private): `Fire.Id` Object (Guid), `Fire.Shooter` EntityRef, `Fire.Target`
+  EntityRef, `Fire.Location` Vec3, `Fire.Munition` Int (0 = not given), `Fire.Quantity` Int,
+  `Fire.Pending` Bool, `Fire.StartedAt` Double (wall time).
+- Identity maps: `ned.member` `IdentityMap<NedMemberKey>` with `readonly record struct NedMemberKey(ulong
+  FormationId, int MemberIndex)` (no allocator); `ned.fire` `IdentityMap<Guid>` (no allocator).
+
+### B.3 Gateway modules (stage 7a; module and rule names stable)
+
+Cardinality (R-041, R-042):
+- `NedFormationIngress`: ONE transaction per message: resolve/create the unit (ned.entity Id; echo rule:
+  a unit of another origin -> ignore the whole message), set Name, TypeTkb, Force (no position); for each
+  member resolve/create via ned.member (Id, Index) and write the spatial attributes exactly like
+  NedGeoSpatialIngress, TypeTkb, Damage (0..3, else Abort), Name = "<unit name>-<index>",
+  Structure.Parent = unit, Structure.MemberIndex = index; destroy the unit's members (ReferencedBy
+  Parent) that are no longer listed.
+- `NedFormationEgress` (rules `MarkDirty`, `Flush`, `Dispose`): for units of origin != ned: member changes
+  (any member attribute, Parent set/cleared, member created/removed) mark the parent dirty;
+  OnChangeSetEnd sends ONE NedFormation per dirty parent with all current members
+  (`ReferencedBy(Structure.Parent, unit)`, ordered by MemberIndex): unit id via ned.entity
+  TryGetOrAllocate (exhaustion as in NedIdentityEgress), member keys bound immediately in ned.member;
+  removed unit -> NedEntityDisposed(unit id). A unit without members yet sends nothing.
+- The individual NED egress modules (`NedIdentityEgress`, `NedSpatialEgress`, `NedDamageEgress`,
+  `NedLifecycleEgress`) skip entities that have `Structure.Parent`. An RPR-origin entity that was
+  published to NED individually and later gets a Parent (its aggregate arrived) is **withdrawn**:
+  NedEntityDisposed with its individual id (id released), then it appears only inside the formation.
+- `RprAggregateEntityIngress`: resolve/create the unit by rpr.handle (origin rpr), set Name, TypeTkb,
+  Force, `RprAggregate.MemberIds`; link every listed member that resolves via rpr.entityId (Parent = unit,
+  MemberIndex = position in the list); clear Parent of members no longer listed.
+- `RprAggregateLinker` (processor, source `proc.aggregate`, rule `LinkLateMember` on OnEntityCreated for
+  origin rpr): when a new RPR entity's rpr.entityId appears in some unit's `RprAggregate.MemberIds`, set its
+  Parent and MemberIndex (S-3.4 member 4 arriving later -> S-3.5 one updated formation).
+- Events naming a member map to the coarse side: NED egress of a fire/detonation whose target has a Parent
+  sends Target = parent's ned id, TargetMember = MemberIndex (S-5.1, C9); NED ingress with TargetMember >= 0
+  resolves the target via ned.member (Target, TargetMember).
+
+Split fire (C8) - showcase configuration only (`NedRprSettings.SplitFireAssembly`, default false; the
+profile registers either `NedWeaponFireIngress` (default) or the two modules below - the default
+single-message fire flow and its stage 5 tests stay unchanged):
+- `NedSplitFireIngress`: NedWeaponFire -> create helper entity H (ned.fire FireId; origin ned), Fire.Id,
+  Shooter, Target, Location, Munition (MunitionTkb, 0 = none yet), Quantity, Pending = true, StartedAt; no
+  event, no ammo change. NedFireAmmunition -> resolve H via ned.fire (unknown -> warning, ignore): Munition,
+  Quantity, Pending = false.
+- `FireAssemblerProcessor` (rules `Complete` on OnAttributesChanged(Fire.Pending) changed to false, and
+  `Timeout` Every(100 ms) for Pending helpers older than `settings.FireAssemblyTimeout` (1 s) by wall time):
+  in one transaction (source `proc.fire`) decrement the shooter's Weapon.Ammo by Quantity (not below 0) and
+  destroy H; then publish WeaponFire **with source ned** (the originating side, so echo suppression keeps
+  working - R-022, R-061) carrying Shooter, Target, Location, Quantity and MunitionTkb = Fire.Munition, or
+  on timeout the shooter's Weapon.SelectedMunition plus the warning "fire <guid> completed by timeout".
+  The state change is dispatched before the event (S-5.3 ammo 28 visible). H's Guid is released with H.
+- Helper entities have no Identity.* or Position, so no egress publishes them; queries may see them.
+
+Damage notification (C6):
+- `NedDamageNotificationEgress` (rule `Notify`, registered after NedDamageEgress): Status.Damage changed on
+  an entity of origin != ned, old < new (old absent counts as 0) -> NedDamageNotification(ned id, -1, old,
+  new) for individuals, (unit ned id, MemberIndex, old, new) for members; decreases send nothing (S-5.5).
+
+RPR events while a handle is pending (R-047):
+- `RprWeaponFireEgress` and `RprDetonationEgress` hold an event whose shooter/target entity is in state
+  Pending (RprPublication) instead of sending it; held events are sent on `RprPublication.HandleBound` once
+  all referenced handles are bound, or after 1 s wall time with "no object" for the still-missing ones and
+  a warning (timer rule `ReleaseHeld`, Every(100 ms)). Order of held events is preserved.
+
+Customer damage in percent (C15, R-046):
+- `CustomerDamagePercent` module, contributor rule `CustomerDamagePercent/Damage` registered `.Disabled()`:
+  on Status.Damage changed contributes `DamagePercent` = {0, 33, 66, 100}[level] to the entity's pending RPR
+  update via an `RprPublication` contribution API (the same mechanism the built-in contributors use).
+  `RprEntityEgress/Damage` and `CustomerDamagePercent/Damage` are swapped at runtime by the operator step.
+  Registered in every configuration (disabled), so the Default behaviour is unchanged.
+
+Replay policy (C16):
+- `RprWeaponFireEgress`, `RprDetonationEgress` (and their held-event release) send only when
+  `Session.Mode == Live`; in Replay the events are still dispatched (event log) but nothing goes to RPR.
+
+Configurations (`NedRprConfigurations`): `Default` unchanged; `Showcase` = Default with
+`SplitFireAssembly = true`, `NedIdRange` sized so that exactly 4 ids are free when act 7's reinforcements
+arrive (the script's RPR-origin entities published to NED individually before act 7 use the others),
+`DisQuarantineSeconds` 10; `All` lists both. Validate(): no errors, no warnings for both.
+
+### B.4 Showcase harness (stage 7b; `src/Showcase/SimNetGateway.Showcase`, DD-002 section 8)
+- `ScenarioScript`/`Act`/`Step` (`InjectStep` holding an `Action<NedRprHost>` that enqueues a typed message,
+  `OperatorStep(ruleFullName, enable)`, `CheckStep(id, Func<ScenarioContext, CheckResult>)`,
+  `ActionStep(Action<ScenarioContext>)` for harness switches like the loopback tap or arming
+  FaultyModule), `ScenarioRunner` (ManualClock, 60 Hz: advance, due inject/operator/action steps,
+  RTI delivery, Tick, InvariantChecker, due checks), `ScenarioContext` (host, recorders, probe, current act,
+  wall/sim time), `ScenarioReport` (timeline of inputs and outputs per side, result per S-id with details,
+  G-violations with tick, PASS/FAIL).
+- **Step timing**: steps are scheduled on the runner clock (ManualClock wall time from 0), not sim time -
+  sim time resets at Load and freezes during the pause. The acts' nominal times of DD-002 section 4 are
+  runner times; the timeline prints both.
+- `InvariantChecker`: G-1 .. G-8 of DD-002 section 6 after every tick (move/extend the stage 5 checker from
+  the test project into the Showcase project; the tests use it from there): G-3 by brute-force comparison
+  using the repository's diagnostic APIs (recency lists, presence, reverse index, spatial grid); G-6 via the
+  probe (no member seen without its parent in the same correlation); G-7 against a per-act whitelist of
+  expected diagnostics (category + message pattern) declared by the script.
+- `ProbeModule` (passive, registered by the harness): records trigger order, correlation, and requested
+  state snapshots at trigger time (e.g. shooter ammo when WeaponFire is dispatched).
+- Test-only modules registered by the harness, never by the profile: `FaultyModule` (handler for
+  NedIffStatus that throws only while `Armed`), `RogueProcessor` (rule `RogueProcessor/Loop`, registered
+  `.Disabled()`, enabled for one tick in act 7: on its trigger attribute changed it writes that attribute
+  again with a new value -> infinite cascade), an unhandled message type `UnknownNedMessage` for S-7.2.
+- `ConvoyAmbushScript`: acts 0-11 with every S-* condition of DD-002 section 5 as a CheckStep; cast and
+  timeline of section 4; act 9 removes 2 of the reinforcements that were published to NED (RprObjectRemoved)
+  so ids free up for S-9.4; act 11 replays a recorded NED stream (the script's own act 3-5 NED inputs,
+  re-injected) after LoadDebrief.
+- `Demo --showcase` runs the script and prints the report; exit code 0 on PASS, 1 on FAIL (remove the stage 6
+  "not available" stub).
+- Acceptance test (Gateway.NedRpr.Tests): runs the script; every S-* passes, no G-* violation at any tick,
+  final state empty (S-10.2/S-11.3), report deterministic across two runs.

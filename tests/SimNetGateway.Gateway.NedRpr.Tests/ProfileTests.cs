@@ -12,21 +12,29 @@ public class ProfileTests
     [
         "NedEntityMasterIngress", "NedGeoSpatialIngress", "NedDamageIngress", "NedWeaponStatusIngress", "NedDisposeIngress",
         "NedWeaponFireIngress", "NedDetonationIngress", "NedControlIngress",
+        "NedFormationIngress", "RprAggregateEntityIngress",
         "RprObjectUpdateIngress", "RprObjectRemovedIngress", "RprWeaponFireIngress", "RprObjectRegisteredIngress",
-        "NedIdentityEgress", "NedSpatialEgress", "NedDamageEgress", "NedLifecycleEgress", "NedWeaponFireEgress",
-        "RprEntityEgress", "RprHeartbeatEgress", "RprWeaponFireEgress", "RprDetonationEgress", "RprControlEgress",
-        "DisplayPositionEgress", "DrExtrapolation", "RprStaleReaper",
+        "NedIdentityEgress", "NedSpatialEgress", "NedDamageEgress", "NedDamageNotificationEgress", "NedLifecycleEgress",
+        "NedFormationEgress", "NedWeaponFireEgress",
+        "RprEntityEgress", "CustomerDamagePercent", "RprHeartbeatEgress", "RprWeaponFireEgress", "RprDetonationEgress", "RprControlEgress",
+        "DisplayPositionEgress", "DrExtrapolation", "RprStaleReaper", "RprAggregateLinker",
     ];
 
     private static readonly string[] RuleNames =
     [
-        "NedIdentityEgress/Master", "NedSpatialEgress/GeoSpatial", "NedDamageEgress/Damage", "NedLifecycleEgress/Dispose",
+        "NedIdentityEgress/Master", "NedSpatialEgress/GeoSpatial", "NedDamageEgress/Damage", "NedDamageNotificationEgress/Notify",
+        "NedLifecycleEgress/Withdraw", "NedLifecycleEgress/Dispose",
+        "NedFormationEgress/MarkDirty", "NedFormationEgress/Flush", "NedFormationEgress/Dispose",
         "NedWeaponFireEgress/Fire",
         "RprEntityEgress/Identity", "RprEntityEgress/Spatial", "RprEntityEgress/Damage", "RprEntityEgress/Flush",
-        "RprEntityEgress/Registered", "RprEntityEgress/Remove",
-        "RprHeartbeatEgress/Heartbeat", "RprWeaponFireEgress/Fire", "RprDetonationEgress/Detonation", "RprControlEgress/Control",
+        "RprEntityEgress/Registered", "RprEntityEgress/Remove", "CustomerDamagePercent/Damage",
+        "RprHeartbeatEgress/Heartbeat",
+        "RprWeaponFireEgress/Fire", "RprWeaponFireEgress/Released", "RprWeaponFireEgress/ReleaseHeld",
+        "RprDetonationEgress/Detonation", "RprDetonationEgress/Released", "RprDetonationEgress/ReleaseHeld",
+        "RprControlEgress/Control",
         "DisplayPositionEgress/Position", "DisplayPositionEgress/Remove",
         "DrExtrapolation/Extrapolate", "RprStaleReaper/Reap",
+        "RprAggregateLinker/LinkLateMember", "RprAggregateLinker/UnlinkMembers",
     ];
 
     [Fact]
@@ -229,7 +237,7 @@ public class ProfileTests
         var dump = h.Engine.Validate().Dump();
 
         Assert.Contains("Status.Damage", dump, StringComparison.Ordinal);
-        Assert.Contains("produced by: NedDamageIngress, NedDetonationIngress, RprObjectUpdateIngress", dump, StringComparison.Ordinal);
+        Assert.Contains("produced by: NedDamageIngress, NedDetonationIngress, NedFormationIngress, RprObjectUpdateIngress", dump, StringComparison.Ordinal);
         Assert.Contains("Derived.PredictedPosition", dump, StringComparison.Ordinal);
         Assert.Contains("produced by: DrExtrapolation", dump, StringComparison.Ordinal);
         Assert.Contains("consumed by: DisplayPositionEgress", dump, StringComparison.Ordinal);

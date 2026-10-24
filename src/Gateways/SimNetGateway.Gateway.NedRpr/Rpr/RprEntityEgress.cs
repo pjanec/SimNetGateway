@@ -28,12 +28,12 @@ public sealed class RprEntityEgress : IGatewayModule
     {
         _publication.Attach(setup);
         setup.Consumes(_schema.StateTime); // read for the heartbeat prediction, not forwarded (RPR has no state time)
-        setup.OnAttributesChanged(_schema.Name, _schema.TypeTkb, _schema.Force)
+        _publication.IdentityRule = setup.OnAttributesChanged(_schema.Name, _schema.TypeTkb, _schema.Force)
             .Named("Identity").When(NotRpr).Do(FillIdentity);
-        setup.OnAttributesChanged(_schema.Position, _schema.Orientation, _schema.Velocity, _schema.Acceleration,
+        _publication.SpatialRule = setup.OnAttributesChanged(_schema.Position, _schema.Orientation, _schema.Velocity, _schema.Acceleration,
                 _schema.AngularVelocity, _schema.DrAlgorithm)
             .Named("Spatial").When(NotRpr).Do(FillSpatial);
-        setup.OnAttributesChanged(_schema.Damage)
+        _publication.DamageRule = setup.OnAttributesChanged(_schema.Damage)
             .Named("Damage").When(NotRpr).Do(FillDamage);
         setup.OnChangeSetEnd().Named("Flush").Do(_ => _publication.Flush());
         setup.OnEvent(_publication.HandleBoundEvent).Named("Registered").Do(_ => _publication.CompleteRegistrations());

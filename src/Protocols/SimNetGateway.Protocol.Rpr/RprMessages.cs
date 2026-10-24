@@ -75,7 +75,21 @@ public sealed record RprObjectUpdate(RprObjectHandle Handle) : IRprMessage
     public byte? DeadReckoningAlgorithm { get; init; }
 
     public RprDamageState? DamageState { get; init; }
+
+    /// <summary>The damage in percent (0..100), as a customer federation that does not use <see cref="DamageState"/> reports it.</summary>
+    public byte? DamagePercent { get; init; }
 }
+
+/// <summary>
+/// Inbound: an aggregate (unit) published by the RPR side. It lists its members by their DIS entity identifier, which
+/// may name platforms that are not known (yet).
+/// </summary>
+public sealed record RprAggregateEntity(
+    RprObjectHandle Handle,
+    string Marking,
+    DisEntityType EntityType,
+    RprForceId ForceId,
+    DisEntityId[] MemberIds) : IRprMessage;
 
 public readonly record struct RprObjectRemoved(RprObjectHandle Handle) : IRprMessage;
 

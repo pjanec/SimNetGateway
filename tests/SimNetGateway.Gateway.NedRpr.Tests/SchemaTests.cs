@@ -28,6 +28,17 @@ public class SchemaTests
         ("Event.Location", AttrKind.Vec3, "ECEF, metres"),
         ("Event.Quantity", AttrKind.Int, "rounds"),
         ("Event.Result", AttrKind.Int, "numbering"),
+        ("Structure.Parent", AttrKind.EntityRef, "unit"),
+        ("Structure.MemberIndex", AttrKind.Int, "Position"),
+        ("RprAggregate.MemberIds", AttrKind.Object, "DisEntityId[]"),
+        ("Fire.Id", AttrKind.Object, "Guid"),
+        ("Fire.Shooter", AttrKind.EntityRef, "shooting"),
+        ("Fire.Target", AttrKind.EntityRef, "target"),
+        ("Fire.Location", AttrKind.Vec3, "ECEF, metres"),
+        ("Fire.Munition", AttrKind.Int, "TKB"),
+        ("Fire.Quantity", AttrKind.Int, "rounds"),
+        ("Fire.Pending", AttrKind.Bool, "second part"),
+        ("Fire.StartedAt", AttrKind.Double, "wall time"),
     ];
 
     private static (AttributeRegistry A, EventTypeRegistry E, PivotSchema S) Create()
@@ -51,7 +62,7 @@ public class SchemaTests
     }
 
     [Fact]
-    public void Only_the_position_has_an_index_and_it_is_a_spatial_index_with_cell_1000()
+    public void Only_the_position_and_the_parent_have_an_index_the_position_a_spatial_one_with_cell_1000()
     {
         var (a, _, s) = Create();
         foreach (var def in a)
@@ -60,6 +71,11 @@ public class SchemaTests
             {
                 Assert.Equal(AttrOptions.SpatialIndex, def.Options);
                 Assert.Equal(1000.0, def.CellSize);
+            }
+            else if (def.Id == s.Parent)
+            {
+                Assert.Equal(AttrOptions.IndexReferences, def.Options); // the reverse index lists a unit's members (R-041)
+                Assert.Equal(0.0, def.CellSize);
             }
             else
             {
@@ -108,6 +124,10 @@ public class SchemaTests
             (s.EventId, "Event.Id"), (s.EventShooter, "Event.Shooter"), (s.EventTarget, "Event.Target"),
             (s.EventMunitionTkb, "Event.MunitionTkb"), (s.EventLocation, "Event.Location"),
             (s.EventQuantity, "Event.Quantity"), (s.EventResult, "Event.Result"),
+            (s.Parent, "Structure.Parent"), (s.MemberIndex, "Structure.MemberIndex"), (s.AggregateMemberIds, "RprAggregate.MemberIds"),
+            (s.FireId, "Fire.Id"), (s.FireShooter, "Fire.Shooter"), (s.FireTarget, "Fire.Target"), (s.FireLocation, "Fire.Location"),
+            (s.FireMunition, "Fire.Munition"), (s.FireQuantity, "Fire.Quantity"), (s.FirePending, "Fire.Pending"),
+            (s.FireStartedAt, "Fire.StartedAt"),
         };
         Assert.Equal(Expected.Length, exposed.Length);
         foreach (var (id, name) in exposed)

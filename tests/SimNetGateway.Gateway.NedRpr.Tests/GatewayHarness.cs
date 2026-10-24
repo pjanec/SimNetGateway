@@ -148,10 +148,18 @@ public sealed class GatewayHarness
     // ---- injection --------------------------------------------------------------------------------------------------
 
     public void Ned<T>(T message)
-        where T : INedMessage => NedIn.Enqueue(in message);
+        where T : INedMessage
+    {
+        Checker.OnNedReceived(message);
+        NedIn.Enqueue(in message);
+    }
 
     public void Rpr<T>(T message)
-        where T : IRprMessage => RprIn.Enqueue(in message);
+        where T : IRprMessage
+    {
+        Checker.OnRprReceived(message);
+        RprIn.Enqueue(in message);
+    }
 
     /// <summary>Injects NED messages and runs one step.</summary>
     public void NedStep<T>(T message)
@@ -180,6 +188,10 @@ public sealed class GatewayHarness
             case NedWeaponFire m: NedIn.Enqueue(in m); break;
             case NedDetonation m: NedIn.Enqueue(in m); break;
             case NedSimControl m: NedIn.Enqueue(in m); break;
+            case NedFormation m: NedIn.Enqueue(in m); break;
+            case NedFireAmmunition m: NedIn.Enqueue(in m); break;
+            case NedDamageNotification m: NedIn.Enqueue(in m); break;
+            case NedIffStatus m: NedIn.Enqueue(in m); break;
             default: throw new InvalidOperationException("Unknown NED message " + message.GetType().Name);
         }
     }
@@ -192,6 +204,7 @@ public sealed class GatewayHarness
             case RprObjectRemoved m: RprIn.Enqueue(in m); break;
             case RprWeaponFire m: RprIn.Enqueue(in m); break;
             case RprMunitionDetonation m: RprIn.Enqueue(in m); break;
+            case RprAggregateEntity m: RprIn.Enqueue(in m); break;
             default: throw new InvalidOperationException("Cannot loop back " + message.GetType().Name);
         }
     }

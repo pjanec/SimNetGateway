@@ -181,6 +181,21 @@ public sealed class IdentityMap<TKey> : IIdentityMapInternal, IChangeParticipant
         return true;
     }
 
+    /// <summary>
+    /// Removes the entity's committed binding while the entity stays alive (outside a transaction), e.g. when a side stops
+    /// knowing the entity under that identity; a key from the allocator goes back to it. False when the entity has no key.
+    /// </summary>
+    public bool Unbind(EntityId id)
+    {
+        if (!_byEntity.ContainsKey(id))
+        {
+            return false;
+        }
+
+        ((IIdentityMapInternal)this).ReleaseEntity(id);
+        return true;
+    }
+
     private void AddBinding(EntityId id, in TKey key, bool allocated)
     {
         _byKey.Add(key, id);

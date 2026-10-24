@@ -86,6 +86,8 @@ public sealed class NedRprHost
         RprHandles = Map<RprObjectHandle>("rpr.handle");
         RprEntityIds = Map<DisEntityId>("rpr.entityId");
         DisplayLabels = Map<string>("display.label");
+        NedMembers = Map<NedMemberKey>("ned.member");
+        NedFires = Map<Guid>("ned.fire");
     }
 
     public IClock Clock { get; }
@@ -124,6 +126,12 @@ public sealed class NedRprHost
     public IdentityMap<DisEntityId> RprEntityIds { get; }
 
     public IdentityMap<string> DisplayLabels { get; }
+
+    /// <summary>"ned.member": (formation id, member index) of the members of NED formations.</summary>
+    public IdentityMap<NedMemberKey> NedMembers { get; }
+
+    /// <summary>"ned.fire": the fire ids of the split fires under assembly.</summary>
+    public IdentityMap<Guid> NedFires { get; }
 
     /// <summary>When false the RTI does not answer registrations (the handle stays pending).</summary>
     public bool DeliverRti { get; set; } = true;

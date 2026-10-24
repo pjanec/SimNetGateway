@@ -132,6 +132,32 @@ public class IdentityTests
     }
 
     [Fact]
+    public void Unbind_removes_the_binding_of_a_live_entity_and_returns_an_allocated_key_to_its_allocator()
+    {
+        var f = new EngineFixture();
+        var allocator = new CountingAllocator(10);
+        var ned = NedMap(f, allocator);
+        var a = f.Create();
+        var b = f.Create();
+        Assert.True(ned.TryGetOrAllocate(a, out ulong keyA));
+        Assert.True(ned.Bind(b, 777UL));
+
+        Assert.True(ned.Unbind(a));
+        Assert.True(ned.Unbind(b));
+        Assert.False(ned.Unbind(a)); // no key any more
+
+        Assert.False(ned.Contains(a));
+        Assert.False(ned.TryResolve(keyA, out _));
+        Assert.False(ned.TryResolve(777UL, out _));
+        Assert.Equal(0, ned.Count);
+        Assert.Equal(new[] { keyA }, allocator.Released); // only the allocated key goes back, not the wire key
+        Assert.NotNull(f.Engine.State.Find(a)); // the entity itself lives on
+        Assert.True(ned.Bind(a, 5UL)); // and can get another key
+        Assert.True(ned.TryResolve(5UL, out var back));
+        Assert.Equal(a, back);
+    }
+
+    [Fact]
     public void Registry_rejects_duplicate_names_and_finds_maps()
     {
         var f = new EngineFixture();

@@ -35,6 +35,9 @@ public sealed class InvariantChecker
     private readonly List<string> _violations = new();
     private readonly HashSet<RprObjectHandle> _removed = new();
     private readonly HashSet<EntityId> _destroyed = new();
+    private readonly HashSet<EntityId> _nedIndividuals = new();
+    private readonly HashSet<Guid> _nedFireIds = new();
+    private readonly HashSet<Guid> _rprEventIds = new();
     private readonly HashSet<long> _seenCorrelations = new();
     private readonly Dictionary<Guid, SourceId> _eventSources = new();
     private readonly List<(Guid Id, SourceId Receiver, string Message)> _eventChecks = new();
@@ -73,16 +76,52 @@ public sealed class InvariantChecker
         return count;
     }
 
-    // ---- inspection of sent messages ----------------------------------------------------------------------------------
+    // ---- inspection of received and sent messages ---------------------------------------------------------------------
+
+    /// <summary>Notes the fire and detonation ids that the NED side itself sent in (G-1: they must never be sent back to NED).</summary>
+    public void OnNedReceived(INedMessage message)
+    {
+        switch (message)
+        {
+            case NedWeaponFire m: _nedFireIds.Add(m.FireId); break;
+            case NedFireAmmunition m: _nedFireIds.Add(m.FireId); break;
+            case NedDetonation m: _nedFireIds.Add(m.DetonationId); break;
+        }
+    }
+
+    public void OnRprReceived(IRprMessage message)
+    {
+        switch (message)
+        {
+            case RprWeaponFire m: _rprEventIds.Add(m.EventId); break;
+            case RprMunitionDetonation m: _rprEventIds.Add(m.EventId); break;
+        }
+    }
 
     public void OnNedSent(INedMessage message)
     {
         switch (message)
         {
-            case NedEntityMaster m: CheckNedEntity(m.Id, nameof(NedEntityMaster)); break;
+            case NedEntityMaster m:
+                CheckNedEntity(m.Id, nameof(NedEntityMaster));
+                if (_h.NedIds.TryResolve(m.Id, out var introduced))
+                {
+                    _nedIndividuals.Add(introduced);
+                }
+
+                break;
+            case NedFormation m: CheckFormation(m); break;
+            case NedDamageNotification m: CheckNedEntity(m.Id, nameof(NedDamageNotification)); break;
             case NedGeoSpatial m: CheckNedEntity(m.Id, nameof(NedGeoSpatial)); break;
             case NedEntityDamage m: CheckNedEntity(m.Id, nameof(NedEntityDamage)); break;
-            case NedEntityDisposed m: CheckNedEntity(m.Id, nameof(NedEntityDisposed)); break;
+            case NedEntityDisposed m:
+                CheckNedEntity(m.Id, nameof(NedEntityDisposed));
+                if (_h.NedIds.TryResolve(m.Id, out var disposed))
+                {
+                    _nedIndividuals.Remove(disposed);
+                }
+
+                break;
             case NedWeaponFire m:
                 if (m.Shooter != 0)
                 {
@@ -92,6 +131,21 @@ public sealed class InvariantChecker
                 if (m.Target != 0)
                 {
                     CheckNedEntity(m.Target, "NedWeaponFire.Target", checkOrigin: false);
+                }
+
+                if (m.ShooterMember >= 0 && !_h.NedMembers.TryResolve(new NedMemberKey(m.Shooter, m.ShooterMember), out _))
+                {
+                    _violations.Add($"G-5: NedWeaponFire names shooter member {m.ShooterMember} of {m.Shooter}, which ned.member does not know");
+                }
+
+                if (m.TargetMember >= 0 && !_h.NedMembers.TryResolve(new NedMemberKey(m.Target, m.TargetMember), out _))
+                {
+                    _violations.Add($"G-5: NedWeaponFire names member {m.TargetMember} of {m.Target}, which ned.member does not know");
+                }
+
+                if (_nedFireIds.Contains(m.FireId))
+                {
+                    _violations.Add($"G-1: NedWeaponFire {m.FireId} was sent back to NED, which sent that fire itself");
                 }
 
                 _eventChecks.Add((m.FireId, _h.NedSource, "NedWeaponFire " + m.FireId));
@@ -120,11 +174,21 @@ public sealed class InvariantChecker
             case RprWeaponFire m:
                 CheckOptionalHandle(m.FiringObject, "RprWeaponFire.FiringObject");
                 CheckOptionalHandle(m.TargetObject, "RprWeaponFire.TargetObject");
+                if (_rprEventIds.Contains(m.EventId))
+                {
+                    _violations.Add($"G-1: RprWeaponFire {m.EventId} was sent back to RPR, which sent that fire itself");
+                }
+
                 _eventChecks.Add((m.EventId, _h.RprSource, "RprWeaponFire " + m.EventId));
                 break;
             case RprMunitionDetonation m:
                 CheckOptionalHandle(m.FiringObject, "RprMunitionDetonation.FiringObject");
                 CheckOptionalHandle(m.TargetObject, "RprMunitionDetonation.TargetObject");
+                if (_rprEventIds.Contains(m.EventId))
+                {
+                    _violations.Add($"G-1: RprMunitionDetonation {m.EventId} was sent back to RPR, which sent that detonation itself");
+                }
+
                 _eventChecks.Add((m.EventId, _h.RprSource, "RprMunitionDetonation " + m.EventId));
                 break;
             case RprRegisterObject:
@@ -133,6 +197,22 @@ public sealed class InvariantChecker
             default:
                 _violations.Add($"G-1: the gateway sent {message.GetType().Name} to RPR, which it never should");
                 break;
+        }
+    }
+
+    private void CheckFormation(NedFormation m)
+    {
+        CheckNedEntity(m.Id, nameof(NedFormation));
+        foreach (var member in m.Members)
+        {
+            if (!_h.NedMembers.TryResolve(new NedMemberKey(m.Id, member.Index), out var entity))
+            {
+                _violations.Add($"G-5: NedFormation {m.Id} lists member {member.Index}, which ned.member does not know");
+            }
+            else if (TryOriginOf(entity, out var origin) && origin == _h.NedSource)
+            {
+                _violations.Add($"G-1: NedFormation {m.Id} describes member {member.Index}, whose origin is ned");
+            }
         }
     }
 
@@ -215,6 +295,7 @@ public sealed class InvariantChecker
         CheckEvents();
         CheckIdentities();
         CheckReceivedState();
+        CheckStructure();
         CheckDiagnostics();
         Fail(_violations);
     }
@@ -296,6 +377,8 @@ public sealed class InvariantChecker
         RoundTrip(_h.RprHandles);
         RoundTrip(_h.RprEntityIds);
         RoundTrip(_h.DisplayLabels);
+        RoundTrip(_h.NedMembers);
+        RoundTrip(_h.NedFires);
         foreach (var map in _h.Engine.Identities.All)
         {
             foreach (var id in _destroyed)
@@ -329,6 +412,24 @@ public sealed class InvariantChecker
         if (bound != map.Count)
         {
             _violations.Add($"G-2: map '{map.Name}' holds {map.Count} bindings, but {bound} live entities have a key");
+        }
+    }
+
+    /// <summary>NED never holds the same entity both as an individual id and as a formation member.</summary>
+    private void CheckStructure()
+    {
+        var parent = _h.Schema.Parent;
+        foreach (var entity in _h.Engine.State.Entities)
+        {
+            if (entity.Origin == _h.NedSource || !entity.Has(parent))
+            {
+                continue;
+            }
+
+            if (_h.NedIds.Contains(entity.Id) || _nedIndividuals.Contains(entity.Id))
+            {
+                _violations.Add($"G-structure: entity {entity.Id.Value} is a formation member but NED also knows it as an individual");
+            }
         }
     }
 

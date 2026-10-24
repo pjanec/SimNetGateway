@@ -36,6 +36,18 @@ internal static class RprEventWire
         return TypeCatalog.DefaultDis;
     }
 
+    public static bool TryEntity(AttributeBag payload, AttrId attr, out EntityId entity)
+    {
+        if (payload.TryGet(attr, out var value))
+        {
+            entity = value.AsEntity();
+            return true;
+        }
+
+        entity = default;
+        return false;
+    }
+
     public static RprObjectHandle? HandleOf(NedRprMaps maps, AttributeBag payload, AttrId attr) =>
         payload.TryGet(attr, out var entity) && maps.RprHandle.TryGetKey(entity.AsEntity(), out var handle) ? handle : null;
 }

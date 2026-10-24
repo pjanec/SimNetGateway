@@ -45,7 +45,7 @@ public sealed class NedDetonationIngress : IGatewayModule
 
         var changes = ctx.Changes;
         EntityId target = default;
-        bool hasTarget = m.Target != 0 && _maps.NedEntity.TryResolve(changes, m.Target, out target);
+        bool hasTarget = m.Target != 0 && IngressEntities.TryResolveNedTarget(ctx, _maps, m.Target, m.TargetMember, out target);
         if (hasTarget && NedRprConversions.IsValidDamage(m.TargetDamage))
         {
             changes.Set(target, _schema.Damage, AttrValue.From(m.TargetDamage));

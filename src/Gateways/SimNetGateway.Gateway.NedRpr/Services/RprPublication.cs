@@ -46,10 +46,13 @@ public struct RprPublicationState
     public byte? DrAlgorithm;
     public RprDamageState? DamageState;
 
+    /// <summary>Damage in percent, contributed by an alternative damage contributor (R-046); the default one fills <see cref="DamageState"/>.</summary>
+    public byte? DamagePercent;
+
     public readonly bool HasPending =>
         Marking is not null || EntityType is not null || ForceId is not null || Location is not null ||
         Orientation is not null || Velocity is not null || Acceleration is not null || AngularVelocity is not null ||
-        DrAlgorithm is not null || DamageState is not null;
+        DrAlgorithm is not null || DamageState is not null || DamagePercent is not null;
 
     public void ClearPending()
     {
@@ -63,6 +66,7 @@ public struct RprPublicationState
         AngularVelocity = null;
         DrAlgorithm = null;
         DamageState = null;
+        DamagePercent = null;
     }
 }
 
@@ -111,6 +115,25 @@ public sealed class RprPublication
     /// </summary>
     public EventTypeId HandleBoundEvent { get; private set; }
 
+    // ---- the contributor rules (R-045) --------------------------------------------------------------------------------------
+    // A full update (first update after the handle arrives, heartbeat) is built through the same attribute groups as a partial
+    // one: a group is present only while the rule of its contributor is enabled, so an operator override that disables a
+    // contributor removes its group from full updates, too. A group whose contributor is not registered counts as enabled.
+
+    /// <summary>The rule that contributes marking, entity type and force.</summary>
+    public RuleInfo? IdentityRule { get; set; }
+
+    /// <summary>The rule that contributes location, orientation, velocities and the dead-reckoning algorithm.</summary>
+    public RuleInfo? SpatialRule { get; set; }
+
+    /// <summary>The rule that contributes the damage state.</summary>
+    public RuleInfo? DamageRule { get; set; }
+
+    /// <summary>The rule that contributes the damage in percent; the group exists only while this rule is registered and enabled.</summary>
+    public RuleInfo? DamagePercentRule { get; set; }
+
+    private static bool IsOn(RuleInfo? rule) => rule is null || rule.Enabled;
+
     public EntityTable<RprPublicationState> Table => _table ?? throw NotAttached();
 
     private IGatewayContext Gateway => _gateway ?? throw NotAttached();
@@ -150,6 +173,9 @@ public sealed class RprPublication
 
         return ref state;
     }
+
+    /// <summary>The contribution API of an alternative damage contributor: the damage in percent of the entity's pending update.</summary>
+    public void ContributeDamagePercent(EntityId id, byte percent) => Pending(id).DamagePercent = percent;
 
     public DisEntityType ToDis(int tkb)
     {
@@ -219,6 +245,7 @@ public sealed class RprPublication
                             AngularVelocity = state.AngularVelocity,
                             DeadReckoningAlgorithm = state.DrAlgorithm,
                             DamageState = state.DamageState,
+                            DamagePercent = state.DamagePercent,
                         };
                         SendUpdate(update, ref state);
                     }
@@ -364,24 +391,31 @@ public sealed class RprPublication
     public RprObjectUpdate BuildFull(EntityRecord e, RprObjectHandle handle, bool predictToNow)
     {
         var s = _schema;
-        string? marking = e.TryGet(s.Name, out var name) ? name.AsString() : null;
-        DisEntityType? type = e.TryGet(s.TypeTkb, out var tkb) ? ToDis((int)tkb.AsInt()) : null;
-        RprForceId? force = e.TryGet(s.Force, out var f) ? ToForce((int)f.AsInt()) : null;
+        bool identity = IsOn(IdentityRule);
+        bool spatial = IsOn(SpatialRule);
+        string? marking = identity && e.TryGet(s.Name, out var name) ? name.AsString() : null;
+        DisEntityType? type = identity && e.TryGet(s.TypeTkb, out var tkb) ? ToDis((int)tkb.AsInt()) : null;
+        RprForceId? force = identity && e.TryGet(s.Force, out var f) ? ToForce((int)f.AsInt()) : null;
         DisEntityId? entityId = _maps.RprEntityId.TryGetKey(e.Id, out var identifier) ? identifier : null;
         WorldLocation? location = null;
-        if (e.TryGet(s.Position, out var position))
+        if (spatial && e.TryGet(s.Position, out var position))
         {
             var p = predictToNow ? Predict(e, position.AsVec3(), Gateway.SimTime) : position.AsVec3();
             location = NedRprConversions.ToWorldLocation(p);
         }
 
-        RprOrientation? orientation = e.TryGet(s.Orientation, out var o) ? NedRprConversions.ToRprOrientation(o.AsVec3()) : null;
-        RprVector? velocity = e.TryGet(s.Velocity, out var v) ? NedRprConversions.ToRprVector(v.AsVec3()) : null;
-        RprVector? acceleration = e.TryGet(s.Acceleration, out var a) ? NedRprConversions.ToRprVector(a.AsVec3()) : null;
-        RprVector? angular = e.TryGet(s.AngularVelocity, out var w) ? NedRprConversions.ToRprVector(w.AsVec3()) : null;
-        byte? algorithm = e.TryGet(s.DrAlgorithm, out var alg) ? (byte)alg.AsInt() : null;
-        RprDamageState? damage = e.TryGet(s.Damage, out var d) && NedRprConversions.TryDamageToRpr((int)d.AsInt(), out var state)
+        RprOrientation? orientation = spatial && e.TryGet(s.Orientation, out var o) ? NedRprConversions.ToRprOrientation(o.AsVec3()) : null;
+        RprVector? velocity = spatial && e.TryGet(s.Velocity, out var v) ? NedRprConversions.ToRprVector(v.AsVec3()) : null;
+        RprVector? acceleration = spatial && e.TryGet(s.Acceleration, out var a) ? NedRprConversions.ToRprVector(a.AsVec3()) : null;
+        RprVector? angular = spatial && e.TryGet(s.AngularVelocity, out var w) ? NedRprConversions.ToRprVector(w.AsVec3()) : null;
+        byte? algorithm = spatial && e.TryGet(s.DrAlgorithm, out var alg) ? (byte)alg.AsInt() : null;
+        RprDamageState? damage = IsOn(DamageRule) && e.TryGet(s.Damage, out var d) &&
+                                 NedRprConversions.TryDamageToRpr((int)d.AsInt(), out var state)
             ? state
+            : null;
+        byte? percent = DamagePercentRule is { Enabled: true } && e.TryGet(s.Damage, out var level) &&
+                        NedRprConversions.IsValidDamage((int)level.AsInt())
+            ? CustomerDamagePercent.PercentOfLevel[level.AsInt()]
             : null;
         return new RprObjectUpdate(handle)
         {
@@ -396,6 +430,7 @@ public sealed class RprPublication
             AngularVelocity = angular,
             DeadReckoningAlgorithm = algorithm,
             DamageState = damage,
+            DamagePercent = percent,
         };
     }
 

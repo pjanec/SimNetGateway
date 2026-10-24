@@ -46,10 +46,14 @@ public class ProtocolTests
     public void The_message_inventory_is_complete_per_side()
     {
         Assert.Equal(
-            new[] { "NedDetonation", "NedEntityDamage", "NedEntityDisposed", "NedEntityMaster", "NedGeoSpatial", "NedSimControl", "NedWeaponFire", "NedWeaponStatus" },
+            new[]
+            {
+                "NedDamageNotification", "NedDetonation", "NedEntityDamage", "NedEntityDisposed", "NedEntityMaster", "NedFireAmmunition",
+                "NedFormation", "NedGeoSpatial", "NedIffStatus", "NedSimControl", "NedWeaponFire", "NedWeaponStatus",
+            },
             MessageTypes(typeof(INedMessage).Assembly, typeof(INedMessage)).Select(t => t.Name).OrderBy(x => x, StringComparer.Ordinal));
         Assert.Equal(
-            new[] { "RprMunitionDetonation", "RprObjectRegistered", "RprObjectRemoved", "RprObjectUpdate", "RprRegisterObject", "RprSimulationControl", "RprWeaponFire" },
+            new[] { "RprAggregateEntity", "RprMunitionDetonation", "RprObjectRegistered", "RprObjectRemoved", "RprObjectUpdate", "RprRegisterObject", "RprSimulationControl", "RprWeaponFire" },
             MessageTypes(typeof(IRprMessage).Assembly, typeof(IRprMessage)).Select(t => t.Name).OrderBy(x => x, StringComparer.Ordinal));
         Assert.Equal(
             new[] { "DisplayEntityPosition", "DisplayEntityRemoved" },
@@ -59,23 +63,29 @@ public class ProtocolTests
     [Fact]
     public void Messages_without_collections_are_value_types_and_the_update_is_a_class()
     {
-        foreach (var t in MessageTypes(typeof(INedMessage).Assembly, typeof(INedMessage)))
+        foreach (var t in MessageTypes(typeof(INedMessage).Assembly, typeof(INedMessage)).Where(t => t != typeof(NedFormation)))
         {
             Assert.True(t.IsValueType, t.Name);
         }
+
+        Assert.True(typeof(NedFormation).IsClass); // it carries the member array
+        Assert.True(typeof(NedFormation).IsSealed);
 
         foreach (var t in MessageTypes(typeof(IDisplayMessage).Assembly, typeof(IDisplayMessage)))
         {
             Assert.True(t.IsValueType, t.Name);
         }
 
-        foreach (var t in MessageTypes(typeof(IRprMessage).Assembly, typeof(IRprMessage)).Where(t => t != typeof(RprObjectUpdate)))
+        foreach (var t in MessageTypes(typeof(IRprMessage).Assembly, typeof(IRprMessage))
+                     .Where(t => t != typeof(RprObjectUpdate) && t != typeof(RprAggregateEntity)))
         {
             Assert.True(t.IsValueType, t.Name);
         }
 
         Assert.True(typeof(RprObjectUpdate).IsClass);
         Assert.True(typeof(RprObjectUpdate).IsSealed);
+        Assert.True(typeof(RprAggregateEntity).IsClass); // it carries the member id array
+        Assert.True(typeof(RprAggregateEntity).IsSealed);
     }
 
     [Fact]

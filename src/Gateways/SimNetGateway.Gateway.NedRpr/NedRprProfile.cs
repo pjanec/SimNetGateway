@@ -14,6 +14,12 @@ namespace SimNetGateway.Gateway.NedRpr;
 /// </summary>
 public sealed class NedRprProfile : IGatewayProfile
 {
+    /// <summary>How often a held RPR event (R-047) is checked for its timeout.</summary>
+    public static readonly TimeSpan HoldReleasePeriod = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>How often a split fire that waits for its ammunition part is checked for its timeout.</summary>
+    public static readonly TimeSpan FireAssemblyCheckPeriod = TimeSpan.FromMilliseconds(100);
+
     public string Name => "ned-rpr";
 
     public void Configure(GatewayBuilder builder)
@@ -27,7 +33,9 @@ public sealed class NedRprProfile : IGatewayProfile
             builder.RequireInbound("rpr").Source,
             builder.Sources.Register("display"),
             builder.Sources.Register("proc.dr"),
-            builder.Sources.Register("proc.reaper"));
+            builder.Sources.Register("proc.reaper"),
+            builder.Sources.Register("proc.aggregate"),
+            builder.Sources.Register("proc.fire"));
         var nedOut = builder.RequireOutbound<INedMessage>("ned");
         var rprOut = builder.RequireOutbound<IRprMessage>("rpr");
         var displayOut = builder.RequireOutbound<IDisplayMessage>("display");
@@ -36,6 +44,7 @@ public sealed class NedRprProfile : IGatewayProfile
         var catalog = new TypeCatalog();
         var predictors = PredictorRegistry.CreateDis();
         var publication = new RprPublication(rprOut, schema, maps, catalog, predictors);
+        var hold = new RprEventHold(maps, publication, rprOut, settings.EventHoldTimeout);
 
         // NED ingress
         builder.AddModule(new NedEntityMasterIngress(schema, maps));
@@ -43,12 +52,22 @@ public sealed class NedRprProfile : IGatewayProfile
         builder.AddModule(new NedDamageIngress(schema, maps));
         builder.AddModule(new NedWeaponStatusIngress(schema, maps));
         builder.AddModule(new NedDisposeIngress(maps));
-        builder.AddModule(new NedWeaponFireIngress(schema, maps));
+        builder.AddModule(new NedFormationIngress(schema, maps));
+        if (settings.SplitFireAssembly)
+        {
+            builder.AddModule(new NedSplitFireIngress(schema, maps));
+        }
+        else
+        {
+            builder.AddModule(new NedWeaponFireIngress(schema, maps));
+        }
+
         builder.AddModule(new NedDetonationIngress(schema, maps));
         builder.AddModule(new NedControlIngress());
 
         // RPR ingress
         builder.AddModule(new RprObjectUpdateIngress(schema, maps, catalog));
+        builder.AddModule(new RprAggregateEntityIngress(schema, maps, catalog));
         builder.AddModule(new RprObjectRemovedIngress(maps));
         builder.AddModule(new RprWeaponFireIngress(schema, maps, catalog));
         builder.AddModule(new RprObjectRegisteredIngress(maps, publication));
@@ -58,14 +77,17 @@ public sealed class NedRprProfile : IGatewayProfile
         builder.AddModule(new NedIdentityEgress(schema, maps, sources, introductions, nedOut));
         builder.AddModule(new NedSpatialEgress(schema, maps, sources, introductions, nedOut));
         builder.AddModule(new NedDamageEgress(schema, maps, sources, introductions, nedOut));
-        builder.AddModule(new NedLifecycleEgress(maps, sources, nedOut));
+        builder.AddModule(new NedDamageNotificationEgress(schema, maps, sources, introductions, nedOut));
+        builder.AddModule(new NedLifecycleEgress(schema, maps, sources, nedOut));
+        builder.AddModule(new NedFormationEgress(schema, maps, sources, nedOut));
         builder.AddModule(new NedWeaponFireEgress(schema, maps, sources, nedOut));
 
         // RPR egress
         builder.AddModule(new RprEntityEgress(schema, publication, sources));
+        builder.AddModule(new CustomerDamagePercent(schema, publication, sources));
         builder.AddModule(new RprHeartbeatEgress(publication, settings.HeartbeatPeriod, settings.HeartbeatCheckPeriod));
-        builder.AddModule(new RprWeaponFireEgress(schema, maps, catalog, sources, rprOut));
-        builder.AddModule(new RprDetonationEgress(schema, maps, catalog, sources, rprOut));
+        builder.AddModule(new RprWeaponFireEgress(schema, maps, catalog, sources, rprOut, hold, HoldReleasePeriod));
+        builder.AddModule(new RprDetonationEgress(schema, maps, catalog, sources, rprOut, hold, HoldReleasePeriod));
         builder.AddModule(new RprControlEgress(sources, rprOut));
 
         // Display and processors
@@ -84,6 +106,11 @@ public sealed class NedRprProfile : IGatewayProfile
             slices: settings.DrSlices));
         builder.AddModule(new StaleEntityReaper(
             "RprStaleReaper", sources.Rpr, settings.StaleTimeout, settings.ReaperCheckPeriod, sources.ProcReaper));
+        builder.AddModule(new RprAggregateLinker(schema, maps, sources));
+        if (settings.SplitFireAssembly)
+        {
+            builder.AddModule(new FireAssemblerProcessor(schema, sources, settings.FireAssemblyTimeout, FireAssemblyCheckPeriod));
+        }
     }
 }
 
@@ -93,6 +120,24 @@ public static class NedRprConfigurations
     /// <summary>The PoC gateway with its default settings.</summary>
     public static GatewayConfiguration Default { get; } = new("ned-rpr/default", new NedRprProfile(), new NedRprSettings());
 
-    /// <summary>Every configuration of this gateway (the Showcase variants come in stage 7).</summary>
-    public static IReadOnlyList<GatewayConfiguration> All { get; } = new[] { Default };
+    /// <summary>
+    /// The first NED id of the gateway's range and the size of the range in the showcase: 6 ids, of which exactly 4 are free
+    /// when act 7's reinforcements arrive (the RPR-origin entities that the script has published to NED by then use the other two).
+    /// </summary>
+    public static NedIdRange ShowcaseNedIdRange { get; } = new(1_000_000, 1_000_005);
+
+    /// <summary>
+    /// The showcase "Convoy Ambush" (DD-002): the default gateway with split fire assembly (C8), damage notifications to NED
+    /// (C6, the rule is enabled), the small NED id range of act 7 and a short DIS quarantine.
+    /// </summary>
+    public static GatewayConfiguration Showcase { get; } = new("ned-rpr/showcase", new NedRprProfile(), new NedRprSettings
+    {
+        SplitFireAssembly = true,
+        NedIdRange = ShowcaseNedIdRange,
+        DisQuarantineSeconds = 10,
+        EnabledRules = ["NedDamageNotificationEgress/Notify"],
+    });
+
+    /// <summary>Every configuration of this gateway.</summary>
+    public static IReadOnlyList<GatewayConfiguration> All { get; } = new[] { Default, Showcase };
 }

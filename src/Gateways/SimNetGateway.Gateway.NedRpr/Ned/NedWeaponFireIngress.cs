@@ -32,7 +32,7 @@ public sealed class NedWeaponFireIngress : IGatewayModule
 
     private void Handle(in NedWeaponFire m, IngressContext ctx)
     {
-        var resolution = IngressEntities.Resolve(ctx, _maps.NedEntity, m.Shooter, create: false, out var shooter);
+        var resolution = IngressEntities.ResolveNed(ctx, _maps, m.Shooter, m.ShooterMember, create: false, out var shooter);
         if (resolution == EntityResolution.Missing)
         {
             ctx.Abort("unknown shooter");
@@ -54,7 +54,7 @@ public sealed class NedWeaponFireIngress : IGatewayModule
         var bag = ctx.RentPayload();
         bag.Set(_schema.EventId, AttrValue.FromObject(m.FireId));
         bag.Set(_schema.EventShooter, AttrValue.From(shooter));
-        if (m.Target != 0 && _maps.NedEntity.TryResolve(changes, m.Target, out var target))
+        if (m.Target != 0 && IngressEntities.TryResolveNedTarget(ctx, _maps, m.Target, m.TargetMember, out var target))
         {
             bag.Set(_schema.EventTarget, AttrValue.From(target));
         }

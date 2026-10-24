@@ -45,4 +45,23 @@ internal static class IngressEntities
         map.Bind(ctx.Changes, id, key);
         return EntityResolution.Created;
     }
+
+    /// <summary>
+    /// <see cref="Resolve{TKey}"/> for a NED wire reference that may name a formation member: member <paramref name="member"/> of
+    /// the formation <paramref name="id"/> (never created here) when the index is not negative, else the entity <paramref name="id"/>.
+    /// </summary>
+    public static EntityResolution ResolveNed(IngressContext ctx, NedRprMaps maps, ulong id, int member, bool create,
+        out EntityId entity) =>
+        member >= 0
+            ? Resolve(ctx, maps.NedMember, new NedMemberKey(id, member), create: false, out entity)
+            : Resolve(ctx, maps.NedEntity, id, create, out entity);
+
+    /// <summary>
+    /// The entity a NED event names as its target: member <paramref name="member"/> of the formation <paramref name="id"/> when
+    /// the member index is not negative, else the entity <paramref name="id"/> itself (C9). False when the key is unknown.
+    /// </summary>
+    public static bool TryResolveNedTarget(IngressContext ctx, NedRprMaps maps, ulong id, int member, out EntityId entity) =>
+        member >= 0
+            ? maps.NedMember.TryResolve(ctx.Changes, new NedMemberKey(id, member), out entity)
+            : maps.NedEntity.TryResolve(ctx.Changes, id, out entity);
 }

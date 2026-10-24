@@ -26,8 +26,8 @@ public sealed class NedWeaponStatusIngress : IGatewayModule
 
     private void Handle(in NedWeaponStatus m, IngressContext ctx)
     {
-        var resolution = IngressEntities.Resolve(ctx, _maps.NedEntity, m.Id, create: true, out var id);
-        if (resolution == EntityResolution.Echo)
+        var resolution = IngressEntities.ResolveNed(ctx, _maps, m.Id, m.Member, create: true, out var id);
+        if (resolution is EntityResolution.Echo or EntityResolution.Missing)
         {
             return;
         }

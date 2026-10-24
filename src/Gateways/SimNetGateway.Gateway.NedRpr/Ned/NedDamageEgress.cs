@@ -27,7 +27,7 @@ public sealed class NedDamageEgress : IGatewayModule
     public void Register(ModuleSetup setup) =>
         setup.OnAttributesChanged(_schema.Damage)
             .Named("Damage")
-            .When(t => t.Entity.Origin != _ned && !_introductions.IsCurrent(t.Id, t.Correlation))
+            .When(t => t.Entity.Origin != _ned && !NedStructure.IsStructural(_schema, t.Entity) && !_introductions.IsCurrent(t.Id, t.Correlation))
             .Do(t =>
             {
                 if (_maps.NedEntity.TryGetKey(t.Id, out ulong id))

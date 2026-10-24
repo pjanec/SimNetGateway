@@ -40,8 +40,10 @@ public sealed class NedIdentityEgress : IGatewayModule
         _gateway = setup.Gateway;
         _exhausted = setup.CreateEntityTable<Exhausted>("NedIdentityEgress.Exhausted");
         setup.Consumes(_schema.Position, _schema.Orientation, _schema.Velocity, _schema.Damage); // sent on introduction
+        setup.Consumes(_schema.AggregateMemberIds); // a unit is described by its formation message, not by a master
         // Position is a retry trigger: an entity that found the id range exhausted is tried again on its next change.
-        setup.OnAttributesChanged(_schema.Name, _schema.TypeTkb, _schema.Force, _schema.Position)
+        // Structure.Parent: an entity that is taken out of its unit is introduced to NED as an individual again.
+        setup.OnAttributesChanged(_schema.Name, _schema.TypeTkb, _schema.Force, _schema.Position, _schema.Parent)
             .Named("Master")
             .When(t => t.Entity.Origin != _ned)
             .Do(OnTrigger);
@@ -50,6 +52,11 @@ public sealed class NedIdentityEgress : IGatewayModule
     private void OnTrigger(EntityTrigger t)
     {
         var entity = t.Entity;
+        if (NedStructure.IsStructural(_schema, entity))
+        {
+            return; // members and units are described by NedFormation (NedFormationEgress), never individually
+        }
+
         if (!entity.TryGet(_schema.Name, out var name) || !entity.TryGet(_schema.TypeTkb, out var type))
         {
             return;
