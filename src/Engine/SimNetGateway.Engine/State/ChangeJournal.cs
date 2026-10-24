@@ -15,9 +15,16 @@ public sealed class ChangeJournal
     private int _head;   // index of the oldest record
     private int _count;
 
-    internal ChangeJournal(int capacity, RecordPools pools)
+    // The bounded event log (what was dispatched, not state; DD-001 5.2).
+    private readonly SimEvent?[] _events;
+    private int _eventHead;
+    private int _eventCount;
+
+    internal ChangeJournal(int capacity, RecordPools pools, int eventCapacity = 256)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(capacity);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(eventCapacity);
+        _events = new SimEvent?[eventCapacity];
         _ring = new ChangeSetRecord?[capacity];
         _byCorrelation = new Dictionary<CorrelationId, ChangeSetRecord>(capacity);
         _pools = pools;
@@ -36,13 +43,45 @@ public sealed class ChangeJournal
             _ring[_head] = null;
             _head = (_head + 1) % _ring.Length;
             _count--;
-            _pools.ReturnRecord(oldest);
+            if (oldest.Pinned)
+            {
+                oldest.EvictedWhilePinned = true; // still queued for dispatch: the engine recycles it later
+            }
+            else
+            {
+                _pools.ReturnRecord(oldest);
+            }
         }
 
         _ring[(_head + _count) % _ring.Length] = record;
         _count++;
         _byCorrelation[record.Correlation] = record;
     }
+
+    public int EventCapacity => _events.Length;
+
+    public int EventCount => _eventCount;
+
+    /// <summary>The last dispatched events, oldest first; an event is valid only while it is in the log.</summary>
+    public EventEnumerator RecentEvents => new(this);
+
+    /// <summary>Adds a dispatched event; the evicted oldest event and its payload return to the pools.</summary>
+    internal void AddEvent(SimEvent ev)
+    {
+        if (_eventCount == _events.Length)
+        {
+            var oldest = _events[_eventHead]!;
+            _events[_eventHead] = null;
+            _eventHead = (_eventHead + 1) % _events.Length;
+            _eventCount--;
+            _pools.ReturnEvent(oldest);
+        }
+
+        _events[(_eventHead + _eventCount) % _events.Length] = ev;
+        _eventCount++;
+    }
+
+    private SimEvent EventAt(int offsetFromOldest) => _events[(_eventHead + offsetFromOldest) % _events.Length]!;
 
     public bool TryGet(CorrelationId correlation, out ChangeSetRecord record)
     {
@@ -64,6 +103,24 @@ public sealed class ChangeJournal
     public RecordEnumerator Since(double wallTime) => new(this, wallTime);
 
     private ChangeSetRecord RecordAt(int offsetFromOldest) => _ring[(_head + offsetFromOldest) % _ring.Length]!;
+
+    public struct EventEnumerator
+    {
+        private readonly ChangeJournal _journal;
+        private int _offset;
+
+        internal EventEnumerator(ChangeJournal journal)
+        {
+            _journal = journal;
+            _offset = -1;
+        }
+
+        public readonly SimEvent Current => _journal.EventAt(_offset);
+
+        public readonly EventEnumerator GetEnumerator() => this;
+
+        public bool MoveNext() => ++_offset < _journal._eventCount;
+    }
 
     public struct RecordEnumerator
     {

@@ -24,8 +24,8 @@ progress and done.
 | **T-002** | done | Design of the gateway engine proof of concept (central repository, triggers, ingress/egress modules, events, session control, dead reckoning) | DD-001 | Design review ongoing: R-013..R-042 decided, DD-001 has no open proposals User: do not implement until the review is finished |
 | **T-003** | dropped | Implement the engine core (split into T-003a..c) | DD-001 | Split by stage, see docs/PLAN.md |
 | **T-003a** | done | Engine: values, registries, repository, ChangeSet transactions, write authority, journal | DD-001, DD-004 | Stage 1; as-built notes in DD-001 section 15 |
-| **T-003b** | in-progress | Engine: rules, dispatcher, triggers, cascades, ingress, Tick, session, events, diagnostics | DD-001, DD-004 | Stage 2 |
-| **T-003c** | todo | Engine: identities and allocators, query indexes (recency, presence, reverse refs, spatial), EntityQuery, EntityTable, vocabulary validation | DD-001, DD-004 | Stage 3 |
+| **T-003b** | done | Engine: rules, dispatcher, triggers, cascades, ingress, Tick, session, events, diagnostics | DD-001, DD-004 | Stage 2; as-built notes in DD-001 section 15 |
+| **T-003c** | in-progress | Engine: identities and allocators, query indexes (recency, presence, reverse refs, spatial), EntityQuery, EntityTable, vocabulary validation | DD-001, DD-004 | Stage 3 |
 | **T-004** | dropped | Common and NED-RPR gateway (split into T-004a, T-004b) | DD-001 | Split by stage, see docs/PLAN.md |
 | **T-004a** | todo | Common: geo, predictor registry (DIS), allocators, generic DR-extrapolation processor and stale reaper | DD-001, DD-004 | Stage 4 |
 | **T-004b** | todo | Protocol projects, PivotSchema, NED/RPR/display modules, NedRprProfile and configurations | DD-001, DD-002, DD-003 | Stage 5 |

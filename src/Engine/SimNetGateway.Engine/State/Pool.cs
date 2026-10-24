@@ -17,6 +17,27 @@ internal sealed class RecordPools
 {
     public readonly Pool<ChangeSetRecord> Records = new(static () => new ChangeSetRecord());
     public readonly Pool<EntityDelta> Deltas = new(static () => new EntityDelta());
+    public readonly Pool<SimEvent> Events = new(static () => new SimEvent());
+    public readonly Pool<AttributeBag> Bags = new(static () => new AttributeBag());
+
+    /// <summary>Returns the event and its payload to their pools.</summary>
+    public void ReturnEvent(SimEvent ev)
+    {
+        var bag = ev.Payload;
+        if (bag is not null)
+        {
+            ReturnBag(bag);
+        }
+
+        ev.Reset();
+        Events.Return(ev);
+    }
+
+    public void ReturnBag(AttributeBag bag)
+    {
+        bag.Clear();
+        Bags.Return(bag);
+    }
 
     public void ReturnRecord(ChangeSetRecord record)
     {

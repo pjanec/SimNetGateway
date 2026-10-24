@@ -1897,3 +1897,47 @@ and unchanged values, journal cycling). Refinements of section 10.3, all within 
   journal ring; a record is valid only while it is in the journal.
 - `StateRepository.Commit(ChangeSet)` / `Discard(ChangeSet)` are public as in 10.1 and reject a change
   set of another repository; `ChangeSet.Discard()` on a closed change set is a no-op.
+
+### Stage 2 - dispatch, ingress, session, events (T-003b, 2026-10-24)
+
+Implemented in `src/Engine/SimNetGateway.Engine` (folders `Runtime/`, `Rules/`, `Ingress/`,
+`Events/`, `Session/`, `Diagnostics/`, `Time/`); `ManualClock` in `Engine.InMemory` (pulled forward
+from stage 4 for the tests). A full message round trip (ingress -> commit -> dispatch -> no-op egress
+and change-set-end rules), the same through `Tick()` with a channel, and a message publishing an event
+allocate 0 bytes in steady state. Refinements:
+
+- **Commit hook.** The repository calls an internal `ICommitObserver` (set by the engine; absent when
+  the repository is used standalone): `BeforeApply` after validation (refuses work beyond
+  `MaxCascadeDepth` before anything is applied; skipped for change sets without commands),
+  `Committed` after journaling and closing (the engine enqueues the record), `Rejected` (one
+  transaction-failure diagnostic; a cascade overflow is diagnosed once, as an overflow).
+- **One breadth-first work queue** of records, events, session commands and session-changed
+  notifications. An ingress message enqueues its record, then its events, then its session commands,
+  all at depth 0; work produced while an item of depth d is dispatched gets depth d + 1. Timer and
+  tick-end firings are depth-0 origins (their work is depth 1, `CausedBy = None`); host calls outside
+  any dispatch are depth 0 and drain immediately. One `_busy` flag forbids re-entrant draining;
+  `Ingest`/`Tick` during a handler or drain throw (programming error).
+- **Records are pinned while queued** (found in review): one cascade level can queue more commits than
+  the journal holds (e.g. a rule committing per entity of a large change set); a pinned record that
+  falls out of the journal ring is recycled only after its dispatch. Regression test
+  `Queued_records_survive_journal_eviction_until_dispatched`.
+- **Entity trigger matching** (R-015): one trigger per delta; Created rules plus attribute rules for a
+  created entity; a Removed delta matches only `OnEntityRemoved`; an owner-only delta (only a
+  `TransferOwner`) matches no entity rule, only `OnChangeSetEnd`. Matched rules run in global
+  registration order (attribute index, stamps, insertion sort). A throwing condition counts as a rule
+  failure.
+- **Unhandled message types** open no transaction and consume no correlation id; `MessagesProcessed`
+  counts messages that reached handlers (including aborted and rejected ones).
+- **Timers**: first due = clock at `AddModule` + period; after firing `due += period`, or `now + period`
+  when that is already past (no catch-up bursts). A disabled timer does not advance; re-enabled it
+  fires at the next tick.
+- **Time**: `WallTime` is read at the start of each tick and refreshed by host calls outside a tick;
+  sim time accumulates wall-time deltas while Idle or Running, frozen while Loaded/Paused, reset to 0
+  by Load and Unload.
+- **Session**: veto rules (`OnSessionRequest`) run only for valid transitions; `SessionTrigger.Current`
+  is the state after the command; `Execute` during a drain applies at once and enqueues the trigger
+  and the unload change set at depth + 1.
+- **`IOutboundChannel<T>` is invariant** - C# forbids `in T` variance together with an `in T`
+  parameter (CS1961); `Send(in T)` is kept.
+- Extra public API: `GatewayEngine.Options`, `GatewayEngine.Productions` (the `Produces(...)`
+  declarations, consumed by stage 3 validation), `SessionController.IsValid`.

@@ -28,16 +28,25 @@ public sealed class StateRepository : IStateView
     private int _nextEntity = 1;
     private long _nextCorrelation = 1;
 
-    public StateRepository(AttributeRegistry attributes, IWriteAuthorityPolicy? policy = null, int journalCapacity = 1024)
+    public StateRepository(AttributeRegistry attributes, IWriteAuthorityPolicy? policy = null, int journalCapacity = 1024,
+        int eventLogCapacity = 256)
     {
         ArgumentNullException.ThrowIfNull(attributes);
         _attributes = attributes;
         _policy = policy ?? PermissivePolicy.Instance;
-        _journal = new ChangeJournal(journalCapacity, _pools);
+        _journal = new ChangeJournal(journalCapacity, _pools, eventLogCapacity);
         _changeSet = new ChangeSet(this);
     }
 
     public AttributeRegistry Attributes => _attributes;
+
+    /// <summary>The engine's view of every commit; null when the repository is used standalone.</summary>
+    internal ICommitObserver? Observer { get; set; }
+
+    internal RecordPools Pools => _pools;
+
+    /// <summary>A fresh correlation id from the same counter as <see cref="Begin"/> (events published outside a transaction).</summary>
+    internal CorrelationId AllocateCorrelation() => new(_nextCorrelation++);
 
     public IWriteAuthorityPolicy Policy => _policy;
 
@@ -93,9 +102,16 @@ public sealed class StateRepository : IStateView
         }
 
         string? reason = Validate(changeSet);
+        var observer = Observer;
+        if (reason is null && observer is not null && changeSet.CommandCount > 0)
+        {
+            reason = observer.BeforeApply(changeSet);
+        }
+
         if (reason is not null)
         {
             changeSet.Close();
+            observer?.Rejected(changeSet, reason);
             return CommitResult.Rejected(reason);
         }
 
@@ -107,6 +123,7 @@ public sealed class StateRepository : IStateView
         }
 
         _journal.Add(record);
+        observer?.Committed(changeSet, record);
         return CommitResult.Committed(record);
     }
 

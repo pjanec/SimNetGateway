@@ -24,4 +24,14 @@ public sealed class ChangeSetRecord
     public int Count => _entities.Count;
 
     internal List<EntityDelta> EntityList => _entities;
+
+    /// <summary>
+    /// Set while the record waits in (or is being dispatched from) the engine's work queue. A pinned record
+    /// that falls out of the journal ring is not recycled until its dispatch has finished, because one
+    /// cascade level may queue more commits than the journal holds.
+    /// </summary>
+    internal bool Pinned { get; set; }
+
+    /// <summary>The journal evicted the record while it was pinned; the engine recycles it after dispatch.</summary>
+    internal bool EvictedWhilePinned { get; set; }
 }
