@@ -24,8 +24,15 @@ Use **Sonnet subagents** (`Agent` with `model: "sonnet"`) for work that does not
 routine implementation against an approved design, scaffolding, writing tests from the test plan,
 mechanical edits, searches and builds. Brief them with the design sections, rulings and files to
 read. The main session stays the **reviewer**: it reads the subagent's diff against the design and
-rulings, runs build and tests, fixes or sends back what is wrong, and only then commits. Keep design
-decisions, `P-n` proposals and design-doc writing in the main session.
+rulings and the tests against the success conditions, sends back what is wrong, and only then
+commits. Keep design decisions, `P-n` proposals and design-doc writing in the main session.
+
+The main session does **not rerun the build or the tests** (R-066): the implementing agent must
+have run the full build and test suite as its last step and put the result lines (warnings,
+errors, passed/failed per test project) in its report; the commit relies on that report. If a
+report lacks them, or the state to be committed was never tested as a whole (e.g. merging the work
+of parallel agents, or a correction), send a Sonnet agent to make the change and/or run the full
+suite and report, instead of running it in the main session.
 
 Success conditions (R-064): every brief states them as **invariants and properties**, not only
 example cases - e.g. the DD-002 `G-*` invariants, index-equals-brute-force-scan, all-or-nothing
@@ -82,7 +89,8 @@ deviation discovered during implementation is reported, not silently chosen. Tri
   at the end of every reply that changed files.
 - Commit messages start with the task id(s): `T-003: state repository and change sets`, and
   mention rulings/designs touched. Docs and the code they describe go in the same commit.
-- Before committing code, make sure the solution builds and the tests pass; if not, say so in
+- Before committing code, make sure the solution builds and the tests pass - by the implementing
+  agent's reported full build and test run (R-066), not by rerunning them; if not green, say so in
   the commit message and in the reply.
 
 ## Build and test
