@@ -830,7 +830,8 @@ logic that the gateway configuration may or may not include (R-024):
      formerly described as the pure helper library
      (`DeadReckoning.Extrapolate(algorithm, p, v, a, dt)` in `SimNetGateway.Common`, DD-003);
   4. writes the result as **derived attributes** `Derived.PredictedPosition` and
-     `Derived.PredictedAt` in **one transaction per timer tick** (source `proc.dr`), only for
+     `Derived.PredictedAt` in **one transaction per timer firing** (a full cycle over all selected
+     entities is N firings with `slices` N, R-069) (source `proc.dr`), only for
      entities whose prediction actually changed - static entities and a paused session (frozen
      sim time) produce no writes and no triggers;
   5. a non-DR egress (`DisplayPositionEgress` in the PoC) subscribes to
@@ -1863,6 +1864,8 @@ moving is therefore never reaped and its prediction runs on forever (S-9.2 would
 | **P-40** | **Staleness counts only writes by the side itself.** The engine keeps, per entity, `LastOriginWriteWallTime` (and sim time): the time of the last commit by a change set whose source is the entity's `Origin` (or its `Owner`, R-057, when ownership moved), maintained at commit in a third intrusive recency list; queries get `OriginWrittenWithin(span)` / `NotOriginWrittenWithin(span)`, served by that list like the other window filters (cost proportional to the result, allocation-free). `StaleEntityReaper` uses `FromOrigin(side).NotOriginWrittenWithin(timeout)`. Derived writes by processors (and engine writes) no longer keep an entity alive. Generic and vocabulary-free (R-034): it uses sources only. | (a) Reaper parameterised with liveness attribute ids and checks their slot `Meta.Source`/`WallTime` by scanning all entities of the side each period (no engine change; O(entities of the side) per check). (b) Processors' change sets marked "derived" and excluded from `LastWriteWallTime` (changes the meaning of an existing field for every query). (c) Ingress writes a dedicated `<Side>.LastHeard` attribute on every message (vocabulary + one extra slot write per message). |
 
 ### Proposals from the stage 6 benchmark investigation (T-015)
+
+Approved on 2026-10-24: P-42 -> R-069. P-41, P-43, P-44, P-45 open (a ring-buffer journal, P-46, is under discussion as a replacement for P-43/P-44).
 
 Evidence (Release, 10k entities, 4 vCPU; full numbers in T-015's report, summarised in section 15):
 every tick at or above p95 is a 10 Hz DR tick (~31 ms: display egress 43 %, commit/apply 25 %,
