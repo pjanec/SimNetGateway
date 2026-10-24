@@ -18,6 +18,15 @@ recent commits and uncommitted changes. Before your first tool call:
 Intent lives in the design docs and rulings, not in the code: the code says how it *is*, the
 docs say how it was *meant*. When they disagree, raise it instead of silently following the code.
 
+## Delegation (R-063)
+
+Use **Sonnet subagents** (`Agent` with `model: "sonnet"`) for work that does not need Opus:
+routine implementation against an approved design, scaffolding, writing tests from the test plan,
+mechanical edits, searches and builds. Brief them with the design sections, rulings and files to
+read. The main session stays the **reviewer**: it reads the subagent's diff against the design and
+rulings, runs build and tests, fixes or sends back what is wrong, and only then commits. Keep design
+decisions, `P-n` proposals and design-doc writing in the main session.
+
 ## Where things are recorded (R-009)
 
 | What | Where | Id format |
