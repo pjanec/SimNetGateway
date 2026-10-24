@@ -27,6 +27,16 @@ read. The main session stays the **reviewer**: it reads the subagent's diff agai
 rulings, runs build and tests, fixes or sends back what is wrong, and only then commits. Keep design
 decisions, `P-n` proposals and design-doc writing in the main session.
 
+Success conditions (R-064): every brief states them as **invariants and properties**, not only
+example cases - e.g. the DD-002 `G-*` invariants, index-equals-brute-force-scan, all-or-nothing
+transactions, 0-byte steady state - checked after every operation in randomized/seeded tests where
+possible, plus the design's edge cases (capacities, limits, interactions between features). The one
+implementing agent writes those tests and runs until they pass; a risk it notices must be fixed and
+tested, not just reported. There is no second test agent. The main session's review then asks
+whether the tests **cover enough and really check what matters** (would they fail if the behaviour
+were wrong? - spot-check by breaking the code), and checks the brief/design itself for errors, which
+no test derived from it can catch.
+
 ## Where things are recorded (R-009)
 
 | What | Where | Id format |
