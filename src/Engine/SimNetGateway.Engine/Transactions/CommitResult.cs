@@ -5,7 +5,10 @@ public enum CommitStatus
     /// <summary>Applied; a record was journaled.</summary>
     Committed,
 
-    /// <summary>Nothing to apply (no commands, or effects that cancel out); no record, no state change.</summary>
+    /// <summary>
+    /// Nothing to journal (no commands, or effects that cancel out): no record, no state change. Buffered identity
+    /// bindings of such a transaction are still applied (a transaction of only bindings ends here).
+    /// </summary>
     Empty,
 
     /// <summary>Validation failed; nothing was applied.</summary>

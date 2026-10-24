@@ -7,7 +7,8 @@ public sealed class EntityRecord
 {
     private readonly Dictionary<AttrId, AttrSlot> _slots = new();
 
-    internal EntityRecord(EntityId id, SourceId origin, SourceId owner, CorrelationId createdBy, double createdWallTime)
+    internal EntityRecord(EntityId id, SourceId origin, SourceId owner, CorrelationId createdBy, double createdWallTime,
+        double createdSimTime)
     {
         Id = id;
         Origin = origin;
@@ -17,6 +18,8 @@ public sealed class EntityRecord
         CreatedWallTime = createdWallTime;
         LastWriteWallTime = createdWallTime;
         LastChangeWallTime = createdWallTime;
+        LastWriteSimTime = createdSimTime;
+        LastChangeSimTime = createdSimTime;
     }
 
     public EntityId Id { get; }
@@ -27,6 +30,18 @@ public sealed class EntityRecord
     public double CreatedWallTime { get; }
     public double LastWriteWallTime { get; internal set; }
     public double LastChangeWallTime { get; internal set; }
+
+    /// <summary>Sim time of the last write; the sim clock restarts at 0 on Load, so this is not monotonic.</summary>
+    public double LastWriteSimTime { get; internal set; }
+
+    /// <summary>Sim time of the last change of any attribute value, owner or lifetime.</summary>
+    public double LastChangeSimTime { get; internal set; }
+
+    // Intrusive links of the repository's recency lists (by last write, by last change); see StateRepository.
+    internal EntityRecord? WritePrev;
+    internal EntityRecord? WriteNext;
+    internal EntityRecord? ChangePrev;
+    internal EntityRecord? ChangeNext;
 
     /// <summary>Number of attributes currently present.</summary>
     public int Count => _slots.Count;

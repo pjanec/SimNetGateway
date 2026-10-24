@@ -37,6 +37,7 @@ public sealed class ChangeSet
 {
     private readonly StateRepository _repository;
     private readonly List<Command> _commands = new();
+    private readonly List<IChangeParticipant> _participants = new();
 
     internal ChangeSet(StateRepository repository) => _repository = repository;
 
@@ -50,6 +51,16 @@ public sealed class ChangeSet
 
     internal List<Command> Commands => _commands;
 
+    /// <summary>The participants enlisted in this transaction (reused list, cleared on open and close).</summary>
+    internal List<IChangeParticipant> Participants => _participants;
+
+    /// <summary>Adds a participant to the open transaction; the caller guarantees it enlists at most once.</summary>
+    internal void Enlist(IChangeParticipant participant)
+    {
+        EnsureOpen();
+        _participants.Add(participant);
+    }
+
     internal void Open(SourceId source, CorrelationId correlation, CorrelationId causedBy, double wallTime, double simTime)
     {
         Source = source;
@@ -58,11 +69,18 @@ public sealed class ChangeSet
         WallTime = wallTime;
         SimTime = simTime;
         _commands.Clear();
+        _participants.Clear();
         IsOpen = true;
     }
 
     internal void Close()
     {
+        for (int i = 0; i < _participants.Count; i++)
+        {
+            _participants[i].Discard(); // drops whatever was not applied
+        }
+
+        _participants.Clear();
         _commands.Clear();
         IsOpen = false;
     }

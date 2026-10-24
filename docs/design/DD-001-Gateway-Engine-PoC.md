@@ -1941,3 +1941,40 @@ allocate 0 bytes in steady state. Refinements:
   parameter (CS1961); `Send(in T)` is kept.
 - Extra public API: `GatewayEngine.Options`, `GatewayEngine.Productions` (the `Produces(...)`
   declarations, consumed by stage 3 validation), `SessionController.IsValid`.
+
+### Stage 3 - identities, queries, indexes, entity tables, validation (T-003c, 2026-10-24)
+
+Implemented in `src/Engine/SimNetGateway.Engine` (folders `Identities/`, `Query/`, `Tables/`,
+`Validation/`, index code in `State/`). Steady-state queries (`CopyTo`, `ForEach`, window, presence,
+spatial), struct-key resolution and a message round trip that resolves a struct key and moves a
+spatially indexed `Vec3` between cells allocate 0 bytes; pooled cell and reference sets forming and
+dissolving allocate 0 bytes. Randomized tests (3 seeds x 3000 operations) compare every index with a
+brute-force scan. Refinements:
+
+- **Immediate `IdentityMap.Bind(id, key)` returns `bool`** (false when the entity is not alive, the key
+  belongs to another entity or the entity already has a key in the map; idempotent for the same pair).
+  Buffered binds are validated at commit after the commands (entity alive at the end of the
+  transaction, no duplicate key, one key per entity per map) through an internal change-set
+  participant; a transaction with only binds commits as `Empty` with the binds applied.
+- **Release timing** (changed in review): keys and `EntityTable` entries of destroyed entities are
+  released at the **end of the drain** that dispatched the removal, not right after the record. Events
+  and cascades of the same unit of work (e.g. an event published by the message that destroyed its
+  target) can still translate the entity; the next unit of work never resolves it (G-2). Regression
+  test `Event_of_the_message_that_destroyed_its_target_can_still_translate_the_target`. The allocator
+  gets `Release` only for keys it allocated (`TryGetOrAllocate`), not for keys received from a wire.
+- **`ModuleSetup.Consumes(...)`** added for attributes and event types a module reads without
+  subscribing (e.g. an egress reading a stored munition); validation counts them as consumed. Kind
+  conflicts cannot reach `Validate()`: the registry rejects them at registration.
+- **Query API**: single-slot filters (a second `ChangedWithin`, `FromOrigin`, `KnownTo`,
+  `ReferencedBy`, spatial filter or `Where` throws); `Where<TState>` returns `EntityQuery<TState>` and
+  must be last (no boxing of the state); up to 4 `Has` and 4 `Lacks`; windows inclusive at the edge;
+  sim-time filters (`InSimTime`) only filter, never drive; `ReferencedBy` needs an `IndexReferences`
+  attribute and spatial filters a `SpatialIndex` attribute. Query time is `StateRepository.Now` /
+  `SimNow`, kept in sync by the engine (`SetTime`), set by each commit when standalone.
+- **Spatial index**: `AttributeRegistry.Register(..., cellSize)`; an entity's cell is derived from its
+  stored value (no extra per-entity state); `CellKey.Of` maps NaN to 0 and saturates to the int range.
+- **Recency lists** assume non-decreasing commit wall times (the clock is monotonic).
+- Extra public diagnostics API (also for the viewer): `StateRepository.ByLastWrite`, `ByLastChange`,
+  `PresenceCount`, `ReferrerCount`, `OccupiedCellCount`, `CellEntityCount`; `EntityRecord`
+  `LastWriteSimTime` / `LastChangeSimTime`; `IdentityRegistry` constructible over a standalone
+  repository.

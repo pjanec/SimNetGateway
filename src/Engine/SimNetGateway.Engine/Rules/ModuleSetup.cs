@@ -3,6 +3,9 @@ namespace SimNetGateway.Engine;
 /// <summary>What a module declares through <see cref="ModuleProduction"/> (kept for the vocabulary validation of stage 3).</summary>
 public sealed record ModuleProduction(string Module, IReadOnlyList<AttrId> Attributes, EventTypeId EventType);
 
+/// <summary>What a module reads without (or besides) subscribing, or subscribes to: input of the vocabulary validation.</summary>
+public sealed record ModuleConsumption(string Module, IReadOnlyList<AttrId> Attributes, EventTypeId EventType);
+
 /// <summary>The registration surface handed to <see cref="IGatewayModule.Register"/> (one per AddModule call).</summary>
 public sealed class ModuleSetup
 {
@@ -22,6 +25,7 @@ public sealed class ModuleSetup
     public AttributeRegistry Attributes => _engine.Attributes;
     public EventTypeRegistry EventTypes => _engine.EventTypes;
     public SourceRegistry Sources => _engine.Sources;
+    public IdentityRegistry Identities => _engine.Identities;
 
     /// <summary>Declares the attributes this module writes (recorded for vocabulary validation).</summary>
     public void Produces(params AttrId[] attributes)
@@ -33,6 +37,27 @@ public sealed class ModuleSetup
     /// <summary>Declares the event type this module publishes (recorded for vocabulary validation).</summary>
     public void Produces(EventTypeId type) =>
         _engine.ProductionList.Add(new ModuleProduction(_module, Array.Empty<AttrId>(), type));
+
+    /// <summary>
+    /// Declares attributes this module reads without subscribing to them (e.g. an egress reading a stored munition),
+    /// so that vocabulary validation counts them as consumed. A refinement of DD-001 10.3.
+    /// </summary>
+    public void Consumes(params AttrId[] attributes)
+    {
+        ArgumentNullException.ThrowIfNull(attributes);
+        _engine.ConsumptionList.Add(new ModuleConsumption(_module, (AttrId[])attributes.Clone(), default));
+    }
+
+    /// <summary>Declares an event type this module reads without subscribing to it (see <see cref="Consumes(AttrId[])"/>).</summary>
+    public void Consumes(EventTypeId type) =>
+        _engine.ConsumptionList.Add(new ModuleConsumption(_module, Array.Empty<AttrId>(), type));
+
+    /// <summary>
+    /// Creates an engine-managed table of per-entity state of this module; the entry of a destroyed entity is removed
+    /// after the removal dispatch. The name must be unique in the engine (DD-004 P-35).
+    /// </summary>
+    public EntityTable<T> CreateEntityTable<T>(string name)
+        where T : struct => _engine.CreateEntityTable<T>(name);
 
     public void OnMessage<T>(IngressHandler<T> handler)
     {
@@ -95,7 +120,20 @@ public sealed class ModuleSetup
     {
         _ruleCounter++;
         name ??= subscription.KindName + "#" + _ruleCounter;
-        return _engine.RegisterRule(_module, subscription, name, conditions, action, _startTime);
+        var info = _engine.RegisterRule(_module, subscription, name, conditions, action, _startTime);
+
+        // What a subscription reads counts as consumed (an empty attribute list means "any" and consumes nothing specific).
+        if ((subscription.Kind == RuleKind.AttributesChanged || subscription.Kind == RuleKind.AttributesWritten) &&
+            subscription.Attributes.Length > 0)
+        {
+            _engine.ConsumptionList.Add(new ModuleConsumption(_module, subscription.Attributes, default));
+        }
+        else if (subscription.Kind == RuleKind.Event)
+        {
+            _engine.ConsumptionList.Add(new ModuleConsumption(_module, Array.Empty<AttrId>(), subscription.EventType));
+        }
+
+        return info;
     }
 
     private string Describe(string kind, AttrId[] attributes)

@@ -21,6 +21,10 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
     private readonly List<RuleInfo> _ruleInfos = new();
     private readonly Dictionary<string, RuleInfo> _rulesByName = new(StringComparer.Ordinal);
     private readonly List<ModuleProduction> _productions = new();
+    private readonly List<ModuleConsumption> _consumptions = new();
+    private readonly List<IEntityTable> _tables = new();
+    private readonly List<EntityId> _pendingRelease = new();   // destroyed in this drain, released at its end
+    private readonly Dictionary<string, IEntityTable> _tablesByName = new(StringComparer.Ordinal);
 
     // Rule indexes (arrays / lists built at registration; each list is in registration order).
     private readonly List<Rule<EntityTrigger>> _createdRules = new();
@@ -65,8 +69,10 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
         Sources = new SourceRegistry();
         State = new StateRepository(Attributes, _options.WriteAuthority, _options.JournalCapacity, _options.EventLogCapacity);
         State.Observer = this;
+        Identities = new IdentityRegistry(State);
         Diagnostics = new Diagnostics(_options.DiagnosticsCapacity, () => _wall);
         _session = new SessionController(_wall);
+        SyncTime();
         _ingress = new IngressContext(this);
         _sink = new EngineSink(this);
     }
@@ -75,6 +81,7 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
     public EventTypeRegistry EventTypes { get; }
     public SourceRegistry Sources { get; }
     public StateRepository State { get; }
+    public IdentityRegistry Identities { get; }
     public Diagnostics Diagnostics { get; }
     public ISessionView Session => _session;
     public GatewayOptions Options => _options;
@@ -98,6 +105,9 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
     /// <summary>What modules declared with <c>Produces</c> (for the vocabulary validation of stage 3).</summary>
     internal List<ModuleProduction> ProductionList => _productions;
 
+    /// <summary>What modules declared with <c>Consumes</c> or subscribed to, in declaration order (vocabulary validation).</summary>
+    internal List<ModuleConsumption> ConsumptionList => _consumptions;
+
     // ---- registration -----------------------------------------------------------------------------------
 
     public void AddModule(IGatewayModule module)
@@ -110,6 +120,25 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
     {
         ArgumentNullException.ThrowIfNull(channel);
         _channels.Add(channel);
+    }
+
+    internal EntityTable<T> CreateEntityTable<T>(string name)
+        where T : struct
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            throw new ArgumentException("Entity table name must not be empty.", nameof(name));
+        }
+
+        if (_tablesByName.ContainsKey(name))
+        {
+            throw new InvalidOperationException($"An entity table named '{name}' already exists.");
+        }
+
+        var table = new EntityTable<T>(name);
+        _tables.Add(table);
+        _tablesByName.Add(name, table);
+        return table;
     }
 
     internal RuleInfo RegisterRule<TTrigger>(string module, RuleSubscription subscription, string name,
@@ -474,6 +503,7 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
         {
             _wall = _clock.Now;
             _session.Advance(_wall);
+            SyncTime();
             TickCount++;
             RunIngress();
             RunTimers();
@@ -610,7 +640,11 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
 
         _wall = _clock.Now;
         _session.Advance(_wall);
+        SyncTime();
     }
+
+    /// <summary>Gives the repository the time that relative query filters are measured from.</summary>
+    private void SyncTime() => State.SetTime(_wall, _session.SimTime);
 
     private void ResetDispatchState()
     {
@@ -637,6 +671,7 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
                     }
                     finally
                     {
+                        CollectDestroyed(record);
                         Unpin(record);
                     }
 
@@ -660,6 +695,7 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
 
         _currentDepth = -1;
         _currentCorrelation = default;
+        ReleaseDestroyed();
     }
 
     private void DrainIfIdle()
@@ -898,6 +934,7 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
         }
 
         _session.TryApply(command);
+        SyncTime(); // Load and Unload reset sim time
         return true;
     }
 
@@ -953,6 +990,41 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
         return null;
     }
 
+    /// <summary>Remembers the entities a dispatched record destroyed, for release at the end of the drain.</summary>
+    private void CollectDestroyed(ChangeSetRecord record)
+    {
+        var deltas = record.EntityList;
+        for (int i = 0; i < deltas.Count; i++)
+        {
+            if (deltas[i].Destroyed)
+            {
+                _pendingRelease.Add(deltas[i].Id);
+            }
+        }
+    }
+
+    /// <summary>
+    /// At the end of a drain, entities destroyed during it lose their identity keys (released to their
+    /// allocators) and their entity-table entries. Until then removal rules, and the events and cascades of
+    /// the same unit of work (e.g. an event published by the message that destroyed its target), can still
+    /// translate and read them. The next unit of work never sees them.
+    /// </summary>
+    private void ReleaseDestroyed()
+    {
+        var ids = _pendingRelease;
+        for (int i = 0; i < ids.Count; i++)
+        {
+            var id = ids[i];
+            Identities.ReleaseEntity(id);
+            for (int t = 0; t < _tables.Count; t++)
+            {
+                _tables[t].Remove(id);
+            }
+        }
+
+        ids.Clear();
+    }
+
     /// <summary>Ends the queue's hold on a record; recycles it if the journal evicted it meanwhile.</summary>
     private void Unpin(ChangeSetRecord record)
     {
@@ -986,6 +1058,120 @@ public sealed class GatewayEngine : IGatewayContext, ICommitObserver
 
         Diagnostics.TransactionFailed(SourceName(changeSet.Source),
             "correlation " + changeSet.Correlation.Value + " rejected: " + reason);
+    }
+
+    // ---- vocabulary validation ----------------------------------------------------------------------------
+
+    /// <summary>
+    /// Checks the declared vocabulary (DD-001 3.5): warnings for attributes and event types that are consumed (by a
+    /// subscription or <c>Consumes</c>) but never produced (<c>Produces</c>) or produced but never consumed; errors for
+    /// ids that are not registered. Kind conflicts cannot occur here - the registry rejects them at registration.
+    /// Call it after all modules were added. Entity structure is never checked (R-034).
+    /// </summary>
+    public ValidationReport Validate()
+    {
+        var errors = new List<ValidationIssue>();
+        var warnings = new List<ValidationIssue>();
+        var attrProducers = new Dictionary<int, SortedSet<string>>();
+        var attrConsumers = new Dictionary<int, SortedSet<string>>();
+        var eventProducers = new Dictionary<int, SortedSet<string>>();
+        var eventConsumers = new Dictionary<int, SortedSet<string>>();
+
+        foreach (var p in _productions)
+        {
+            foreach (var attr in p.Attributes)
+            {
+                Declare(attrProducers, errors, p.Module, attr, "produces");
+            }
+
+            if (!p.EventType.IsNone)
+            {
+                Declare(eventProducers, errors, p.Module, p.EventType, "produces");
+            }
+        }
+
+        foreach (var c in _consumptions)
+        {
+            foreach (var attr in c.Attributes)
+            {
+                Declare(attrConsumers, errors, c.Module, attr, "consumes");
+            }
+
+            if (!c.EventType.IsNone)
+            {
+                Declare(eventConsumers, errors, c.Module, c.EventType, "consumes");
+            }
+        }
+
+        foreach (var def in Attributes)
+        {
+            bool produced = attrProducers.TryGetValue(def.Id.Value, out var producers);
+            bool consumed = attrConsumers.TryGetValue(def.Id.Value, out var consumers);
+            if (consumed && !produced)
+            {
+                warnings.Add(new ValidationIssue(ValidationSeverity.Warning, ValidationCodes.AttributeNeverProduced, def.Name,
+                    $"attribute '{def.Name}' is consumed by {string.Join(", ", consumers!)} but no module produces it"));
+            }
+            else if (produced && !consumed)
+            {
+                warnings.Add(new ValidationIssue(ValidationSeverity.Warning, ValidationCodes.AttributeNeverConsumed, def.Name,
+                    $"attribute '{def.Name}' is produced by {string.Join(", ", producers!)} but no module consumes it"));
+            }
+        }
+
+        for (int id = 1; id <= EventTypes.Count; id++)
+        {
+            string name = EventTypes.NameOf(new EventTypeId(id));
+            bool produced = eventProducers.TryGetValue(id, out var producers);
+            bool consumed = eventConsumers.TryGetValue(id, out var consumers);
+            if (consumed && !produced)
+            {
+                warnings.Add(new ValidationIssue(ValidationSeverity.Warning, ValidationCodes.EventNeverProduced, name,
+                    $"event type '{name}' is consumed by {string.Join(", ", consumers!)} but no module produces it"));
+            }
+            else if (produced && !consumed)
+            {
+                warnings.Add(new ValidationIssue(ValidationSeverity.Warning, ValidationCodes.EventNeverConsumed, name,
+                    $"event type '{name}' is produced by {string.Join(", ", producers!)} but no module consumes it"));
+            }
+        }
+
+        string dump = ValidationReport.BuildDump(Attributes, EventTypes, attrProducers, attrConsumers, eventProducers, eventConsumers);
+        return new ValidationReport(errors, warnings, dump);
+    }
+
+    private void Declare(Dictionary<int, SortedSet<string>> map, List<ValidationIssue> errors, string module, AttrId attr, string verb)
+    {
+        if (!Attributes.TryGet(attr, out _))
+        {
+            errors.Add(new ValidationIssue(ValidationSeverity.Error, ValidationCodes.UnknownAttribute, module,
+                $"module '{module}' {verb} attribute id {attr.Value}, which is not registered"));
+            return;
+        }
+
+        if (!map.TryGetValue(attr.Value, out var modules))
+        {
+            map.Add(attr.Value, modules = new SortedSet<string>(StringComparer.Ordinal));
+        }
+
+        modules.Add(module);
+    }
+
+    private void Declare(Dictionary<int, SortedSet<string>> map, List<ValidationIssue> errors, string module, EventTypeId type, string verb)
+    {
+        if (type.Value < 1 || type.Value > EventTypes.Count)
+        {
+            errors.Add(new ValidationIssue(ValidationSeverity.Error, ValidationCodes.UnknownEventType, module,
+                $"module '{module}' {verb} event type id {type.Value}, which is not registered"));
+            return;
+        }
+
+        if (!map.TryGetValue(type.Value, out var modules))
+        {
+            map.Add(type.Value, modules = new SortedSet<string>(StringComparer.Ordinal));
+        }
+
+        modules.Add(module);
     }
 
     // ---- helpers ----------------------------------------------------------------------------------------

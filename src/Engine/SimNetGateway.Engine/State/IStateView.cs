@@ -14,6 +14,9 @@ public interface IStateView
     EntityEnumerable Entities { get; }
 
     ChangeJournal Journal { get; }
+
+    /// <summary>Starts a query over the live entities (DD-001 3.4); a struct builder, nothing is allocated.</summary>
+    EntityQuery Query();
 }
 
 /// <summary>Struct enumerable over live entity records.</summary>

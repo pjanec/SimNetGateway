@@ -2,7 +2,11 @@ using System.Collections;
 
 namespace SimNetGateway.Engine;
 
-/// <summary>Index options of an attribute (flags only; the indexes themselves arrive with the queries).</summary>
+/// <summary>
+/// Index options of an attribute. <see cref="IndexReferences"/> needs kind <see cref="AttrKind.EntityRef"/> (reverse
+/// reference index, DD-001 3.7); <see cref="SpatialIndex"/> needs kind <see cref="AttrKind.Vec3"/> and a cell size
+/// (uniform grid, DD-004 P-33 / R-056).
+/// </summary>
 [Flags]
 public enum AttrOptions
 {
@@ -14,13 +18,14 @@ public enum AttrOptions
 /// <summary>Definition of a registered attribute.</summary>
 public sealed class AttributeDef
 {
-    internal AttributeDef(AttrId id, string name, AttrKind kind, string? description, AttrOptions options)
+    internal AttributeDef(AttrId id, string name, AttrKind kind, string? description, AttrOptions options, double cellSize)
     {
         Id = id;
         Name = name;
         Kind = kind;
         Description = description;
         Options = options;
+        CellSize = cellSize;
     }
 
     public AttrId Id { get; }
@@ -28,6 +33,9 @@ public sealed class AttributeDef
     public AttrKind Kind { get; }
     public string? Description { get; internal set; }
     public AttrOptions Options { get; }
+
+    /// <summary>Edge length of a spatial grid cell; 0 unless <see cref="AttrOptions.SpatialIndex"/> is set.</summary>
+    public double CellSize { get; }
 
     public override string ToString() => Name + ":" + Kind;
 }
@@ -43,7 +51,13 @@ public sealed class AttributeRegistry : IEnumerable<AttributeDef>
 
     public int Count => _defs.Count;
 
-    public AttrId Register(string name, AttrKind kind, string? description = null, AttrOptions options = AttrOptions.None)
+    /// <summary>
+    /// Registers (or finds) an attribute. <paramref name="cellSize"/> is the grid cell edge of a
+    /// <see cref="AttrOptions.SpatialIndex"/> attribute (required and positive with it, 0 without it).
+    /// Index options on a value kind that cannot carry them throw <see cref="ArgumentException"/>.
+    /// </summary>
+    public AttrId Register(string name, AttrKind kind, string? description = null, AttrOptions options = AttrOptions.None,
+        double cellSize = 0)
     {
         if (string.IsNullOrEmpty(name))
         {
@@ -57,19 +71,42 @@ public sealed class AttributeRegistry : IEnumerable<AttributeDef>
 
         if (_byName.TryGetValue(name, out var existing))
         {
-            if (existing.Kind != kind || existing.Options != options)
+            if (existing.Kind != kind || existing.Options != options || existing.CellSize != cellSize)
             {
                 throw new InvalidOperationException(
-                    $"Attribute '{name}' is already registered as {existing.Kind}/{existing.Options}; " +
-                    $"cannot re-register as {kind}/{options}.");
+                    $"Attribute '{name}' is already registered as {existing.Kind}/{existing.Options}/cell {existing.CellSize}; " +
+                    $"cannot re-register as {kind}/{options}/cell {cellSize}.");
             }
 
             existing.Description ??= description;
             return existing.Id;
         }
 
+        // A new registration: the options must fit the value kind (a re-registration is checked against the first one).
+        if ((options & AttrOptions.IndexReferences) != 0 && kind != AttrKind.EntityRef)
+        {
+            throw new ArgumentException($"Attribute '{name}': IndexReferences requires kind EntityRef, not {kind}.", nameof(options));
+        }
+
+        if ((options & AttrOptions.SpatialIndex) != 0)
+        {
+            if (kind != AttrKind.Vec3)
+            {
+                throw new ArgumentException($"Attribute '{name}': SpatialIndex requires kind Vec3, not {kind}.", nameof(options));
+            }
+
+            if (!(cellSize > 0) || double.IsInfinity(cellSize))
+            {
+                throw new ArgumentException($"Attribute '{name}': SpatialIndex requires a positive finite cell size.", nameof(cellSize));
+            }
+        }
+        else if (cellSize != 0)
+        {
+            throw new ArgumentException($"Attribute '{name}': a cell size is only valid with SpatialIndex.", nameof(cellSize));
+        }
+
         var id = new AttrId(_defs.Count + 1);
-        var def = new AttributeDef(id, name, kind, description, options);
+        var def = new AttributeDef(id, name, kind, description, options, cellSize);
         _defs.Add(def);
         _byName.Add(name, def);
         return id;

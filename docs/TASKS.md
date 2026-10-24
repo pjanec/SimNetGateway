@@ -25,9 +25,9 @@ progress and done.
 | **T-003** | dropped | Implement the engine core (split into T-003a..c) | DD-001 | Split by stage, see docs/PLAN.md |
 | **T-003a** | done | Engine: values, registries, repository, ChangeSet transactions, write authority, journal | DD-001, DD-004 | Stage 1; as-built notes in DD-001 section 15 |
 | **T-003b** | done | Engine: rules, dispatcher, triggers, cascades, ingress, Tick, session, events, diagnostics | DD-001, DD-004 | Stage 2; as-built notes in DD-001 section 15 |
-| **T-003c** | in-progress | Engine: identities and allocators, query indexes (recency, presence, reverse refs, spatial), EntityQuery, EntityTable, vocabulary validation | DD-001, DD-004 | Stage 3 |
+| **T-003c** | done | Engine: identities and allocators, query indexes (recency, presence, reverse refs, spatial), EntityQuery, EntityTable, vocabulary validation | DD-001, DD-004 | Stage 3; as-built notes in DD-001 section 15 |
 | **T-004** | dropped | Common and NED-RPR gateway (split into T-004a, T-004b) | DD-001 | Split by stage, see docs/PLAN.md |
-| **T-004a** | todo | Common: geo, predictor registry (DIS), allocators, generic DR-extrapolation processor and stale reaper | DD-001, DD-004 | Stage 4 |
+| **T-004a** | in-progress | Common: geo, predictor registry (DIS), allocators, generic DR-extrapolation processor and stale reaper | DD-001, DD-004 | Stage 4 |
 | **T-004b** | todo | Protocol projects, PivotSchema, NED/RPR/display modules, NedRprProfile and configurations | DD-001, DD-002, DD-003 | Stage 5 |
 | **T-005** | todo | Automated test suite (xUnit) covering engine and module behaviour including edge cases (see DD-001 section 12) | DD-001 | Written in every stage alongside the code |
 | **T-006** | todo | Console demo host assembling the pieces, 10k-entity benchmark (`Hosts/SimNetGateway.Demo`) | DD-001, DD-003 | Stage 6 |
@@ -37,5 +37,5 @@ progress and done.
 | **T-010** | todo | Implement the showcase harness, protocol extensions and acceptance test + `Demo --showcase` report | DD-002 | Stage 7 |
 | **T-011** | done | Design of the solution structure: folders, projects, dependency rules, gateway profiles and ports, host assembly | DD-003 | Approved (R-049..R-054) |
 | **T-012** | done | Solution skeleton per DD-003: projects, references, central packages, architecture tests, build/test scripts, CLAUDE.md paths | DD-003 | Stage 0 built: build + test green on Linux, forbidden-reference check done; deviations in DD-003 section 9; stage approved by user 2026-10-24 |
-| **T-012b** | todo | Composition: Engine.InMemory, IGatewayProfile, GatewayBuilder, ports, settings records and configuration registries | DD-003 | Stage 4 |
+| **T-012b** | in-progress | Composition: Engine.InMemory, IGatewayProfile, GatewayBuilder, ports, settings records and configuration registries | DD-003 | Stage 4 |
 | **T-013** | done | Analyse the WAN RTI concept's impact on the engine design | DD-004 | Approved (R-056..R-062) |

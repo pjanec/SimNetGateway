@@ -4,9 +4,10 @@ namespace SimNetGateway.Engine;
 
 /// <summary>
 /// The central state: live entities, the single reusable <see cref="ChangeSet"/>, the journal and the pools.
-/// Single-threaded. Writes go through <see cref="Begin"/> and <see cref="ChangeSet.Commit"/> only.
+/// Single-threaded. Writes go through <see cref="Begin"/> and <see cref="ChangeSet.Commit"/> only. The indexes behind
+/// <see cref="Query"/> (recency lists, presence sets, reverse references, spatial grids) are maintained at commit.
 /// </summary>
-public sealed class StateRepository : IStateView
+public sealed partial class StateRepository : IStateView
 {
     private readonly Dictionary<EntityId, EntityRecord> _entities = new();
     private readonly AttributeRegistry _attributes;
@@ -102,8 +103,13 @@ public sealed class StateRepository : IStateView
         }
 
         string? reason = Validate(changeSet);
+        if (reason is null)
+        {
+            reason = ValidateParticipants(changeSet);
+        }
+
         var observer = Observer;
-        if (reason is null && observer is not null && changeSet.CommandCount > 0)
+        if (reason is null && observer is not null && (changeSet.CommandCount > 0 || changeSet.Participants.Count > 0))
         {
             reason = observer.BeforeApply(changeSet);
         }
@@ -116,6 +122,17 @@ public sealed class StateRepository : IStateView
         }
 
         var record = Apply(changeSet);
+        var participants = changeSet.Participants;
+        for (int i = 0; i < participants.Count; i++)
+        {
+            participants[i].Apply();
+        }
+
+        if (observer is null)
+        {
+            SetTime(changeSet.WallTime, changeSet.SimTime); // standalone: queries see the time of the last commit
+        }
+
         changeSet.Close();
         if (record is null)
         {
@@ -134,6 +151,29 @@ public sealed class StateRepository : IStateView
             throw new ArgumentException("The change set belongs to another repository.", nameof(changeSet));
         }
     }
+
+    /// <summary>Validates the buffered operations of the participants (identity bindings) after the commands validated.</summary>
+    private string? ValidateParticipants(ChangeSet cs)
+    {
+        var participants = cs.Participants;
+        for (int i = 0; i < participants.Count; i++)
+        {
+            string? reason = participants[i].Validate();
+            if (reason is not null)
+            {
+                return reason;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether the entity is alive after the transaction being validated: it exists (or is created in it) and is not
+    /// destroyed in it. Valid only while <see cref="Commit"/> validates participants.
+    /// </summary>
+    internal bool IsAliveAfterTransaction(EntityId id) =>
+        !_destroyedInTx.Contains(id) && (_createdInTx.Contains(id) || _entities.ContainsKey(id));
 
     // ---- validation -------------------------------------------------------------------------------------
 
@@ -228,8 +268,9 @@ public sealed class StateRepository : IStateView
             {
                 case CommandKind.Create:
                 {
-                    var entity = new EntityRecord(c.Entity, c.Source, c.Source, corr, wall);
+                    var entity = new EntityRecord(c.Entity, c.Source, c.Source, corr, wall, sim);
                     _entities.Add(c.Entity, entity);
+                    AppendRecency(entity);
                     GetDelta(record, entity).Created = true;
                     break;
                 }
@@ -239,9 +280,12 @@ public sealed class StateRepository : IStateView
                     var entity = _entities[c.Entity];
                     var delta = GetDelta(record, entity);
                     _entities.Remove(c.Entity);
+                    UnindexEntity(entity);
                     entity.IsAlive = false;
                     entity.LastWriteWallTime = wall;
                     entity.LastChangeWallTime = wall;
+                    entity.LastWriteSimTime = sim;
+                    entity.LastChangeSimTime = sim;
                     if (delta.Created)
                     {
                         // Created and destroyed in one transaction: the effects cancel out.
@@ -274,6 +318,7 @@ public sealed class StateRepository : IStateView
                         old = default;
                         changed = true;
                         entity.AddSlot(c.Attr, new AttrSlot(c.Value, new AttrMeta(src, corr, wall, sim, wall, sim, 1)));
+                        IndexSlotAdded(entity, c.Attr, c.Value);
                     }
                     else
                     {
@@ -284,12 +329,16 @@ public sealed class StateRepository : IStateView
                             ? new AttrMeta(src, corr, wall, sim, wall, sim, meta.Version + 1)
                             : meta with { Source = src, Correlation = corr, WallTime = wall, SimTime = sim };
                         slot = new AttrSlot(c.Value, meta);
+                        if (changed)
+                        {
+                            IndexSlotChanged(entity, c.Attr, old, c.Value);
+                        }
                     }
 
-                    entity.LastWriteWallTime = wall;
+                    MarkWritten(entity, wall, sim);
                     if (changed)
                     {
-                        entity.LastChangeWallTime = wall;
+                        MarkChanged(entity, wall, sim);
                     }
 
                     RecordChange(delta, c.Attr, old, c.Value);
@@ -312,9 +361,10 @@ public sealed class StateRepository : IStateView
 
                     var old = slot.Value;
                     entity.RemoveSlot(c.Attr);
+                    IndexSlotRemoved(entity, c.Attr, old);
                     var delta = GetDelta(record, entity);
-                    entity.LastWriteWallTime = wall;
-                    entity.LastChangeWallTime = wall;
+                    MarkWritten(entity, wall, sim);
+                    MarkChanged(entity, wall, sim);
                     RecordChange(delta, c.Attr, old, default);
                     break;
                 }
@@ -335,8 +385,8 @@ public sealed class StateRepository : IStateView
                     }
 
                     entity.Owner = c.Source;
-                    entity.LastWriteWallTime = wall;
-                    entity.LastChangeWallTime = wall;
+                    MarkWritten(entity, wall, sim);
+                    MarkChanged(entity, wall, sim);
                     break;
                 }
             }

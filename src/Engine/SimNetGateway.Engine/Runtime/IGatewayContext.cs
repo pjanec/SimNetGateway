@@ -8,6 +8,7 @@ public interface IGatewayContext
     AttributeRegistry Attributes { get; }
     EventTypeRegistry EventTypes { get; }
     SourceRegistry Sources { get; }
+    IdentityRegistry Identities { get; }
     Diagnostics Diagnostics { get; }
 
     /// <summary>Wall clock of the current tick / unit of work, in seconds.</summary>
