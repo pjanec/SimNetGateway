@@ -2227,3 +2227,15 @@ after 5 s warm-up; the DR processor feeds the display at 10 Hz for every named m
    allocations: outbound records), but **unexplained**: the 5 m run allocates twice as much in total as
    the 1 m run despite less input and identical derived/display rates. Needs attribution before any
    claim about R-033 beyond the engine's own 0-byte tests.
+
+### T-016 - time-sliced DR extrapolation (R-069, 2026-10-24)
+
+`DrExtrapolationProcessor(..., slices)`: `Every(period / slices)`; slice 0 snapshots the selected
+entities (`KnownTo` / selector applied only at the snapshot); firing k predicts the k-th contiguous chunk
+(`ceil(count / N)`), re-checking only liveness and the required attributes; one transaction per firing,
+opened only when a prediction changed. Entities created during a cycle are first predicted in the next
+cycle. After a pause each entity may get one catch-up write (to the frozen sim time) in the first cycle,
+then none - the "only changed predictions" rule. `NedRprSettings.DrSlices = 6`. Release benchmark, same
+setup as stage 6 (5 s warm-up): p95 11.1-12.1 ms (was 31-34), p99 14.8-15.7 ms (was 39-49) at 1 m;
+p95 14.4 / p99 19.7 ms at 5 m; the 160-220 ms maxima remain - the GC growth stalls identified in T-015
+(addressed by P-41, P-43/P-44 or their replacement), not the DR burst.

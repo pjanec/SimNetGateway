@@ -33,6 +33,13 @@ public sealed record DrAttributeSet(
 /// by a caller predicate. An entity whose algorithm has no registered predictor is skipped; a warning is recorded once
 /// per strategy id. The rule is named "Extrapolate"; disabling it switches the module off.
 /// </para>
+/// <para>
+/// Time slicing (R-069): with <c>slices</c> = N the rule fires every <c>period / N</c>. At slice 0 of each cycle the
+/// selected entities are snapshotted; firing k processes the k-th contiguous chunk (ceil(count / N) entities) of that
+/// snapshot, skipping entities that died or lost a required attribute meanwhile, with the prediction made at the
+/// sim time of that firing. Entities created during a cycle are first predicted in the next cycle. One transaction
+/// per firing. With N = 1 this is the plain, unsliced behaviour.
+/// </para>
 /// </summary>
 public sealed class DrExtrapolationProcessor : IGatewayModule
 {
@@ -44,6 +51,8 @@ public sealed class DrExtrapolationProcessor : IGatewayModule
     private readonly PredictorRegistry _predictors;
     private readonly IIdentityMap? _knownTo;
     private readonly Func<EntityRecord, bool>? _select;
+    private readonly int _slices;
+    private int _slice;
     private readonly List<EntityRecord> _entities = new();
     private readonly HashSet<int> _warnedStrategies = new();
     private IGatewayContext _gateway = null!;
@@ -57,7 +66,8 @@ public sealed class DrExtrapolationProcessor : IGatewayModule
         AttrId predictedAt,
         PredictorRegistry predictors,
         IIdentityMap? knownTo = null,
-        Func<EntityRecord, bool>? select = null)
+        Func<EntityRecord, bool>? select = null,
+        int slices = 1)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(input);
@@ -65,6 +75,11 @@ public sealed class DrExtrapolationProcessor : IGatewayModule
         if (period <= TimeSpan.Zero)
         {
             throw new ArgumentOutOfRangeException(nameof(period), "The period must be positive.");
+        }
+
+        if (slices < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(slices), "At least one slice is required.");
         }
 
         if (input.Position.IsNone || input.Algorithm.IsNone || input.StateTime.IsNone)
@@ -80,6 +95,7 @@ public sealed class DrExtrapolationProcessor : IGatewayModule
         Name = name;
         _source = source;
         _period = period;
+        _slices = slices;
         _input = input;
         _predictedPosition = predictedPosition;
         _predictedAt = predictedAt;
@@ -105,33 +121,36 @@ public sealed class DrExtrapolationProcessor : IGatewayModule
         }
 
         setup.Consumes(consumed.ToArray());
-        setup.Every(_period).Named("Extrapolate").Do(Extrapolate);
+        setup.Every(_period / _slices).Named("Extrapolate").Do(Extrapolate);
     }
 
     private void Extrapolate(TimerTrigger trigger)
     {
         double now = _gateway.SimTime;
-        var query = _gateway.State.Query().Has(_input.Position).Has(_input.Algorithm).Has(_input.StateTime);
-        if (_knownTo is not null)
+        int slice = _slice;
+        _slice = slice + 1 == _slices ? 0 : slice + 1;
+        if (slice == 0)
         {
-            query = query.KnownTo(_knownTo);
+            Snapshot();
         }
 
-        if (_select is not null)
-        {
-            query.Where(_select).CopyTo(_entities);
-        }
-        else
-        {
-            query.CopyTo(_entities);
-        }
+        int count = _entities.Count;
+        int chunk = (count + _slices - 1) / _slices;
+        int from = Math.Min(count, slice * chunk);
+        int to = Math.Min(count, from + chunk);
 
         ChangeSet? changes = null;
         try
         {
-            for (int i = 0; i < _entities.Count; i++)
+            for (int i = from; i < to; i++)
             {
                 var entity = _entities[i];
+                if (!entity.IsAlive || !entity.Has(_input.Position) || !entity.Has(_input.Algorithm)
+                    || !entity.Has(_input.StateTime))
+                {
+                    continue;
+                }
+
                 int strategy = (int)entity.Get(_input.Algorithm).AsInt();
                 if (!_predictors.TryGet(strategy, out var predictor))
                 {
@@ -163,7 +182,29 @@ public sealed class DrExtrapolationProcessor : IGatewayModule
         finally
         {
             changes?.Discard(); // a no-op once committed; closes the transaction if something threw
-            _entities.Clear();
+            if (slice + 1 == _slices)
+            {
+                _entities.Clear(); // the cycle is over; do not keep references to dead entities
+            }
+        }
+    }
+
+    private void Snapshot()
+    {
+        _entities.Clear();
+        var query = _gateway.State.Query().Has(_input.Position).Has(_input.Algorithm).Has(_input.StateTime);
+        if (_knownTo is not null)
+        {
+            query = query.KnownTo(_knownTo);
+        }
+
+        if (_select is not null)
+        {
+            query.Where(_select).CopyTo(_entities);
+        }
+        else
+        {
+            query.CopyTo(_entities);
         }
     }
 

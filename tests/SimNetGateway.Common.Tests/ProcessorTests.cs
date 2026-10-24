@@ -54,10 +54,10 @@ internal sealed class Rig
     public DrAttributeSet Input => new(Pos, Vel, Acc, Ori, AngVel, Alg, StateTime);
 
     public DrExtrapolationProcessor AddDr(double periodSeconds = 0.5, IIdentityMap? knownTo = null,
-        Func<EntityRecord, bool>? select = null, string name = "dr")
+        Func<EntityRecord, bool>? select = null, string name = "dr", int slices = 1)
     {
         var dr = new DrExtrapolationProcessor(name, Dr, TimeSpan.FromSeconds(periodSeconds), Input, PredPos, PredAt,
-            Predictors, knownTo, select);
+            Predictors, knownTo, select, slices);
         Engine.AddModule(dr);
         return dr;
     }

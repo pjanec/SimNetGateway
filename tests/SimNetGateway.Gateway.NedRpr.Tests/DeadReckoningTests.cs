@@ -287,6 +287,40 @@ public class DeadReckoningTests
     }
 
     [Fact]
+    public void With_sliced_extrapolation_the_display_gets_each_moving_entity_at_10_Hz_on_average()
+    {
+        Assert.Equal(6, new NedRprSettings().DrSlices);
+        var h = new GatewayHarness();
+        StartSession(h);
+        const int entities = 25; // not divisible by the 6 slices
+        for (ulong i = 0; i < entities; i++)
+        {
+            T.PublishNed(h, T.Hawk + i, "Mover" + i, 200, T.Geo(T.Hawk + i, lon: 14.0 + i * 0.01, speed: 100));
+        }
+
+        h.Run(1); // warm up: the first cycle also writes the first prediction of everyone
+        h.DisplayOut.Clear();
+
+        int maxPerStep = 0;
+        for (int i = 0, steps = (int)Math.Round(10 / GatewayHarness.Dt); i < steps; i++)
+        {
+            int before = h.DisplayOut.Count;
+            h.Step(); // every step runs the invariant checker
+            maxPerStep = Math.Max(maxPerStep, h.DisplayOut.Count - before);
+        }
+
+        var positions = h.DisplaySent<DisplayEntityPosition>();
+        foreach (var group in positions.GroupBy(p => p.Label))
+        {
+            Assert.InRange(group.Count(), 99, 101); // 10 Hz over 10 s
+        }
+
+        Assert.Equal(entities, positions.Select(p => p.Label).Distinct().Count());
+        // the writes of one cycle are spread over its slices instead of arriving in one burst
+        Assert.InRange(maxPerStep, 1, 5); // a firing carries at most one chunk of ceil(25 / 6) entities
+    }
+
+    [Fact]
     public void The_display_label_comes_from_Identity_Name_and_never_from_the_entity_id()
     {
         var h = new GatewayHarness();

@@ -15,6 +15,9 @@ public sealed record NedRprSettings : GatewaySettings
 
     public TimeSpan DrProcessorPeriod { get; init; } = TimeSpan.FromSeconds(0.1);
 
+    /// <summary>The dead-reckoning cycle is split into this many time slices (R-069); 1 = one burst per period.</summary>
+    public int DrSlices { get; init; } = 6;
+
     /// <summary>An RPR entity without a write by RPR for this long is removed.</summary>
     public TimeSpan StaleTimeout { get; init; } = TimeSpan.FromSeconds(12);
 

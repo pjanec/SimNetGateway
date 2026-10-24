@@ -80,7 +80,8 @@ public sealed class NedRprProfile : IGatewayProfile
             schema.PredictedPosition,
             schema.PredictedAt,
             predictors,
-            select: entity => entity.Has(nameId))); // the entities the display can show
+            select: entity => entity.Has(nameId), // the entities the display can show
+            slices: settings.DrSlices));
         builder.AddModule(new StaleEntityReaper(
             "RprStaleReaper", sources.Rpr, settings.StaleTimeout, settings.ReaperCheckPeriod, sources.ProcReaper));
     }
