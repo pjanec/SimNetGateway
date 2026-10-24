@@ -40,6 +40,7 @@ public sealed class RuleBuilder<TTrigger> where TTrigger : class
     private readonly RuleSubscription _subscription;
     private readonly List<Func<TTrigger, bool>> _conditions = new();
     private string? _name;
+    private bool _disabled;
 
     internal RuleBuilder(ModuleSetup setup, RuleSubscription subscription)
     {
@@ -51,6 +52,16 @@ public sealed class RuleBuilder<TTrigger> where TTrigger : class
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
         _name = name;
+        return this;
+    }
+
+    /// <summary>
+    /// Registers the rule with <see cref="RuleInfo.Enabled"/> = false, e.g. an alternative contributor that only an
+    /// operator override enables (DD-002 act 6).
+    /// </summary>
+    public RuleBuilder<TTrigger> Disabled()
+    {
+        _disabled = true;
         return this;
     }
 
@@ -66,6 +77,12 @@ public sealed class RuleBuilder<TTrigger> where TTrigger : class
     public RuleInfo Do(Action<TTrigger> action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        return _setup.AddRule(_subscription, _name, _conditions.ToArray(), action);
+        var info = _setup.AddRule(_subscription, _name, _conditions.ToArray(), action);
+        if (_disabled)
+        {
+            info.Enabled = false;
+        }
+
+        return info;
     }
 }

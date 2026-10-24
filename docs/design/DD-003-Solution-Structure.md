@@ -349,3 +349,23 @@ Linux with .NET SDK 8.0.426. Points where the code goes beyond or interprets the
   (git keeps no empty folders; they come with stage 5) and `src/Transports/` (later).
 - The three layer test projects contain no tests yet; `dotnet test` prints "No test is
   available" for them (not a failure) until stages 1, 4 and 5 fill them.
+
+Stage 4 part 1 (T-012b, 2026-10-24) - composition and in-memory transports:
+
+- **Placement**: `IGatewayProfile`, `GatewaySettings`, `GatewayConfiguration`, `GatewayBuilder`,
+  `InboundPort`, `OutboundPort<T>`, `GatewayHostBinding` and `GatewayBuildException` live in
+  `SimNetGateway.Engine/Composition/` (gateway projects reference only Engine, Common and protocols, so
+  the profile interface must be there); `GatewayEngine` itself does not know them.
+- The builder creates the engine in its constructor so the profile can register schema, sources,
+  identity maps and modules; `RequireInbound(name)` registers a source of the same name. Bindings are
+  only recorded; `Build()` checks everything at once (unbound, undeclared, mistyped outbound, inbound
+  channel with the wrong source, unknown rule names in the settings, validation errors) and throws one
+  `GatewayBuildException` listing all problems; only a successful build adds the channels and binds the
+  outbound ports. A builder is closed after `Build()`, also after a failed one. Rule overrides:
+  `DisabledRules` first, then `EnabledRules` (a name in both ends enabled). `RuleBuilder.Disabled()`
+  registers a rule disabled (alternatives enabled by an operator override, DD-002 act 6).
+- `GatewayConfiguration.CreateBuilder(clock, options)` creates the builder and runs the profile.
+- `Engine.InMemory`: `InMemoryInbound<T>` (single type, ring buffer, 0 bytes per message in steady
+  state), `InMemoryInbound` (several message types in arrival order, pooled envelopes, delivered with
+  the concrete type), `InMemoryOutbound<T>` recorder (tick/wall/sim stamps, global sequence across
+  recorders, `Between`, `OfType`, `Tap` for loopback) and `NullOutbound<T>`.
