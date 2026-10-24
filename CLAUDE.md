@@ -32,10 +32,12 @@ example cases - e.g. the DD-002 `G-*` invariants, index-equals-brute-force-scan,
 transactions, 0-byte steady state - checked after every operation in randomized/seeded tests where
 possible, plus the design's edge cases (capacities, limits, interactions between features). The one
 implementing agent writes those tests and runs until they pass; a risk it notices must be fixed and
-tested, not just reported. There is no second test agent. The main session's review then asks
-whether the tests **cover enough and really check what matters** (would they fail if the behaviour
-were wrong? - spot-check by breaking the code), and checks the brief/design itself for errors, which
-no test derived from it can catch.
+tested, not just reported. There is no second test agent. The implementing agent also proves its
+tests are effective (R-065): it deliberately breaks each important behaviour (mutation check),
+confirms the relevant tests fail, restores the code, and lists the mutations and the failing tests
+in its report. The main session does **not** run mutation checks itself: its review reads the tests
+and that report and asks whether they **cover enough and really check what matters**, and checks
+the brief/design itself for errors, which no test derived from it can catch.
 
 ## Where things are recorded (R-009)
 
