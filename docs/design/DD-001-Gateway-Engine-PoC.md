@@ -1848,7 +1848,19 @@ rulings:
 | P-21 Cardinality via finest-granularity pivot, relations, reverse index, `OnChangeSetEnd` | approved | **R-041** |
 | P-22 Formation example in the PoC | approved | **R-042** |
 
-No open proposals. DD-004 adds spatial queries, write authority, entity tables, session veto and the
+### Open proposal (found during stage 4)
+
+The stale-entity reaper as designed in 6.5 (`Query().FromOrigin(side).NotWrittenWithin(timeout)`) does
+not work together with the DR extrapolation processor of section 8: `NotWrittenWithin` uses the
+entity's last write by **any** source, and the processor writes `Derived.PredictedPosition` /
+`PredictedAt` to every moving entity at 10 Hz. An entity of a heartbeat side that went silent while
+moving is therefore never reaped and its prediction runs on forever (S-9.2 would fail).
+
+| ID | Proposal (lean) | Main alternatives |
+|---|---|---|
+| **P-40** | **Staleness counts only writes by the side itself.** The engine keeps, per entity, `LastOriginWriteWallTime` (and sim time): the time of the last commit by a change set whose source is the entity's `Origin` (or its `Owner`, R-057, when ownership moved), maintained at commit in a third intrusive recency list; queries get `OriginWrittenWithin(span)` / `NotOriginWrittenWithin(span)`, served by that list like the other window filters (cost proportional to the result, allocation-free). `StaleEntityReaper` uses `FromOrigin(side).NotOriginWrittenWithin(timeout)`. Derived writes by processors (and engine writes) no longer keep an entity alive. Generic and vocabulary-free (R-034): it uses sources only. | (a) Reaper parameterised with liveness attribute ids and checks their slot `Meta.Source`/`WallTime` by scanning all entities of the side each period (no engine change; O(entities of the side) per check). (b) Processors' change sets marked "derived" and excluded from `LastWriteWallTime` (changes the meaning of an existing field for every query). (c) Ingress writes a dedicated `<Side>.LastHeard` attribute on every message (vocabulary + one extra slot write per message). |
+
+DD-004 adds spatial queries, write authority, entity tables, session veto and the
 predictor registry (R-056 .. R-060); the API reference above includes them.
 
 ## 15. As-built notes
