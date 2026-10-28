@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- DIS 7 (IEEE 1278.1-2012) wire model: vendored open-dis-csharp CSharpDis7 (see NOTICE.md) plus own additions
+       in namespace SimNetGateway.Protocol.Dis7. References nothing (R-050, DD-003 rule 2). The vendored code was written
+       for ImplicitUsings and Nullable disabled; own files opt in with #nullable enable and explicit usings. -->
+  <PropertyGroup>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="LICENSE;NOTICE.md" />
+  </ItemGroup>
+
+</Project>

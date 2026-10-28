@@ -577,4 +577,34 @@ expected extension when HLA ownership transfer is needed, in its own design.
 
 ## 14. As-built notes
 
-(To be filled in during implementation.)
+**H1, part 1 (T-019): `Protocol.Dis7` and the Common frame maths** (Protocol.Hrot is a separate, later part of H1).
+
+- Layout: `src/Protocols/SimNetGateway.Protocol.Dis7/` - `Vendored/` (the 174 files of `CSharpDis7` at open-dis-csharp
+  commit `681ba85`, namespace `DISnet`, plus `Vendored/Streams/` from `CsharpDis6`), own code in the project root
+  (namespace `SimNetGateway.Protocol.Dis7`): `PduCodec`, `DisTimestamp`, `EntityAppearance`, `EntityMarkingText`,
+  `ArticulatedPart`. `LICENSE` and `NOTICE.md` (list of all changes) sit beside the project file. The project has
+  `Nullable` and `ImplicitUsings` disabled (the vendored code needs it); own files use `#nullable enable` and explicit
+  usings. Tests: `tests/SimNetGateway.Protocol.Dis7.Tests` (new, mirrors the project as the architecture tests require).
+- Duplicate-id fix: the duplicate `_originatingID` / `_receivingID` fields of the seven simulation-management PDUs that
+  declared them (Create Entity, Remove Entity, Start/Resume, Stop/Freeze, Acknowledge, Action Request, Action Response)
+  were removed; `OriginatingID` / `ReceivingID` stay as `[XmlIgnore]` aliases of the inherited
+  `OriginatingEntityID` / `ReceivingEntityID`. The Reliable variants did not have the bug.
+- Decoded PDU types: 1 Entity State, 2 Fire, 3 Detonation, 4 Collision, 11 .. 17 (Create, Remove, Start/Resume,
+  Stop/Freeze, Acknowledge, Action Request, Action Response), 67 Entity State Update; everything else is reported
+  Unsupported. **Deviation / limit found:** the vendored `VariableDatum` has no payload bytes (it marshals a fixed 16
+  bytes), so it cannot carry the variable-length data of the standard; PDUs with variable datum records (Action
+  Request / Response; Comment, Data, Set Data ... would be the same) are refused by the codec (error on decode,
+  `ArgumentException` on encode) instead of being mis-framed, and Comment (22) is not decoded. Fixed datums work.
+  Needed only if a later stage wants datum-carrying PDUs.
+- `DataInputStream.Position` was added to the vendored stream (the PDU classes swallow read errors; the codec reads each
+  PDU from an exactly sized slice and requires that all bytes were consumed and the computed size equals `Length`).
+- Appearance: damage bits 3-4, smoke bits 5-6 (platforms), Frozen bit 21, State/Deactivated bit 23. Articulated part
+  value: IEEE float in the first four bytes of the 8-byte field, last four bytes zero; parameter type = type class +
+  metric (REF-010 values `ClassPrimaryTurret1` 4096, `ClassPrimaryGun1` 4416, `MetricAzimuth` 11, `MetricElevation` 13 -
+  to be checked against SISO-REF-010 when H4 uses them).
+- Common (`Geo/`): `Quaternion` (Hamilton, w first; DCM and ZYX Euler through the existing `Matrix3` / `Orientation`, so
+  the gimbal-lock convention phi = 0 stays in one place), `LocalTangentFrame` (ENU basis built from the existing
+  `NorthEastDown` columns: east = NED column 1, north = column 0, up = -column 2), `BodyAxes` (F = diag(1,-1,-1)),
+  `LocalToGeocentricOrientation` (the composite of section 5 plus the vector-part quaternion and the angular velocity
+  conversions), `Matrix3.Determinant()`. The composite takes the frame **at the HROT origin** (the flat-world
+  assumption of section 5), not at the entity.
