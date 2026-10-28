@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | in review - proposals P-56 .. P-67 await the user |
+| **Status** | approved: P-56 .. P-67 are R-079 .. R-090 (P-59 changed by the user: reference HROT's assemblies); P-68 (how HROT is brought into the build) awaits the user |
 | **Tasks** | T-018 (this design) |
 | **Rulings honoured** | R-002, R-003, R-012, R-019 .. R-022, R-024, R-028, R-032 .. R-041, R-045, R-050 .. R-055, R-057 .. R-061, R-068 .. R-070 |
 | **Inputs** | HROT `coordinator` branch: `docs/reference/NED_DDS_Protocol.md` (written for this gateway), `docs/reference/BDC_NED_SST_Descriptor_Rules.md`, the C# wire types of `Hrot.Network.NED`, `Hrot.Network.Orchestration`, `Fdp.Network.Cyclone`; open-dis-csharp `CSharpDis7` (DIS 7, IEEE 1278.1-2012), compiled and tested |
@@ -449,6 +449,7 @@ flowchart BT
     GW["Gateway.HrotDis"]
     TH["Transport.HrotDds (CycloneDDS.NET 1.2.20)"]
     TD["Transport.DisUdp"]
+    HW["HROT wire assemblies: Hrot.Network.NED, Hrot.Network.Orchestration, Fdp.Network.Cyclone (+ closure)"]
     Host["Hosts: Demo / Viewer / a service host"]
     Common --> Engine
     GW --> Engine
@@ -457,6 +458,7 @@ flowchart BT
     GW --> PD
     TH --> Engine
     TH --> PH
+    TH --> HW
     TD --> Engine
     TD --> PD
     Host --> GW
@@ -465,10 +467,41 @@ flowchart BT
 ```
 
 The layering of DD-003 holds unchanged: protocols reference nothing, the gateway references no transport, only hosts
-assemble. **Transport.HrotDds** holds DDS-annotated mirror types of the ~20 HROT wire types the gateway uses, in
-HROT's own namespaces so that the derived topic names and DDS type names match (`Hrot.NED.Descriptors.WorldPos` ->
-topic `Hrot_NED_Descriptors_WorldPos`), generated from the IDL HROT's build emits, with a refresh script and a
-conformance test against that IDL (P-59). New configuration `hrot-dis/default` (`HrotDisConfigurations`).
+assemble. **Transport.HrotDds references HROT's own wire assemblies** (R-082): the DDS types, topic names, and
+HROT's wire codecs (`WorldPosCodec`, `EnuWire`, `QuaternionWireCodec`) come from HROT itself, so there is no copy to
+drift and no conformance test against a copy. It is the **only** project that sees HROT: it decodes samples with
+HROT's codecs into the Protocol.Hrot messages and encodes them back, so the engine, Common, Gateway.HrotDis and
+their tests stay HROT-free and build anywhere (R-050). Protocol.Hrot is therefore not a copy of HROT's structs but
+the gateway's decoded port contract: only the fields the translation uses, in decoded units (doubles, a unit
+quaternion, sim seconds). New configuration `hrot-dis/default` (`HrotDisConfigurations`).
+
+Caption: the diagram shows that the HROT dependency enters at one edge box only; everything the gateway's tests
+need sits below it.
+
+### 8.1 Bringing HROT into the build (P-68)
+
+Measured on HROT `coordinator` at `34f249e`: `Hrot.Network.NED` pulls a closure of **22 projects**, all `net8.0`
+or `netstandard2.0` (Hrot.Core, Hrot.Common, Hrot.Network.Orchestration, Fdp.Core (+ source generators),
+Fdp.ModuleHost, Fdp.Toolkits (+ analyzers, Tkb source generator), Fdp.Toolkits.Spatial.Bepu, Fdp.Diagnostics.*,
+Fdp.Network.Cyclone, Fbt/Fhsm kernels, GizmoMap.*, StructEdit.*, Hrot.Blueprints.Schema) and the packages
+CycloneDDS.NET (HROT's `$(CycloneDdsNetVersion)`), NLog, K4os LZ4, BepuPhysics, Newtonsoft.Json,
+CommandLineParser, Microsoft.Extensions.Logging. No Windows-only project is in it (R-012 holds). HROT does not use
+central package management; its projects keep their own `Directory.Build.props` and `global.json` (8.0.408,
+`latestFeature`) because MSBuild resolves those from each project's own folder.
+
+Lean (P-68):
+1. HROT is a **sibling checkout**, located by the MSBuild property `HrotRoot` (default `../hrot` relative to the
+   repository root; overridable), pinned to a commit recorded in `hrot.ref`, checked by `scripts/hrot-check.sh`.
+2. The HROT-dependent projects (`Transport.HrotDds`, its tests, the HROT host) are **not** in `SimNetGateway.sln`
+   but in `SimNetGateway.Hrot.sln` (all of `SimNetGateway.sln` plus them), built by `scripts/build.sh --hrot` and
+   tested by `scripts/test.sh --hrot`. The main solution and its suites keep building on a machine without HROT.
+3. Architecture tests: the transport layer may reference projects outside `src/` only from an allow-list
+   (`Hrot.*`, `Fdp.*`, `CycloneDDS.NET`), and only `SimNetGateway.Transport.HrotDds` may use it; every other
+   project keeps the current rules.
+
+Rejected: git submodule (clones all of HROT, including the Stride tree, into every checkout); HROT-built NuGet
+packages (HROT publishes none today - a later option when it does); referencing prebuilt DLLs by path (stale-binary
+risk, no source navigation).
 
 ## 9. Gaps, limits and decisions
 
@@ -510,7 +543,7 @@ expected extension when HLA ownership transfer is needed, in its own design.
   HROT-origin entity is re-sent to DIS within 5 s; no PDU before the GeoFrame is valid; origin re-base and world
   reset sequences; replay suppression; session mapping; mutation checks (R-065).
 - **Transports**: DDS loopback on a private domain (CycloneDDS.NET native on Linux), UDP loopback, exercise filter,
-  own-echo filter; HROT conformance test of the mirror types against HROT's generated IDL.
+  own-echo filter; HrotDds codec round trips through HROT's own types and codecs (in `SimNetGateway.Hrot.sln`).
 - **Showcase** "Border Crossing": a scripted HROT side (in-memory, protocol-accurate) and a scripted DIS side,
   acts covering appearance, movement with RVW DR, fire both ways, damage, pause, origin change, world reset.
 - **Interop (manual, Windows)**: against a real HROT cluster and a DIS tool (e.g. Wireshark's DIS dissector).
@@ -521,7 +554,7 @@ expected extension when HLA ownership transfer is needed, in its own design.
 |---|---|---|
 | H1 | Protocol.Dis7 (vendored + fixes + codec) and Protocol.Hrot; Common quaternion and local tangent frame | golden vectors, conversion properties |
 | H2 | Gateway.HrotDis: schema, services, all modules, configuration; in-memory end-to-end tests | all gateway tests and invariants |
-| H3 | Transport.DisUdp, Transport.HrotDds (mirror types, conformance), host wiring | loopback tests; manual run against HROT on the Windows machine |
+| H3 | Transport.DisUdp, Transport.HrotDds (references HROT's assemblies, P-68 build wiring), host wiring | loopback tests; manual run against HROT on the Windows machine |
 | H4 | Showcase "Border Crossing", articulation, viewer map attributes | showcase PASS |
 
 ## 13. Proposals
@@ -531,7 +564,7 @@ expected extension when HLA ownership transfer is needed, in its own design.
 | **P-56** | **Scope and topology**: a bidirectional HROT <-> DIS 7 gateway; the gateway is a full NED node (sender identity, node id 700 or granted, heartbeat and capabilities, id allocator client) and one DIS application (configured site, application, exercise id); translated set and exclusions as in section 1 and 9. | HROT -> DIS only (no DIS entities in HROT). |
 | **P-57** | **Pivot data model** of section 3 as the intermediate model, RPR-FOM-aligned: ECEF, geocentric Euler, body-axis angular velocity, DIS DR numbering, packed DIS entity type, DIS damage state and force, plus HROT mirrors (`Hrot.TkbType`, `Hrot.Health`, `Hrot.OwnerNode`, `Hrot.MasterFlags`); events `WeaponFire` and `MunitionDetonation` with RPR payloads. | Store orientation as an ECEF quaternion (no gimbal lock, but needs a non-RPR 4-component value and conversion on both outputs). |
 | **P-58** | **Protocol.Dis7** = vendored open-dis-csharp `CSharpDis7` with the stream classes, big-endian, compile fixes, the simulation-management duplicate-id fix, and a tested `PduCodec`, timestamp, appearance, marking and articulation helpers; contribute the fixes upstream later. **Protocol.Hrot** = plain structs of the HROT wire types used. | Write a small own DIS 7 marshaller for the PDUs needed and drop open-dis. |
-| **P-59** | **Transport.HrotDds** with CycloneDDS.NET 1.2.20 and DDS-annotated mirror types (in HROT's namespaces) generated from HROT's build IDL, refreshed by a script and checked by a conformance test; maps to Protocol.Hrot. **Transport.DisUdp** with broadcast/multicast, exercise and own-echo filters. | Reference HROT's own type assemblies (`Hrot.Network.NED`, `Fdp.Network.Cyclone`) - exact types for free, but pulls HROT's dependency tree into the gateway. |
+| **P-59** | ~~Mirror types generated from HROT's IDL~~ **changed by the user (R-082)**: **Transport.HrotDds references HROT's own wire assemblies** (`Hrot.Network.NED`, `Hrot.Network.Orchestration`, `Fdp.Network.Cyclone`) and uses HROT's codecs; maps to Protocol.Hrot. **Transport.DisUdp** with broadcast/multicast, exercise and own-echo filters. | Mirror types generated from HROT's IDL (the original lean - a copy that can drift). |
 | **P-60** | **Identities**: `hrot.entity` (long) fed by HROT's id allocator in blocks with pending introduction while empty; `dis.entity` from a site/application number pool with quarantine; gateway DIS event ids; fire<->detonation correlator (same shooter and munition within 30 s); world reset empties the HROT map and re-introduces DIS entities. | Ask HROT to create DIS entities with `CreateEntityRequest` (HROT allocates; but the creator node then owns them, not the gateway). |
 | **P-61** | **Kinematics**: GeoFrame from `GeoReference` (refuse unknown version/frame, nothing positional before it, re-base on a new generation); quaternion FLU in ENU <-> DIS Euler FRD in ECEF; HROT -> DIS FPW with DIS thresholds (1 m / 3 deg) and 5 s heartbeat; DIS -> HROT re-send when HROT's linear projection drifts beyond 0.5 m / 3 deg and at least every 5 s; HROT sim time mapped by a running offset. **The FLU body convention is verified against HROT before release** (a test vector set from HROT's `OrientationDisplay`). | Forward HROT samples 1:1 to DIS (up to 60 PDUs/s per entity) and DIS states 1:1 to HROT (HROT drift with RVW entities). |
 | **P-62** | **Damage and appearance**: HROT health fraction -> DIS damage (1.0 none, >= 0.5 slight, > 0 moderate, 0 destroyed; settings); DIS -> HROT health (100 / 75 / 40 / 0 % of `DisEntityMaxHealth` = 100); removal = final Entity State with Deactivated; DIS removal by Deactivated, Remove Entity PDU or 12 s timeout. | Map damage through `EntityPartDamage` levels. |
@@ -540,6 +573,7 @@ expected extension when HLA ownership transfer is needed, in its own design.
 | **P-65** | **Catalogs in code** (R-054): TKB <-> DIS entity type table (prefer a complete `EntityMaster.DisType`), munition table (TKB <-> DIS munition type, warhead, fuse), `DefaultTkbForUnknownDis` with one warning per unknown type; unit entities (kind 11) not forwarded by default. | A JSON catalog file (contradicts R-054 for now). |
 | **P-66** | **HLA readiness**: no HLA code now; the pivot and module structure keep a Pitch/RPR side a pure addition (section 10); attribute-group ownership deferred to the HLA design. | Design the HLA side now. |
 | **P-67** | **Delivery in stages H1 - H4** (section 12) with the test plan of section 11; interop with a real HROT cluster on the Windows machine as a manual acceptance step. | One big stage. |
+| **P-68** | **HROT in the build** (section 8.1): sibling checkout via `HrotRoot` pinned by `hrot.ref`; HROT-dependent projects only in `SimNetGateway.Hrot.sln` (`build.sh --hrot` / `test.sh --hrot`); architecture-test allow-list of external references for `Transport.HrotDds` only. Protocol.Hrot is the decoded port contract, not a copy of HROT's structs. | Git submodule; or let Gateway.HrotDis use HROT's types directly (drops Protocol.Hrot, but every gateway test then needs HROT). |
 
 ## 14. As-built notes
 
