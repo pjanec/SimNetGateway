@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | in review - proposals P-77 .. P-86 await the user; stage HLA-1 (port, encoding, FOM model, fake RTI) started on the user's go-ahead |
+| **Status** | in review - proposals P-77 .. P-86 await the user; stage HLA-1 (port, encoding, FOM model, fake RTI) implemented on the user's go-ahead, see section 12 |
 | **Tasks** | T-021 |
 | **Rulings honoured** | R-002, R-003, R-012, R-018, R-019 .. R-022, R-045, R-047, R-050, R-051, R-053, R-054, R-063 .. R-067, R-089 (HLA readiness) |
 | **Inputs** | RPR FOM 2.0 modules (SISO-STD-001.1-2015 Annex A, copy in `github.com/IVCTool/TS_RPR_FOM`, `RPR-FOM-v2.0/RPR-{Foundation,Base,Physical,Warfare,Enumerations,Aggregate}_v2.0.xml`); IEEE 1516.1-2010 Java/C++ interfaces as copied in `github.com/openlvc/portico` (`codebase/src/java/portico/hla/rti1516e`, `codebase/src/cpp/ieee1516e/include/RTI`); padded encoders of `github.com/Pitch-Technologies/FedProClient` (`cpp/src/fedpro/services-common/encoding`) and `github.com/TNO-MST/object-oriented-rti`; the DIS <-> RPR gateway `github.com/openlvc/disco` |
@@ -431,3 +431,39 @@ RPR FOM 2.0 XML modules; `RprFom2.Model()` is checked against them by a test.
 | **P-84** | `RprSimulationControl` **not carried** over HLA (no RPR 2.0 interaction for it in the used modules); counted and warned. | Map it to a custom interaction class (non-standard). |
 | **P-85** | **Retire `SimulatedRti`** in HLA-3 when Convoy Ambush passes on the fake RTI. | Keep both stand-ins (two implementations of one concept). |
 | **P-86** | **Stages HLA-1 .. HLA-4** of section 10; the HROT gateway gets the same HLA side when `Gateway.HrotDis` reaches it, by sharing the RPR modules then (their extraction is that stage's design question, not this one). | Build the HLA side for `Gateway.HrotDis` first (it does not exist yet). |
+
+
+## 12. As-built notes (stage HLA-1, T-021)
+
+Built: `Protocol.Rpr` namespaces `Hla` (port, handles, maps, exceptions), `Hla.Encoding` (`HlaWriter`, `HlaReader`) and `Fom`
+(`FomModel`, `FomModelBuilder`, `FomModules`, `RprFom2` model + codecs, plain value structs, enumerations); project
+`Transport.FakeRti` (`FakeRtiHub`, `FakeRtiAmbassador`); test projects `Protocol.Rpr.Tests` and `Transport.FakeRti.Tests`
+(DD-003 convention: one test project per src project, so no shared "per layer" project). The class diagram of section 4 holds;
+deviations and decisions the design left open:
+
+| Topic | As built | Why |
+|---|---|---|
+| Port surface | section 4 plus `UnpublishObjectClass`, `UnsubscribeObjectClass`, `UnpublishInteractionClass`, `UnsubscribeInteractionClass` and `RequestAttributeValueUpdate(ObjectClassHandle, ...)` (1516e names) | section 3.6 and the HLA-1 exit demand unpublish / unsubscribe and "by instance or class" requests; the diagram had not listed them. An empty set in publish / subscribe also means unpublish / unsubscribe, as in 1516e |
+| Exceptions | the list of the brief plus `FederateOwnsAttributes` (resign without divesting while owning) | needed by `ResignAction.NoAction` |
+| `FomModules` | lives in `Protocol.Rpr.Fom` (not test-side); `FakeRtiHub.RegisterModule` overrides it per hub | the fake RTI (references only `Protocol.Rpr`) and the later transport share the module names; an unknown module name is `NameNotFound` (1516e has `CouldNotOpenFDD`, not in the port) |
+| `Encode*` / `TryDecode*` | `Encode*` throws `ArgumentException` for what the FOM cannot hold (enumerator not in the FOM, `Other` dead reckoning, non-ASCII `RTIobjectId`, marking not 11 octets); `TryDecode*` is strict on enumerators and booleans, requires the value to be consumed completely, does not check padding octets | a decoder that never returns a half value (3.3); the encoder is the only producer of zero padding |
+| Variant padding | `HlaWriter.VariantRecordStart` / `VariantAlternativeStart` pad to the largest boundary over all alternatives. In the RPR types every alternative has the same boundary (8 for `SpatialVariantStruct`, 4 for `ParameterValueVariantStruct`), so the rule is only observable on a synthetic variant, which the tests use | honest limit of the golden vectors |
+| `ArticulatedParameterStruct` | 20 octets for both alternatives (Change@0, 1 pad, PartAttachedTo@2, ParameterType@4, alternative@8..19); lengthless array = elements only, truncation between elements is a valid shorter array | derived in `EncodingGoldenTests` |
+| Handles | 1-based indexes in model order (classes parents first, attributes by declaring class in declaration order); inherited attributes / parameters keep the declaring class's handle; instance handles and `HLAobject_<n>` names use the same counter per federation | deterministic, same FOM = same handles in every federation |
+| Ownership | fixed at registration: the registrant owns the attributes published at the registered class plus `HLAprivilegeToDeleteObject`; a later publish / unpublish does not change it (R-057: one owner, no transfer) | simplest deterministic rule; ownership transfer is out of scope |
+| Attribute checks | `AttributeNotDefined` for update and value requests is evaluated against the class the caller knows the instance as (the registered class for the registrant) | a federate that knows an instance as `PhysicalEntity` cannot name `Platform` attributes |
+| Value requests by class | cover live instances of that class or a subclass that the requester knows | requests are relative to what a federate knows |
+| Names | printable ASCII, 1..255 characters, not starting with `HLA`; a reservation by another federate counts as "not reserved" for `RegisterObjectInstance(class, name)`, `ObjectInstanceNameInUse` only for a name bound to an instance; a name is free again when its instance is deleted or its reserver resigns | `HLA`-prefixed names are reserved for RTI-generated ones, so they cannot collide |
+| Resign | `DeleteObjects`, `DeleteObjectsThenDivest`, `CancelThenDeleteThenDivest` delete the federate's instances (removal callbacks to discoverers); `UnconditionallyDivestAttributes` leaves them without an owner (nobody can update or delete them, late subscribers still discover them); `NoAction`, `CancelPendingOwnershipAcquisitions` throw `FederateOwnsAttributes` while it owns anything. The resigned federate's callback queue is discarded | 1516e semantics reduced to what exists without ownership transfer |
+| Evoke | `EvokeCallback` / `EvokeMultipleCallbacks` need only a connection and return true while callbacks are still pending; callbacks queued during delivery wait for the next evoke | HLA_EVOKED |
+| Callback copies | values and tags are cloned per recipient when queued | a sender mutating its arrays later cannot change what was sent |
+| `ProtocolTests.Namespaces_equal_the_project_names` | now accepts the three sub-namespaces for `Protocol.Rpr`; message types must still be in the root namespace | DD-008 section 2 puts `Hla`, `Hla.Encoding`, `Fom` into that project |
+| Generated sources | `Fom/RprEnumerations.cs` (the seven enumerations) and `Fom/RprFom2.Definitions.cs` (name constants + `BuildModel`) were generated once from `RPR-Enumerations/Base/Physical/Aggregate/Warfare_v2.0.xml`; not regenerated by the build | R-054: no runtime XML; the HLA-4 test compares the model with the official XML |
+| Equivalent behaviour noted | the "no reflection to the updater" check in the update loop is redundant by construction (only the registrant can update and it never discovers its own instance); the rule is enforced by "never discover own instances" and tested through that | found by the mutation check |
+
+AggregateEntity (parent `BaseEntity`, module `RPR-Aggregate_v2.0.xml`), attributes in module order: `AggregateMarking`
+(AggregateMarkingStruct), `AggregateState` (AggregateStateEnum8), `Dimensions` (DimensionStruct), `EntityIdentifiers`
+(RTIobjectIdArray), `ForceIdentifier` (ForceIdentifierEnum8), `Formation` (FormationEnum32), `NumberOfSilentEntities`
+(Integer16), `NumberOfVariableDatums` (UnsignedInteger32), `SilentAggregates` (SilentAggregateStructLengthlessArray),
+`SilentEntities` (SilentEntityStructLengthlessArray), `SubAggregateIdentifiers` (RTIobjectIdArray), `VariableDatums`
+(VariableDatumStructLengthlessArray). The model only names them; no codecs exist for these types yet (HLA-2 decides which are used).

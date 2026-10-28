@@ -72,7 +72,7 @@ public class ObjectAndInteractionTests
     [InlineData("")]
     [InlineData("HLAanything")]
     [InlineData("HLA")]
-    [InlineData("café")]
+    [InlineData("caf\u00e9")]
     [InlineData("tab\there")]
     [InlineData("new\nline")]
     public void Illegal_names_are_refused_for_reservation_and_named_registration(string name)

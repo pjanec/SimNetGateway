@@ -165,7 +165,7 @@ internal sealed class Generator
     ];
 
     private static readonly string[] GoodNames = ["n1", "n2", "n3", "n4", "n5", "n6"];
-    private static readonly string[] BadNames = ["", "HLAreserved", "bad\tname", "café", new string('x', 256)];
+    private static readonly string[] BadNames = ["", "HLAreserved", "bad\tname", "caf\u00e9", new string('x', 256)];
 
     private readonly Random _r;
     private readonly RefModel _m;
