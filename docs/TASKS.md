@@ -44,4 +44,4 @@ progress and done.
 | **T-016** | done | Time-sliced DR extrapolation processor (`slices`, NedRprSettings.DrSlices = 6) | DD-001 | R-069 (P-42); as-built notes in DD-001 section 15 |
 | **T-017** | done | Journal switchable off (`JournalCapacity` / `EventLogCapacity` 0: records and events recycled right after dispatch) | DD-001 | R-070; as-built notes in DD-001 section 15 |
 | **T-018** | done | Design of a HROT <-> DIS 7 translator (open-dis-csharp PDUs) including the intermediate data model, as precursor for HLA via Pitch | DD-006 | P-56 .. P-67 approved as R-079 .. R-090 (P-59 changed by the user to reference HROT's assemblies); follow-up P-68 (HROT in the build) in review |
-| **T-019** | todo | Implement DD-006 stages H1 .. H4 (Protocol.Dis7/Hrot, Gateway.HrotDis, transports, Border Crossing showcase) | DD-006 | R-079 .. R-090; H3 waits for P-68 |
+| **T-019** | in-progress | Implement DD-006 stages H1 .. H4 (Protocol.Dis7/Hrot, Gateway.HrotDis, transports, Border Crossing showcase) | DD-006 | R-079 .. R-090; H3 waits for P-68. H1 part 1 (Protocol.Dis7 + Common Quaternion / LocalTangentFrame / orientation composite) done; Protocol.Hrot (H1 part 2) open |

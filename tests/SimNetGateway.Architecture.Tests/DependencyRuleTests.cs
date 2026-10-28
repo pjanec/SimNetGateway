@@ -25,7 +25,7 @@ public class DependencyRuleTests
         string[] expected =
         [
             "SimNetGateway.Engine", "SimNetGateway.Engine.InMemory", "SimNetGateway.Engine.Monitoring", "SimNetGateway.Common",
-            "SimNetGateway.Protocol.Ned", "SimNetGateway.Protocol.Rpr", "SimNetGateway.Protocol.Display",
+            "SimNetGateway.Protocol.Ned", "SimNetGateway.Protocol.Rpr", "SimNetGateway.Protocol.Display", "SimNetGateway.Protocol.Dis7",
             "SimNetGateway.Gateway.NedRpr", "SimNetGateway.Showcase", "SimNetGateway.Demo", "SimNetGateway.Viewer",
         ];
         var actual = SourceTree.SrcProjects.Select(p => p.Name).ToList();
