@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Protocols/SimNetGateway.Protocol.Dis7/SimNetGateway.Protocol.Dis7.csproj" />
+  </ItemGroup>
+
+</Project>
