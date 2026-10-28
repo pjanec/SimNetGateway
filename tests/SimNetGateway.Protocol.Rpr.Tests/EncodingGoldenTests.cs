@@ -166,7 +166,7 @@ public class EncodingGoldenTests
             RprFom2.EncodeRtiObjectId("HLAo_7"));
         Assert.Equal(new byte[] { 0 }, RprFom2.EncodeRtiObjectId(string.Empty));
         Assert.Throws<ArgumentException>(() => RprFom2.EncodeRtiObjectId("a\0b"));
-        Assert.Throws<ArgumentException>(() => RprFom2.EncodeRtiObjectId("café"));
+        Assert.Throws<ArgumentException>(() => RprFom2.EncodeRtiObjectId("caf\u00e9"));
     }
 
     [Fact]

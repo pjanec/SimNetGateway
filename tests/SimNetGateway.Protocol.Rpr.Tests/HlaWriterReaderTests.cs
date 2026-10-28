@@ -66,7 +66,7 @@ public class HlaWriterReaderTests
 
         Assert.Equal(new byte[] { 1, (byte)'a', (byte)'b', 0, 0 }, w.ToArray());
         Assert.Throws<ArgumentException>(() => w.NullTerminatedAscii("x\0"));
-        Assert.Throws<ArgumentException>(() => w.NullTerminatedAscii("ü"));
+        Assert.Throws<ArgumentException>(() => w.NullTerminatedAscii("\u00fc"));
     }
 
     [Fact]
