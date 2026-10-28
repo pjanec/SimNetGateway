@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests the fake RTI against a brute-force reference model; Protocol.Rpr is referenced for the port, the RPR FOM model
+       and the codecs (the values the tests push through the RTI are real RPR encodings, which the RTI must not touch). -->
+  <ItemGroup>
+    <ProjectReference Include="../../src/Transports/SimNetGateway.Transport.FakeRti/SimNetGateway.Transport.FakeRti.csproj" />
+    <ProjectReference Include="../../src/Protocols/SimNetGateway.Protocol.Rpr/SimNetGateway.Protocol.Rpr.csproj" />
+  </ItemGroup>
+
+</Project>
