@@ -31,10 +31,19 @@ public class ProtocolTests
             Assert.Equal("SimNetGateway.Protocol.Ned", t.Namespace);
         }
 
+        // DD-008 section 2: Protocol.Rpr also holds the 1516e port (Hla), its encodings (Hla.Encoding) and the RPR FOM 2.0 (Fom)
+        string[] rprNamespaces =
+        [
+            "SimNetGateway.Protocol.Rpr", "SimNetGateway.Protocol.Rpr.Hla", "SimNetGateway.Protocol.Rpr.Hla.Encoding",
+            "SimNetGateway.Protocol.Rpr.Fom",
+        ];
         foreach (var t in typeof(IRprMessage).Assembly.GetExportedTypes())
         {
-            Assert.Equal("SimNetGateway.Protocol.Rpr", t.Namespace);
+            Assert.Contains(t.Namespace, rprNamespaces);
         }
+        Assert.All(
+            typeof(IRprMessage).Assembly.GetExportedTypes().Where(t => typeof(IRprMessage).IsAssignableFrom(t)),
+            t => Assert.Equal("SimNetGateway.Protocol.Rpr", t.Namespace));
 
         foreach (var t in typeof(IDisplayMessage).Assembly.GetExportedTypes())
         {

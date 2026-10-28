@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The fake in-memory RTI (DD-008): implements the 1516e-mirroring port of Protocol.Rpr. A transport references the
+       engine and ONE protocol (DD-003 rule 5); this one needs only the protocol. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Protocols/SimNetGateway.Protocol.Rpr/SimNetGateway.Protocol.Rpr.csproj" />
+  </ItemGroup>
+
+</Project>
