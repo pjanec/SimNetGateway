@@ -68,6 +68,10 @@ public readonly struct Matrix3
         return Identity + k * a + (k * k) * b;
     }
 
+    /// <summary>The determinant (+1 for a proper rotation).</summary>
+    public double Determinant() =>
+        M00 * (M11 * M22 - M12 * M21) - M01 * (M10 * M22 - M12 * M20) + M02 * (M10 * M21 - M11 * M20);
+
     public Matrix3 Transpose() => new(M00, M10, M20, M01, M11, M21, M02, M12, M22);
 
     public Vec3 Column(int index) => index switch
