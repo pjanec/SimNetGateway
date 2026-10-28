@@ -43,3 +43,4 @@ progress and done.
 | **T-015** | done | Attribute the stage 6 benchmark tick-time spikes (10 Hz DR/display burst, 250-290 ms maxima) and allocations (incl. why threshold 5 m allocates 2x), then propose fixes | DD-001 | Root causes found; P-42 -> R-069 (T-016), P-44 dropped (R-070); P-41, P-43, P-45 open, low priority |
 | **T-016** | done | Time-sliced DR extrapolation processor (`slices`, NedRprSettings.DrSlices = 6) | DD-001 | R-069 (P-42); as-built notes in DD-001 section 15 |
 | **T-017** | done | Journal switchable off (`JournalCapacity` / `EventLogCapacity` 0: records and events recycled right after dispatch) | DD-001 | R-070; as-built notes in DD-001 section 15 |
+| **T-018** | in-progress | Design of a HROT <-> DIS 7 translator (open-dis-csharp PDUs) including the intermediate data model, as precursor for HLA via Pitch | DD-006 (to write) | User request 2026-10-28; HROT network docs digested from the repository (docs/reference exists only locally) |
