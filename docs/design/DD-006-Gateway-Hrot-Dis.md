@@ -2,11 +2,47 @@
 
 | | |
 |---|---|
-| **Status** | approved: P-56 .. P-67 are R-079 .. R-090 (P-59 changed by the user: reference HROT's assemblies); P-68 (how HROT is brought into the build) awaits the user |
+| **Status** | approved: P-56 .. P-67 are R-079 .. R-090; **revised by R-091** (the gateway runs in-process in the HROT editor as an ECS-level pack, vendored into HROT): section 0 says what that changes; the HROT side is designed in DD-007 (P-69 .. P-76 in review); P-68 withdrawn |
 | **Tasks** | T-018 (this design) |
 | **Rulings honoured** | R-002, R-003, R-012, R-019 .. R-022, R-024, R-028, R-032 .. R-041, R-045, R-050 .. R-055, R-057 .. R-061, R-068 .. R-070 |
 | **Inputs** | HROT `coordinator` branch: `docs/reference/NED_DDS_Protocol.md` (written for this gateway), `docs/reference/BDC_NED_SST_Descriptor_Rules.md`, the C# wire types of `Hrot.Network.NED`, `Hrot.Network.Orchestration`, `Fdp.Network.Cyclone`; open-dis-csharp `CSharpDis7` (DIS 7, IEEE 1278.1-2012), compiled and tested |
 | **Date** | 2026-10-28 |
+
+## 0. Revision 2 - the gateway in-process in the HROT editor (R-091)
+
+The user ruled: *"let's vendored into HROT with ECS-level adapter and reusing HROT stuff, best as separate
+installable HROT module pluggable into HROT editor node (i.e. grateway+adapters not being a separate HROT node at
+all)"* (R-091). The HROT side is now **DD-007** (the pack). What it changes here:
+
+| Section of this document | Status |
+|---|---|
+| 1 scope, 3 pivot, 5 conversions (ENU <-> ECEF, quaternion <-> Euler), 7 DIS side, 10 HLA readiness | **unchanged** |
+| 2 block diagram - the HROT half ("Transport.HrotDds", NED topics) | **superseded** by DD-007 section 2; the gateway's HROT ports carry `Protocol.Hrot` messages over in-memory channels to the pack |
+| 3.2 `hrot.entity` allocator `HrotIdPool` (IdRequest / IdResponse) | **superseded**: an `IIdAllocator<long>` port, implemented in the pack over `HrotNodeContext.IdAllocator` (DD-007 3.3) |
+| 4.1 being a NED node (GeoReference topic, node id, heartbeat, capabilities) | **superseded**: HROT services (DD-007 3.8) |
+| 4.2 / 4.3 HROT ingress / egress over NED descriptors | **superseded** by the `Protocol.Hrot` contract below; the pivot effects of each row stay the same |
+| 4.3 `HrotWorldPosEgress/Keep` re-send rule (0.5 m / 3 deg / 5 s) | **dropped**: the gateway sends a replica state only on a new DIS state; the pack poses per frame (DD-007 3.4) |
+| `OwnershipUpdate` handling (P-63 / R-086) | **dropped**: replicas are owned by a reserved DIS owner id (DD-007 3.2) |
+| 6.2 DIS entity appears in HROT (id allocation sequence) | **superseded** by DD-007 5.2 |
+| 8 projects: `Transport.HrotDds`; 8.1 / P-68 (HROT in our build) | **dropped / withdrawn**: no project here references HROT; HROT vendors ours (DD-007 P-69) |
+| 12 stages: H3 "Transport.HrotDds" | H3 = `Transport.DisUdp` + vendorability; **H5 = the HROT pack, in HROT** |
+
+**`Protocol.Hrot` is the gateway <-> pack contract** (BCL-only, upstream, tested here without HROT). Units: local
+ENU metres (double), HROT body quaternion (x, y, z, w) in ENU, m/s, rad/s, HROT sim seconds.
+
+| Direction | Message | Fields |
+|---|---|---|
+| pack -> gateway | `HrotOrigin` | lat, lon, alt (deg, deg, m), `Generation` |
+| | `HrotSession` | `ClusterPhase` (Idle, Edit, Preview, Live, Replay, Review, Degraded), `Advancing`, `TimeScale`, `SimTime` |
+| | `HrotEntityState` | `Id`, `TkbType`, `DisType` (packed, 0 = none), `Marking`, `Force` (HROT `ForceId`), `CommanderId`, `Position`, `Rotation`, `Velocity`, `AngularVelocity`, `HealthCurrent`, `HealthMax`, `SimTime` (a full snapshot) |
+| | `HrotEntityRemoved` | `Id` |
+| | `HrotTurretPose` (H4) | `Id`, `PartId`, `Azimuth`, `Elevation` |
+| | `HrotFire` | `ShooterId`, `TargetId` (0 = none), `MunitionTkb`, `MunitionDisType`, `Origin`, `Velocity`, `Quantity` |
+| | `HrotDetonation` | `ShooterId`, `TargetId` (0 = ground), `MunitionTkb`, `MunitionDisType`, `Location`, `Velocity` |
+| gateway -> pack | `ReplicaState` | `Id`, `TkbType`, `DisType`, `Marking`, `Force`, DR snapshot (`Position`, `Velocity`, `Acceleration`, `Rotation`, `AngularVelocity`, `DrAlgorithm`, `StateTime`), `HealthCurrent`, `HealthMax`, `Deactivated` |
+| | `ReplicaRemoved` | `Id` |
+| | `InjectFire` / `InjectDetonation` | as `HrotFire` / `HrotDetonation`, plus `TargetIsHrot` |
+| | `TimeRequest` | `Pause` / `Resume` (only with `DisControlsHrot`) |
 
 ## 1. Purpose and scope
 
@@ -384,10 +420,10 @@ sequenceDiagram
     M->>G: GeoReference Generation 2 (new terrain origin)
     G->>E: GeoFrame re-based (one engine transaction marking every DIS-origin entity)
     E->>G: HROT egress re-publishes WorldPos of every DIS entity in the new local frame
-    Note over G,E: HROT entities' next WorldPos arrive in the new frame; their ECEF stays correct
+    Note over G,E: HROT entities' next WorldPos arrive in the new frame, their ECEF stays correct
     M->>G: ClusterState Unloading / IdResponse Resp_Reset (world boundary)
     G->>E: destroy every HROT-origin entity (DIS gets Deactivated PDUs), empty hrot.entity, reset HrotIdPool
-    Note over G,E: DIS-origin entities stay; they are re-introduced to HROT with new ids (ids restart at 1000)
+    Note over G,E: DIS-origin entities stay, they are re-introduced to HROT with new ids (ids restart at 1000)
 ```
 
 ### 6.5 Pause and resume
@@ -400,7 +436,7 @@ sequenceDiagram
     participant D as DIS exercise
 
     H->>G: master heartbeat SimTickAdvancing false (pause) / ClusterState OperatingLive
-    G->>G: session Running -> Paused (sim time frozen; heartbeats continue with frozen predictions)
+    G->>G: session Running -> Paused (sim time frozen, heartbeats continue with frozen predictions)
     opt HrotControlsDis (default on)
         G->>D: Stop/Freeze PDU (receiving entity = all, reason "recess")
     end
@@ -478,7 +514,7 @@ quaternion, sim seconds). New configuration `hrot-dis/default` (`HrotDisConfigur
 Caption: the diagram shows that the HROT dependency enters at one edge box only; everything the gateway's tests
 need sits below it.
 
-### 8.1 Bringing HROT into the build (P-68)
+### 8.1 Bringing HROT into the build (P-68) - WITHDRAWN by R-091 (HROT vendors the gateway; see section 0 and DD-007 P-69); kept for the record
 
 Measured on HROT `coordinator` at `34f249e`: `Hrot.Network.NED` pulls a closure of **22 projects**, all `net8.0`
 or `netstandard2.0` (Hrot.Core, Hrot.Common, Hrot.Network.Orchestration, Fdp.Core (+ source generators),
@@ -554,7 +590,8 @@ expected extension when HLA ownership transfer is needed, in its own design.
 |---|---|---|
 | H1 | Protocol.Dis7 (vendored + fixes + codec) and Protocol.Hrot; Common quaternion and local tangent frame | golden vectors, conversion properties |
 | H2 | Gateway.HrotDis: schema, services, all modules, configuration; in-memory end-to-end tests | all gateway tests and invariants |
-| H3 | Transport.DisUdp, Transport.HrotDds (references HROT's assemblies, P-68 build wiring), host wiring | loopback tests; manual run against HROT on the Windows machine |
+| H3 | Transport.DisUdp, vendorability of the six projects (DD-007 P-69) - ~~Transport.HrotDds~~ dropped by R-091 | loopback tests; a vendoring dry run builds the six projects under a foreign root props |
+| H5 | the HROT pack `Hrot.DisGateway` (DD-007), built in HROT | DD-007 section 8; manual run in the editor against a DIS tool |
 | H4 | Showcase "Border Crossing", articulation, viewer map attributes | showcase PASS |
 
 ## 13. Proposals
@@ -573,7 +610,7 @@ expected extension when HLA ownership transfer is needed, in its own design.
 | **P-65** | **Catalogs in code** (R-054): TKB <-> DIS entity type table (prefer a complete `EntityMaster.DisType`), munition table (TKB <-> DIS munition type, warhead, fuse), `DefaultTkbForUnknownDis` with one warning per unknown type; unit entities (kind 11) not forwarded by default. | A JSON catalog file (contradicts R-054 for now). |
 | **P-66** | **HLA readiness**: no HLA code now; the pivot and module structure keep a Pitch/RPR side a pure addition (section 10); attribute-group ownership deferred to the HLA design. | Design the HLA side now. |
 | **P-67** | **Delivery in stages H1 - H4** (section 12) with the test plan of section 11; interop with a real HROT cluster on the Windows machine as a manual acceptance step. | One big stage. |
-| **P-68** | **HROT in the build** (section 8.1): sibling checkout via `HrotRoot` pinned by `hrot.ref`; HROT-dependent projects only in `SimNetGateway.Hrot.sln` (`build.sh --hrot` / `test.sh --hrot`); architecture-test allow-list of external references for `Transport.HrotDds` only. Protocol.Hrot is the decoded port contract, not a copy of HROT's structs. | Git submodule; or let Gateway.HrotDis use HROT's types directly (drops Protocol.Hrot, but every gateway test then needs HROT). |
+| **P-68** | ~~**WITHDRAWN by R-091**~~ **HROT in the build** (section 8.1): sibling checkout via `HrotRoot` pinned by `hrot.ref`; HROT-dependent projects only in `SimNetGateway.Hrot.sln` (`build.sh --hrot` / `test.sh --hrot`); architecture-test allow-list of external references for `Transport.HrotDds` only. Protocol.Hrot is the decoded port contract, not a copy of HROT's structs. | Git submodule; or let Gateway.HrotDis use HROT's types directly (drops Protocol.Hrot, but every gateway test then needs HROT). |
 
 ## 14. As-built notes
 
