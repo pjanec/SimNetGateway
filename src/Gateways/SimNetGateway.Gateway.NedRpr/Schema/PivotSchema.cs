@@ -44,7 +44,7 @@ public sealed class PivotSchema
         EventMunitionTkb = attributes.Register("Event.MunitionTkb", AttrKind.Int, "Munition, TKB numbering; 0 = not given");
         EventLocation = attributes.Register("Event.Location", AttrKind.Vec3, "Event location, ECEF, metres");
         EventQuantity = attributes.Register("Event.Quantity", AttrKind.Int, "Number of rounds");
-        EventResult = attributes.Register("Event.Result", AttrKind.Int, "Detonation result (0 other, 1 entity impact, 2 ground impact, 3 detonation); same numbering on both sides");
+        EventResult = attributes.Register("Event.Result", AttrKind.Int, "Detonation result in the pivot numbering (0 other, 1 entity impact, 2 ground impact, 3 detonation); NED uses the same, RPR the FOM numbering (NedRprConversions)");
 
         Parent = attributes.Register("Structure.Parent", AttrKind.EntityRef,
             "The unit (formation, aggregate) this entity is a member of; reverse-indexed", AttrOptions.IndexReferences);

@@ -44,12 +44,21 @@ public enum RprForceId : byte
     Neutral = 3,
 }
 
+/// <summary>
+/// The detonation result in the numbering of the RPR FOM 2.0 DetonationResultCodeEnum8 (DD-008 section 3.4, R-105). The gateway's
+/// pivot numbering is a different one (Other, EntityImpact, GroundImpact, Detonation = 0..3); the NED-RPR gateway maps through
+/// <c>NedRprConversions</c>. FOM codes above <see cref="None"/> are not represented (the HLA transport delivers them as
+/// <see cref="Other"/>).
+/// </summary>
 public enum RprDetonationResult : byte
 {
     Other = 0,
     EntityImpact = 1,
-    GroundImpact = 2,
-    Detonation = 3,
+    EntityProximateDetonation = 2,
+    GroundImpact = 3,
+    GroundProximateDetonation = 4,
+    Detonation = 5,
+    None = 6,
 }
 
 public enum RprControlKind : byte
@@ -93,28 +102,73 @@ public sealed record RprAggregateEntity(
 
 public readonly record struct RprObjectRemoved(RprObjectHandle Handle) : IRprMessage;
 
-/// <summary>A null handle means "no object".</summary>
+/// <summary>
+/// A null handle means "no object". The optional fields carry the RPR FOM WeaponFire parameters the gateway may not know
+/// (DD-008 section 3.4, R-105); null = not known (an HLA transport sends the FOM default, and delivers null for a parameter the
+/// peer did not send or that was undecodable). <see cref="FuseType"/> and <see cref="WarheadType"/> are the SISO-REF-010 codes.
+/// </summary>
 public readonly record struct RprWeaponFire(
     Guid EventId,
     RprObjectHandle? FiringObject,
     RprObjectHandle? TargetObject,
     WorldLocation Location,
     DisEntityType Munition,
-    int Quantity) : IRprMessage;
+    int Quantity) : IRprMessage
+{
+    public ushort? FuseType { get; init; }
 
-/// <summary>A null handle means "no object".</summary>
+    public ushort? WarheadType { get; init; }
+
+    /// <summary>Rounds per minute.</summary>
+    public ushort? RateOfFire { get; init; }
+
+    /// <summary>Initial velocity of the munition, m/s.</summary>
+    public RprVector? InitialVelocity { get; init; }
+
+    /// <summary>Range to the fire control solution, metres.</summary>
+    public float? FireControlSolutionRange { get; init; }
+
+    /// <summary>The munition as an object, when the munition is tracked as one.</summary>
+    public RprObjectHandle? MunitionObject { get; init; }
+}
+
+/// <summary>A null handle means "no object"; the optional fields are as for <see cref="RprWeaponFire"/>.</summary>
 public readonly record struct RprMunitionDetonation(
     Guid EventId,
     RprObjectHandle? FiringObject,
     RprObjectHandle? TargetObject,
     WorldLocation Location,
     DisEntityType Munition,
-    RprDetonationResult Result) : IRprMessage;
+    RprDetonationResult Result) : IRprMessage
+{
+    public ushort? FuseType { get; init; }
+
+    public ushort? WarheadType { get; init; }
+
+    public ushort? RateOfFire { get; init; }
+
+    /// <summary>Final velocity of the munition, m/s.</summary>
+    public RprVector? FinalVelocity { get; init; }
+
+    /// <summary>Detonation location relative to the target entity, body frame, metres.</summary>
+    public RprVector? RelativeDetonationLocation { get; init; }
+
+    public RprObjectHandle? MunitionObject { get; init; }
+}
 
 public readonly record struct RprSimulationControl(RprControlKind Kind) : IRprMessage;
 
-/// <summary>Outbound: the gateway asks the RTI to register an object; the token is opaque to the RTI.</summary>
-public readonly record struct RprRegisterObject(long Token) : IRprMessage;
+/// <summary>
+/// Outbound: the gateway asks the RTI to register an object; the token is opaque to the RTI. The entity type decides the
+/// object class an HLA transport registers (DD-008 section 3.5, R-105).
+/// </summary>
+public readonly record struct RprRegisterObject(long Token, DisEntityType EntityType) : IRprMessage;
+
+/// <summary>
+/// Inbound: another federate asked for the attributes of one of our objects to be provided (HLA provideAttributeValueUpdate);
+/// the gateway answers with a full update of that object (DD-008 section 3.4, R-105).
+/// </summary>
+public readonly record struct RprUpdateRequested(RprObjectHandle Handle) : IRprMessage;
 
 /// <summary>Inbound: the RTI's answer to <see cref="RprRegisterObject"/> with the same token.</summary>
 public readonly record struct RprObjectRegistered(long Token, RprObjectHandle Handle) : IRprMessage;

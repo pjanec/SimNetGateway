@@ -116,6 +116,15 @@ internal static class Gen
         return new MarkingStruct(PickEnum<MarkingEncodingEnum8>(r), data);
     }
 
+    public static AggregateMarkingStruct AggregateMarking(Random r)
+    {
+        var data = new byte[AggregateMarkingStruct.DataLength];
+        r.NextBytes(data);
+        return new AggregateMarkingStruct(PickEnum<MarkingEncodingEnum8>(r), data);
+    }
+
+    public static string[] ObjectNames(Random r) => Enumerable.Range(0, r.Next(0, 6)).Select(_ => ObjectName(r)).ToArray();
+
     public static string ObjectName(Random r)
     {
         var length = r.Next(0, 40);

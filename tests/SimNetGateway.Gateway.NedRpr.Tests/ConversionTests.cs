@@ -390,8 +390,10 @@ public class ConversionTests
     }
 
     [Fact]
-    public void Detonation_result_mapping_is_a_bijection_on_0_to_3_and_rejects_everything_else()
+    public void Detonation_result_mapping_is_a_bijection_between_the_pivot_0_to_3_and_the_four_FOM_codes_and_rejects_everything_else()
     {
+        // pivot -> FOM numbering (R-105): Other 0, EntityImpact 1, GroundImpact 3, Detonation 5
+        int[] fom = [0, 1, 3, 5];
         for (int pivot = -300; pivot <= 300; pivot++)
         {
             bool valid = pivot is >= 0 and <= 3;
@@ -404,7 +406,7 @@ public class ConversionTests
             }
 
             Assert.Equal(pivot, (int)ned);
-            Assert.Equal(pivot, (int)rpr);
+            Assert.Equal(fom[pivot], (int)rpr);
             Assert.True(NedRprConversions.TryResultToPivot(ned, out int p1));
             Assert.True(NedRprConversions.TryResultFromRpr(rpr, out int p2));
             Assert.Equal(pivot, p1);
@@ -414,13 +416,18 @@ public class ConversionTests
         for (int b = 0; b <= 255; b++)
         {
             Assert.Equal(b <= 3, NedRprConversions.TryResultToPivot((NedDetonationResult)b, out int p));
-            Assert.Equal(b <= 3, NedRprConversions.TryResultFromRpr((RprDetonationResult)b, out int q));
             Assert.Equal(b <= 3 ? b : 0, p);
-            Assert.Equal(b <= 3 ? b : 0, q);
+            bool fromRpr = NedRprConversions.TryResultFromRpr((RprDetonationResult)b, out int q);
+            Assert.Equal(b is 0 or 1 or 3 or 5, fromRpr);
+            Assert.Equal(b switch { 0 => 0, 1 => 1, 3 => 2, 5 => 3, _ => 0 }, q);
         }
 
         Assert.True(NedRprConversions.TryResultToRpr(2, out var ground));
         Assert.Equal(RprDetonationResult.GroundImpact, ground);
+        Assert.Equal(3, (int)ground);
+        Assert.True(NedRprConversions.TryResultToRpr(3, out var detonation));
+        Assert.Equal(RprDetonationResult.Detonation, detonation);
+        Assert.Equal(5, (int)detonation);
         Assert.True(NedRprConversions.TryResultFromPivot(3, out var det));
         Assert.Equal(NedDetonationResult.Detonation, det);
     }

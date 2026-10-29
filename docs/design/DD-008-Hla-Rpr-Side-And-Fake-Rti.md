@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | approved: P-77 .. P-86 are R-100 .. R-109; HLA-1 built (section 12); HLA-2 next |
+| **Status** | approved: P-77 .. P-86 are R-100 .. R-109; HLA-1 and HLA-2 built (section 12) |
 | **Tasks** | T-021 |
 | **Rulings honoured** | R-002, R-003, R-012, R-018, R-019 .. R-022, R-045, R-047, R-050, R-051, R-053, R-054, R-063 .. R-067, R-089 (HLA readiness) |
 | **Inputs** | RPR FOM 2.0 modules (SISO-STD-001.1-2015 Annex A, copy in `github.com/IVCTool/TS_RPR_FOM`, `RPR-FOM-v2.0/RPR-{Foundation,Base,Physical,Warfare,Enumerations,Aggregate}_v2.0.xml`); IEEE 1516.1-2010 Java/C++ interfaces as copied in `github.com/openlvc/portico` (`codebase/src/java/portico/hla/rti1516e`, `codebase/src/cpp/ieee1516e/include/RTI`); padded encoders of `github.com/Pitch-Technologies/FedProClient` (`cpp/src/fedpro/services-common/encoding`) and `github.com/TNO-MST/object-oriented-rti`; the DIS <-> RPR gateway `github.com/openlvc/disco` |
@@ -126,14 +126,14 @@ drops (the DIS codec rule of DD-006).
 | `Protocol.Rpr` message (direction) | HLA |
 |---|---|
 | `RprRegisterObject(Token, EntityType)` (out) - **gains `EntityType`** (the class depends on it) | `registerObjectInstance(class)` with an RTI-generated name (Disco precedent); the class from the entity type (3.5); answered by `RprObjectRegistered(Token, Handle)` on the next pump; the transport keeps handle <-> name |
-| `RprObjectUpdate(Handle, fields)` (out) | `updateAttributeValues`: `EntityType`, `EntityIdentifier`, `Marking` (ASCII, 11), `ForceIdentifier`, `DamageState`, `Spatial` (one variant from the transport's per-object spatial cache: any spatial field change re-encodes the whole variant), `ArticulatedParametersArray` (when present). `DamagePercent` has no RPR 2.0 attribute: dropped, one warning |
+| `RprObjectUpdate(Handle, fields)` (out) | `updateAttributeValues`: `EntityType`, `EntityIdentifier`, `Marking` (ASCII, 11), `ForceIdentifier`, `DamageState`, `Spatial` (one variant from the transport's per-object spatial cache: any spatial field change re-encodes the whole variant), `ArticulatedParametersArray` (as built: not carried, no message field has it; see section 12a). `DamagePercent` has no RPR 2.0 attribute: dropped, one warning |
 | discover + reflect (in) | `RprObjectUpdate(Handle, fields)` with exactly the decoded attributes; on discovery the transport calls `requestAttributeValueUpdate` (Disco precedent) |
 | `removeObjectInstance` (in) | `RprObjectRemoved(Handle)` |
 | `RprObjectRemoved` / entity removed (out) | `deleteObjectInstance` |
 | `provideAttributeValueUpdate` (in) | **new** `RprUpdateRequested(Handle)` -> a new small NedRpr module asks `RprPublication` for a full update (R-003) |
 | `RprWeaponFire` / `RprMunitionDetonation` (both ways) - **gain** the RPR fields `FuseType`, `WarheadType`, `RateOfFire`, `InitialVelocity` / `FinalVelocity`, `FireControlSolutionRange`, `RelativeDetonationLocation`, `MunitionObject` | `sendInteraction` / `receiveInteraction` of `HLAinteractionRoot.WeaponFire` / `.MunitionDetonation`; object references (`FiringObjectIdentifier`, `TargetObjectIdentifier`, `MunitionObjectIdentifier`) are **object instance names** (`RTIobjectId`), empty = none; `EventIdentifier` = (`EventCount`, issuing object's name) <-> the message's `Guid` through a bounded correlation map (30 s, like the DIS fire correlator) |
 | `RprAggregateEntity` (in) | `HLAobjectRoot.BaseEntity.AggregateEntity` reflections (attribute set taken from `RPR-Aggregate_v2.0.xml` by the implementing agent and recorded in the as-built notes) |
-| `RprSimulationControl` | **not carried**: RPR FOM 2.0 has no simulation-management interactions in the modules used; counted and dropped with one warning (verify in HLA-2; P-84) |
+| `RprSimulationControl` | **not carried**: RPR FOM 2.0 has no simulation-management interactions in the modules used; counted and dropped with one warning (verified in HLA-2 against the official RPR FOM 2.0 modules: the only interaction classes are `Collision`, `WeaponFire` and `MunitionDetonation`; R-107) |
 
 `RprDetonationResult` takes the FOM's numbering (Other 0, EntityImpact 1, EntityProximateDetonation 2,
 GroundImpact 3, GroundProximateDetonation 4, Detonation 5, None 6) - today it has GroundImpact 2 / Detonation 3;
@@ -413,7 +413,7 @@ RPR FOM 2.0 XML modules; `RprFom2.Model()` is checked against them by a test.
 | Stage | Content | Exit |
 |---|---|---|
 | HLA-1 | `Protocol.Rpr`: `Hla` port, `Hla.Encoding`, `Fom` (`FomModel`, `RprFom2` model + codecs); `Transport.FakeRti`; test projects | encoding goldens, fake-RTI reference-model invariants |
-| HLA-2 | `Transport.HlaRpr`; message additions (3.4); `RprUpdateRequested` module in NedRpr; `RprDetonationResult` renumbered | transport tests; all existing suites green |
+| HLA-2 (built) | `Transport.HlaRpr`; message additions (3.4); `RprUpdateRequested` module in NedRpr; `RprDetonationResult` renumbered | transport tests; all existing suites green |
 | HLA-3 | Convoy Ambush over the fake RTI; `SimulatedRti` retired; Demo/Viewer option to run the RPR side over the fake RTI | 48/48 |
 | HLA-4 | real binding (section 9) | interop with a real RTI |
 
@@ -466,4 +466,123 @@ AggregateEntity (parent `BaseEntity`, module `RPR-Aggregate_v2.0.xml`), attribut
 (RTIobjectIdArray), `ForceIdentifier` (ForceIdentifierEnum8), `Formation` (FormationEnum32), `NumberOfSilentEntities`
 (Integer16), `NumberOfVariableDatums` (UnsignedInteger32), `SilentAggregates` (SilentAggregateStructLengthlessArray),
 `SilentEntities` (SilentEntityStructLengthlessArray), `SubAggregateIdentifiers` (RTIobjectIdArray), `VariableDatums`
-(VariableDatumStructLengthlessArray). The model only names them; no codecs exist for these types yet (HLA-2 decides which are used).
+(VariableDatumStructLengthlessArray). HLA-1 only named them; HLA-2 uses `AggregateMarking`, `EntityType`, `ForceIdentifier` and `EntityIdentifiers` (codecs added, see the HLA-2 notes below); the rest is not decoded.
+
+## 12a. As-built notes (stage HLA-2, T-021)
+
+Built: `Transport.HlaRpr` (`RprHlaConnection`, `RprHlaSettings`, `RprHlaClasses`; internal `RprHlaHandles`, `SpatialCache`,
+`EventCorrelation`), the message changes of 3.4, the NedRpr module `RprUpdateRequestedResponder`, the renumbered
+`RprDetonationResult`, new codecs in `Protocol.Rpr.Fom`, test project `Transport.HlaRpr.Tests` with the `ScriptedRprFederate`
+peer. `Showcase` / `NedRprHost` still run on `SimulatedRti` (HLA-3 retires it).
+
+```mermaid
+classDiagram
+    direction LR
+    class RprHlaConnection {
+        <<Transport.HlaRpr>>
+        +Start()
+        +Pump()
+        +Drain(sink, budget) int
+        +Send(IRprMessage)
+        +Dispose()
+        +TryGetCachedSpatial(handle) SpatialVariantStruct
+        +Counters and Warnings
+    }
+    class RprHlaHandles {
+        <<internal>>
+        +Resolve(IRtiAmbassador)
+    }
+    class SpatialCache {
+        <<internal>>
+        +Merge(update) bool
+        +TryBuild(spatial) bool
+    }
+    class EventCorrelation {
+        <<internal>>
+        +ForOutbound(guid, issuer)
+        +ForInbound(key)
+        +Expire(now)
+    }
+    class RprHlaClasses {
+        <<static>>
+        +NameFor(DisEntityType) string
+    }
+    class RprUpdateRequestedResponder {
+        <<NedRpr module>>
+    }
+    class RprPublication {
+        +AddUpdateRequest(entity)
+        +SendRequestedUpdates()
+    }
+    RprHlaConnection ..|> IInboundChannel
+    RprHlaConnection ..|> IOutboundChannel
+    RprHlaConnection ..|> IFederateAmbassador
+    RprHlaConnection --> IRtiAmbassador
+    RprHlaConnection *-- RprHlaHandles
+    RprHlaConnection *-- EventCorrelation
+    RprHlaConnection o-- SpatialCache
+    RprHlaConnection ..> RprHlaClasses
+    RprHlaConnection ..> RprFom2
+    RprUpdateRequestedResponder --> RprPublication
+```
+
+Caption - what the picture shows that prose hid: the transport is one class (split over three files by direction) with three small
+helpers; the only state that survives a message is the two name/handle maps, the per-object `SpatialCache` and the
+`EventCorrelation`; the gateway side of the new feature is one module plus two members of `RprPublication` (no second way to build a
+full update).
+
+The class diagram of section 4 holds. Deviations and decisions the design left open:
+
+| Topic | As built | Why |
+|---|---|---|
+| Message fields (3.4) | the new RPR fields are **init-only properties** on `RprWeaponFire` / `RprMunitionDetonation` (the positional constructors are unchanged, so no caller changed): `FuseType`, `WarheadType`, `RateOfFire` as `ushort?`, `InitialVelocity` / `FinalVelocity` / `RelativeDetonationLocation` as `RprVector?`, `FireControlSolutionRange` as `float?`, `MunitionObject` as `RprObjectHandle?`. Null = not known: the transport sends the FOM default (Other, 0, zero vector, empty reference) and delivers null for a parameter the peer did not send or that did not decode. The NED-RPR gateway fills none of them | the gateway does not know them; a DD-008 3.4 "optional where the gateway may not know them" |
+| `QuantityFired` of a detonation | `RprMunitionDetonation` has no quantity; the transport sends 1 | the DIS-aligned message never carried one |
+| `RprDetonationResult` | 7 enumerators (FOM 0 .. 6). FOM codes 7 .. 33 inbound become `Other`. `NedRprConversions.TryResultToRpr` maps pivot 0, 1, 2, 3 to 0, 1, 3, 5; `TryResultFromRpr` is its inverse and rejects 2, 4, 6 (no pivot counterpart; nothing calls it for production traffic) | NED-visible behaviour unchanged: the NED side and the pivot keep their numbering (`NedRprConversions` tests, the event tests by enumerator name) |
+| `RprRegisterObject.EntityType` | filled by `RprPublication.TryRegister` from the entity's TKB through `ToDis` (the catalogue default with the usual one-time warning for an unknown TKB) | the class depends on it (3.5) |
+| `RprUpdateRequestedResponder` | one module: the ingress handler notes the entity (only a publication of ours: `Echo` resolution; unknown handle or RPR-origin entity ignored) and publishes the internal event `RprPublication.UpdateRequested`; its rule "Send" calls `RprPublication.SendRequestedUpdates`, which sends the same full update as the heartbeat (`BuildFull(predictToNow: true)`, pending fields folded in) and counts as a send for the heartbeat. A pending (not bound) entity is not answered. Each request message is answered; the engine does not collapse requests | R-003 (new small module); ingress cannot send, the same pattern as the registration answer |
+| Duplicate requests | the transport collapses `RprUpdateRequested` for a handle that is still waiting in its inbound queue (several federates asking in one pump = one message) | cheap, keeps a request storm out of the engine |
+| Pump order | answers of the registrations made since the last pump are queued first, then `EvokeMultipleCallbacks`, then the callbacks are processed in arrival order (discovery -> value request, reflect -> update, interaction -> event, provide -> request), then the correlations are aged. Callbacks only enqueue (R-018); the value request after a discovery is an RTI call made after the evoke, never inside a callback | the fake RTI throws `CallNotAllowedFromWithinCallback`; 5.2 and 6 |
+| Registration failure | an RTI exception while registering is counted (`SendErrors`) and no `RprObjectRegistered` follows; the entity stays pending (the gateway has no failure answer) | no message type for it; a real federate that cannot register has nothing to run |
+| Spatial | `SpatialCache` merges the spatial fields of every update. The variant needs a position: without one nothing is sent for `Spatial` (the other attributes of the update are), unknown orientation / vectors are zero, `IsFrozen` is false. The algorithm is the gateway's when it is DIS 1 .. 9, otherwise Static without a known velocity and FPW with one (so Other, absent and 10+ never reach the wire). Fields the algorithm does not carry are zeroed in the cache, so the cache equals what a peer decodes (`TryGetCachedSpatial`) | 3.4; success condition a |
+| Inbound spatial | the update carries location, orientation and algorithm, and a velocity / acceleration / angular velocity only when the algorithm carries it (a switch from FPW to Static does not clear a stored velocity on the gateway side) | "exactly the decoded attributes" |
+| Attribute sets | published at each of the nine classes of 3.5: `EntityType`, `EntityIdentifier`, `Spatial`, `Marking`, `ForceIdentifier`, `DamageState`. Subscribed at `PhysicalEntity` the same six; at `AggregateEntity`: `AggregateMarking`, `EntityType`, `ForceIdentifier`, `EntityIdentifiers`. **`ArticulatedParametersArray` is neither published nor subscribed** (no message field carries it); `DamagePercent` is dropped (one warning, counted) | a message has to carry what the transport sends |
+| New codecs (`RprFom2.Hla2.cs`) | `AggregateMarkingStruct` (encoding octet + 31 octets, 32 octets, checked against `RPR-Aggregate_v2.0.xml`), `RTIobjectIdArray` (HLAvariableArray of null terminated names: int32 count then the names, no padding; checked against `RPR-Foundation_v2.0.xml`), `UnsignedInteger16`, `UnsignedInteger32`, `LengthMeterFloat32`; goldens and the random round-trip / truncation properties in `Protocol.Rpr.Tests` | needed by the aggregate and interaction mappings |
+| Aggregates | one `RprAggregateEntity` per reflection that decoded any aggregate attribute; the state (marking, type, force, member names) is kept per object across partial reflections. The member names are mapped to DIS ids learnt from the members' reflected `EntityIdentifier` (a member not known yet is left out); when a member's id becomes known, every aggregate that names it is emitted again, after the member's own update | the NED-RPR linker links late members itself, this makes the member list complete as early as the transport can |
+| Interactions out | every FOM parameter is sent: those the message has, else FOM defaults (`FireMissionIndex` 0, `QuantityFired` of a detonation 1, `RateOfFire` 0, `FuseType` / `WarheadType` Other when null or not a FOM enumerator, empty `MunitionObjectIdentifier`, empty `ArticulatedPartData`). A handle the transport cannot name (unknown, or null) is the empty reference | a receiver decodes whole interactions |
+| Event correlation | ONE map for both directions (`Guid` <-> (count, issuing object name)) so a peer that answers a gateway fire with a detonation of the same identifier gets the gateway's `Guid`. An entry lives 30 s of the connection's clock from its creation (age >= 30 s is gone, no refresh on use), at most 4096 entries. Outbound counts are per issuing object (the firing object's RTI name, empty when none or unknown). An inbound identifier that is missing or does not decode cannot be correlated: the event gets a `Guid` of its own and the error is counted | 3.4 |
+| Counters, warnings | the transport has no engine diagnostics: counters (`DecodeErrors`, `EncodeErrors`, `SendErrors`, `CallbackErrors`, `DroppedDamagePercent`, `DroppedSimulationControl`, `RejectedOutbound`, `UnknownObjectCallbacks`) and a `Warning` event plus `Warnings` list (each kind once). A host that wants them in the engine's diagnostics forwards the event | a transport references the engine's ports only |
+| `Inbound` source / name | the channel takes its `SourceId` and name in the constructor (the host builds the builder first and reads the port's source) | the engine checks that the bound channel reports the port's source |
+| `Showcase` / `NedRprHost` | unchanged; the end-to-end tests of this stage build their own host in `Transport.HlaRpr.Tests` (builder, `RprHlaConnection` bound as inbound and outbound `rpr` port, host tick = pump, engine tick, peer evoke) | HLA-3 does the showcase |
+| Peer detonation does not reach NED | the NED-RPR gateway has **no inbound handler for `RprMunitionDetonation`**: this matches its approved design (DD-001 mapping table: detonations go NED -> RPR only; the PoC adjudicates damage on the NED side), so nothing is added; the transport delivers it (`EndToEndTests`). Success condition g of the HLA-2 brief over-asked here (reviewer's note). The HROT gateway handles inbound detonations (R-097) | resolved by the reviewer against DD-001, not a user question |
+| Existing tests changed | `ProfileTests` module / rule lists (the new module), `ProtocolTests` message inventory and enum numbering, `ConversionTests` detonation mapping, `SimulatedRtiTests` (constructor argument), `Engine.Monitoring.Tests.IntegrationTests` (one rule more: "46 rules" replaces "45 rules" in the observed report) | mechanical consequences of the new module / fields |
+
+Test inventory and the mutation checks (R-064 / R-065): see the T-021 row of `docs/TASKS.md` and the report of the commit; the
+mutation table of this stage is:
+
+| Mutation | Failing tests |
+|---|---|
+| spatial cache merge dropped (each update starts from an empty cache) | partial-update property test (300 seeds) + 3 directed spatial tests |
+| Aircraft domain registered as GroundVehicle | class-choice theory, interleaved-registration test |
+| event count not incremented (distinct events collide) | distinct-events test, both expiry tests |
+| inbound correlation key ignores the count | inbound same-Guid / distinct-events test |
+| detonation gets a fresh EventIdentifier instead of the correlated one | fire/detonation identifier tests, end-to-end NED fire + detonation |
+| registration answer queued inside Send | answer-on-next-pump test |
+| a decode error aborts the whole reflection | corrupt-attribute, all-corrupt, random-corruption (300 seeds), garbage (300 seeds) |
+| ForceIdentifier Friendly_2 mapped to Other | force-table test, Friendly_2 test, random reflections, aggregate test |
+| correlation never expires | inbound and outbound expiry tests |
+| correlation expires one instant late (< instead of <=) | exact-30-second boundary tests |
+| warning given every time | DamagePercent and RprSimulationControl one-warning tests |
+| no value request after discovery | discovery/value-request test, aggregate request test, lifecycle tests |
+| provide callback ignored | RprUpdateRequested tests, end-to-end value request |
+| dead reckoning Other sent | partial-update property test, DR rule test |
+| inbound spatial delivers vectors the algorithm does not carry | spatial-fields test, random reflections |
+| aggregate not re-emitted when a late member becomes known | late-member aggregate test |
+| object removal does not delete the RTI instance | removal test |
+| unknown object name mapped to a handle | inbound fire / detonation tests |
+| DamagePercent sent as a damage state | DamagePercent test |
+| registration answers not cleared (delivered on every pump) | 49 tests (answers exactly once) |
+| duplicate value requests not collapsed | request-collapsing test |
+| NedRpr: responder sends nothing | 4 UpdateRequestedTests + end-to-end value request |
+| NedRpr: detonation result keeps the old numbering | ConversionTests, the NED detonation-result theory, end-to-end NED detonation |
+| NedRpr: RprRegisterObject without the entity type | end-to-end class test |
+

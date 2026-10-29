@@ -71,6 +71,7 @@ public sealed class NedRprProfile : IGatewayProfile
         builder.AddModule(new RprObjectRemovedIngress(maps));
         builder.AddModule(new RprWeaponFireIngress(schema, maps, catalog));
         builder.AddModule(new RprObjectRegisteredIngress(maps, publication));
+        builder.AddModule(new RprUpdateRequestedResponder(maps, publication));
 
         // NED egress (the identity rule introduces an entity before the spatial and damage rules look for its id)
         var introductions = new NedIntroductions();

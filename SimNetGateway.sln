@@ -72,6 +72,9 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimNetGateway.Protocol.Hrot.Tests", "tests\SimNetGateway.Protocol.Hrot.Tests\SimNetGateway.Protocol.Hrot.Tests.csproj", "{831FEAD7-EED4-4D18-8CF9-D3B80FC68108}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimNetGateway.Gateway.HrotDis.Tests", "tests\SimNetGateway.Gateway.HrotDis.Tests\SimNetGateway.Gateway.HrotDis.Tests.csproj", "{8FF44298-94E2-4F68-BC91-6F81A60B1729}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimNetGateway.Transport.HlaRpr", "src\Transports\SimNetGateway.Transport.HlaRpr\SimNetGateway.Transport.HlaRpr.csproj", "{BC110B14-EEC6-4B28-960C-5245C7277792}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimNetGateway.Transport.HlaRpr.Tests", "tests\SimNetGateway.Transport.HlaRpr.Tests\SimNetGateway.Transport.HlaRpr.Tests.csproj", "{A7D915E6-403B-45F5-8E4F-AF634A9022F8}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -186,6 +189,14 @@ Global
 		{8FF44298-94E2-4F68-BC91-6F81A60B1729}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8FF44298-94E2-4F68-BC91-6F81A60B1729}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8FF44298-94E2-4F68-BC91-6F81A60B1729}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BC110B14-EEC6-4B28-960C-5245C7277792}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BC110B14-EEC6-4B28-960C-5245C7277792}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BC110B14-EEC6-4B28-960C-5245C7277792}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BC110B14-EEC6-4B28-960C-5245C7277792}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A7D915E6-403B-45F5-8E4F-AF634A9022F8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A7D915E6-403B-45F5-8E4F-AF634A9022F8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A7D915E6-403B-45F5-8E4F-AF634A9022F8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A7D915E6-403B-45F5-8E4F-AF634A9022F8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{DCE382F5-2909-4DF2-BD70-F3B5E64103CD} = {EE970E5A-D607-4A18-BBE0-DD84B4A4ABCE}
@@ -221,5 +232,7 @@ Global
 		{7B2C6F78-E716-463D-BEBF-913898E6D8F1} = {5C03BD28-2E59-4D96-AE0F-D44895F9A9BA}
 		{831FEAD7-EED4-4D18-8CF9-D3B80FC68108} = {75B601E7-044C-480F-8C7F-D0C9AC1F6F05}
 		{8FF44298-94E2-4F68-BC91-6F81A60B1729} = {75B601E7-044C-480F-8C7F-D0C9AC1F6F05}
+		{BC110B14-EEC6-4B28-960C-5245C7277792} = {5A1F0C7E-3B9D-4E62-8C41-7D0A9B2E6F13}
+		{A7D915E6-403B-45F5-8E4F-AF634A9022F8} = {75B601E7-044C-480F-8C7F-D0C9AC1F6F05}
 	EndGlobalSection
 EndGlobal

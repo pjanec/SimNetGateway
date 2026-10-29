@@ -183,7 +183,7 @@ public static class NedRprConversions
         return false;
     }
 
-    // ---- detonation result (identical numbering) ---------------------------------------------------------------------
+    // ---- detonation result (pivot and NED numbering identical; RPR takes the FOM numbering, R-105) ---------------------
 
     public static bool IsValidDetonationResult(int result) => result is >= 0 and <= 3;
 
@@ -211,28 +211,30 @@ public static class NedRprConversions
         return true;
     }
 
+    /// <summary>Pivot (Other 0, EntityImpact 1, GroundImpact 2, Detonation 3) to the FOM numbering (0, 1, 3, 5).</summary>
     public static bool TryResultToRpr(int pivot, out RprDetonationResult result)
     {
-        result = default;
-        if (!IsValidDetonationResult(pivot))
+        switch (pivot)
         {
-            return false;
+            case 0: result = RprDetonationResult.Other; return true;
+            case 1: result = RprDetonationResult.EntityImpact; return true;
+            case 2: result = RprDetonationResult.GroundImpact; return true;
+            case 3: result = RprDetonationResult.Detonation; return true;
+            default: result = default; return false;
         }
-
-        result = (RprDetonationResult)pivot;
-        return true;
     }
 
+    /// <summary>The inverse of <see cref="TryResultToRpr"/>; the FOM codes the pivot has no counterpart for are rejected.</summary>
     public static bool TryResultFromRpr(RprDetonationResult result, out int pivot)
     {
-        pivot = (byte)result;
-        if (IsValidDetonationResult(pivot))
+        switch (result)
         {
-            return true;
+            case RprDetonationResult.Other: pivot = 0; return true;
+            case RprDetonationResult.EntityImpact: pivot = 1; return true;
+            case RprDetonationResult.GroundImpact: pivot = 2; return true;
+            case RprDetonationResult.Detonation: pivot = 3; return true;
+            default: pivot = 0; return false;
         }
-
-        pivot = 0;
-        return false;
     }
 
     // ---- DIS ids ---------------------------------------------------------------------------------------------------
