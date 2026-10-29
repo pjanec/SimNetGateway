@@ -96,8 +96,16 @@ neither the ECS nor HROT.
   `Gateway.HrotDis`, `Transport.DisUdp` - all BCL-only, `net8.0`. Copied read-only at a recorded commit by
   `scripts/sync-simnetgateway.sh` (the `sync-sumosharp.sh` shape: scratch clone outside the HROT tree,
   `UPSTREAM.md`, `--check`, `--verify`). Our own `Directory.Build.props` is copied with it, so the vendored
-  projects build with SimNetGateway's settings (MSBuild stops at the nearest props file). Tests, viewer, demo and
+  projects build with SimNetGateway's settings (MSBuild stops at the nearest props file) and so is the root `.editorconfig`
+  (`root = true`, no rules: it stops the host's analyzer severities from applying to the vendored folder; found necessary by the H3
+  dry run). Tests, viewer, demo and
   showcase stay upstream.
+  **Dry run (H3, `bash scripts/vendor-dry-run.sh`):** copies exactly these six projects plus the root `Directory.Build.props` and
+  `.editorconfig` (and each project's LICENSE / NOTICE.md) into a scratch folder below a foreign parent with hostile `Directory.Build.props`
+  (net6.0, LangVersion 7.3, TreatWarningsAsErrors), `Directory.Build.targets` (warnings as errors, warning level 9999, documentation file),
+  `Directory.Packages.props` (central package management on) and `.editorconfig` (all analyzer rules errors), builds each of the
+  six and fails unless every build has 0 warnings and 0 errors. Result and what had to change: DD-006 section 14, H3.
+  The six projects use no package and read no repository-root file other than `Directory.Build.props`.
 - **The pack** (`Hrot.DisGateway`, a new HROT project referenced by `Hrot.Editor`): the capability, one system,
   the adapter, the poser. It is the "installable module" - one assembly, one line in the editor's capability plan
   (R-093); it contributes nothing unless the gateway configuration file exists (R-094, section 3a).
