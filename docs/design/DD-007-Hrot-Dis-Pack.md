@@ -92,7 +92,8 @@ Caption - what the picture shows that prose hid: **nothing crosses a process bou
 socket is DIS. The pack is the one place that knows both the ECS and `Protocol.Hrot`; the vendored gateway knows
 neither the ECS nor HROT.
 
-- **Vendored gateway** (`FDP/ExtDeps/SimNetGateway`): `Engine`, `Common`, `Protocol.Dis7`, `Protocol.Hrot`,
+- **Vendored gateway** (`FDP/ExtDeps/SimNetGateway`): `Engine`, `Common`, `Protocol.Dis7`, `Protocol.Hrot`, `Protocol.Rpr`
+  (the HLA side of `Gateway.HrotDis` speaks it, DD-009; the HLA transport and the RTI binding are not vendored),
   `Gateway.HrotDis`, `Transport.DisUdp` - all BCL-only, `net8.0`. Copied read-only at a recorded commit by
   `scripts/sync-simnetgateway.sh` (the `sync-sumosharp.sh` shape: scratch clone outside the HROT tree,
   `UPSTREAM.md`, `--check`, `--verify`). Our own `Directory.Build.props` is copied with it, so the vendored
@@ -100,12 +101,12 @@ neither the ECS nor HROT.
   (`root = true`, no rules: it stops the host's analyzer severities from applying to the vendored folder; found necessary by the H3
   dry run). Tests, viewer, demo and
   showcase stay upstream.
-  **Dry run (H3, `bash scripts/vendor-dry-run.sh`):** copies exactly these six projects plus the root `Directory.Build.props` and
+  **Dry run (H3, `bash scripts/vendor-dry-run.sh`):** copies exactly these seven projects plus the root `Directory.Build.props` and
   `.editorconfig` (and each project's LICENSE / NOTICE.md) into a scratch folder below a foreign parent with hostile `Directory.Build.props`
   (net6.0, LangVersion 7.3, TreatWarningsAsErrors), `Directory.Build.targets` (warnings as errors, warning level 9999, documentation file),
   `Directory.Packages.props` (central package management on) and `.editorconfig` (all analyzer rules errors), builds each of the
-  six and fails unless every build has 0 warnings and 0 errors. Result and what had to change: DD-006 section 14, H3.
-  The six projects use no package and read no repository-root file other than `Directory.Build.props`.
+  seven and fails unless every build has 0 warnings and 0 errors. Result and what had to change: DD-006 section 14, H3.
+  The seven projects use no package and read no repository-root file other than `Directory.Build.props`.
 - **The pack** (`Hrot.DisGateway`, a new HROT project referenced by `Hrot.Editor`): the capability, one system,
   the adapter, the poser. It is the "installable module" - one assembly, one line in the editor's capability plan
   (R-093); it contributes nothing unless the gateway configuration file exists (R-094, section 3a).
@@ -127,7 +128,7 @@ limits R-054 - hardcoded configuration - for this gateway's runtime settings.)
               "hrotControlsDis": true, "disControlsHrot": false },
   "hla":    { "rti": "fake", "federation": "RPR", "federateName": "HROT-Gateway",
               "federateType": "SimNetGateway", "fomModules": ["RPR-FOM-2.0"], "createFederation": true,
-              "heartbeatS": 5, "timeoutS": 12 }
+              "positionThresholdM": 1.0, "orientationThresholdDeg": 3.0, "heartbeatS": 5, "timeoutS": 12 }
 }
 ```
 
@@ -136,6 +137,7 @@ limits R-054 - hardcoded configuration - for this gateway's runtime settings.)
 | File missing | the pack contributes no system, no component registration, no socket - the gateway is **not instantiated** |
 | File present but invalid (JSON error, unknown key, out-of-range value) | not instantiated; one error naming the file, the key and the reason (log + editor notification) |
 | Sections | `shared` - values every side uses (DIS site/application = RPR `EntityIdentifier` federate id, damage and health mapping, unknown-type fallback, replay rule); `hrot` - the pack's own; `dis`, `hla` - one per protocol side; a side runs when its section is present and `enabled` is not false; no side running = not instantiated (warning) |
+| HLA send policy | `hla.positionThresholdM` / `hla.orientationThresholdDeg` (>= 0, defaults 1 m / 3 deg) and `hla.heartbeatS` are the HLA side's own dead-reckoning thresholds and keep-alive (DD-009, R-117); the DIS side reads `dis.*`, never the other way round; `hla.timeoutS` reaps silent `rpr` entities |
 | Defaults | every key except `dis.exerciseId` and `hla.federation` has the default shown; a missing optional key takes it; `enabled` (per side) defaults to true - `"enabled": false` keeps a section but turns its side off |
 | When read | once, when the editor composes its capabilities; a change takes effect at the next start |
 | Where (P-87) | `simnetgateway.json` in the process working directory (beside HROT's other configuration files), overridable by the environment variable `SIMNETGATEWAY_CONFIG` (a path) |

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Vendorability dry run (R-092, DD-007 section 2, DD-006 section 14 / H3).
 #
-# HROT vendors six projects of this repository (Engine, Common, Protocol.Dis7, Protocol.Hrot, Gateway.HrotDis, Transport.DisUdp) with our
+# HROT vendors seven projects of this repository (Engine, Common, Protocol.Dis7, Protocol.Hrot, Protocol.Rpr, Gateway.HrotDis, Transport.DisUdp) with our
 # root Directory.Build.props into FDP/ExtDeps/SimNetGateway, below HROT's own props / targets / central package management / editorconfig.
 # This script copies exactly that set into a scratch folder nested under a FOREIGN parent that contains hostile build files, builds every
-# one of the six projects with 'dotnet build' and fails unless each build succeeds with 0 warnings and 0 errors.
+# one of the seven projects with 'dotnet build' and fails unless each build succeeds with 0 warnings and 0 errors.
 #
 # Usage: bash scripts/vendor-dry-run.sh [--keep] [scratch-parent-dir]
 #   --keep   do not delete the scratch folder afterwards (it is printed)
@@ -32,6 +32,7 @@ PROJECTS=(
   "src/Common/SimNetGateway.Common"
   "src/Protocols/SimNetGateway.Protocol.Dis7"
   "src/Protocols/SimNetGateway.Protocol.Hrot"
+  "src/Protocols/SimNetGateway.Protocol.Rpr"
   "src/Gateways/SimNetGateway.Gateway.HrotDis"
   "src/Transports/SimNetGateway.Transport.DisUdp"
 )
@@ -91,7 +92,7 @@ for p in "${PROJECTS[@]}"; do
   tar -C "$ROOT/$p" --exclude=bin --exclude=obj -cf - . | tar -C "$VENDOR/$p" -xf -
 done
 
-# ---- build the six -------------------------------------------------------------------------------------------------------------------
+# ---- build the seven -------------------------------------------------------------------------------------------------------------------
 FAILED=0
 for p in "${PROJECTS[@]}"; do
   name="$(basename "$p")"
