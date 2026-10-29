@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | in review - proposals P-90 .. P-94 await the user |
+| **Status** | approved: P-90 .. P-94 are R-114 .. R-118 |
 | **Tasks** | T-024 |
 | **Rulings honoured** | R-003, R-045, R-047, R-068, R-069, R-079 .. R-113 (esp. R-094 configuration file, R-100 .. R-109 HLA side) |
 | **Inputs** | DD-006 section 14 (as-built H2a / H2b: `DisPublication` with dead-reckoned send policy), DD-008 sections 3.4 - 3.6 and 12 - 12b (HLA transport, fake RTI, Convoy Ambush over HLA), `Gateway.NedRpr/Services/RprPublication.cs` (asynchronous registration None -> Pending -> Bound) |
@@ -195,8 +195,8 @@ with both transports pumped first (DD-008 section 6 order).
 
 | ID | Proposal (lean) | Main alternative |
 |---|---|---|
-| **P-90** | Extract **`DeadReckonedSendPolicy`** into Common from `DisPublication`; DIS and RPR sides of the HROT gateway each use an instance. | Leave it in `DisPublication` and let the RPR side call it (RPR then depends on DIS being enabled). |
-| **P-91** | Extract **`AsyncRegistration<THandle>`** into Common from NedRpr's `RprPublication`; both gateways use it; NedRpr behaviour proven unchanged by the HLA-3 goldens. | Copy the state machine into the HROT gateway (two implementations). |
-| **P-92** | **Origin rule**: only `hrot` entities and events go to DIS and HLA; `dis` and `rpr` both become HROT replicas; no DIS <-> HLA relaying. | Relay DIS <-> HLA through the gateway (a bridge product of its own; relayed-origin handling). |
-| **P-93** | **HROT gateway RPR modules** of 3.3 in `Gateway.HrotDis/Rpr`, configured by the `hla` section with new keys `positionThresholdM` / `orientationThresholdDeg`, stale reaping after `hla.timeoutS`. | Reuse NedRpr's modules directly (they are bound to the NED pivot). |
-| **P-94** | **Stage** `HLA-H` (T-024): extraction + refactor first (both gateways green, goldens identical), then the HROT RPR side; the HROT pack (H5) composes the HLA transport when `hla` is present, with `rti: "fake"` the only value until HLA-4. | HROT pack DIS-only until a real RTI exists. |
+| **P-90** (approved, R-114) | Extract **`DeadReckonedSendPolicy`** into Common from `DisPublication`; DIS and RPR sides of the HROT gateway each use an instance. | Leave it in `DisPublication` and let the RPR side call it (RPR then depends on DIS being enabled). |
+| **P-91** (approved, R-115) | Extract **`AsyncRegistration<THandle>`** into Common from NedRpr's `RprPublication`; both gateways use it; NedRpr behaviour proven unchanged by the HLA-3 goldens. | Copy the state machine into the HROT gateway (two implementations). |
+| **P-92** (approved, R-116) | **Origin rule**: only `hrot` entities and events go to DIS and HLA; `dis` and `rpr` both become HROT replicas; no DIS <-> HLA relaying. | Relay DIS <-> HLA through the gateway (a bridge product of its own; relayed-origin handling). |
+| **P-93** (approved, R-117) | **HROT gateway RPR modules** of 3.3 in `Gateway.HrotDis/Rpr`, configured by the `hla` section with new keys `positionThresholdM` / `orientationThresholdDeg`, stale reaping after `hla.timeoutS`. | Reuse NedRpr's modules directly (they are bound to the NED pivot). |
+| **P-94** (approved, R-118) | **Stage** `HLA-H` (T-024): extraction + refactor first (both gateways green, goldens identical), then the HROT RPR side; the HROT pack (H5) composes the HLA transport when `hla` is present, with `rti: "fake"` the only value until HLA-4. | HROT pack DIS-only until a real RTI exists. |
