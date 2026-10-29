@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The DIS side of the HROT DIS gateway (DD-006 sections 2 and 14, R-082): UDP datagrams (broadcast, multicast or unicast) carrying DIS PDUs,
+       on the channels of the engine. A transport references the engine and ONE protocol (DD-003 rule 5); plain System.Net.Sockets only (R-012).
+       Vendorable with the other five projects (R-092): no repository-root files beyond Directory.Build.props. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Engine/SimNetGateway.Engine/SimNetGateway.Engine.csproj" />
+    <ProjectReference Include="../../Protocols/SimNetGateway.Protocol.Dis7/SimNetGateway.Protocol.Dis7.csproj" />
+  </ItemGroup>
+
+</Project>
