@@ -495,4 +495,50 @@ public class AggregateTests
         Assert.Single(formation.Members);
         Assert.Equal(1, h.Checker.WarningsContaining("formation"));
     }
+
+    // ---- a unit's heartbeat is the unit's, not its members' (HLA-3, R-068) ---------------------------------------------
+
+    [Fact]
+    public void A_re_sent_aggregate_writes_the_unit_but_not_the_members_it_already_links()
+    {
+        var h = WolfPack(3);
+        h.Run(2.0);
+        var member = S.RprEntity(h, 0x602);
+        double unitWrite = S.RprEntity(h, Wolf).LastOriginWriteWallTime;
+        double memberWrite = member.LastOriginWriteWallTime;
+        Assert.True(member.TryGetSlot(h.Schema.Parent, out var parentBefore));
+        Assert.True(member.TryGetSlot(h.Schema.MemberIndex, out var indexBefore));
+
+        h.RprStep(S.Aggregate(Wolf, "Wolf", 1, 2, 3));
+        h.Steps(2);
+
+        Assert.True(S.RprEntity(h, Wolf).LastOriginWriteWallTime > unitWrite, "the unit itself was written by its re-sent description");
+        var after = S.RprEntity(h, 0x602);
+        Assert.Equal(memberWrite, after.LastOriginWriteWallTime); // a member of a live unit still ages out when it is silent (R-068)
+        Assert.True(after.TryGetSlot(h.Schema.Parent, out var parentAfter));
+        Assert.True(after.TryGetSlot(h.Schema.MemberIndex, out var indexAfter));
+        Assert.Equal(parentBefore.Meta.Version, parentAfter.Meta.Version);
+        Assert.Equal(indexBefore.Meta.Version, indexAfter.Meta.Version);
+    }
+
+    [Fact]
+    public void A_re_sent_aggregate_still_links_a_member_that_moved_in_the_list_or_is_new_to_it()
+    {
+        var h = WolfPack(3, listed: 3);
+        h.Rpr(S.Platform(4));
+        h.Step();
+        h.ClearOutput();
+
+        // member 2 now comes first, member 1 second; member 4 is listed for the first time
+        h.RprStep(S.Aggregate(Wolf, "Wolf", 2, 1, 3, 4));
+        h.Steps(2);
+
+        var unit = S.RprEntity(h, Wolf);
+        var members = S.MembersOf(h, unit);
+        Assert.Equal(4, members.Count);
+        Assert.Equal(S.RprEntity(h, 0x602).Id, members[0].Id);
+        Assert.Equal(S.RprEntity(h, 0x601).Id, members[1].Id);
+        Assert.Equal(S.RprEntity(h, 0x604).Id, members[3].Id);
+        Assert.Equal(S.MembersByScan(h, unit).Select(m => m.Id), members.Select(m => m.Id));
+    }
 }

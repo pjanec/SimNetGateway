@@ -1,0 +1,46 @@
+180 NedEntityMaster id=1000000 name=T-1 tkb=400 force=Opposing
+180 NedGeoSpatial id=1000000 lat=50.100000 lon=14.100000 alt=300.0 hdg=270.0 spd=0.0
+510 NedEntityMaster id=1000001 name=Wolf-1 tkb=400 force=Opposing
+510 NedGeoSpatial id=1000001 lat=50.120000 lon=14.120400 alt=280.0 hdg=270.0 spd=0.0
+510 NedEntityMaster id=1000002 name=Wolf-2 tkb=400 force=Opposing
+510 NedGeoSpatial id=1000002 lat=50.120000 lon=14.120800 alt=280.0 hdg=270.0 spd=0.0
+510 NedEntityMaster id=1000003 name=Wolf-3 tkb=400 force=Opposing
+510 NedGeoSpatial id=1000003 lat=50.120000 lon=14.121200 alt=280.0 hdg=270.0 spd=2.0
+570 NedEntityDisposed id=1000001
+570 NedEntityDisposed id=1000002
+570 NedEntityDisposed id=1000003
+570 NedFormation id=1000004 name=Wolf tkb=400 force=Opposing members=[0: tkb=400 lat=50.120000 lon=14.120400 spd=0.0 dmg=0; 1: tkb=400 lat=50.120000 lon=14.120800 spd=0.0 dmg=0; 2: tkb=400 lat=50.120000 lon=14.121200 spd=2.0 dmg=0]
+660 NedEntityMaster id=1000005 name=Wolf-4 tkb=400 force=Opposing
+660 NedGeoSpatial id=1000005 lat=50.120000 lon=14.121600 alt=280.0 hdg=270.0 spd=0.0
+660 NedEntityDisposed id=1000005
+660 NedFormation id=1000004 name=Wolf tkb=400 force=Opposing members=[0: tkb=400 lat=50.120000 lon=14.120400 spd=0.0 dmg=0; 1: tkb=400 lat=50.120000 lon=14.120800 spd=0.0 dmg=0; 2: tkb=400 lat=50.120000 lon=14.121200 spd=2.0 dmg=0; 3: tkb=400 lat=50.120000 lon=14.121600 spd=0.0 dmg=0]
+2880 NedGeoSpatial id=1000000 lat=50.100100 lon=14.100000 alt=300.0 hdg=270.0 spd=0.0
+3660 NedWeaponFire fire=X shooter=1000000 target=7/m1 munition=501 qty=1
+4200 NedEntityDamage id=1000000 level=2
+4200 NedDamageNotification id=1000000 0->2
+4380 NedEntityDamage id=1000000 level=1
+5190 NedGeoSpatial id=1000000 lat=50.100200 lon=14.100000 alt=300.0 hdg=270.0 spd=0.0
+5220 NedEntityDamage id=1000000 level=2
+5220 NedDamageNotification id=1000000 1->2
+5250 NedFormation id=1000004 name=Wolf tkb=400 force=Opposing members=[0: tkb=400 lat=50.120000 lon=14.120400 spd=0.0 dmg=0; 1: tkb=400 lat=50.120100 lon=14.120800 spd=0.0 dmg=0; 2: tkb=400 lat=50.120000 lon=14.121200 spd=2.0 dmg=0; 3: tkb=400 lat=50.120000 lon=14.121600 spd=0.0 dmg=0]
+5340 NedEntityMaster id=1000001 name=R-1 tkb=400 force=Opposing
+5340 NedGeoSpatial id=1000001 lat=50.140000 lon=14.140300 alt=260.0 hdg=270.0 spd=0.0
+5340 NedEntityMaster id=1000002 name=R-2 tkb=400 force=Opposing
+5340 NedGeoSpatial id=1000002 lat=50.140000 lon=14.140600 alt=260.0 hdg=270.0 spd=0.0
+5340 NedEntityMaster id=1000003 name=R-3 tkb=400 force=Opposing
+5340 NedGeoSpatial id=1000003 lat=50.140000 lon=14.140900 alt=260.0 hdg=270.0 spd=0.0
+5340 NedEntityMaster id=1000005 name=R-4 tkb=400 force=Opposing
+5340 NedGeoSpatial id=1000005 lat=50.140000 lon=14.141200 alt=260.0 hdg=270.0 spd=0.0
+6060 NedEntityDisposed id=1000001
+6060 NedEntityDisposed id=1000002
+6120 NedEntityMaster id=1000001 name=R-5 tkb=400 force=Opposing
+6120 NedGeoSpatial id=1000001 lat=50.140030 lon=14.141500 alt=260.0 hdg=270.0 spd=0.0
+6120 NedEntityMaster id=1000002 name=R-6 tkb=400 force=Opposing
+6120 NedGeoSpatial id=1000002 lat=50.140030 lon=14.141800 alt=260.0 hdg=270.0 spd=0.0
+6840 NedFormation id=1000004 name=Wolf tkb=400 force=Opposing members=[0: tkb=400 lat=50.120000 lon=14.120400 spd=0.0 dmg=0; 1: tkb=400 lat=50.120100 lon=14.120800 spd=0.0 dmg=0; 3: tkb=400 lat=50.120000 lon=14.121600 spd=0.0 dmg=0]
+7500 NedEntityDisposed id=1000000
+7500 NedEntityDisposed id=1000004
+7500 NedEntityDisposed id=1000003
+7500 NedEntityDisposed id=1000005
+7500 NedEntityDisposed id=1000001
+7500 NedEntityDisposed id=1000002

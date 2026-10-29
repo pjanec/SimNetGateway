@@ -4,6 +4,7 @@ using SimNetGateway.Gateway.NedRpr;
 using SimNetGateway.Protocol.Display;
 using SimNetGateway.Protocol.Ned;
 using SimNetGateway.Protocol.Rpr;
+using SimNetGateway.Protocol.Rpr.Fom;
 
 namespace SimNetGateway.Showcase;
 
@@ -56,7 +57,7 @@ public sealed partial class ConvoyAmbushScript
             if (fires.Count == 1)
             {
                 var f = fires[0].Message;
-                v.Equal(RprFireE1, f.FireId, "fire id");
+                v.Equal(ctx.Host.SeenEventId(RprFireE1), f.FireId, "fire id (the id the gateway saw for the RPR fire: HLA carries no guid)");
                 v.Equal(T1NedId(ctx), f.Shooter, "shooter (T-1's NED id)");
                 v.Equal(-1, f.ShooterMember, "shooter member");
                 v.Equal(ViperId, f.Target, "target (the formation, not the platform)");
@@ -104,6 +105,27 @@ public sealed partial class ConvoyAmbushScript
                 }
             }
 
+            // what the RPR federate received through the RTI: member 1's damage state (a partial update of one attribute) and the detonation
+            var seenMember = handle is { } memberHandle ? ctx.Peer.DiscoveredObject(memberHandle.Value) : null;
+            v.That(seenMember is not null, "the RPR federate does not hold member 1");
+            if (seenMember is not null)
+            {
+                v.Equal(DamageStatusEnum32.Destroyed, seenMember.Damage ?? DamageStatusEnum32.NoDamage, "damage state of member 1 at the RPR federate");
+                v.Equal(ScenarioContext.TickOf(62.0), seenMember.LastReflectTick, "tick at which the RPR federate received member 1's damage state");
+                PeerHoldsWhatWasSent(v, ctx, handle!.Value, "member 1");
+            }
+
+            var peerDetonations = PeerDetonations(ctx, 62.0, 62.5);
+            v.Equal(1, peerDetonations.Count, "detonations the RPR federate received");
+            if (peerDetonations.Count == 1)
+            {
+                var d = peerDetonations[0];
+                v.Equal(seenMember?.Name ?? "-", d.Target, "target object of the detonation at the RPR federate (member 1's RTI name)");
+                v.Equal(string.Empty, d.Firing, "firing object of the detonation at the RPR federate (none)");
+                v.Equal(DetonationResultCodeEnum8.EntityImpact, d.Result, "result code at the RPR federate");
+                v.Equal(ToFom(DisOf(TkbMunitionA)), d.Munition, "munition type at the RPR federate");
+            }
+
             // the probe saw the damage change dispatched before the detonation, both under the correlation of the input
             string? damage = ctx.Probe.Order.FirstOrDefault(o => o.StartsWith("damage:", StringComparison.Ordinal) && o.EndsWith(":3", StringComparison.Ordinal));
             string? detonation = ctx.Probe.Order.FirstOrDefault(o => o.StartsWith("detonation:", StringComparison.Ordinal));
@@ -133,7 +155,7 @@ public sealed partial class ConvoyAmbushScript
         // the split fire F1: first part, then (about 120 ms later) the ammunition
         a.Inject(64.0, "Viper member 2 fires F1: NedWeaponFire (munition not given)", h =>
         {
-            var m = new NedWeaponFire(NedFireF1, ViperId, h.NedIds.TryGetKey(h.RprHandles.TryResolve(new RprObjectHandle(T1Handle), out var t1) ? t1 : default, out ulong id) ? id : 0,
+            var m = new NedWeaponFire(NedFireF1, ViperId, h.NedIds.TryGetKey(h.RprHandles.TryResolve(h.ActualHandle(T1Handle), out var t1) ? t1 : default, out ulong id) ? id : 0,
                 0, 50.02, 14.027, 300.0, 1, ShooterMember: 2);
             _recording.Add(m);
             h.SendNed(m);
@@ -165,6 +187,19 @@ public sealed partial class ConvoyAmbushScript
                 v.Note($"sent at tick {fires[0].Tick} (first part at {fireTick}, ammunition at {ammoTick})");
             }
 
+            // what the RPR federate received: ONE fire interaction, in the tick it was sent, with the objects named by their RTI names
+            var peerFires = PeerFires(ctx, 64.0, 64.5);
+            v.Equal(1, peerFires.Count, "weapon fires the RPR federate received");
+            if (peerFires.Count == 1 && fires.Count == 1)
+            {
+                var received = peerFires[0];
+                v.Equal(fires[0].Tick, received.Tick, "tick at which the RPR federate received the fire");
+                v.Equal(PeerName(ctx, MemberHandle(ctx, 2)), received.Firing, "firing object at the RPR federate (member 2's RTI name)");
+                v.Equal(PeerName(ctx, ctx.Host.ActualHandle(T1Handle)), received.Target, "target object at the RPR federate (T-1, its own object)");
+                v.Equal(ToFom(DisOf(TkbMunitionB)), received.Munition, "munition type at the RPR federate");
+                v.Equal((ushort)2, received.Quantity, "quantity at the RPR federate");
+            }
+
             var seen = ctx.Probe.FireSeen.Where(o => o.EventId == NedFireF1).ToList();
             v.Equal(1, seen.Count, "the probe saw F1 dispatched once");
             if (seen.Count == 1)
@@ -179,7 +214,7 @@ public sealed partial class ConvoyAmbushScript
 
         a.Inject(67.0, "Viper member 2 fires F2: NedWeaponFire, the ammunition part never arrives", h =>
         {
-            ulong target = h.RprHandles.TryResolve(new RprObjectHandle(T1Handle), out var t1) && h.NedIds.TryGetKey(t1, out ulong id) ? id : 0;
+            ulong target = h.RprHandles.TryResolve(h.ActualHandle(T1Handle), out var t1) && h.NedIds.TryGetKey(t1, out ulong id) ? id : 0;
             h.SendNed(new NedWeaponFire(NedFireF2, ViperId, target, 0, 50.02, 14.027, 300.0, 1, ShooterMember: 2));
         });
         a.Check(69.0, "S-5.4", ctx =>
@@ -198,6 +233,16 @@ public sealed partial class ConvoyAmbushScript
                 v.Equal(1, f.Quantity, "quantity");
                 v.Equal(MemberHandle(ctx, 2), f.FiringObject, "firing object");
                 v.Note(F($"sent {delay:F3} s after the first part"));
+            }
+
+            var peerFires = PeerFires(ctx, 67.0, 69.0);
+            v.Equal(1, peerFires.Count, "weapon fires the RPR federate received");
+            if (peerFires.Count == 1 && fires.Count == 1)
+            {
+                v.Equal(fires[0].Tick, peerFires[0].Tick, "tick at which the RPR federate received the fire");
+                v.Equal(ToFom(DisOf(TkbMunitionA)), peerFires[0].Munition, "munition type at the RPR federate (the selected TKB 501)");
+                v.Equal((ushort)1, peerFires[0].Quantity, "quantity at the RPR federate");
+                v.Equal(PeerName(ctx, MemberHandle(ctx, 2)), peerFires[0].Firing, "firing object at the RPR federate");
             }
 
             var warnings = DiagnosticsContaining(ctx, $"fire {NedFireF2} completed by timeout");
@@ -244,13 +289,20 @@ public sealed partial class ConvoyAmbushScript
             var v = new Verdict();
             var nedFires = ctx.NedOf<NedWeaponFire>(60.0, 74.5);
             v.Equal(1, nedFires.Count, "NedWeaponFire messages in the act (only T-1's shot, which came from RPR)");
-            v.That(nedFires.All(f => f.Message.FireId == RprFireE1), "NED got a fire that NED itself sent (F1, F2)");
+            v.That(nedFires.All(f => f.Message.FireId == ctx.Host.SeenEventId(RprFireE1)), "NED got a fire that NED itself sent (F1, F2)");
             v.Equal(0, ctx.NedBetween(60.0, 74.5).Count(r => r.Message is NedDetonation), "NedDetonation sent to NED (D1 came from NED)");
             var rprFires = ctx.RprOf<RprWeaponFire>(60.0, 74.5);
             v.Equal(2, rprFires.Count, "RprWeaponFire messages (F1 and F2, both from NED)");
-            v.That(rprFires.All(f => f.Message.EventId != RprFireE1), "RPR got the fire it sent itself (E1)");
+            v.That(rprFires.All(f => f.Message.EventId != ctx.Host.SeenEventId(RprFireE1)), "RPR got the fire it sent itself (E1)");
             var dets = ctx.RprOf<RprMunitionDetonation>(60.0, 74.5);
             v.Equal(1, dets.Count, "RprMunitionDetonation messages");
+            // the same through the RTI: the federate received F1, F2 and D1 and none of them carries the identifier of the fire it issued itself
+            var e1 = ctx.Peer.EventIdentifierOf(RprFireE1);
+            v.That(e1 is not null, "the RPR federate never sent E1");
+            v.Equal(2, PeerFires(ctx, 60.0, 74.5).Count, "weapon fires the RPR federate received (F1 and F2)");
+            v.Equal(1, PeerDetonations(ctx, 60.0, 74.5).Count, "detonations the RPR federate received (D1)");
+            v.That(ctx.Peer.Fires.All(f => f.Event != e1) && ctx.Peer.Detonations.All(d => d.Event != e1),
+                "the RPR federate received an event with the event identifier of its own fire E1 (echo through the RTI)");
             // the sources of the events as the event log recorded them
             var sources = new Dictionary<Guid, string>();
             foreach (var ev in ctx.Engine.State.Journal.RecentEvents)
@@ -261,7 +313,7 @@ public sealed partial class ConvoyAmbushScript
                 }
             }
 
-            v.Equal("rpr", sources.GetValueOrDefault(RprFireE1) ?? "-", "source of E1");
+            v.Equal("rpr", sources.GetValueOrDefault(ctx.Host.SeenEventId(RprFireE1)) ?? "-", "source of E1");
             foreach (var id in new[] { NedFireF1, NedFireF2, NedDetonationD1 })
             {
                 v.Equal("ned", sources.GetValueOrDefault(id) ?? "-", "source of " + MessageText.Short(id));
@@ -297,7 +349,12 @@ public sealed partial class ConvoyAmbushScript
                 v.Equal((byte)33, u.DamagePercent ?? 255, "DamagePercent");
                 v.That(u.DamageState is null, "the default DamageState is present");
                 v.Equal("DamagePercent", Shape(u), "properties of the update (no other change)");
-                v.Note("RprObjectUpdate(Gate): DamagePercent = 33");
+                // over HLA: RPR FOM 2.0 has no damage percentage attribute (R-105), the transport drops it - the RPR federate receives nothing
+                var seenGate = handle is { } gateHandle ? ctx.Peer.DiscoveredObject(gateHandle.Value) : null;
+                v.That(seenGate is not null && seenGate.LastReflectTick != rpr[0].Tick, "the RPR federate received something for a damage percentage");
+                v.Equal(ctx.Rpr.Messages.Count(r => r.Message is RprObjectUpdate { DamagePercent: not null }), ctx.Host.RprConnection.DroppedDamagePercent,
+                    "damage percentages the transport dropped = the updates that carried one (RPR FOM 2.0 cannot carry them)");
+                v.Note("RprObjectUpdate(Gate): DamagePercent = 33 (dropped by the HLA transport, R-105)");
             }
             else
             {
@@ -610,6 +667,7 @@ public sealed partial class ConvoyAmbushScript
             var stop = ctx.RprOf<RprSimulationControl>(PauseAt, PauseAt + 0.1);
             v.Equal(1, stop.Count, "StopFreeze messages");
             v.That(stop.Count == 1 && stop[0].Message.Kind == RprControlKind.StopFreeze, "the control message is StopFreeze");
+            v.Equal(2, ctx.Host.RprConnection.DroppedSimulationControl, "simulation controls the HLA transport dropped so far (StartResume at Start, StopFreeze: not carried by RPR FOM 2.0, R-107)");
             v.Equal(ctx.Recall<double>("frozen"), ctx.SimTime, "sim time at 98.9 s against 90.5 s");
             var display = ctx.DisplayBetween(PauseAt + 0.3, 98.9);
             v.Equal(0, display.Count, "display messages during the pause (the prediction is unchanged: no writes)");
@@ -657,6 +715,7 @@ public sealed partial class ConvoyAmbushScript
             var go = ctx.RprOf<RprSimulationControl>(ResumeAt, 99.5);
             v.Equal(1, go.Count, "StartResume messages");
             v.That(go.Count == 1 && go[0].Message.Kind == RprControlKind.StartResume, "the control message is StartResume");
+            v.Equal(3, ctx.Host.RprConnection.DroppedSimulationControl, "simulation controls the HLA transport dropped so far (R-107)");
             var display = ctx.DisplayOf<DisplayEntityPosition>(ResumeAt, 99.5);
             foreach (string label in new[] { "Hawk", "Viper-0", "Viper-1", "Viper-2" })
             {

@@ -131,12 +131,10 @@ internal sealed class ScenarioInstance
     {
         // exact 60 Hz: tick k is at k / 60 s (no accumulated rounding)
         clock.Now = tick / 60.0;
-        if (host.DeliverRti)
-        {
-            host.Rti.DeliverPending(registered => host.RprIn.Enqueue(registered));
-        }
-
+        // DD-008 section 6: pump the RTI, tick the engine, let the scripted RPR federate evoke what the gateway sent
+        host.PumpRti();
         host.Engine.Tick();
+        host.EvokePeer();
         host.AfterTick?.Invoke(host);
         return true;
     }

@@ -164,7 +164,7 @@ public static class BenchmarkRunner
         var counters = new SendCounters();
         var samples = new double[ticks];
         long nedOut0 = host.NedSentCount, rprOut0 = host.RprSentCount, displayOut0 = host.DisplaySentCount;
-        int registered0 = host.Rti.Registered.Count;
+        int registered0 = host.RegisteredCount;
         int gen0 = GC.CollectionCount(0), gen1 = GC.CollectionCount(1), gen2 = GC.CollectionCount(2);
         long allocated = 0;
         long derivedWrites = 0;
@@ -184,7 +184,7 @@ public static class BenchmarkRunner
         }
 
         int gen0End = GC.CollectionCount(0), gen1End = GC.CollectionCount(1), gen2End = GC.CollectionCount(2);
-        long registrations = host.Rti.Registered.Count - registered0;
+        long registrations = host.RegisteredCount - registered0;
         var summary = Percentiles.Summarize(samples);
 
         int nedEntities = 0, rprEntities = 0, staticNed = 0, staticRpr = 0;
@@ -311,7 +311,7 @@ public static class BenchmarkRunner
             }
             else
             {
-                var handle = vehicle.Handle;
+                var handle = host.ActualHandle(vehicle.Handle.Value); // the RTI's handle of the object the vehicle's federate registered
                 if (host.RprHandles.TryResolve(handle, out var entity) && host.NedIds.Contains(entity))
                 {
                     toNed++;
