@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | approved: P-69, P-70, P-72 .. P-76 are R-092 .. R-099; P-71 replaced by the user's ruling R-094 (configuration file on disk, section 3a); P-87 (file details) awaits the user |
+| **Status** | approved: P-69, P-70, P-72 .. P-76 are R-092 .. R-099; P-71 replaced by the user's ruling R-094 (configuration file on disk, section 3a); P-87 approved (R-119) |
 | **Tasks** | T-020 (this design) |
 | **Rulings honoured** | R-091 (in-process ECS-level pack, vendored into HROT), R-079 .. R-090 as amended by section 9, R-092 .. R-099, R-012, R-050 .. R-053, R-054 (as limited by R-094), R-057 |
 | **Inputs** | HROT `coordinator` @ `34f249e`: `Hrot.Traffic` (the precedent: `TrafficPack`, `TrafficReplicas`, `TrafficBodies`, `TrafficModules`), `Hrot.Common/Infrastructure/NodeCapability.cs`, `Hrot.Editor/EditorSubsystem.cs` + `EditorCapabilities.cs` + `OfflineNetworkFactory.cs`, `Fdp.Toolkits` Combat / Replication / Time / Geographic, `docs/blueprints/Architect_Question_93_Sumo_Traffic_Node.md` (AQ93) section 11, `docs/reference/NED_DDS_Protocol.md` "For a protocol gateway" |
@@ -96,8 +96,16 @@ neither the ECS nor HROT.
   `Gateway.HrotDis`, `Transport.DisUdp` - all BCL-only, `net8.0`. Copied read-only at a recorded commit by
   `scripts/sync-simnetgateway.sh` (the `sync-sumosharp.sh` shape: scratch clone outside the HROT tree,
   `UPSTREAM.md`, `--check`, `--verify`). Our own `Directory.Build.props` is copied with it, so the vendored
-  projects build with SimNetGateway's settings (MSBuild stops at the nearest props file). Tests, viewer, demo and
+  projects build with SimNetGateway's settings (MSBuild stops at the nearest props file) and so is the root `.editorconfig`
+  (`root = true`, no rules: it stops the host's analyzer severities from applying to the vendored folder; found necessary by the H3
+  dry run). Tests, viewer, demo and
   showcase stay upstream.
+  **Dry run (H3, `bash scripts/vendor-dry-run.sh`):** copies exactly these six projects plus the root `Directory.Build.props` and
+  `.editorconfig` (and each project's LICENSE / NOTICE.md) into a scratch folder below a foreign parent with hostile `Directory.Build.props`
+  (net6.0, LangVersion 7.3, TreatWarningsAsErrors), `Directory.Build.targets` (warnings as errors, warning level 9999, documentation file),
+  `Directory.Packages.props` (central package management on) and `.editorconfig` (all analyzer rules errors), builds each of the
+  six and fails unless every build has 0 warnings and 0 errors. Result and what had to change: DD-006 section 14, H3.
+  The six projects use no package and read no repository-root file other than `Directory.Build.props`.
 - **The pack** (`Hrot.DisGateway`, a new HROT project referenced by `Hrot.Editor`): the capability, one system,
   the adapter, the poser. It is the "installable module" - one assembly, one line in the editor's capability plan
   (R-093); it contributes nothing unless the gateway configuration file exists (R-094, section 3a).
@@ -443,4 +451,4 @@ see DIS entities unless they also compose the pack) - a decision for that later 
 | **P-74** (approved, R-097) | **Events**: HROT fire/detonation -> Fire/Detonation PDUs; DIS Fire -> `WeaponFireNotification{IsRemote}` (effects only); DIS Detonation on a HROT entity -> `DetonationNotification{IsRemote=false}` so HROT computes the damage; on anything else `IsRemote=true`. | Translate DIS detonations straight into `DamageAssessedEvent` with a gateway damage model (duplicates HROT's damage tables). |
 | **P-75** (approved, R-098) | **Ownership of the work**: SimNetGateway delivers the vendorable projects and the `Protocol.Hrot` contract with upstream tests (stages H1 - H3); a HROT lane builds `Hrot.DisGateway` (H5) from this design (moved into HROT `docs/`), verifying the three open HROT facts first: FDP bus event visibility between Input and Simulation phases, Input-phase structural changes at 1000 replicas, and that no HROT system acts on an entity without `Locomotion` that carries a non-local owner. | This session builds the HROT pack too (needs push access to HROT and a HROT lane's review; possible on request). |
 | **P-76** (approved, R-099) | **Session table** of section 6 (Edit = Loaded and silent to DIS; Replay = HROT -> DIS only, replicas removed). | Publish authoring positions to DIS in Edit (DIS peers would see entities jump while being placed). |
-| **P-87** | **Configuration file details** (section 3a): JSON (the format of HROT's own `config.json` / `orchestrator-config.json`), name `simnetgateway.json` in the working directory, `SIMNETGATEWAY_CONFIG` override, sections `shared` / `hrot` / `dis` / `hla`, unknown keys are errors, read once at composition; one parser in the vendored gateway. | Name and path from a HROT command-line option (needs a ClusterRunner change); YAML/INI (a second format in HROT). |
+| **P-87** (approved, R-119) | **Configuration file details** (section 3a): JSON (the format of HROT's own `config.json` / `orchestrator-config.json`), name `simnetgateway.json` in the working directory, `SIMNETGATEWAY_CONFIG` override, sections `shared` / `hrot` / `dis` / `hla`, unknown keys are errors, read once at composition; one parser in the vendored gateway. | Name and path from a HROT command-line option (needs a ClusterRunner change); YAML/INI (a second format in HROT). |

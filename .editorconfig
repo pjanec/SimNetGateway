@@ -1,0 +1,7 @@
+# Stops editorconfig inheritance (R-092, DD-007 section 2): this file is vendored together with Directory.Build.props, so that the
+# style / analyzer severities of a host repository above the vendored folder do not apply to these projects.
+# scripts/vendor-dry-run.sh fails without it (a host that sets every analyzer to error breaks the build).
+root = true
+
+[*.cs]
+indent_style = space
