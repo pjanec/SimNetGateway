@@ -138,7 +138,7 @@ sequenceDiagram
     U->>P: filter "not known to rpr.handle", select X
     P->>M: Load(X)
     M->>E: slots, identities per map, ReferencedBy, EntityTables (P-54)
-    M-->>P: rows: no Identity.TypeTkb; RPR publication state None
+    M-->>P: rows: no Identity.TypeTkb, RPR publication state None
     U->>P: "trace this entity"
     P->>T: Watch(X)
     Note over T,E: next inputs touching X are traced
