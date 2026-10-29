@@ -114,10 +114,10 @@ limits R-054 - hardcoded configuration - for this gateway's runtime settings.)
               "damageThresholds": { "slight": 0.5, "moderate": 0.0 },
               "defaultTkbForUnknown": 0, "forwardUnitEntities": false, "sendEventsInReplay": false },
   "hrot":   { "sampleRateHz": 20, "replicaOwnerNodeId": 65000, "allowZeroOrigin": false },
-  "dis":    { "enabled": true, "exerciseId": 1, "port": 3000, "address": "255.255.255.255",
+  "dis":    { "exerciseId": 1, "port": 3000, "address": "255.255.255.255",
               "positionThresholdM": 1.0, "orientationThresholdDeg": 3.0, "heartbeatS": 5, "timeoutS": 12,
               "hrotControlsDis": true, "disControlsHrot": false },
-  "hla":    { "enabled": false, "rti": "fake", "federation": "RPR", "federateName": "HROT-Gateway",
+  "hla":    { "rti": "fake", "federation": "RPR", "federateName": "HROT-Gateway",
               "federateType": "SimNetGateway", "fomModules": ["RPR-FOM-2.0"], "createFederation": true,
               "heartbeatS": 5, "timeoutS": 12 }
 }
@@ -128,7 +128,7 @@ limits R-054 - hardcoded configuration - for this gateway's runtime settings.)
 | File missing | the pack contributes no system, no component registration, no socket - the gateway is **not instantiated** |
 | File present but invalid (JSON error, unknown key, out-of-range value) | not instantiated; one error naming the file, the key and the reason (log + editor notification) |
 | Sections | `shared` - values every side uses (DIS site/application = RPR `EntityIdentifier` federate id, damage and health mapping, unknown-type fallback, replay rule); `hrot` - the pack's own; `dis`, `hla` - one per protocol side; a side runs when its section is present and `enabled` is not false; no side running = not instantiated (warning) |
-| Defaults | every key except `dis.exerciseId` and `hla.federation` has the default shown; a missing optional key takes it |
+| Defaults | every key except `dis.exerciseId` and `hla.federation` has the default shown; a missing optional key takes it; `enabled` (per side) defaults to true - `"enabled": false` keeps a section but turns its side off |
 | When read | once, when the editor composes its capabilities; a change takes effect at the next start |
 | Where (P-87) | `simnetgateway.json` in the process working directory (beside HROT's other configuration files), overridable by the environment variable `SIMNETGATEWAY_CONFIG` (a path) |
 | Who parses | the vendored `Gateway.HrotDis` (`GatewayConfiguration` records + `GatewayConfigurationFile.TryLoad`, System.Text.Json from the shared framework), so the pack, the upstream demo/viewer hosts and tests share one parser |
