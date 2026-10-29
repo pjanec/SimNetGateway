@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | approved: P-77 .. P-86 are R-100 .. R-109; HLA-1, HLA-2 and HLA-3 built (sections 12, 12a, 12b); P-88, P-89 (found in HLA-3) await approval |
+| **Status** | approved: P-77 .. P-86 are R-100 .. R-109; HLA-1, HLA-2 and HLA-3 built (sections 12, 12a, 12b); P-88, P-89 (found in HLA-3) approved as R-120, R-121 |
 | **Tasks** | T-021 |
 | **Rulings honoured** | R-002, R-003, R-012, R-018, R-019 .. R-022, R-045, R-047, R-050, R-051, R-053, R-054, R-063 .. R-067, R-089 (HLA readiness) |
 | **Inputs** | RPR FOM 2.0 modules (SISO-STD-001.1-2015 Annex A, copy in `github.com/IVCTool/TS_RPR_FOM`, `RPR-FOM-v2.0/RPR-{Foundation,Base,Physical,Warfare,Enumerations,Aggregate}_v2.0.xml`); IEEE 1516.1-2010 Java/C++ interfaces as copied in `github.com/openlvc/portico` (`codebase/src/java/portico/hla/rti1516e`, `codebase/src/cpp/ieee1516e/include/RTI`); padded encoders of `github.com/Pitch-Technologies/FedProClient` (`cpp/src/fedpro/services-common/encoding`) and `github.com/TNO-MST/object-oriented-rti`; the DIS <-> RPR gateway `github.com/openlvc/disco` |
