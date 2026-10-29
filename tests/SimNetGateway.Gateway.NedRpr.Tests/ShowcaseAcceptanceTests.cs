@@ -127,10 +127,10 @@ public class ShowcaseAcceptanceTests
     }
 
     [Fact]
-    public void The_design_questions_of_the_run_are_listed_in_the_report()
+    public void No_condition_of_the_run_raises_a_design_question_after_R_113()
     {
         var withQuestions = Report.Conditions.Where(c => c.DesignQuestions.Count > 0).Select(c => c.Id).ToList();
-        Assert.Equal(["S-4.5", "S-9.3"], withQuestions);
-        Assert.Contains("Design questions", Report.RenderSummary());
+        Assert.Empty(withQuestions);
+        Assert.DoesNotContain("Design questions", Report.RenderSummary());
     }
 }
