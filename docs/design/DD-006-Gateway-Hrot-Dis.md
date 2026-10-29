@@ -141,7 +141,7 @@ follow RPR FOM 2.0 attribute names so an HLA side maps 1:1 (section 10).
 | `Spatial.Acceleration` | Vec3 | ECEF m/s² (HROT: absent, 0) | `Spatial.AccelerationVector` | - | DR parameters |
 | `Spatial.AngularVelocity` | Vec3 | body axes (DIS x fwd, y right, z down), rad/s | `Spatial.AngularVelocityVector` | `WorldPos.AngularVelocity` (ENU axes) rotated into the body | DR parameters |
 | `Spatial.DrAlgorithm` | Int | DIS DR algorithm number (R-060); HROT entities: 2 (FPW) | `Spatial.DeadReckoningAlgorithm` | constant FPW | DR parameters |
-| `Spatial.StateTime` | Double | gateway sim time at which the spatial values were valid | (time stamp) | `WorldPos.SimTime` mapped to gateway sim time | receipt time (or absolute DIS timestamp, P-64) |
+| `Spatial.StateTime` | Double | time on the gateway engine clock (monotonic wall time, the one time axis of the pivot) at which the spatial values were valid | (time stamp) | the engine clock at ingress (the pack gathers the state in the frame it is valid; `SimTime` is not used) | receipt time (or absolute DIS timestamp, P-64) |
 | `Status.Damage` | Int | DIS damage state 0 none, 1 slight, 2 moderate, 3 destroyed | `PhysicalEntity.DamageState` | `EntityDamage` thresholds (P-62) | appearance bits |
 | `Status.Deactivated` | Bool | entity announced as leaving (final ESPDU) | (object delete) | - | appearance "Deactivated" |
 | `Articulation.Parts` | Object | immutable list of (part type, azimuth rad, elevation rad, rates) | `PhysicalEntity.ArticulatedParametersArray` | `EntityTurretPose` instances | ESPDU variable parameters (stage H4) |
@@ -296,9 +296,7 @@ re-sends exactly when HROT's view would drift (P-61). Ownership: the gateway own
   theta, phi (ZYX) from `C` in ECEF (Common `Orientation` helpers, DD-001 15). Inverse for DIS -> HROT, then
   normalise `q` so `w >= 0` (all-zero = identity).
 - **Angular velocity**: HROT ENU axes -> body FRD: `ω_body = Fᵀ · C(q_local)ᵀ · ω_enu`; inverse for HROT egress.
-- **Time**: pivot `StateTime` for HROT samples = `WorldPos.SimTime` re-based to gateway sim time by a running
-  offset (gateway sim time − HROT sim time, measured at receipt of the newest sample; jumps beyond 1 s reset it -
-  replay seeks, world reset); HROT egress maps back with the same offset.
+- **Time** (superseded by the as-built rule, section 14 D2): one time axis in the pivot, the gateway engine clock. `StateTime` of a HROT entity = the engine clock at ingress; HROT sim time (pauses, time scale, replay seeks) never enters it. `ReplicaState.State.StateTime` is on the same axis and the pack poses replicas with that clock. The old running-offset mapping is dropped.
 - **Precision**: HROT ECS positions are float32; the gateway computes in double; orientations near theta = ±90 deg
   (gimbal lock) are carried with phi = 0 (Common convention).
 
@@ -661,7 +659,7 @@ expected extension when HLA ownership transfer is needed, in its own design.
   `HrotVec3`, `HrotQuat` (x, y, z, w; the default is not a rotation, use `Identity`) and `HrotDrSnapshot` (what `ReplicaState.State`
   carries). Snapshot conventions: position and rotation in the ENU frame of the origin current when the message was built; velocity
   and acceleration in ENU for the world-axis DR algorithms (1 .. 5) and in the DIS body axes (FRD, unchanged) for the body-axis ones
-  (6 .. 9); angular velocity always in ENU axes. `StateTime` is the pivot's `Spatial.StateTime` unchanged.
+  (6 .. 9); angular velocity always in ENU axes. `StateTime` is the pivot's `Spatial.StateTime` (engine clock) unchanged.
 - Configuration (R-094, DD-007 3a): `GatewayConfiguration(Shared, Hrot, Dis?, Hla?)`; `GatewayConfigurationFile.TryLoad(path, out config, out errors)`
   (true only for a loaded file), `Load(path)` / `Parse(json, source)` returning a `ConfigurationLoadResult` with the kind
   `Missing` / `Invalid` / `Loaded`, `ResolvePath()` (`SIMNETGATEWAY_CONFIG`, else `simnetgateway.json` in the current directory; an overload takes
@@ -680,10 +678,7 @@ expected extension when HLA ownership transfer is needed, in its own design.
   1. **`hla.enabled` defaults to true.** The DD-007 3a example shows `"enabled": false` for the HLA section, but the rule table says a side
      runs "when its section is present and `enabled` is not false", so a missing key means enabled for both sides; the example's `false` is an
      explicit value. (Question for the user: or should `hla.enabled` default to false?)
-  2. **`Spatial.StateTime` of HROT entities is the HROT sim time unchanged** (DD-007 section 9: "HROT sim time read directly, no offset"; section
-     3.1 above still says "mapped to gateway sim time"). DIS-origin entities will carry the gateway's sim time. The two axes are
-     the same only if the pack keeps them in step: for the DIS egress (H2b) and the pack's poser, "now" must be on the axis of the
-     entity's `StateTime`. To be settled with H2b / the HROT lane.
+  2. **One time axis (D2, decided by the coordinator): the gateway engine clock.** `Spatial.StateTime` of a HROT entity is the engine clock's now at ingress (DD-007 section 9 "no offset"); `HrotEntityState.SimTime` is only validated (finite), nothing else reads it, and `HrotSession.SimTime` is ignored. DIS-origin entities carry the same clock, `ReplicaState.State.StateTime` is on it and the pack poses replicas with it. A HROT pause or time-scale change therefore neither makes `StateTime` jump nor stall.
   3. The name `GatewayConfiguration` is also the engine's (profile name + settings); inside `Gateway.HrotDis` it means the file's records,
      the engine's is aliased in `HrotDisConfigurations`.
   4. One internal pivot event `Hrot.FrameRebased` (attribute `Hrot.FrameGeneration`) carries "the origin became valid or changed" from the

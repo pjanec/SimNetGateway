@@ -115,10 +115,29 @@ public class HrotIngressTests
         Support.Near(LocalToGeocentricOrientation.AngularVelocityEnuToBodyFrd(quaternion, Support.V(omega)), e.Get(h.Schema.AngularVelocity).AsVec3(), 1e-12, "angular velocity");
         Assert.Equal(Vec3.Zero, e.Get(h.Schema.Acceleration).AsVec3());
         Assert.Equal((long)DrAlgorithms.Fpw, e.Get(h.Schema.DrAlgorithm).AsInt());
-        Assert.Equal(33.25, e.Get(h.Schema.StateTime).AsDouble());
+        Assert.Equal(h.Clock.Now, e.Get(h.Schema.StateTime).AsDouble()); // the engine clock, not the HROT sim time (33.25)
         // the yaw rate of an upright body is about the down axis of the DIS body, opposite to HROT's up
         h.HrotStep(HrotDisHarness.State(6, enu, angularVelocity: new HrotVec3(0, 0, 1)));
         Support.Near(new Vec3(0, 0, -1), h.EntityOfHrot(6)!.Get(h.Schema.AngularVelocity).AsVec3(), 1e-12, "yaw rate");
+    }
+
+    [Fact]
+    public void State_time_is_the_engine_clock_whatever_hrot_does_with_its_own_time()
+    {
+        var h = LiveAtEquator();
+        double previous = -1;
+        for (int i = 0; i < 40; i++)
+        {
+            // HROT pauses, runs at a different scale, and its sim time jumps back and forth: none of it reaches StateTime
+            if (i == 10) h.HrotStep(new HrotSession(ClusterPhase.Live, false, 1.0, 5.0));
+            if (i == 20) h.HrotStep(new HrotSession(ClusterPhase.Live, true, 0.25, 5.0));
+            double hrotTime = i % 2 == 0 ? 1000.0 + i : 3.0;
+            h.HrotStep(HrotDisHarness.State(1, new HrotVec3(i, 0, 0), simTime: hrotTime));
+            double stateTime = h.EntityOfHrot(1)!.Get(h.Schema.StateTime).AsDouble();
+            Assert.Equal(h.Clock.Now, stateTime);
+            Assert.True(stateTime > previous, "StateTime must advance with the engine clock, paused or not");
+            previous = stateTime;
+        }
     }
 
     [Fact]
