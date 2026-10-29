@@ -204,7 +204,7 @@ re-sends its unchanged geo-spatial every 10 s.
 | S-4.2 | Display got Hawk and Viper members at 10 Hz with positions within 0.01 m of the analytic FPW prediction; Gate only once (static, no change). |
 | S-4.3 | Gate's unchanged re-sends: the probe's `OnAttributesWritten` rule fires, every `OnAttributesChanged` rule stays silent, RPR got nothing but heartbeats. |
 | S-4.4 | Received `Spatial.*` attributes of Hawk change only at NED inputs (meta `Source = NED`); predictions exist only in `Derived.*` (meta `Source = proc.dr`). |
-| S-4.5 | Query at t=50 s: `ChangedWithin(3 s)` returns exactly the entities the script updated in [47, 50]; `NotWrittenWithin(10 s).FromOrigin(RPR)` returns the RPR entities silent for 10 s. |
+| S-4.5 | ~~Query at t=50 s: `ChangedWithin(3 s)` returns exactly the entities the script updated in [47, 50]; `NotWrittenWithin(10 s).FromOrigin(RPR)` returns the RPR entities silent for 10 s.~~ **SUPERSEDED by R-113.** Query at t=50 s: `AttributeChangedWithin(Spatial.Position, 3 s)` returns exactly the entities the script updated in [47, 50]; `ChangedWithin(3 s)` returns those plus every entity whose `Derived.*` prediction changed (the DR processor writes moving entities at 10 Hz, R-029); `NotWrittenWithin(10 s).FromOrigin(RPR)` returns the RPR entities silent for 10 s (unchanged). |
 
 ### Act 5 - Engagement (C5 .. C9, C11)
 
@@ -274,7 +274,7 @@ contributes `DamageState` as 0/33/66/100). Then NED reports damage 1 on Gate.
 |---|---|
 | S-9.1 | RPR got `RprObjectRemoved` for member 1's handle; display removed `Viper-1`; member 1's `ned.member` key and DIS identifier released (the identifier only after quarantine). |
 | S-9.2 | 12 s after Wolf member 3's last update the reaper destroyed it; NED got **one** Wolf formation message without member 3. |
-| S-9.3 | The new entity gets a different DIS entity number during quarantine; after the quarantine a freed number may be reused. |
+| S-9.3 | ~~The new entity gets a different DIS entity number during quarantine; after the quarantine a freed number may be reused.~~ **SUPERSEDED by R-113.** A released DIS entity number stays unavailable for the quarantine and becomes available afterwards (a reuse itself is not observable because the pool hands out never-used numbers first). The showcase also keeps the stricter check that the new entity gets a different number during the quarantine. |
 | S-9.4 | The 2 reinforcements of S-7.6 are now published to NED. |
 
 ### Act 10 - Unload (C16)
@@ -535,8 +535,8 @@ read-only accessors (`IdentityMap.Allocator`, `MappedAllocator.Numbers`) for S-1
   side, NED sees indexes 0-3. The act 6 override stays active during the replay. After Unload, Idle sim
   time runs free again (S-10.2 checks that, not 0). A throwing step fails the run instead of aborting it.
   G-8 lets a record and its events share one correlation, record first.
-- **Wording conflicts, checked in the closest faithful way and put to the user as P-47**: S-4.5 and S-9.3
-  (see section 9).
+- **Wording conflicts, put to the user as P-47 and resolved by R-113 (T-023)**: S-4.5 and S-9.3 were amended
+  (section 4/7 tables); the checks assert the amended text exactly and raise no design question any more.
 - Known test gap: the CausedBy half of G-8 has no injected-violation test (the engine sets CausedBy
   itself); the dispatch-order half has one.
 

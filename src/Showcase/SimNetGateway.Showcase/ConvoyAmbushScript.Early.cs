@@ -789,16 +789,21 @@ public sealed partial class ConvoyAmbushScript
         state.Query().AttributeChangedWithin(s.Position, TimeSpan.FromSeconds(3)).CopyTo(position);
         var changed = new List<EntityRecord>();
         state.Query().ChangedWithin(TimeSpan.FromSeconds(3)).CopyTo(changed);
-        var moving = state.Query().Where(e => e.Has(s.Name) && e.TryGet(s.Velocity, out var vel) && vel.AsVec3().Length > 0).Count();
+        // every entity whose Derived.* prediction changed in the window (the DR processor writes the moving entities, R-029)
+        var predicted = new List<EntityRecord>();
+        state.Query().AttributeChangedWithin(s.PredictedPosition, TimeSpan.FromSeconds(3)).CopyTo(predicted);
+        var predictedAt = new List<EntityRecord>();
+        state.Query().AttributeChangedWithin(s.PredictedAt, TimeSpan.FromSeconds(3)).CopyTo(predictedAt);
+        var derived = predicted.Concat(predictedAt).Select(e => NameOf(ctx, e)).ToHashSet();
         var movingNames = new List<EntityRecord>();
         state.Query().Where(e => e.Has(s.Name) && e.TryGet(s.Velocity, out var vel) && vel.AsVec3().Length > 0).CopyTo(movingNames);
+        var moving = movingNames.Select(e => NameOf(ctx, e)).ToHashSet();
+        v.That(moving.IsSubsetOf(derived), "every moving entity has a changed Derived.* prediction in the window");
 
-        v.Equal(Names(updated), Names(position.Select(e => NameOf(ctx, e))), "AttributeChangedWithin(Spatial.Position, 3 s): the entities the script updated in [47, 50]");
-        var expectedChanged = updated.Concat(movingNames.Select(e => NameOf(ctx, e))).ToHashSet();
-        v.Equal(Names(expectedChanged), Names(changed.Select(e => NameOf(ctx, e))), "ChangedWithin(3 s): the updated entities plus the moving ones (their derived predictions change)");
-        v.Question("'ChangedWithin(3 s) returns exactly the entities the script updated in [47, 50]' cannot hold as written: the dead-reckoning " +
-            "processor writes Derived.* of every moving entity every 0.1 s, so ChangedWithin also returns the moving entities Hawk and Wolf-3, which the script did not update. " +
-            "Checked instead: AttributeChangedWithin(Spatial.Position) is exactly the updated set, and ChangedWithin is the updated set plus the moving entities.");
+        // S-4.5 (R-113)
+        v.Equal(Names(updated), Names(position.Select(e => NameOf(ctx, e))), "AttributeChangedWithin(Spatial.Position, 3 s): exactly the entities the script updated in [47, 50]");
+        var expectedChanged = updated.Concat(derived).ToHashSet();
+        v.Equal(Names(expectedChanged), Names(changed.Select(e => NameOf(ctx, e))), "ChangedWithin(3 s): the updated entities plus every entity whose Derived.* prediction changed");
 
         var rpr = ctx.Host.RprSource;
         var silent = new List<EntityRecord>();
@@ -807,7 +812,7 @@ public sealed partial class ConvoyAmbushScript
         state.Query().FromOrigin(rpr).NotOriginWrittenWithin(TimeSpan.FromSeconds(10)).CopyTo(silentOrigin);
         v.Equal(Names(["Wolf-1", "Wolf-2"]), Names(silent.Select(e => NameOf(ctx, e))), "NotWrittenWithin(10 s).FromOrigin(RPR)");
         v.Equal(Names(["Wolf-1", "Wolf-2"]), Names(silentOrigin.Select(e => NameOf(ctx, e))), "NotOriginWrittenWithin(10 s).FromOrigin(RPR)");
-        v.Note($"updated {Names(updated)}; moving {moving}; silent RPR entities {Names(silent.Select(e => NameOf(ctx, e)))}");
+        v.Note($"updated {Names(updated)}; derived {Names(derived)}; silent RPR entities {Names(silent.Select(e => NameOf(ctx, e)))}");
         return v.Result();
     }
 }
