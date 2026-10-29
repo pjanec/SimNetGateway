@@ -15,7 +15,7 @@ public class SimulatedRtiTests
     public void A_registration_is_delivered_by_the_next_call_exactly_once()
     {
         var rti = new SimulatedRti();
-        rti.Observe(new RprRegisterObject(7));
+        rti.Observe(new RprRegisterObject(7, default));
 
         var first = Deliver(rti, out int n1);
         Assert.Equal(1, n1);
@@ -40,13 +40,13 @@ public class SimulatedRtiTests
     public void A_registration_requested_while_delivering_waits_for_the_next_call()
     {
         var rti = new SimulatedRti();
-        rti.Observe(new RprRegisterObject(1));
+        rti.Observe(new RprRegisterObject(1, default));
         var delivered = new List<RprObjectRegistered>();
 
         int n = rti.DeliverPending(r =>
         {
             delivered.Add(r);
-            rti.Observe(new RprRegisterObject(2)); // requested after this call began
+            rti.Observe(new RprRegisterObject(2, default)); // requested after this call began
         });
 
         Assert.Equal(1, n);
@@ -67,7 +67,7 @@ public class SimulatedRtiTests
         {
             for (int i = 0; i <= round; i++)
             {
-                rti.Observe(new RprRegisterObject(token++));
+                rti.Observe(new RprRegisterObject(token++, default));
             }
 
             all.AddRange(Deliver(rti, out _));
@@ -90,7 +90,7 @@ public class SimulatedRtiTests
         long[] tokens = { 50, 3, 9999999999L, -4, 12 };
         foreach (long t in tokens)
         {
-            rti.Observe(new RprRegisterObject(t));
+            rti.Observe(new RprRegisterObject(t, default));
         }
 
         var delivered = Deliver(rti, out int n);
@@ -116,7 +116,7 @@ public class SimulatedRtiTests
         Assert.Empty(rti.Registered);
 
         // and the handle counter was not consumed by them
-        rti.Observe(new RprRegisterObject(1));
+        rti.Observe(new RprRegisterObject(1, default));
         Assert.Equal(0x2A01u, Deliver(rti, out _).Single().Handle.Value);
     }
 
@@ -124,7 +124,7 @@ public class SimulatedRtiTests
     public void Registered_grows_only_when_delivered()
     {
         var rti = new SimulatedRti();
-        rti.Observe(new RprRegisterObject(1));
+        rti.Observe(new RprRegisterObject(1, default));
         Assert.Empty(rti.Registered);
         Deliver(rti, out _);
         Assert.Single(rti.Registered);

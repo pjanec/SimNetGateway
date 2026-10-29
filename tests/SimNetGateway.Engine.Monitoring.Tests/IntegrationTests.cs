@@ -156,7 +156,7 @@ public class IntegrationTests
 
         // observing changed nothing: the report is the same text as without it
         // (the only difference is S-0.1 counting the two rules of the test's own mirror module)
-        string observed = report.Render().Replace("45 rules", "43 rules");
+        string observed = report.Render().Replace("46 rules", "44 rules");
         string plain = new ScenarioRunner(null, new GatewayOptions { JournalCapacity = 1024, EventLogCapacity = 512, DiagnosticsCapacity = 8192 })
             .Run(ConvoyAmbushScript.Create()).Render();
         Assert.Equal(plain, observed);
