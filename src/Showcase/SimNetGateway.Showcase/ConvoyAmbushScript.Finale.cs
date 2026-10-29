@@ -118,16 +118,31 @@ public sealed partial class ConvoyAmbushScript
             v.Equal(2, ctx.DisPool.InQuarantine, "numbers in quarantine (member 1's and Hawk's)");
             return v.Result();
         });
+        // S-9.3 (R-113): a released DIS entity number stays unavailable for the quarantine and becomes available afterwards
+        // (member 1's number was released at 100 s, Hawk's at 104 s; the quarantine lasts 10 s)
+        a.Check(109.5, "S-9.3", ctx =>
+        {
+            var v = new Verdict();
+            v.Equal(2, ctx.DisPool.InQuarantine, "numbers in quarantine 5.5 s after Hawk's release (member 1's and Hawk's)");
+            v.Equal(ctx.Recall<int>("available-before") - 1, ctx.DisPool.Available,
+                "available numbers (Kestrel took a fresh one, the two released numbers are still unavailable)");
+            return v.Result();
+        });
+        a.Check(112.5, "S-9.3", ctx =>
+        {
+            var v = new Verdict();
+            v.Equal(1, ctx.DisPool.InQuarantine, "numbers in quarantine after member 1's quarantine ended (Hawk's still rests)");
+            v.Equal(ctx.Recall<int>("available-before") - 1 + 1, ctx.DisPool.Available,
+                "available numbers (member 1's number is available again, Hawk's is still unavailable)");
+            return v.Result();
+        });
         a.Check(115.0, "S-9.3", ctx =>
         {
             var v = new Verdict();
             v.Equal(0, ctx.DisPool.InQuarantine, "numbers in quarantine after the quarantine");
             v.Equal(ctx.Recall<int>("available-before") - 1 + 2, ctx.DisPool.Available,
                 "available numbers (Kestrel took a fresh one, member 1's and Hawk's numbers came back)");
-            v.Note("both rested numbers are available again");
-            v.Question("'after the quarantine a freed number may be reused' is only checkable as availability: the DIS number pool hands out never-used " +
-                "numbers first (ascending), so a freed number is reused only after all 65,534 numbers were used once. Checked: the pool counts the numbers " +
-                "as in quarantine until 10 s after their release and as available afterwards.");
+            v.Note("both released numbers are available again; a reuse itself is not observable (the pool hands out never-used numbers first, R-113)");
             return v.Result();
         });
         a.Check(105.5, "S-9.5", ctx =>
