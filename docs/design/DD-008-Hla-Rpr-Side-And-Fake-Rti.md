@@ -646,7 +646,7 @@ sequenceDiagram
     R-->>T: discover, reflect
     T-->>E: RprObjectUpdate (RTI handle) waits for the drain
     S->>E: 2 Tick
-    E->>E: drain: direct queue, then transport; rules
+    E->>E: drain: direct queue, then transport, rules
     E->>T: Send(RprRegisterObject) and later Send(RprObjectUpdate)
     T->>R: RegisterObjectInstance, UpdateAttributeValues
     S->>P: 3 Evoke
