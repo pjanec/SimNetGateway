@@ -1,3 +1,4 @@
+using SimNetGateway.Common;
 using SimNetGateway.Engine;
 using SimNetGateway.Protocol.Rpr;
 
@@ -33,22 +34,17 @@ public sealed class RprObjectRegisteredIngress : IGatewayModule
 
     private void Handle(in RprObjectRegistered m, IngressContext ctx)
     {
-        if (!_publication.TryTakeToken(m.Token, out var entity))
+        var answer = _publication.Registration.OnRegistered(m.Token, m.Handle, out var entity,
+            id => ctx.State.Find(id) is { IsAlive: true });
+        switch (answer)
         {
-            ctx.Diagnostics.Warn(Name, $"Registration answer for unknown token {m.Token} (handle {m.Handle.Value}); ignored.");
-            return;
-        }
-
-        var record = ctx.State.Find(entity);
-        if (record is null || !record.IsAlive)
-        {
-            // The entity was removed while its registration was pending: the object exists at the RTI and is deleted again.
-            _publication.AddOrphan(m.Handle);
-        }
-        else
-        {
-            _maps.RprHandle.Bind(ctx.Changes, entity, m.Handle);
-            _publication.AddArrival(entity, m.Handle);
+            case RegistrationAnswer.Unknown:
+                ctx.Diagnostics.Warn(Name, $"Registration answer for unknown token {m.Token} (handle {m.Handle.Value}); ignored.");
+                return;
+            case RegistrationAnswer.Accepted:
+                _maps.RprHandle.Bind(ctx.Changes, entity, m.Handle);
+                break;
+            // Released: the entity was removed while its registration was pending: the object exists at the RTI and is deleted again.
         }
 
         ctx.Publish(_handleBound, ctx.RentPayload());

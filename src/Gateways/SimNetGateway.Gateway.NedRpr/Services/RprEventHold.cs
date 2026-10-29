@@ -1,3 +1,4 @@
+using SimNetGateway.Common;
 using SimNetGateway.Engine;
 using SimNetGateway.Protocol.Rpr;
 
@@ -128,5 +129,5 @@ public sealed class RprEventHold
         _maps.RprHandle.TryGetKey(entity, out var handle) ? handle : null;
 
     private bool IsPending(EntityId entity) =>
-        _publication.Table.TryGet(entity, out var state) && state.Status == RprPublicationStatus.Pending;
+        _publication.Registration.StatusOf(entity) == RegistrationStatus.Pending;
 }

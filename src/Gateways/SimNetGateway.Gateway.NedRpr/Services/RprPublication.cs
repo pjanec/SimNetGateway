@@ -4,28 +4,13 @@ using SimNetGateway.Protocol.Rpr;
 
 namespace SimNetGateway.Gateway.NedRpr;
 
-/// <summary>Where an entity is on its way to RPR.</summary>
-public enum RprPublicationStatus : byte
-{
-    /// <summary>Not registered with the RTI (type or position still unknown, or no entity number available).</summary>
-    None,
-
-    /// <summary>Registration requested, the RTI has not answered; updates are coalesced.</summary>
-    Pending,
-
-    /// <summary>The RTI answered; the entity has a handle and updates are sent.</summary>
-    Bound,
-}
-
 /// <summary>
-/// Per-entity publication state of the RPR egress (spec section 2): the status, the registration token, the wall time of
-/// the last update sent, and the fields of the one pending update that the contributor rules fill (R-045).
+/// Per-entity publication state of the RPR egress (spec section 2): the wall time of the last update sent and the fields of
+/// the one pending update that the contributor rules fill (R-045). The registration status and token live in
+/// <see cref="RprPublication.Registration"/> (Common's <see cref="AsyncRegistration{THandle}"/>, DD-009).
 /// </summary>
 public struct RprPublicationState
 {
-    public RprPublicationStatus Status;
-    public long Token;
-
     /// <summary>Wall time at which the last RprObjectUpdate (egress, first full update or heartbeat) was sent.</summary>
     public double LastSendWall;
 
@@ -54,7 +39,7 @@ public struct RprPublicationState
         Orientation is not null || Velocity is not null || Acceleration is not null || AngularVelocity is not null ||
         DrAlgorithm is not null || DamageState is not null || DamagePercent is not null;
 
-    /// <summary>The state as the inspector shows it (R-077): status, token, last send, queued flag and the names of the pending fields.</summary>
+    /// <summary>The state as the inspector shows it (R-077): last send, queued flag and the names of the pending fields.</summary>
     public override readonly string ToString()
     {
         var pending = new List<string>();
@@ -70,7 +55,7 @@ public struct RprPublicationState
         if (DamageState is not null) { pending.Add("damage state"); }
         if (DamagePercent is not null) { pending.Add("damage percent"); }
         return string.Create(System.Globalization.CultureInfo.InvariantCulture,
-            $"status {Status}, token {Token}, last send {LastSendWall:F3} s, queued {Queued}, allocation warned {AllocationWarned}, pending: {(pending.Count == 0 ? "none" : string.Join(", ", pending))}");
+            $"last send {LastSendWall:F3} s, queued {Queued}, allocation warned {AllocationWarned}, pending: {(pending.Count == 0 ? "none" : string.Join(", ", pending))}");
     }
 
     public void ClearPending()
@@ -105,13 +90,10 @@ public sealed class RprPublication
     private readonly TypeCatalog _catalog;
     private readonly PredictorRegistry _predictors;
     private readonly List<EntityId> _queue = new();
-    private readonly Dictionary<long, EntityId> _tokens = new();
-    private readonly List<(EntityId Entity, RprObjectHandle Handle)> _arrivals = new();
-    private readonly List<RprObjectHandle> _orphans = new();
+    private readonly AsyncRegistration<RprObjectHandle> _registration = new();
     private readonly List<EntityId> _requests = new();
     private EntityTable<RprPublicationState>? _table;
     private IGatewayContext? _gateway;
-    private long _lastToken;
 
     public RprPublication(IOutboundChannel<IRprMessage> output, PivotSchema schema, NedRprMaps maps, TypeCatalog catalog,
         PredictorRegistry predictors)
@@ -127,6 +109,9 @@ public sealed class RprPublication
         _catalog = catalog;
         _predictors = predictors;
     }
+
+    /// <summary>The asynchronous registration machine (Common, DD-009 section 3 item 2): status, tokens, arrivals and orphans of the registrations.</summary>
+    public AsyncRegistration<RprObjectHandle> Registration => _registration;
 
     /// <summary>
     /// The internal event "a registration answer was bound to its entity". The registration transaction only binds an
@@ -252,14 +237,14 @@ public sealed class RprPublication
                 continue;
             }
 
-            switch (state.Status)
+            switch (_registration.StatusOf(id))
             {
-                case RprPublicationStatus.None:
+                case RegistrationStatus.None:
                     TryRegister(entity, ref state);
                     break;
-                case RprPublicationStatus.Pending:
+                case RegistrationStatus.Pending:
                     break; // coalesce: the first update after the handle arrives carries everything
-                case RprPublicationStatus.Bound:
+                case RegistrationStatus.Bound:
                     if (state.HasPending && _maps.RprHandle.TryGetKey(id, out var handle))
                     {
                         var update = new RprObjectUpdate(handle)
@@ -306,22 +291,11 @@ public sealed class RprPublication
             return;
         }
 
-        state.Token = ++_lastToken;
-        state.Status = RprPublicationStatus.Pending;
-        _tokens[state.Token] = entity.Id;
-        _output.Send(new RprRegisterObject(state.Token, ToDis((int)tkb.AsInt())));
+        long token = _registration.Request(entity.Id);
+        _output.Send(new RprRegisterObject(token, ToDis((int)tkb.AsInt())));
     }
 
     // ---- registration answers ---------------------------------------------------------------------------------------
-
-    /// <summary>Takes the entity that requested the token; false when the token is unknown (or already answered).</summary>
-    public bool TryTakeToken(long token, out EntityId entity) => _tokens.Remove(token, out entity);
-
-    /// <summary>Notes a handle that was bound (in the open transaction) to the entity that requested it.</summary>
-    public void AddArrival(EntityId entity, RprObjectHandle handle) => _arrivals.Add((entity, handle));
-
-    /// <summary>Notes a handle for an entity that no longer exists; its RTI object is deleted again.</summary>
-    public void AddOrphan(RprObjectHandle handle) => _orphans.Add(handle);
 
     /// <summary>
     /// After the registration transaction committed: marks the entities Bound and sends ONE full update each (everything the
@@ -330,16 +304,18 @@ public sealed class RprPublication
     public void CompleteRegistrations()
     {
         var gateway = Gateway;
-        for (int i = 0; i < _orphans.Count; i++)
+        var orphans = _registration.Orphans;
+        for (int i = 0; i < orphans.Count; i++)
         {
-            _output.Send(new RprObjectRemoved(_orphans[i]));
+            _output.Send(new RprObjectRemoved(orphans[i]));
         }
 
-        _orphans.Clear();
+        _registration.ClearOrphans();
 
-        for (int i = 0; i < _arrivals.Count; i++)
+        var arrivals = _registration.Arrivals;
+        for (int i = 0; i < arrivals.Count; i++)
         {
-            var (id, handle) = _arrivals[i];
+            var (id, handle) = arrivals[i];
             if (!_maps.RprHandle.TryGetKey(id, out var bound) || bound != handle)
             {
                 continue; // the binding did not commit
@@ -351,13 +327,17 @@ public sealed class RprPublication
                 continue;
             }
 
+            if (!_registration.Complete(id, handle))
+            {
+                continue;
+            }
+
             ref var state = ref Table.GetOrAdd(id);
-            state.Status = RprPublicationStatus.Bound;
             state.ClearPending();
             SendUpdate(BuildFull(entity, handle, predictToNow: false), ref state);
         }
 
-        _arrivals.Clear();
+        _registration.ClearArrivals();
     }
 
     // ---- removal ------------------------------------------------------------------------------------------------------
@@ -368,6 +348,7 @@ public sealed class RprPublication
     /// </summary>
     public void OnRemoved(EntityId id)
     {
+        _registration.Release(id);
         if (_maps.RprHandle.TryGetKey(id, out var handle))
         {
             _output.Send(new RprObjectRemoved(handle));
@@ -387,7 +368,7 @@ public sealed class RprPublication
         for (int i = 0; i < table.Count; i++)
         {
             ref var state = ref table.ValueAt(i);
-            if (state.Status != RprPublicationStatus.Bound || wallNow - state.LastSendWall < period)
+            if (_registration.StatusOf(table.IdAt(i)) != RegistrationStatus.Bound || wallNow - state.LastSendWall < period)
             {
                 continue;
             }
@@ -422,7 +403,7 @@ public sealed class RprPublication
             var id = _requests[i];
             ref var state = ref Table.GetOrAdd(id);
             var entity = gateway.State.Find(id);
-            if (state.Status != RprPublicationStatus.Bound || entity is null || !entity.IsAlive || !_maps.RprHandle.TryGetKey(id, out var handle))
+            if (_registration.StatusOf(id) != RegistrationStatus.Bound || entity is null || !entity.IsAlive || !_maps.RprHandle.TryGetKey(id, out var handle))
             {
                 continue;
             }
