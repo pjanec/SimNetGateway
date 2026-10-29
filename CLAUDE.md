@@ -110,6 +110,9 @@ deviation discovered during implementation is reported, not silently chosen. Tri
   a forbidden project reference fails it). Deterministic, `ManualClock`, no sleeping.
 - `bash scripts/mermaid-check.sh docs/design/*.md` - parses every mermaid block (needs node; installs mermaid once into
   `~/.cache`); run it on every design doc you change - a semicolon inside a sequence-diagram message breaks it.
+- `bash scripts/vendor-dry-run.sh` - vendorability dry run (R-092, DD-007 section 2): copies Engine, Common, Protocol.Dis7, Protocol.Hrot,
+  Gateway.HrotDis and Transport.DisUdp with the root `Directory.Build.props` and `.editorconfig` under a foreign parent with hostile build files and builds
+  each with 0 warnings required; run it after changing any of the six projects' files or `Directory.Build.props`.
 - `dotnet run --project src/Hosts/SimNetGateway.Demo` - console demo; `-- --bench` for the 10k
   benchmark (from stage 6).
 - Layout (DD-003 section 2): `src/Engine`, `src/Common`, `src/Protocols`, `src/Gateways`,

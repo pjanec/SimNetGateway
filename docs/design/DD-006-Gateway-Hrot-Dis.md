@@ -743,3 +743,44 @@ expected extension when HLA ownership transfer is needed, in its own design.
   never; threshold ignores orientation; partial PDU (marking omitted, spatial omitted); no quarantine; ESPDUs for dis-origin entities (both guards removed - one alone is
   covered by the other); own-site PDUs accepted; reaper by any-write recency; SIMAN with `hrotControlsDis` off; no final PDU; fresh event id; events in replay; ESPDUs in
   Edit; exercise unfiltered; DIS SIMAN honoured without `disControlsHrot`; no tick-end drift check; Deactivated does not remove; Remove Entity removes HROT entities; no Reconcile.
+
+**H3 (T-019): `Transport.DisUdp` and the vendorability dry run** (R-082, R-092, DD-007 P-69).
+
+- Layout: `src/Transports/SimNetGateway.Transport.DisUdp/` references Engine and `Protocol.Dis7` only (DD-003 rule 5; it does not reference the gateway). `DisUdpSettings` (record,
+  built by the host from `dis.address`, `dis.port`, `dis.exerciseId`, `shared.site`, `shared.application`; extra: `ListenPort`, `LocalAddress`, `QueueCapacity` 65536, `MulticastTtl`,
+  `MulticastLoopback`), `IDatagramSocket` (the minimal socket surface: `Receive(buffer, timeoutMs)`, `Send`), `UdpDatagramSocket` (the real one), `DisUdpTransport`
+  (`IInboundChannel` + `IOutboundChannel<Pdu>` + `IDisposable`), `DisUdpCounters` (snapshot). `DisUdpTransport.Open(settings, source)` builds the real socket and starts the thread; the
+  public constructor takes any `IDatagramSocket` (tests), `Start()` starts the thread. The host binds it to the ports "dis" (`BindInbound` and `BindOutbound<Pdu>`).
+- Inbound (R-018): the receive thread polls the socket (50 ms slices, so a stop is seen quickly), and for each datagram calls `Ingest`: `PduCodec.Decode`, then per PDU slot, in order:
+  Unsupported and Error entries are counted; another exercise id is filtered; an echo is filtered; the rest is ENQUEUED (bounded queue, overflow dropped and counted). `Drain(sink, budget)`
+  runs on the engine thread and calls `sink.Deliver` with the **concrete class** (`Deliver<EntityStatePdu>`, `FirePdu`, ... for the 12 decoded types; H2b modules route on it). Nothing reaches the
+  engine from the receive thread. The echo filter checks, per kind, the id the gateway's own ingress checks: Entity State / Entity State Update entity id; Fire / Detonation firing id **or** event
+  id; Collision issuing id or event id; simulation management originating id. `Ingest` and `WaitForPdus(count, timeout)` (a bounded wait on a monitor, no polling) are public for tests and tools.
+- Counters: `DatagramsReceived`, `PdusReceived` (one per PDU slot), `Delivered`, `Pending`, `FilteredExercise`, `FilteredOwn`, `Unsupported`, `DecodeErrors`, `QueueOverflow`, `ReceiveErrors`,
+  `Sent`, `EncodeErrors`, `SendErrors`. Invariant `Balanced`: PdusReceived = Delivered + Pending + FilteredExercise + FilteredOwn + Unsupported + DecodeErrors + QueueOverflow.
+- Outbound: `Send` encodes with `PduCodec.Encode`, **one PDU per datagram (no bundling)**, `SendTo` the configured address; encode and socket failures are counted, never thrown.
+- Socket: `System.Net.Sockets` only. SO_REUSEADDR before bind (several processes on one host share port 3000), broadcast enabled, bind to the wildcard address for multicast (binding to a group
+  address is not portable) or to `LocalAddress` / any for unicast and broadcast (a socket bound to a unicast address does not get broadcasts on Linux: leave `LocalAddress` empty for a broadcast
+  network), multicast group joined with `AddMembership` and left on dispose, TTL and loopback options, `MulticastInterface` from `LocalAddress`; on Windows the UDP connection-reset ioctl is
+  switched off. `Dispose` stops the thread (bounded join, 5 s; a stop is seen within one 50 ms poll slice), then closes the socket; it does not throw and may be called twice.
+- Decisions: (1) one address for send and for the multicast join, as `dis.address` is one value; (2) `ListenPort` exists so that two transports on one host can talk by unicast (the same
+  unicast port cannot be shared: the kernel gives each datagram to one socket); (3) `receivedAt` is not passed to `Deliver` (the engine stamps its own clock when the drain runs; the
+  DIS ingress uses that as `Spatial.StateTime`); (4) the queue holds decoded PDU objects, so a datagram is decoded once, on the receive thread.
+- Vendoring dry run (`bash scripts/vendor-dry-run.sh`, DD-007 section 2): the six projects plus the root `Directory.Build.props` build with 0 warnings and 0 errors below a foreign parent with a
+  hostile `Directory.Build.props` (net6.0, LangVersion 7.3, TreatWarningsAsErrors), `Directory.Build.targets` (TreatWarningsAsErrors, WarningLevel 9999, GenerateDocumentationFile),
+  `Directory.Packages.props` (central package management on) and `.editorconfig` (every analyzer rule an error). **What had to change:** the six projects needed nothing from the repository root
+  except `Directory.Build.props` (no packages, no `Directory.Packages.props`), but a host's `.editorconfig` cascades into the vendored folder and a strict one failed the build with IDE / CA errors, so a
+  root `.editorconfig` (`root = true`, no rules) was added to the repository root and to the vendored set (DD-007 section 2). The dry run is a script, not a test (about half a minute of builds).
+- End-to-end test (`HrotDisUdpLoopbackTests`): the gateway profile, `DisUdpTransport` on 127.0.0.1 and a scripted peer socket; a HROT entity (in-memory `Protocol.Hrot` messages) arrives as
+  a Start/Resume and an Entity State at the peer, a peer Entity State becomes a `ReplicaState`, an other-exercise PDU and an echo never reach the gateway. **Test project choice:** it lives in
+  `tests/SimNetGateway.Transport.DisUdp.Tests` (the mirror project of the transport, which the architecture tests require); a test project may reference the gateway (the layer rules apply to
+  `src/` only, as for `Transport.HlaRpr.Tests` which references both gateways and the showcase), so no host-level test project was needed.
+- Tests (`Transport.DisUdp.Tests`, 55): `FilterTests` (seeded random datagrams of 1 - 4 PDUs of five kinds with random exercise, origin and event id plus unsupported and malformed slots against an
+  oracle written from the spec, 8 seeds x 400 datagrams: delivered = right exercise, not own, in arrival order, each as its concrete class, counters equal the oracle and balance after every datagram;
+  2000 garbage / corrupted datagrams per seed never throw), `ThreadingTests` (nothing reaches the sink except in the drain on the draining thread; 8 producers x 1500 datagrams with concurrent
+  random-budget drains lose and duplicate nothing and keep per-producer order; receive errors do not end the loop; dispose bounded, idempotent, tolerant), `LoopbackTests` (127.0.0.1 unicast,
+  byte-identical and in order; echo to self filtered; several PDUs plus junk in raw datagrams; broadcast on 127.255.255.255 and multicast 239.255.42.99 with three transports sharing one port via
+  SO_REUSEADDR - skipped with the reason when a probe shows the machine cannot do it; dispose frees the port), `HrotDisUdpLoopbackTests` (3).
+- Mutation checks (R-065), each red then restored: no exercise filter (14 tests incl. the random runs and the e2e filter test); no echo filter (random runs, echo tests); delivery as `Pdu` (concrete-class
+  tests, random runs, e2e); delivery on the receive thread (threading test, stress, e2e, overflow test); only the first PDU of a datagram (multi-PDU tests, random runs, raw-socket test); unsupported
+  not counted (random runs, garbage); echo by site only; Fire echo ignoring the event id; queue unbounded; dispose without joining the thread; delivered not counted; Entity State delivered as `Pdu`.
