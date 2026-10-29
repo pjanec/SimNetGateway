@@ -361,7 +361,7 @@ Linux with .NET SDK 8.0.426. Points where the code goes beyond or interprets the
   `Showcase -> Transport`, `LayerRulesTests` moved the pair from forbidden to allowed, `Showcase` references
   `Transport.HlaRpr` and `Transport.FakeRti`. Rejected: hosts wire the transport and the showcase takes channels
   by interface - `ScenarioRunner`, `DemoScenario` and the test classes build the host themselves, a host may not
-  reference another host, so Demo and Viewer would each carry the wiring (DD-008 P-88, awaiting approval).
+  reference another host, so Demo and Viewer would each carry the wiring (DD-008 P-88, approved as R-120).
 - **Not yet created**: the gateway's `Schema/`, `Ned/`, `Rpr/`, `Display/`, `Processors/` folders
   (git keeps no empty folders; they come with stage 5) and `src/Transports/` (later).
 - The three layer test projects contain no tests yet; `dotnet test` prints "No test is

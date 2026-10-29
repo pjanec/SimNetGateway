@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests the DIS UDP transport: filtering and queueing over a fake socket, real loopback sockets, and (HrotDisUdpLoopbackTests) the
+       HROT DIS gateway over the transport against a scripted DIS peer socket. A test project may reference the gateway; the transport may not. -->
+  <ItemGroup>
+    <ProjectReference Include="../../src/Transports/SimNetGateway.Transport.DisUdp/SimNetGateway.Transport.DisUdp.csproj" />
+    <ProjectReference Include="../../src/Gateways/SimNetGateway.Gateway.HrotDis/SimNetGateway.Gateway.HrotDis.csproj" />
+    <ProjectReference Include="../../src/Engine/SimNetGateway.Engine.InMemory/SimNetGateway.Engine.InMemory.csproj" />
+    <ProjectReference Include="../../src/Protocols/SimNetGateway.Protocol.Dis7/SimNetGateway.Protocol.Dis7.csproj" />
+    <ProjectReference Include="../../src/Protocols/SimNetGateway.Protocol.Hrot/SimNetGateway.Protocol.Hrot.csproj" />
+  </ItemGroup>
+
+</Project>
