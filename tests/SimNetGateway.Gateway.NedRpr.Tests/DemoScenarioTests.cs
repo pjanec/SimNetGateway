@@ -82,9 +82,9 @@ public class DemoScenarioTests
         var host = s_result.Value.Host;
         var registrations = host.RprOut!.OfType<RprRegisterObject>().ToList();
         Assert.Equal(3, registrations.Count);
-        Assert.Equal(3, host.Rti.Registered.Count);
+        Assert.Equal(3, host.RegisteredHandles.Count);
         var fullUpdates = host.RprOut!.OfType<RprObjectUpdate>().Where(u => u.Marking is not null).ToList();
-        foreach (var handle in host.Rti.Registered)
+        foreach (var handle in host.RegisteredHandles)
         {
             var first = host.RprOut!.OfType<RprObjectUpdate>().First(u => u.Handle == handle);
             Assert.NotNull(first.Marking);
@@ -93,7 +93,9 @@ public class DemoScenarioTests
         }
 
         Assert.True(fullUpdates.Count >= 3);
-        Assert.Contains(s_result.Value.Timeline, l => l.Contains("RprObjectUpdate handle=0x2A01 (full) marking=Alpha-1", StringComparison.Ordinal));
+        // the handle is the RTI's: the first registration of the federation
+        Assert.Contains(s_result.Value.Timeline,
+            l => l.Contains($"RprObjectUpdate handle=0x{host.RegisteredHandles[0].Value:X} (full) marking=Alpha-1", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -135,7 +137,7 @@ public class DemoScenarioTests
     {
         var host = s_result.Value.Host;
         var removed = host.RprOut!.OfType<RprObjectRemoved>().Single();
-        Assert.Equal(host.Rti.Registered.ElementAt(2), removed.Handle);
+        Assert.Equal(host.RegisteredHandles[2], removed.Handle);
         Assert.Contains(host.DisplayOut!.OfType<DisplayEntityRemoved>(), d => d.Label == "Bravo-2");
     }
 
@@ -172,7 +174,7 @@ public class DemoScenarioTests
     public void The_static_checkpoint_is_only_refreshed_by_heartbeats()
     {
         var host = s_result.Value.Host;
-        var handle = host.Rti.Registered.ElementAt(1);
+        var handle = host.RegisteredHandles[1];
         var updates = host.RprOut!.OfType<RprObjectUpdate>().Where(u => u.Handle == handle).ToList();
         Assert.InRange(updates.Count, 3, 5); // the full first update and one heartbeat every 5 s
         Assert.All(updates, u => Assert.Equal("Checkpoint", u.Marking));

@@ -261,11 +261,7 @@ public class BenchmarkTests
             {
                 checker = new InvariantChecker(host);
                 host.NedOut!.Tap = checker.OnNedSent;
-                host.RprOut!.Tap = message =>
-                {
-                    host.Rti.Observe(message);
-                    checker.OnRprSent(message);
-                };
+                host.RprOut!.Tap = checker.OnRprSent;
             },
             afterTick: host =>
             {

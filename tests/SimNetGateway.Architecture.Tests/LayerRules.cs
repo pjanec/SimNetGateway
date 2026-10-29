@@ -50,8 +50,10 @@ public static class LayerRules
         [Layer.Gateway] = [Layer.Engine, Layer.Common, Layer.Protocol],
         // rule 5: the engine and one protocol - never a gateway
         [Layer.Transport] = [Layer.Engine, Layer.Protocol],
-        // the harness drives a gateway through in-memory channels (DD-002 section 8)
-        [Layer.Showcase] = [Layer.Engine, Layer.EngineSupport, Layer.Common, Layer.Protocol, Layer.Gateway],
+        // the harness drives a gateway through in-memory channels (DD-002 section 8) and, since HLA-3 (DD-008 section 12b, T-021), wires
+        // the RPR side to the HLA transport on the fake RTI: the showcase assembly is the shared host assembly (NedRprHost) of the
+        // demo, the viewer and the tests, so the wiring lives once, here (a host cannot reference another host)
+        [Layer.Showcase] = [Layer.Engine, Layer.EngineSupport, Layer.Common, Layer.Protocol, Layer.Gateway, Layer.Transport],
         // rule 6: only hosts reference gateways together with transports
         [Layer.Host] = [Layer.Engine, Layer.EngineSupport, Layer.Common, Layer.Protocol, Layer.Gateway,
                         Layer.Transport, Layer.Showcase],
@@ -65,7 +67,7 @@ public static class LayerRules
         [Layer.Protocol] = "rule 2: protocol projects reference nothing, not even the engine",
         [Layer.Gateway] = "rule 4: a gateway references the engine, Common and protocols only - never a transport, a host or another gateway",
         [Layer.Transport] = "rule 5: a transport references the engine and one protocol - never a gateway",
-        [Layer.Showcase] = "the showcase references gateways, the engine and its in-memory support - never a transport or a host",
+        [Layer.Showcase] = "the showcase references gateways, transports, the engine and its in-memory support - never a host",
         [Layer.Host] = "rule 6: a host may reference every layer except another host",
     };
 

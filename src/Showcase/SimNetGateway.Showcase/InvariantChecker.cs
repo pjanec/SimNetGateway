@@ -52,11 +52,14 @@ public readonly record struct ExpectedDiagnostic(string? Category, string Messag
 /// <item>G-7 diagnostics whitelist: every warning and error is one the script (or the test) expects now; no rule failed.</item>
 /// <item>G-8 causality: correlation ids strictly increase, every CausedBy is an earlier correlation, and records and events are
 /// dispatched in correlation order (the state triggers of a correlation precede its events).</item>
+/// <item>G-9 (HLA-3, when <see cref="CheckRti"/> is on) what the RPR side receives is what the gateway sent: everything the gateway sent
+/// to the RPR side in a tick (registrations, attribute updates, removals, fires, detonations) is, at the end of the tick, what the
+/// scripted federate decoded from the RTI; the transport lost nothing and dropped only what the FOM cannot carry.</item>
 /// </list>
 /// Messages are inspected when they are sent (the identity maps still hold the keys of entities being removed); violations found
 /// there are collected, because a rule that throws is swallowed by the engine, and raised by the next <see cref="Evaluate"/>.
 /// </summary>
-public sealed class InvariantChecker
+public sealed partial class InvariantChecker
 {
     private readonly NedRprHost _h;
     private readonly List<(string Id, string Detail)> _violations = new();
@@ -202,6 +205,11 @@ public sealed class InvariantChecker
 
     public void OnRprSent(IRprMessage message)
     {
+        if (CheckRti)
+        {
+            MirrorSent(message);
+        }
+
         switch (message)
         {
             case RprObjectUpdate m:
@@ -276,7 +284,7 @@ public sealed class InvariantChecker
 
     private void CheckHandle(RprObjectHandle handle, string what, bool updating, bool checkOrigin)
     {
-        if (!_h.Rti.Registered.Contains(handle))
+        if (!_h.IsRegisteredHandle(handle))
         {
             Violate("G-5", $"{what} uses handle {handle.Value}, which the RTI never delivered");
         }
@@ -297,7 +305,7 @@ public sealed class InvariantChecker
     {
         // a handle is valid when the RTI delivered it (an object the gateway registered) or when the RPR side announced it itself
         // (an RPR-origin object that is bound in rpr.handle), e.g. the target of a NED weapon fire
-        if (handle is { } h && !_h.Rti.Registered.Contains(h) && !_h.RprHandles.TryResolve(h, out _))
+        if (handle is { } h && !_h.IsRegisteredHandle(h) && !_h.RprHandles.TryResolve(h, out _))
         {
             Violate("G-5", $"{what} uses handle {h.Value}, which the RTI never delivered");
         }
@@ -360,6 +368,11 @@ public sealed class InvariantChecker
         CheckIndexes();
         CheckProbe();
         CheckDiagnostics();
+        if (CheckRti)
+        {
+            CheckRtiMirror();
+        }
+
         if (_violations.Count == 0)
         {
             return Array.Empty<Violation>();

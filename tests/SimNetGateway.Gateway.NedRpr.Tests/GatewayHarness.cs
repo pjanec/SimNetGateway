@@ -9,8 +9,8 @@ namespace SimNetGateway.Gateway.NedRpr.Tests;
 
 /// <summary>
 /// The reusable end-to-end harness of the NED-RPR gateway: a manual clock, the gateway built from a configuration, one
-/// multi-type in-memory inbound channel per input side, recorders for the three outbound sides, the simulated RTI wired to
-/// the RPR recorder, and the <see cref="InvariantChecker"/> of the showcase project that runs after every step (G-1 .. G-8 as far as
+/// multi-type in-memory inbound channel per input side, recorders for the three outbound sides, the RPR side wired to the HLA
+/// transport on the fake RTI (<see cref="NedRprHost"/>: registrations are answered by the RTI one tick later, handles are the RTI's), and the <see cref="InvariantChecker"/> of the showcase project that runs after every step (G-1 .. G-8 as far as
 /// the harness has the data: no probe is registered, so the probe parts of G-6 and G-8 are left to the showcase runner).
 /// </summary>
 public sealed class GatewayHarness
@@ -43,7 +43,6 @@ public sealed class GatewayHarness
             };
             RprOut.Tap = message =>
             {
-                Rti.Observe(message);
                 Checker.OnRprSent(message);
                 if (LoopbackRpr && message is RprObjectUpdate or RprObjectRemoved or RprWeaponFire or RprMunitionDetonation)
                 {
@@ -76,7 +75,8 @@ public sealed class GatewayHarness
 
     public InMemoryOutbound<IDisplayMessage> DisplayOut { get; }
 
-    public SimulatedRti Rti => Host.Rti;
+    /// <summary>The handles the RTI answered the gateway's registrations with, in answer order.</summary>
+    public IReadOnlyList<RprObjectHandle> RegisteredHandles => Host.RegisteredHandles;
 
     public InvariantChecker Checker { get; }
 
@@ -92,7 +92,7 @@ public sealed class GatewayHarness
 
     public IdentityMap<string> DisplayLabels => Host.DisplayLabels;
 
-    /// <summary>When false the RTI does not answer registrations (the handle stays pending).</summary>
+    /// <summary>When false the transport is not pumped: the RTI's answer to a registration is not delivered (the handle stays pending).</summary>
     public bool DeliverRti
     {
         get => Host.DeliverRti;

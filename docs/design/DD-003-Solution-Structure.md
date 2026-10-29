@@ -45,7 +45,8 @@ src/
                                             (DR extrapolation, stale-entity reaper)
   Protocols/
     SimNetGateway.Protocol.Ned/           NED message types (wire model only)
-    SimNetGateway.Protocol.Rpr/           RPR message and DIS types, SimulatedRti (PoC)
+    SimNetGateway.Protocol.Rpr/           RPR message and DIS types, the 1516e port and RPR FOM 2.0 (DD-008; SimulatedRti
+                                            was retired in stage HLA-3)
     SimNetGateway.Protocol.Display/       display message types
   Gateways/
     SimNetGateway.Gateway.NedRpr/         the concrete NED <-> RPR (+ display) gateway:
@@ -84,6 +85,8 @@ flowchart BT
     GW["Gateway.NedRpr"]
     TDds["Transport.Dds (later)"]
     TRti["Transport.PitchRti (later)"]
+    THla["Transport.HlaRpr (DD-008)"]
+    TFake["Transport.FakeRti (DD-008)"]
     Show["Showcase"]
     Demo["Hosts: Demo"]
     Viewer["Hosts: Viewer (later)"]
@@ -99,8 +102,13 @@ flowchart BT
     TDds --> PNed
     TRti --> Engine
     TRti --> PRpr
+    THla --> Engine
+    THla --> PRpr
+    TFake --> PRpr
     Show --> GW
     Show --> InMem
+    Show --> THla
+    Show --> TFake
     Demo --> GW
     Demo --> InMem
     Demo --> Show
@@ -123,7 +131,10 @@ Arrows point to what a project may reference. The rules:
    transport or a host**, and never another gateway.
 5. **A transport references** the engine (channel interfaces) and one protocol - **never a
    gateway**.
-6. **Only hosts** reference gateways together with transports and assemble them.
+6. **Only hosts** reference gateways together with transports and assemble them. (Stage HLA-3,
+   DD-008 P-88: the **showcase assembly** `NedRprHost` is the one host assembly shared by the demo, the
+   viewer, the benchmark and the tests, so `Showcase` may also reference transports - the fake RTI and the
+   HLA transport - and wires the RPR side there once. It still references no host.)
 7. Test projects mirror the layer they test; `Architecture.Tests` enforces rules 1 - 6 by
    inspecting the assemblies' references, so a violation fails the build pipeline.
 
@@ -345,6 +356,12 @@ Linux with .NET SDK 8.0.426. Points where the code goes beyond or interprets the
 - **`.sln` paths use `\`** - the solution file format requires it (`dotnet sln` writes it on Linux
   too) and MSBuild normalises it on every OS; this is the one place R-012's "no `\`" cannot apply.
   The file is stored with LF and without BOM; `ConventionTests` normalises when reading it.
+- **Stage HLA-3 (T-021, 2026-10-29): `Showcase` may reference transports.** The rule of the bullet above
+  ("never a transport") is relaxed for the one layer that is the shared host assembly: `LayerRules` allows
+  `Showcase -> Transport`, `LayerRulesTests` moved the pair from forbidden to allowed, `Showcase` references
+  `Transport.HlaRpr` and `Transport.FakeRti`. Rejected: hosts wire the transport and the showcase takes channels
+  by interface - `ScenarioRunner`, `DemoScenario` and the test classes build the host themselves, a host may not
+  reference another host, so Demo and Viewer would each carry the wiring (DD-008 P-88, awaiting approval).
 - **Not yet created**: the gateway's `Schema/`, `Ned/`, `Rpr/`, `Display/`, `Processors/` folders
   (git keeps no empty folders; they come with stage 5) and `src/Transports/` (later).
 - The three layer test projects contain no tests yet; `dotnet test` prints "No test is
