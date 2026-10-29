@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | in review - proposals P-77 .. P-86 await the user; stage HLA-1 (port, encoding, FOM model, fake RTI) implemented on the user's go-ahead, see section 12 |
+| **Status** | approved: P-77 .. P-86 are R-100 .. R-109; HLA-1 built (section 12); HLA-2 next |
 | **Tasks** | T-021 |
 | **Rulings honoured** | R-002, R-003, R-012, R-018, R-019 .. R-022, R-045, R-047, R-050, R-051, R-053, R-054, R-063 .. R-067, R-089 (HLA readiness) |
 | **Inputs** | RPR FOM 2.0 modules (SISO-STD-001.1-2015 Annex A, copy in `github.com/IVCTool/TS_RPR_FOM`, `RPR-FOM-v2.0/RPR-{Foundation,Base,Physical,Warfare,Enumerations,Aggregate}_v2.0.xml`); IEEE 1516.1-2010 Java/C++ interfaces as copied in `github.com/openlvc/portico` (`codebase/src/java/portico/hla/rti1516e`, `codebase/src/cpp/ieee1516e/include/RTI`); padded encoders of `github.com/Pitch-Technologies/FedProClient` (`cpp/src/fedpro/services-common/encoding`) and `github.com/TNO-MST/object-oriented-rti`; the DIS <-> RPR gateway `github.com/openlvc/disco` |
@@ -421,16 +421,16 @@ RPR FOM 2.0 XML modules; `RprFom2.Model()` is checked against them by a test.
 
 | ID | Proposal (lean) | Main alternative |
 |---|---|---|
-| **P-77** | **A C# port mirroring 1516e** (names, exceptions, HLA_EVOKED only; services of section 4 only) in `Protocol.Rpr.Hla`. | A message-level port (a second design for the real binding). |
-| **P-78** | **One protocol project**: the port, the 1516.2 encoding and the RPR FOM 2.0 model/codecs live in `Protocol.Rpr` (namespaces `Hla`, `Hla.Encoding`, `Fom`). | A separate `Protocol.Hla` - the transport would reference two protocols (rule 5 change). |
-| **P-79** | **Padded 1516.2 encoding** (Pitch/TNO behaviour) with the derived RPR sizes of 3.3 pinned by goldens. | Unpadded (Portico Java) - wire-incompatible with Pitch. |
-| **P-80** | **Fake RTI semantics** of 3.6, deterministic, single-threaded, opaque values, verified against a brute-force reference model. | A thinner fake (no promotion, no filtering) - would hide the behaviours a real RTI enforces. |
-| **P-81** | **RTI-generated object names** (no reservation round trip), names kept by the transport for `RTIobjectId` references. | Reserved deterministic names `site.app.entity` - an extra asynchronous step and collisions to handle. |
-| **P-82** | **Mapping of 3.4 / 3.5**: `RprRegisterObject` gains `EntityType`; new `RprUpdateRequested` + module; interaction fields added; `RprDetonationResult` takes the FOM numbering; per-object spatial cache in the transport. | Keep the messages and guess the class at registration (always `PhysicalEntity`) - other federates subscribing to `Platform` would never discover us. |
-| **P-83** | **FOM in code** (`RprFom2.Model()`, R-054); the official XML is used only by the real binding, with a test comparing the two. | Ship the RPR XML modules now and parse them (contradicts R-054 for now). |
-| **P-84** | `RprSimulationControl` **not carried** over HLA (no RPR 2.0 interaction for it in the used modules); counted and warned. | Map it to a custom interaction class (non-standard). |
-| **P-85** | **Retire `SimulatedRti`** in HLA-3 when Convoy Ambush passes on the fake RTI. | Keep both stand-ins (two implementations of one concept). |
-| **P-86** | **Stages HLA-1 .. HLA-4** of section 10; the HROT gateway gets the same HLA side when `Gateway.HrotDis` reaches it, by sharing the RPR modules then (their extraction is that stage's design question, not this one). | Build the HLA side for `Gateway.HrotDis` first (it does not exist yet). |
+| **P-77** (approved, R-100) | **A C# port mirroring 1516e** (names, exceptions, HLA_EVOKED only; services of section 4 only) in `Protocol.Rpr.Hla`. | A message-level port (a second design for the real binding). |
+| **P-78** (approved, R-101) | **One protocol project**: the port, the 1516.2 encoding and the RPR FOM 2.0 model/codecs live in `Protocol.Rpr` (namespaces `Hla`, `Hla.Encoding`, `Fom`). | A separate `Protocol.Hla` - the transport would reference two protocols (rule 5 change). |
+| **P-79** (approved, R-102) | **Padded 1516.2 encoding** (Pitch/TNO behaviour) with the derived RPR sizes of 3.3 pinned by goldens. | Unpadded (Portico Java) - wire-incompatible with Pitch. |
+| **P-80** (approved, R-103) | **Fake RTI semantics** of 3.6, deterministic, single-threaded, opaque values, verified against a brute-force reference model. | A thinner fake (no promotion, no filtering) - would hide the behaviours a real RTI enforces. |
+| **P-81** (approved, R-104) | **RTI-generated object names** (no reservation round trip), names kept by the transport for `RTIobjectId` references. | Reserved deterministic names `site.app.entity` - an extra asynchronous step and collisions to handle. |
+| **P-82** (approved, R-105) | **Mapping of 3.4 / 3.5**: `RprRegisterObject` gains `EntityType`; new `RprUpdateRequested` + module; interaction fields added; `RprDetonationResult` takes the FOM numbering; per-object spatial cache in the transport. | Keep the messages and guess the class at registration (always `PhysicalEntity`) - other federates subscribing to `Platform` would never discover us. |
+| **P-83** (approved, R-106) | **FOM in code** (`RprFom2.Model()`, R-054); the official XML is used only by the real binding, with a test comparing the two. | Ship the RPR XML modules now and parse them (contradicts R-054 for now). |
+| **P-84** (approved, R-107) | `RprSimulationControl` **not carried** over HLA (no RPR 2.0 interaction for it in the used modules); counted and warned. | Map it to a custom interaction class (non-standard). |
+| **P-85** (approved, R-108) | **Retire `SimulatedRti`** in HLA-3 when Convoy Ambush passes on the fake RTI. | Keep both stand-ins (two implementations of one concept). |
+| **P-86** (approved, R-109) | **Stages HLA-1 .. HLA-4** of section 10; the HROT gateway gets the same HLA side when `Gateway.HrotDis` reaches it, by sharing the RPR modules then (their extraction is that stage's design question, not this one). | Build the HLA side for `Gateway.HrotDis` first (it does not exist yet). |
 
 
 ## 12. As-built notes (stage HLA-1, T-021)

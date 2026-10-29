@@ -474,7 +474,7 @@ Proposal from stage 7 (awaiting approval):
 
 | ID | Proposal (lean) | Main alternative |
 |---|---|---|
-| **P-47** | Amend two success conditions to what the approved design actually allows: **S-4.5** - `AttributeChangedWithin(Spatial.Position, 3 s)` returns exactly the entities the script updated in [47, 50]; `ChangedWithin(3 s)` returns those plus every entity whose `Derived.*` prediction changed (the DR processor writes moving entities at 10 Hz, R-029); `NotWrittenWithin(10 s).FromOrigin(RPR)` unchanged. **S-9.3** - a released DIS entity number stays unavailable for the quarantine and becomes available afterwards (a reuse itself is not observable because the pool hands out never-used numbers first). | Keep the original wording and change the gateway (e.g. exclude derived writes from `ChangedWithin`, or reuse numbers LIFO) - contradicts R-029 / the approved pool policy. |
+| **P-47** (approved, R-113) | Amend two success conditions to what the approved design actually allows: **S-4.5** - `AttributeChangedWithin(Spatial.Position, 3 s)` returns exactly the entities the script updated in [47, 50]; `ChangedWithin(3 s)` returns those plus every entity whose `Derived.*` prediction changed (the DR processor writes moving entities at 10 Hz, R-029); `NotWrittenWithin(10 s).FromOrigin(RPR)` unchanged. **S-9.3** - a released DIS entity number stays unavailable for the quarantine and becomes available afterwards (a reuse itself is not observable because the pool hands out never-used numbers first). | Keep the original wording and change the gateway (e.g. exclude derived writes from `ChangedWithin`, or reuse numbers LIFO) - contradicts R-029 / the approved pool policy. |
 
 ## 10. As-built notes
 
