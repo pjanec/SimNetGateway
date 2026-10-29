@@ -3,6 +3,9 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Gateways/SimNetGateway.Gateway.HrotDis/SimNetGateway.Gateway.HrotDis.csproj" />
     <ProjectReference Include="../../src/Engine/SimNetGateway.Engine.InMemory/SimNetGateway.Engine.InMemory.csproj" />
+    <ProjectReference Include="../../src/Transports/SimNetGateway.Transport.HlaRpr/SimNetGateway.Transport.HlaRpr.csproj" />
+    <ProjectReference Include="../../src/Transports/SimNetGateway.Transport.FakeRti/SimNetGateway.Transport.FakeRti.csproj" />
+    <ProjectReference Include="../../src/Showcase/SimNetGateway.Showcase/SimNetGateway.Showcase.csproj" />
   </ItemGroup>
 
 </Project>

@@ -28,7 +28,7 @@ internal static class InjectSupport
 }
 
 /// <summary>
-/// Rule "Fire": a <c>WeaponFire</c> event of the DIS side as <see cref="InjectFire"/> (DD-007 3 item 7, R-097). Events of HROT's own
+/// Rule "Fire": a <c>WeaponFire</c> event of the DIS or the HLA side as <see cref="InjectFire"/> (DD-007 3 item 7, R-097). Events of HROT's own
 /// side never come back (G-1); nothing is sent while the exercise does not run (not in Edit, paused or replay).
 /// </summary>
 public sealed class InjectFireEgress : IGatewayModule
@@ -59,7 +59,7 @@ public sealed class InjectFireEgress : IGatewayModule
             _schema.EventQuantity, _schema.EventLocation, _schema.EventVelocity);
         setup.OnEvent(_schema.WeaponFire)
             .Named("Fire")
-            .When(t => t.Source == _sources.Dis && _services.EffectsAllowed(_gateway.Session))
+            .When(t => _sources.IsReplicaOrigin(t.Source) && _services.EffectsAllowed(_gateway.Session))
             .Do(OnFire);
     }
 
@@ -125,7 +125,7 @@ public sealed class InjectDetonationEgress : IGatewayModule
             _schema.EventLocation, _schema.EventVelocity);
         setup.OnEvent(_schema.MunitionDetonation)
             .Named("Detonation")
-            .When(t => t.Source == _sources.Dis && _services.EffectsAllowed(_gateway.Session))
+            .When(t => _sources.IsReplicaOrigin(t.Source) && _services.EffectsAllowed(_gateway.Session))
             .Do(OnDetonation);
     }
 

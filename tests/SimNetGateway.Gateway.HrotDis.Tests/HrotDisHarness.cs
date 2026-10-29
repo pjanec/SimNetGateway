@@ -4,6 +4,7 @@ using SimNetGateway.Engine;
 using SimNetGateway.Engine.InMemory;
 using SimNetGateway.Gateway.HrotDis;
 using SimNetGateway.Protocol.Hrot;
+using SimNetGateway.Protocol.Rpr;
 using GatewayConfiguration = SimNetGateway.Gateway.HrotDis.GatewayConfiguration;
 
 namespace SimNetGateway.Gateway.HrotDis.Tests;
@@ -68,6 +69,15 @@ public sealed class HrotDisHarness
             Builder.BindOutbound<Pdu>("dis", DisOut);
         }
 
+        if (Config.HlaRuns)
+        {
+            var rpr = Builder.RequireInbound("rpr");
+            RprIn = new InMemoryInbound(rpr.Source, "rpr");
+            Builder.BindInbound("rpr", RprIn);
+            RprOut = new InMemoryOutbound<IRprMessage>();
+            Builder.BindOutbound<IRprMessage>("rpr", RprOut);
+        }
+
         beforeBuild?.Invoke(Builder);
         Binding = Builder.Build();
         Engine = Binding.Engine;
@@ -76,10 +86,24 @@ public sealed class HrotDisHarness
         HrotSource = hrot.Source;
         DisSource = Engine.Sources.Register("dis");
         HrotIds = (IdentityMap<long>)Engine.Identities.Find("hrot.entity")!;
+        if (Config.HlaRuns)
+        {
+            RprOut!.Context = Engine;
+            RprSource = Engine.Sources.Register("rpr");
+            RprHandles = (IdentityMap<RprObjectHandle>)Engine.Identities.Find("rpr.handle")!;
+            RprIds = (IdentityMap<DisEntityKey>)Engine.Identities.Find("rpr.entityId")!;
+        }
+
         Checker = new InvariantChecker(this);
         if (installChecker)
         {
             HrotOut.Tap = Checker.OnSent;
+        }
+
+        if (Config.HlaRuns && installChecker)
+        {
+            RprChecker = new RprInvariantChecker(this);
+            RprOut!.Tap = RprChecker.OnSent;
         }
 
         if (Config.DisRuns)
@@ -130,6 +154,45 @@ public sealed class HrotDisHarness
 
     public SourceId DisSource { get; }
 
+    /// <summary>The source of the HLA side (<see cref="SourceId.None"/> when the HLA side does not run).</summary>
+    public SourceId RprSource { get; }
+
+    /// <summary>True for the origin of a replica of a peer simulation (dis or rpr).</summary>
+    public bool IsReplica(SourceId origin) => origin == DisSource || (RprSource != SourceId.None && origin == RprSource);
+
+    public InMemoryInbound? RprIn { get; }
+
+    public InMemoryOutbound<IRprMessage>? RprOut { get; }
+
+    /// <summary>"rpr.handle" (null when the HLA side does not run).</summary>
+    public IdentityMap<RprObjectHandle>? RprHandles { get; }
+
+    /// <summary>"rpr.entityId" (null when the HLA side does not run).</summary>
+    public IdentityMap<DisEntityKey>? RprIds { get; }
+
+    /// <summary>The invariants of the HLA half (null when the HLA side does not run or the checker is not installed); checked after every step.</summary>
+    public RprInvariantChecker? RprChecker { get; }
+
+    /// <summary>When false the harness does not check the RPR invariants after a step.</summary>
+    public bool CheckRpr { get; set; } = true;
+
+    /// <summary>
+    /// The fake RTI of the in-memory tests: when true (default), every registration the gateway sent is answered with a fresh handle at the
+    /// start of the next tick (asynchronous, like the transport's pump), unless <see cref="DeliverRti"/> is false.
+    /// </summary>
+    public bool AutoRegister { get; set; } = true;
+
+    /// <summary>When false no registration is answered (the handles stay pending).</summary>
+    public bool DeliverRti { get; set; } = true;
+
+    /// <summary>The handles this RTI gave to the gateway's registrations, by token.</summary>
+    public Dictionary<long, RprObjectHandle> Answered { get; } = new();
+
+    /// <summary>The handle value the next answered registration gets.</summary>
+    public uint NextHandle { get; set; } = 0x1000;
+
+    private int _rtiCursor;
+
     public InMemoryInbound HrotIn { get; }
 
     public InMemoryInbound? DisIn { get; }
@@ -154,6 +217,7 @@ public sealed class HrotDisHarness
         bool quiet = !_stimulus;
         _stimulus = false;
         Clock.Advance(Dt);
+        PumpRti();
         Engine.Tick();
         if (quiet)
         {
@@ -162,10 +226,55 @@ public sealed class HrotDisHarness
         }
 
         Checker.Check();
+        if (CheckRpr)
+        {
+            RprChecker?.Check();
+        }
+
         if (CheckDis)
         {
             DisChecker?.Check();
         }
+    }
+
+    /// <summary>Answers the registrations the gateway sent since the last pump (the fake RTI), asynchronously: they reach the engine in this tick.</summary>
+    public void PumpRti()
+    {
+        if (RprOut is null || !AutoRegister)
+        {
+            return;
+        }
+
+        var messages = RprOut.Messages;
+        for (; _rtiCursor < messages.Count; _rtiCursor++)
+        {
+            if (!DeliverRti)
+            {
+                return;
+            }
+
+            if (messages[_rtiCursor].Message is RprRegisterObject register)
+            {
+                var handle = new RprObjectHandle(NextHandle++);
+                Answered[register.Token] = handle;
+                RprIn!.Enqueue(new RprObjectRegistered(register.Token, handle));
+            }
+        }
+    }
+
+    /// <summary>Queues a message of the HLA side (a federate's object update, interaction, ...).</summary>
+    public void Rpr<T>(T message, double? receivedAt = null)
+        where T : IRprMessage
+    {
+        _stimulus = true;
+        RprIn!.Enqueue(in message, receivedAt);
+    }
+
+    public void RprStep<T>(T message)
+        where T : IRprMessage
+    {
+        Rpr(message);
+        Step();
     }
 
     public void Steps(int count)

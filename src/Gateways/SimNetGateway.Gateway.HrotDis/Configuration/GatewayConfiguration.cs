@@ -73,7 +73,7 @@ public sealed record DisConfiguration
     public bool DisControlsHrot { get; init; }
 }
 
-/// <summary>The HLA side (the "hla" section); the gateway of this project only carries and validates it.</summary>
+/// <summary>The HLA side (the "hla" section): the RPR modules of the gateway run on it (DD-009), the RTI binding is the host's.</summary>
 public sealed record HlaConfiguration
 {
     /// <summary>The side runs when its section is present and this is not false.</summary>
@@ -92,6 +92,12 @@ public sealed record HlaConfiguration
 
     public bool CreateFederation { get; init; } = true;
 
+    /// <summary>The HLA side's own dead-reckoning position threshold, metres (DD-009 section 3 item 5; like <c>dis.positionThresholdM</c>, never read from the dis section).</summary>
+    public double PositionThresholdM { get; init; } = 1.0;
+
+    /// <summary>The HLA side's own orientation threshold, degrees.</summary>
+    public double OrientationThresholdDeg { get; init; } = 3.0;
+
     public double HeartbeatS { get; init; } = 5;
 
     public double TimeoutS { get; init; } = 12;
@@ -100,6 +106,7 @@ public sealed record HlaConfiguration
         other is not null && Enabled == other.Enabled && Rti == other.Rti && Federation == other.Federation &&
         FederateName == other.FederateName && FederateType == other.FederateType &&
         FomModules.SequenceEqual(other.FomModules) && CreateFederation == other.CreateFederation &&
+        PositionThresholdM.Equals(other.PositionThresholdM) && OrientationThresholdDeg.Equals(other.OrientationThresholdDeg) &&
         HeartbeatS.Equals(other.HeartbeatS) && TimeoutS.Equals(other.TimeoutS);
 
     public override int GetHashCode() => HashCode.Combine(Enabled, Rti, Federation, FederateName, FederateType, FomModules.Count);

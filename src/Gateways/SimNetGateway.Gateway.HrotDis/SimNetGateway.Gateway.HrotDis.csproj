@@ -5,6 +5,7 @@
     <ProjectReference Include="../../Common/SimNetGateway.Common/SimNetGateway.Common.csproj" />
     <ProjectReference Include="../../Protocols/SimNetGateway.Protocol.Hrot/SimNetGateway.Protocol.Hrot.csproj" />
     <ProjectReference Include="../../Protocols/SimNetGateway.Protocol.Dis7/SimNetGateway.Protocol.Dis7.csproj" />
+    <ProjectReference Include="../../Protocols/SimNetGateway.Protocol.Rpr/SimNetGateway.Protocol.Rpr.csproj" />
   </ItemGroup>
 
 </Project>

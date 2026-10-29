@@ -1,10 +1,18 @@
 using SimNetGateway.Common;
 using SimNetGateway.Engine;
+using SimNetGateway.Protocol.Rpr;
 
 namespace SimNetGateway.Gateway.HrotDis;
 
-/// <summary>The sources of the HROT DIS gateway: the two sides (R-061: one per peer). Nothing else writes the pivot yet.</summary>
-public sealed record HrotDisSources(SourceId Hrot, SourceId Dis);
+/// <summary>
+/// The sources of the HROT DIS gateway: one per peer (R-061). <see cref="Rpr"/> is the HLA side's source, <see cref="SourceId.None"/>
+/// while the HLA side does not run. Entities of origin dis and rpr are the replicas HROT shows (DD-009 section 3 item 4).
+/// </summary>
+public sealed record HrotDisSources(SourceId Hrot, SourceId Dis, SourceId Rpr = default)
+{
+    /// <summary>True for an entity origin that is a replica of a peer simulation (dis or rpr), not the HROT side's own.</summary>
+    public bool IsReplicaOrigin(SourceId origin) => origin == Dis || (Rpr != SourceId.None && origin == Rpr);
+}
 
 /// <summary>
 /// The identity maps of the gateway (DD-006 section 3.2, DD-007 section 3 item 3): HROT entity ids (<c>long</c>); wire ids from the
@@ -15,11 +23,16 @@ public sealed record HrotDisSources(SourceId Hrot, SourceId Dis);
 public sealed class HrotDisMaps
 {
     private readonly IdentityMap<DisEntityKey>? _disEntity;
+    private readonly IdentityMap<RprObjectHandle>? _rprHandle;
+    private readonly IdentityMap<DisEntityKey>? _rprEntity;
 
-    public HrotDisMaps(IdentityMap<long> hrotEntity, IdentityMap<DisEntityKey>? disEntity = null)
+    public HrotDisMaps(IdentityMap<long> hrotEntity, IdentityMap<DisEntityKey>? disEntity = null,
+        IdentityMap<RprObjectHandle>? rprHandle = null, IdentityMap<DisEntityKey>? rprEntity = null)
     {
         HrotEntity = hrotEntity;
         _disEntity = disEntity;
+        _rprHandle = rprHandle;
+        _rprEntity = rprEntity;
     }
 
     /// <summary>"hrot.entity".</summary>
@@ -32,14 +45,34 @@ public sealed class HrotDisMaps
     public IdentityMap<DisEntityKey> DisEntity =>
         _disEntity ?? throw new InvalidOperationException("The DIS side is not running: there is no dis.entity map.");
 
-    public static HrotDisMaps Create(IdentityRegistry identities, HrotDisSources sources, IIdAllocator<long> hrotIds, DisIdentityOptions? dis = null)
+    /// <summary>True when the HLA side runs and so <see cref="RprHandle"/> and <see cref="RprEntity"/> exist.</summary>
+    public bool HasRpr => _rprHandle is not null;
+
+    /// <summary>"rpr.handle": bound when the RTI answers a registration of a hrot entity, or when a handle is first seen on the wire (rpr entities).</summary>
+    public IdentityMap<RprObjectHandle> RprHandle =>
+        _rprHandle ?? throw new InvalidOperationException("The HLA side is not running: there is no rpr.handle map.");
+
+    /// <summary>"rpr.entityId": the RPR entity identifiers (site, application, number) the gateway hands out to the hrot entities it publishes to HLA; own number pool with quarantine, independent of the DIS side's.</summary>
+    public IdentityMap<DisEntityKey> RprEntity =>
+        _rprEntity ?? throw new InvalidOperationException("The HLA side is not running: there is no rpr.entityId map.");
+
+    public static HrotDisMaps Create(IdentityRegistry identities, HrotDisSources sources, IIdAllocator<long> hrotIds, DisIdentityOptions? dis = null,
+        DisIdentityOptions? rpr = null)
     {
         ArgumentNullException.ThrowIfNull(identities);
         ArgumentNullException.ThrowIfNull(sources);
         ArgumentNullException.ThrowIfNull(hrotIds);
         var hrot = identities.Create<long>(sources.Hrot, "hrot.entity", hrotIds);
         var disMap = dis is null ? null : identities.Create<DisEntityKey>(sources.Dis, "dis.entity", dis.CreateAllocator());
-        return new HrotDisMaps(hrot, disMap);
+        IdentityMap<RprObjectHandle>? rprHandle = null;
+        IdentityMap<DisEntityKey>? rprEntity = null;
+        if (rpr is not null)
+        {
+            rprHandle = identities.Create<RprObjectHandle>(sources.Rpr, "rpr.handle");
+            rprEntity = identities.Create<DisEntityKey>(sources.Rpr, "rpr.entityId", rpr.CreateAllocator());
+        }
+
+        return new HrotDisMaps(hrot, disMap, rprHandle, rprEntity);
     }
 }
 
@@ -126,4 +159,10 @@ public sealed class HrotDisServices
     /// <summary>Fire and detonation reach DIS in an open session; in a replay only with <c>shared.sendEventsInReplay</c> (R-087).</summary>
     public bool DisEventsAllowed(ISessionView session) =>
         DisSessionOpen(session) && (session.Mode == SessionMode.Live || Config.Shared.SendEventsInReplay);
+
+    /// <summary>The HLA side shows HROT entities under the same rule as the DIS side (<see cref="DisSessionOpen"/>).</summary>
+    public bool HlaSessionOpen(ISessionView session) => DisSessionOpen(session);
+
+    /// <summary>Fire and detonation reach HLA under the same rule as DIS (<see cref="DisEventsAllowed"/>, R-087).</summary>
+    public bool HlaEventsAllowed(ISessionView session) => DisEventsAllowed(session);
 }

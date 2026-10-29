@@ -31,7 +31,7 @@ public sealed class ReplicaStateEgress : IGatewayModule
 
         setup.OnAttributesChanged(_schema.StateTime, _schema.EntityType, _schema.Marking, _schema.Force, _schema.Damage, _schema.Deactivated)
             .Named("State")
-            .When(t => t.Entity.Origin == _sources.Dis)
+            .When(t => _sources.IsReplicaOrigin(t.Entity.Origin))
             .Do(t => _publisher.Publish(t.Entity));
 
         setup.OnEvent(_schema.FrameRebased)
@@ -44,7 +44,7 @@ public sealed class ReplicaStateEgress : IGatewayModule
     }
 }
 
-/// <summary>Rule "Remove": an entity of origin dis that HROT knows was removed: <c>ReplicaRemoved</c> (its HROT id is released afterwards).</summary>
+/// <summary>Rule "Remove": an entity of origin dis or rpr that HROT knows was removed: <c>ReplicaRemoved</c> (its HROT id is released afterwards).</summary>
 public sealed class ReplicaRemovedEgress : IGatewayModule
 {
     private readonly HrotDisSources _sources;
@@ -61,6 +61,6 @@ public sealed class ReplicaRemovedEgress : IGatewayModule
     public void Register(ModuleSetup setup) =>
         setup.OnEntityRemoved()
             .Named("Remove")
-            .When(t => t.Entity.Origin == _sources.Dis)
+            .When(t => _sources.IsReplicaOrigin(t.Entity.Origin))
             .Do(t => _publisher.Remove(t.Id));
 }
