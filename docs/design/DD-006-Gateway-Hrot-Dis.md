@@ -25,6 +25,7 @@ all)"* (R-091). The HROT side is now **DD-007** (the pack). What it changes here
 | `OwnershipUpdate` handling (P-63 / R-086) | **dropped**: replicas are owned by a reserved DIS owner id (DD-007 3.2) |
 | 6.2 DIS entity appears in HROT (id allocation sequence) | **superseded** by DD-007 5.2 |
 | 8 projects: `Transport.HrotDds`; 8.1 / P-68 (HROT in our build) | **dropped / withdrawn**: no project here references HROT; HROT vendors ours (DD-007 P-69) |
+| 3.2 `HrotDisSettings` (one hardcoded record) | **superseded by R-094**: `GatewayConfiguration` read from `simnetgateway.json`, sections `shared` / `hrot` / `dis` / `hla` (DD-007 section 3a) |
 | 12 stages: H3 "Transport.HrotDds" | H3 = `Transport.DisUdp` + vendorability; **H5 = the HROT pack, in HROT** |
 
 **`Protocol.Hrot` is the gateway <-> pack contract** (BCL-only, upstream, tested here without HROT). Units: local

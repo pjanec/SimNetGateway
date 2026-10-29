@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| **Status** | in review - proposals P-69 .. P-76 await the user |
+| **Status** | approved: P-69, P-70, P-72 .. P-76 are R-092 .. R-099; P-71 replaced by the user's ruling R-094 (configuration file on disk, section 3a); P-87 (file details) awaits the user |
 | **Tasks** | T-020 (this design) |
-| **Rulings honoured** | R-091 (in-process ECS-level pack, vendored into HROT), R-079 .. R-090 as amended by section 9, R-012, R-050 .. R-054, R-057 |
+| **Rulings honoured** | R-091 (in-process ECS-level pack, vendored into HROT), R-079 .. R-090 as amended by section 9, R-092 .. R-099, R-012, R-050 .. R-053, R-054 (as limited by R-094), R-057 |
 | **Inputs** | HROT `coordinator` @ `34f249e`: `Hrot.Traffic` (the precedent: `TrafficPack`, `TrafficReplicas`, `TrafficBodies`, `TrafficModules`), `Hrot.Common/Infrastructure/NodeCapability.cs`, `Hrot.Editor/EditorSubsystem.cs` + `EditorCapabilities.cs` + `OfflineNetworkFactory.cs`, `Fdp.Toolkits` Combat / Replication / Time / Geographic, `docs/blueprints/Architect_Question_93_Sumo_Traffic_Node.md` (AQ93) section 11, `docs/reference/NED_DDS_Protocol.md` "For a protocol gateway" |
 | **Date** | 2026-10-28 |
 | **Home** | written here because the gateway side and this pack share one contract (`Protocol.Hrot`); when a HROT lane builds the pack, this document moves to HROT `docs/` (with a pointer left here) |
@@ -99,8 +99,39 @@ neither the ECS nor HROT.
   projects build with SimNetGateway's settings (MSBuild stops at the nearest props file). Tests, viewer, demo and
   showcase stay upstream.
 - **The pack** (`Hrot.DisGateway`, a new HROT project referenced by `Hrot.Editor`): the capability, one system,
-  the adapter, the poser, the settings component. It is the "installable module" - one assembly, one line in the
-  editor's capability plan, idle unless the scenario enables it (P-70, P-71).
+  the adapter, the poser. It is the "installable module" - one assembly, one line in the editor's capability plan
+  (R-093); it contributes nothing unless the gateway configuration file exists (R-094, section 3a).
+
+## 3a. Configuration file (R-094)
+
+The user ruled: *"gateway needs its config on disk, if missing, gateway not instantiated. Nothing in scenario.
+Different sections of that config used by different protocol sides (dis/hla), some can be shared."* (R-094; it
+limits R-054 - hardcoded configuration - for this gateway's runtime settings.)
+
+```json
+{
+  "shared": { "site": 1, "application": 3001, "entityMaxHealth": 100,
+              "damageThresholds": { "slight": 0.5, "moderate": 0.0 },
+              "defaultTkbForUnknown": 0, "forwardUnitEntities": false, "sendEventsInReplay": false },
+  "hrot":   { "sampleRateHz": 20, "replicaOwnerNodeId": 65000, "allowZeroOrigin": false },
+  "dis":    { "enabled": true, "exerciseId": 1, "port": 3000, "address": "255.255.255.255",
+              "positionThresholdM": 1.0, "orientationThresholdDeg": 3.0, "heartbeatS": 5, "timeoutS": 12,
+              "hrotControlsDis": true, "disControlsHrot": false },
+  "hla":    { "enabled": false, "rti": "fake", "federation": "RPR", "federateName": "HROT-Gateway",
+              "federateType": "SimNetGateway", "fomModules": ["RPR-FOM-2.0"], "createFederation": true,
+              "heartbeatS": 5, "timeoutS": 12 }
+}
+```
+
+| Rule | |
+|---|---|
+| File missing | the pack contributes no system, no component registration, no socket - the gateway is **not instantiated** |
+| File present but invalid (JSON error, unknown key, out-of-range value) | not instantiated; one error naming the file, the key and the reason (log + editor notification) |
+| Sections | `shared` - values every side uses (DIS site/application = RPR `EntityIdentifier` federate id, damage and health mapping, unknown-type fallback, replay rule); `hrot` - the pack's own; `dis`, `hla` - one per protocol side; a side runs when its section is present and `enabled` is not false; no side running = not instantiated (warning) |
+| Defaults | every key except `dis.exerciseId` and `hla.federation` has the default shown; a missing optional key takes it |
+| When read | once, when the editor composes its capabilities; a change takes effect at the next start |
+| Where (P-87) | `simnetgateway.json` in the process working directory (beside HROT's other configuration files), overridable by the environment variable `SIMNETGATEWAY_CONFIG` (a path) |
+| Who parses | the vendored `Gateway.HrotDis` (`GatewayConfiguration` records + `GatewayConfigurationFile.TryLoad`, System.Text.Json from the shared framework), so the pack, the upstream demo/viewer hosts and tests share one parser |
 
 ## 3. Key concepts and decisions
 
@@ -166,14 +197,15 @@ classDiagram
     class DisGatewaySystem {
         <<IEcsModuleSystem, Input phase>>
         +Execute(view, dt)
-        -EnsureStarted(DisExercise) / Stop()
+        -Start() / Stop()
     }
-    class DisExercise {
-        <<scenario component, singleton entity>>
-        +Enabled bool
-        +ExerciseId, Site, Application
-        +Port int, Address FixedString64
-        +HrotControlsDis, DisControlsHrot, SendEventsInReplay
+    class GatewayConfiguration {
+        <<record, vendored Gateway.HrotDis>>
+        +Shared, Hrot, Dis?, Hla?
+    }
+    class GatewayConfigurationFile {
+        <<vendored>>
+        +TryLoad(path, out config, out errors) bool
     }
     class EcsHrotAdapter {
         +Gather(world, inbound)
@@ -218,7 +250,8 @@ classDiagram
     DisGatewaySystem --> EcsHrotAdapter
     DisGatewaySystem --> ReplicaPoser
     DisGatewaySystem --> GatewayEngine : ticks
-    DisGatewaySystem ..> DisExercise : reads
+    DisGatewayPack ..> GatewayConfigurationFile : reads once, absent = nothing composed
+    DisGatewaySystem ..> GatewayConfiguration
     GatewayEngine <.. HrotDisProfile : built by
     HrotDisProfile --> DisUdpTransport : DIS ports
     EcsHrotAdapter --> HrotDisProfile : HROT ports (in-memory channels)
@@ -231,8 +264,9 @@ classDiagram
 
 - `DisGatewayPack` is the only type the editor sees: `EditorCapabilities.BuildDefault` gets one more
   `.Capability(...)` line (appended last, so no existing system moves - `EditorCapabilitiesTests` pins the order).
-- `DisGatewaySystem` owns the engine's lifetime: built when a `DisExercise` with `Enabled` appears, disposed when it
-  disappears or the scenario unloads (socket closed, replicas removed).
+- `DisGatewayPack` reads the configuration file when the editor composes it; absent or invalid, it adds nothing.
+- `DisGatewaySystem` owns the engine's lifetime: started when a scenario is loaded and the HROT origin is known,
+  stopped when the scenario unloads (final Deactivated states, socket / federation left, replicas removed).
 - `EcsHrotAdapter` is the only ECS <-> `Protocol.Hrot` mapping; `ReplicaPoser` the only per-frame writer of replica
   poses.
 
@@ -250,7 +284,7 @@ sequenceDiagram
     participant P as ReplicaPoser
     U-)E: PDUs enqueued on the DIS inbound channel (any time)
     K->>S: Execute
-    S->>S: DisExercise enabled? origin set? else idle
+    S->>S: scenario loaded? origin set? else idle
     S->>A: Gather(world)
     A->>A: query SimTransform+TkbIdentity+NetworkIdentity, no ReplicationRoute
     A->>A: read last frame's WeaponFireNotification / DetonationNotification (not IsRemote)
@@ -310,17 +344,18 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant U as Author
+    participant U as Operator
     participant W as ECS world
     participant S as DisGatewaySystem
     participant G as Gateway
-    U->>W: scenario gets a DisExercise entity, Enabled = true
+    Note over S: composed only because simnetgateway.json exists (R-094)
+    U->>W: loads a scenario
     S->>G: build profile, open UDP, session per ClusterState
     Note over S,G: Live + advancing -> Running, paused -> Paused (Stop/Freeze if HrotControlsDis)
     W->>S: ReplayState.IsActive
     S->>G: session Replay: DIS ingress into the world suspended
     S->>W: replicas removed (they are NoReplay)
-    U->>W: Enabled = false or scenario unloaded
+    U->>W: scenario unloaded
     S->>G: final ESPDUs Deactivated, dispose engine and socket
     S->>W: remaining replicas removed
 ```
@@ -380,7 +415,7 @@ see DIS entities unless they also compose the pack) - a decision for that later 
   HROT's own systems; replicas never appear in the HROT -> DIS stream (echo); poses advance only while the clock
   advances; disable removes every replica and closes the socket; `EditorCapabilitiesTests` order rail still passes
   with the pack appended; `sync-simnetgateway.sh --verify` clean.
-- **Interop (manual)**: the editor with a scenario enabling DIS, against a DIS tool (Wireshark dissector, a second
+- **Interop (manual)**: the editor with a `simnetgateway.json` enabling DIS, against a DIS tool (Wireshark dissector, a second
   DIS simulator) on the Windows machine.
 
 ## 9. Effect on the DD-006 rulings
@@ -400,11 +435,12 @@ see DIS entities unless they also compose the pack) - a decision for that later 
 
 | ID | Proposal (lean) | Main alternative |
 |---|---|---|
-| **P-69** | **Vendoring**: `FDP/ExtDeps/SimNetGateway` holds `Engine`, `Common`, `Protocol.Dis7`, `Protocol.Hrot`, `Gateway.HrotDis`, `Transport.DisUdp` (+ our `Directory.Build.props`, LICENSE/NOTICE), refreshed by `scripts/sync-simnetgateway.sh <ref>` with `UPSTREAM.md`, `--check`, `--verify`; read-only in HROT, changes go upstream first (AQ93 V1 - V3 shape). | Git submodule (a second checkout per session, rejected for SumoSharp too); a NuGet package (a feed to run). |
-| **P-70** | **"Installable" = a separate compiled-in assembly `Hrot.DisGateway`, composed into the editor plan with one line, idle unless the scenario enables it** (AQ93 V4/V5, R-4047/R-4048). No runtime plugin loader. | Runtime loading of capability assemblies from a folder - HROT has no such mechanism (measured); it would be new engine infrastructure with its own design. |
-| **P-71** | **Enablement and settings**: a scenario singleton entity with a `DisExercise` component (Enabled, exercise id, site, application, port, address, `HrotControlsDis`, `DisControlsHrot`, `SendEventsInReplay`); absent or disabled = the pack costs nothing per frame. | A host command-line / config setting - network settings in config, but then a scenario cannot carry its exercise. |
-| **P-72** | **Replica shape** of section 3 item 2 (the `TrafficReplicas` set + `SimVelocity`, `DisReplica`, owner `DisOwnerNodeId` = a reserved id not equal to any node id, `ReplicationRoute(Dis)` as a new route value). | Spawn through `EntityCreationRequest` with the TKB template (HROT would simulate DIS-owned entities). |
-| **P-73** | **Motion**: DIS -> HROT by per-frame posing from the DR snapshot with the vendored `Common` predictors while the clock advances; HROT -> DIS gathered at 20 Hz (sliced) with the NED egress change thresholds, DIS thresholds/heartbeat in the gateway. | The gateway writing replica poses every frame through the engine. |
-| **P-74** | **Events**: HROT fire/detonation -> Fire/Detonation PDUs; DIS Fire -> `WeaponFireNotification{IsRemote}` (effects only); DIS Detonation on a HROT entity -> `DetonationNotification{IsRemote=false}` so HROT computes the damage; on anything else `IsRemote=true`. | Translate DIS detonations straight into `DamageAssessedEvent` with a gateway damage model (duplicates HROT's damage tables). |
-| **P-75** | **Ownership of the work**: SimNetGateway delivers the vendorable projects and the `Protocol.Hrot` contract with upstream tests (stages H1 - H3); a HROT lane builds `Hrot.DisGateway` (H5) from this design (moved into HROT `docs/`), verifying the three open HROT facts first: FDP bus event visibility between Input and Simulation phases, Input-phase structural changes at 1000 replicas, and that no HROT system acts on an entity without `Locomotion` that carries a non-local owner. | This session builds the HROT pack too (needs push access to HROT and a HROT lane's review; possible on request). |
-| **P-76** | **Session table** of section 6 (Edit = Loaded and silent to DIS; Replay = HROT -> DIS only, replicas removed). | Publish authoring positions to DIS in Edit (DIS peers would see entities jump while being placed). |
+| **P-69** (approved, R-092) | **Vendoring**: `FDP/ExtDeps/SimNetGateway` holds `Engine`, `Common`, `Protocol.Dis7`, `Protocol.Hrot`, `Gateway.HrotDis`, `Transport.DisUdp` (+ our `Directory.Build.props`, LICENSE/NOTICE), refreshed by `scripts/sync-simnetgateway.sh <ref>` with `UPSTREAM.md`, `--check`, `--verify`; read-only in HROT, changes go upstream first (AQ93 V1 - V3 shape). | Git submodule (a second checkout per session, rejected for SumoSharp too); a NuGet package (a feed to run). |
+| **P-70** (approved, R-093) | **"Installable" = a separate compiled-in assembly `Hrot.DisGateway`, composed into the editor plan with one line, idle unless its configuration file exists** (AQ93 V4/V5, R-4047/R-4048; enablement by R-094). No runtime plugin loader. | Runtime loading of capability assemblies from a folder - HROT has no such mechanism (measured); it would be new engine infrastructure with its own design. |
+| **P-71** | ~~Enablement by a scenario `DisExercise` entity~~ **REPLACED by the user's ruling R-094**: a configuration file on disk, sections per side (section 3a). | - |
+| **P-72** (approved, R-095) | **Replica shape** of section 3 item 2 (the `TrafficReplicas` set + `SimVelocity`, `DisReplica`, owner `DisOwnerNodeId` = a reserved id not equal to any node id, `ReplicationRoute(Dis)` as a new route value). | Spawn through `EntityCreationRequest` with the TKB template (HROT would simulate DIS-owned entities). |
+| **P-73** (approved, R-096) | **Motion**: DIS -> HROT by per-frame posing from the DR snapshot with the vendored `Common` predictors while the clock advances; HROT -> DIS gathered at 20 Hz (sliced) with the NED egress change thresholds, DIS thresholds/heartbeat in the gateway. | The gateway writing replica poses every frame through the engine. |
+| **P-74** (approved, R-097) | **Events**: HROT fire/detonation -> Fire/Detonation PDUs; DIS Fire -> `WeaponFireNotification{IsRemote}` (effects only); DIS Detonation on a HROT entity -> `DetonationNotification{IsRemote=false}` so HROT computes the damage; on anything else `IsRemote=true`. | Translate DIS detonations straight into `DamageAssessedEvent` with a gateway damage model (duplicates HROT's damage tables). |
+| **P-75** (approved, R-098) | **Ownership of the work**: SimNetGateway delivers the vendorable projects and the `Protocol.Hrot` contract with upstream tests (stages H1 - H3); a HROT lane builds `Hrot.DisGateway` (H5) from this design (moved into HROT `docs/`), verifying the three open HROT facts first: FDP bus event visibility between Input and Simulation phases, Input-phase structural changes at 1000 replicas, and that no HROT system acts on an entity without `Locomotion` that carries a non-local owner. | This session builds the HROT pack too (needs push access to HROT and a HROT lane's review; possible on request). |
+| **P-76** (approved, R-099) | **Session table** of section 6 (Edit = Loaded and silent to DIS; Replay = HROT -> DIS only, replicas removed). | Publish authoring positions to DIS in Edit (DIS peers would see entities jump while being placed). |
+| **P-87** | **Configuration file details** (section 3a): JSON (the format of HROT's own `config.json` / `orchestrator-config.json`), name `simnetgateway.json` in the working directory, `SIMNETGATEWAY_CONFIG` override, sections `shared` / `hrot` / `dis` / `hla`, unknown keys are errors, read once at composition; one parser in the vendored gateway. | Name and path from a HROT command-line option (needs a ClusterRunner change); YAML/INI (a second format in HROT). |
