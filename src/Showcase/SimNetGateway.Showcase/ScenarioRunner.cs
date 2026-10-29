@@ -13,7 +13,8 @@ namespace SimNetGateway.Showcase;
 /// Runs a <see cref="ScenarioScript"/> against the gateway on a <see cref="ManualClock"/> at 60 Hz (DD-002 section 8.1). The clock
 /// is the runner clock: tick k is at k / 60 seconds, steps are scheduled on it (not on sim time, which resets at Load and
 /// freezes in a pause). Per tick: advance the clock, begin the act that starts now, run the steps that are due (inject, operator,
-/// action) in script order, let the simulated RTI answer, <c>Tick()</c> the engine, run the <see cref="InvariantChecker"/>,
+/// action) in script order, pump the RTI (it answers the registrations of the previous tick), <c>Tick()</c> the engine, let the
+/// scripted RPR federate evoke what the gateway sent (DD-008 section 6), run the <see cref="InvariantChecker"/>,
 /// evaluate the checks that are due. Everything is recorded in the <see cref="ScenarioReport"/>.
 /// </summary>
 public sealed class ScenarioRunner
@@ -72,7 +73,7 @@ public sealed class ScenarioRunner
             builder.AddModule(faulty);
             builder.AddModule(rogue);
         });
-        var checker = new InvariantChecker(host) { Probe = probe };
+        var checker = new InvariantChecker(host) { Probe = probe, CheckRti = true };
         var ctx = new ScenarioContext(host, clock, checker, probe!, faulty, rogue);
         Context = ctx;
         OnStart?.Invoke(ctx);
@@ -212,16 +213,11 @@ public sealed class ScenarioRun
             _nextStep++;
         }
 
-        if (host.DeliverRti)
-        {
-            host.Rti.DeliverPending(registered =>
-            {
-                AddTimeline(tick, "in", "RPR", MessageText.Format(registered));
-                host.RprIn.Enqueue(registered);
-            });
-        }
-
+        // DD-008 section 6: Pump (the RTI's callbacks, the answers of the registrations of the previous tick), the engine tick, the
+        // scripted federate's evoke (it receives and decodes what the gateway sent during the tick)
+        host.PumpRti();
         host.Engine.Tick();
+        host.EvokePeer();
         AfterTick(tick);
         _onTick?.Invoke(ctx);
         while (_nextCheck < _checks.Count && _checks[_nextCheck].Tick <= tick)
@@ -249,10 +245,15 @@ public sealed class ScenarioRun
             checker.OnNedReceived(message);
             RecordInput("NED", message);
         };
-        host.OnRprInput = message =>
+        host.OnRprInput = message => RecordInput("RPR", message);
+        host.OnRprDelivered = message =>
         {
+            // what the engine receives from the RTI: the event ids are the transport's (G-1 compares them with what is sent back)
             checker.OnRprReceived(message);
-            RecordInput("RPR", message);
+            if (message is RprObjectRegistered registered)
+            {
+                AddTimeline(_tick, "in", "RPR", MessageText.Format(registered));
+            }
         };
         host.NedOut!.Tap = message =>
         {
@@ -267,7 +268,6 @@ public sealed class ScenarioRun
         };
         host.RprOut!.Tap = message =>
         {
-            host.Rti.Observe(message);
             checker.OnRprSent(message);
             AddOutput("RPR", message);
         };

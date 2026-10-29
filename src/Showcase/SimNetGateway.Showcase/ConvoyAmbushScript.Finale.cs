@@ -4,6 +4,7 @@ using SimNetGateway.Gateway.NedRpr;
 using SimNetGateway.Protocol.Display;
 using SimNetGateway.Protocol.Ned;
 using SimNetGateway.Protocol.Rpr;
+using SimNetGateway.Protocol.Rpr.Fom;
 
 namespace SimNetGateway.Showcase;
 
@@ -30,6 +31,8 @@ public sealed partial class ConvoyAmbushScript
             var removed = ctx.RprOf<RprObjectRemoved>(100.0, 100.6);
             v.Equal(1, removed.Count, "RprObjectRemoved messages");
             v.That(removed.Count == 1 && removed[0].Message.Handle == handle, "the removal is for member 1's handle");
+            v.That(PeerRemoved(ctx, 100.0, 100.6).SetEquals([handle.Value]), "the RPR federate did not receive exactly the removal of member 1's object");
+            v.That(ctx.Peer.DiscoveredObject(handle.Value) is null, "the RPR federate still holds member 1's object");
             v.Equal(0, UpdatesOf(ctx.RprOf<RprObjectUpdate>(100.0, 100.6), handle).Count, "updates for member 1's handle");
             v.Equal(1, RprEvents(ctx, 100.0, 100.6).Count(r => r.Message is not RprObjectUpdate), "RPR messages other than updates (the one removal)");
             var markers = ctx.DisplayOf<DisplayEntityRemoved>(100.0, 100.6);
@@ -89,7 +92,7 @@ public sealed partial class ConvoyAmbushScript
         a.Inject(105.0, "Kestrel: geo-spatial", h => h.SendNed(KestrelGeo.Message(KestrelId)));
         a.Inject(105.0, "Kestrel fires F3 at once: NedWeaponFire", h =>
         {
-            ulong target = h.RprHandles.TryResolve(new RprObjectHandle(T1Handle), out var t1) && h.NedIds.TryGetKey(t1, out ulong id) ? id : 0;
+            ulong target = h.RprHandles.TryResolve(h.ActualHandle(T1Handle), out var t1) && h.NedIds.TryGetKey(t1, out ulong id) ? id : 0;
             h.SendNed(new NedWeaponFire(NedFireF3, KestrelId, target, TkbMunitionA, 50.03, 14.02, 600.0, 1));
         });
         a.Inject(105.0, "Kestrel fires F3 at once: NedFireAmmunition", h => h.SendNed(new NedFireAmmunition(NedFireF3, TkbMunitionA, 1)));
@@ -100,6 +103,7 @@ public sealed partial class ConvoyAmbushScript
             var removed = ctx.RprOf<RprObjectRemoved>(104.0, 104.5);
             v.Equal(1, removed.Count, "RprObjectRemoved messages for Hawk");
             v.That(removed.Count == 1 && removed[0].Message.Handle == hawkHandle, "the removal is for Hawk's handle");
+            v.That(PeerRemoved(ctx, 104.0, 104.5).SetEquals([hawkHandle.Value]), "the RPR federate did not receive exactly the removal of Hawk's object");
             v.Equal(1, ctx.DisplayOf<DisplayEntityRemoved>(104.0, 104.5).Count(r => r.Message.Label == "Hawk"), "display removal of Hawk");
             var kestrel = ctx.NedEntity(KestrelId);
             var id = kestrel is null ? null : ctx.DisIdOf(kestrel.Id);
@@ -148,6 +152,18 @@ public sealed partial class ConvoyAmbushScript
                 v.Equal(handle, fires[0].Message.FiringObject, "firing object (Kestrel's handle, not 'no object')");
                 v.That(fires[0].Message.FiringObject is not null, "the fire was sent with 'no object' for its shooter");
                 v.Equal(NedFireF3, fires[0].Message.EventId, "event id");
+                // the RPR federate had discovered Kestrel's object (the registration) before the held fire reached it, and it names it
+                var peerFires = PeerFires(ctx, 105.0, 105.5);
+                v.Equal(1, peerFires.Count, "weapon fires the RPR federate received");
+                var seenKestrel = handle is { } kestrelHandle ? ctx.Peer.DiscoveredObject(kestrelHandle.Value) : null;
+                v.That(seenKestrel is not null, "the RPR federate does not hold Kestrel's object");
+                if (peerFires.Count == 1 && seenKestrel is not null)
+                {
+                    v.Equal(fires[0].Tick, peerFires[0].Tick, "tick at which the RPR federate received the held fire");
+                    v.Equal(seenKestrel.Name, peerFires[0].Firing, "firing object at the RPR federate (Kestrel's RTI name)");
+                    v.Equal(peerFires[0].Tick, seenKestrel.LastReflectTick, "tick of Kestrel's full update at the RPR federate (the tick of the held fire: the update is sent first)");
+                }
+
                 v.Equal(DisOf(TkbMunitionA), fires[0].Message.Munition, "munition");
                 v.Note($"registration at tick {regs[0].Tick}; the fire was held and sent at tick {fires[0].Tick} with firing object {Hex(fires[0].Message.FiringObject)}");
             }
@@ -258,6 +274,9 @@ public sealed partial class ConvoyAmbushScript
             v.That(removed.Select(r => r.Message.Handle).ToHashSet().SetEquals(expectedRpr),
                 "the removed handles are not exactly the objects the gateway had published to RPR: " + string.Join(",", expectedRpr.Select(h => MessageText.H(h)).OrderBy(s => s)));
             v.That(ctx.RprPayloadBetween(UnloadAt, 126.5).All(r => r.Message is RprObjectRemoved), "RPR got something else than removals (not even a heartbeat after the unload)");
+            v.That(PeerRemoved(ctx, UnloadAt, 126.5).SetEquals(expectedRpr.Select(h => h.Value)),
+                "the RPR federate did not receive exactly the removals of the objects the gateway had published");
+            v.Equal(0, ctx.Peer.Discovered.Count(o => ctx.Peer.DiscoveredObject((uint)o.Handle.Value) is not null), "objects of the gateway the RPR federate still holds");
 
             var expectedNed = ctx.Recall<HashSet<ulong>>("ned-published");
             var disposed = ctx.NedOf<NedEntityDisposed>(UnloadAt, 126.5);
@@ -309,7 +328,7 @@ public sealed partial class ConvoyAmbushScript
 
             foreach (var id in new[] { RprFireE1, NedFireF1, NedFireF2, NedFireF3 })
             {
-                v.Equal("WeaponFire", events.GetValueOrDefault(id) ?? "-", "event log entry of " + MessageText.Short(id));
+                v.Equal("WeaponFire", events.GetValueOrDefault(ctx.Host.SeenEventId(id)) ?? "-", "event log entry of " + MessageText.Short(id));
             }
 
             v.Equal("Detonation", events.GetValueOrDefault(NedDetonationD1) ?? "-", "event log entry of the detonation");
@@ -389,10 +408,16 @@ public sealed partial class ConvoyAmbushScript
             var v = new Verdict();
             var go = ctx.RprOf<RprSimulationControl>(128.0, 129.0);
             v.That(go.Count == 1 && go[0].Message.Kind == RprControlKind.StartResume, "RPR did not get exactly one StartResume at Start");
+            v.Equal(4, ctx.Host.RprConnection.DroppedSimulationControl, "simulation controls the HLA transport dropped so far (R-107)");
             var updates = ctx.RprOf<RprObjectUpdate>(128.5, 129.0);
             v.Equal(4, updates.Count, "full RPR updates (3 members + Gate)");
             v.That(updates.All(u => IsHeartbeat(u.Message)), "the updates are not complete");
             v.Equal(4, ctx.RprOf<RprRegisterObject>(128.5, 129.0).Count, "registrations");
+            foreach (var update in updates)
+            {
+                PeerHoldsWhatWasSent(v, ctx, update.Message.Handle, "replayed " + update.Message.Marking);
+            }
+
             var labels = ctx.DisplayOf<DisplayEntityPosition>(128.5, 129.0).Select(p => p.Message.Label).Distinct().ToList();
             foreach (string label in new[] { "Viper-0", "Viper-1", "Viper-2", "Gate" })
             {
@@ -420,6 +445,8 @@ public sealed partial class ConvoyAmbushScript
             var v = new Verdict();
             v.Equal(0, ctx.RprOf<RprWeaponFire>(ReplayLoadAt, 133.0).Count, "RprWeaponFire messages during the replay");
             v.Equal(0, ctx.RprOf<RprMunitionDetonation>(ReplayLoadAt, 133.0).Count, "RprMunitionDetonation messages during the replay");
+            v.Equal(0, PeerFires(ctx, ReplayLoadAt, 133.0).Count + PeerDetonations(ctx, ReplayLoadAt, 133.0).Count,
+                "fires and detonations the RPR federate received during the replay");
             long boundary = ctx.Recall<long>("live-end");
             var seen = new Dictionary<Guid, string>();
             foreach (var ev in ctx.Engine.State.Journal.RecentEvents)

@@ -446,7 +446,7 @@ public class ShowcaseHarnessTests
         var (report, ctx) = Execute(a =>
         {
             HawkAndTank(a);
-            a.Do(0.5, "RPR is told about its own object", c => c.Checker.OnRprSent(new RprObjectUpdate(new RprObjectHandle(0x601)) { Marking = "T-1" }));
+            a.Do(0.5, "RPR is told about its own object", c => c.Checker.OnRprSent(new RprObjectUpdate(c.Host.ActualHandle(0x601)) { Marking = "T-1" }));
             a.Do(0.6, "RPR receives a fire and gets it back", c =>
             {
                 var fire = new RprWeaponFire(id, null, null, default, default, 1);

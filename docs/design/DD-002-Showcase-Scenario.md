@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | approved (R-043 .. R-047); project placement per DD-003 |
+| **Status** | approved (R-043 .. R-047); project placement per DD-003; since stage HLA-3 (T-021) the RPR side runs over the fake RTI (DD-008 section 12b; the as-built notes below carry the changes) |
 | **Tasks** | T-009 (this design), T-010 (implementation) |
 | **Rulings honoured** | R-002, R-003, R-006, R-008, R-013 .. R-048 |
 | **Date** | 2026-10-24 |
@@ -70,7 +70,7 @@ flowchart LR
         BOut["NED outbound recorder<br/>(+ loopback tap)"]
         RIn["RPR inbound"]
         ROut["RPR outbound recorder"]
-        RTI["SimulatedRti<br/>handles arrive one tick later"]
+        RTI["RPR side over HLA (HLA-3, DD-008 12b):<br/>transport + fake RTI + scripted RPR federate<br/>the handles are the RTI's, answered one tick later"]
         DOut["Display outbound recorder"]
     end
     Script --> Runner
@@ -99,8 +99,10 @@ flowchart LR
   `Tick()`, runs the **InvariantChecker** and evaluates the checks that are due.
 - **Recorders** keep every outbound message with tick, wall time and sim time, so checks can ask
   "exactly which messages went to RPR between t1 and t2".
-- **SimulatedRti** models asynchronous registration: `RegisterObject` returns nothing at once;
-  the handle is delivered on the next tick, as RTIs do through callbacks.
+- **The RPR side** (since HLA-3 the message-level `SimulatedRti` is gone, R-108): the gateway's "rpr" port is the HLA
+  transport on the fake RTI and the scripted RPR side is a federate on the same RTI (`ScriptedRprFederate`, DD-008 12b).
+  Registration is asynchronous as RTIs are: the registration is a service call, the handle (assigned by the RTI) is
+  delivered by the transport's next pump, one tick later; script handles are keys, never the RTI's numbers.
 - **ProbeModule** is a passive test module: it subscribes to triggers and records their order and
   the state visible at that moment (e.g. the shooter's ammo when the fire event is dispatched).
 - **RogueProcessor** (a rule that rewrites its own trigger attribute: an infinite cascade) and
@@ -162,7 +164,7 @@ Hawk's `NedGeoSpatial` arrives **before** its `NedEntityMaster`; Red tank T-1 ap
 | Id | Success condition |
 |---|---|
 | S-1.1 | After the geo-spatial only: Hawk exists in the pivot, RPR got **nothing** (type unknown), display got nothing (no label/identity yet). |
-| S-1.2 | After the master: RPR registration requested at the SimulatedRti; on the next tick the handle arrives and RPR got **one** full `RprObjectUpdate` for Hawk with ECEF position, geocentric orientation, velocity, DR algorithm, DIS type of Hawk's TKB type. |
+| S-1.2 | After the master: RPR registration requested at the RTI (the SimulatedRti of stage 7, the fake RTI since HLA-3); on the next tick the handle arrives and RPR got **one** full `RprObjectUpdate` for Hawk with ECEF position, geocentric orientation, velocity, DR algorithm, DIS type of Hawk's TKB type. |
 | S-1.3 | NED got master + geo-spatial for T-1 with a gateway-range id; T-1 never appears on RPR outbound (echo). |
 | S-1.4 | Sim time advanced with wall time (Idle runs free). |
 
@@ -305,6 +307,7 @@ contributes `DamageState` as 0/33/66/100). Then NED reports damage 1 on Gate.
 | G-6 | **Transaction atomicity**: every journal record is complete (a formation transaction never appears half-applied to any rule - the probe never sees a member without its parent in the same correlation). |
 | G-7 | **Diagnostics whitelist**: every warning/error is one the script expects at that act; nothing else. |
 | G-8 | **Causality**: correlation ids increase; every `CausedBy` refers to an earlier correlation; state triggers of a correlation precede its events. |
+| G-9 | **What the RPR side receives is what the gateway sent** (HLA-3): per tick, the registrations, attribute updates, removals, fires and detonations the gateway sent are what the scripted RPR federate decoded from the RTI; nothing was lost by the transport. |
 
 Overall success: all `S-*` conditions pass, no `G-*` invariant is violated at any tick, and the
 final state after act 11 equals the empty state of S-10.2.
@@ -320,7 +323,7 @@ These extend DD-001 section 9 (protocols and modules); they are part of this rev
 | `NedWeaponFire.TargetMember` (member index, -1 = none) | C9 |
 | `NedFireAmmunition(fireId, munitionTkb, quantity)` and `FireAssemblerProcessor` (helper entity keyed by `IdentityMap<Guid>`, timeout timer) | C8 |
 | `NedDamageNotification(id, member, oldLevel, newLevel)` and `NedDamageNotificationEgress` (rule on `Status.Damage` changed with old < new) | C6 |
-| `SimulatedRti` with asynchronous handle delivery; `RprEntityEgress` buffers updates until the handle is bound | C11 |
+| asynchronous handle delivery (`SimulatedRti` in stage 7, the fake RTI since HLA-3); `RprEntityEgress` buffers updates until the handle is bound | C11 |
 | `RprEntityEgress` split into per-attribute-group **contributor rules** (`Identity`, `Spatial`, `Damage`, ...) filling one pending update per entity, flushed in `OnChangeSetEnd` (and on handle arrival) | C15 override, coalescing |
 | `CustomerDamagePercent` module | C15 |
 | Replay policy: RPR event egress rules have the condition `Session.Mode == Live` | C16 |
@@ -378,9 +381,10 @@ classDiagram
     class ProbeModule {
         +Records of triggers with state snapshot
     }
-    class SimulatedRti {
-        +RegisterObject(EntityId)
-        +deliver handle next tick
+    class NedRprHost {
+        +RprConnection (HLA transport)
+        +RprPeer (scripted federate)
+        +PumpRti, EvokePeer, Step
     }
     class ScenarioReport {
         +results per S-id
@@ -398,7 +402,7 @@ classDiagram
     ScenarioRunner ..> ScenarioReport : produces
     ScenarioContext --> OutboundRecorder
     ScenarioContext --> ProbeModule
-    ScenarioContext --> SimulatedRti
+    ScenarioContext --> NedRprHost
 ```
 
 The harness lives in `src/Showcase/SimNetGateway.Showcase` (DD-003), shared by the acceptance test
@@ -413,16 +417,18 @@ sequenceDiagram
     autonumber
     participant Run as ScenarioRunner
     participant Clk as ManualClock
-    participant Sides as Inbound channels / SimulatedRti
+    participant Sides as Inbound channels / RPR federate on the RTI
     participant Eng as GatewayEngine
     participant Inv as InvariantChecker
     participant Chk as CheckSteps
 
     loop every 1/60 s until the script ends
         Run->>Clk: Advance(1/60 s)
-        Run->>Sides: inject due InjectSteps, deliver pending RTI handles
+        Run->>Sides: inject due InjectSteps (the RPR ones through the scripted federate)
         Run->>Eng: apply due OperatorSteps (enable / disable rules)
+        Run->>Sides: pump the RTI (callbacks, registration answers of the previous tick)
         Run->>Eng: Tick()
+        Run->>Sides: the scripted federate evokes what the gateway sent
         Run->>Inv: CheckAll()
         Inv-->>Run: violations (fail fast in the test, listed in the demo)
         Run->>Chk: evaluate due CheckSteps against recorders, journal, queries
@@ -533,6 +539,33 @@ read-only accessors (`IdentityMap.Allocator`, `MappedAllocator.Numbers`) for S-1
   (see section 9).
 - Known test gap: the CausedBy half of G-8 has no injected-violation test (the engine sets CausedBy
   itself); the dispatch-order half has one.
+
+### Stage HLA-3 - the RPR side over the fake RTI (T-021, 2026-10-29)
+
+`SimulatedRti` is retired (R-108). `NedRprHost` wires the "rpr" port to `Transport.HlaRpr` on a `FakeRtiHub`; every RPR input of a script
+(`SendRpr`) is the action of the scripted RPR federate, every RPR output of the gateway is checked against what that federate decoded
+(DD-008 section 12b has the diagrams, the wiring, the mutation table; the layer rule change is DD-008 P-88). Host tick: pump, engine tick, the
+federate's evoke. Result: **48 of 48 PASS, no G-1 .. G-9 violation in 8,400 ticks**; the gateway sent NED / display / RPR exactly what it sent before
+(golden files; the only differences are the numbers of the RTI handles and the guid of the RPR fire on the NED side, see below).
+
+New: invariant **G-9** (section 6). `RtiMirror` and `ConvoyAmbushScript.Peer.cs` compare the gateway's output with the federate's view.
+
+Checks that changed, and why their intent is kept (the check bodies that are not listed did not change):
+
+| Check | What changed | Intent kept because |
+|---|---|---|
+| S-1.2 | "handle delivered by the RTI" asks the host (`IsRegisteredHandle`); **added**: the federate discovered the object under that handle and received the one full update (five attributes once) in the tick it was sent, decoded to the values of the update | the handle is still answered one tick after the request (`tick + 1` unchanged); the RPR side now sees it |
+| S-1.3 | T-1's own handle is the RTI's (script handle 0x601 is a key); **added**: the federate never gets its own object back, NED got the master in the tick T-1 was announced | no echo, same messages; the tick assertion pins "pump before the engine tick" |
+| S-3.2, S-4.1, S-5.2, S-5.3, S-5.4, S-9.1, S-9.3, S-9.5, S-10.1 | **added**: the federate received exactly these objects / reflections / removals / fires / detonation (counts, ticks, RTI names of the objects, FOM munition type, quantity, result code) and holds what the gateway sent | strictly more checks on the same gateway output |
+| S-5.1, S-5.6, S-10.3 | the RPR fire's id is `SeenEventId(E1)`: the guid the transport correlated with the RTI event identifier (HLA carries no guid); S-5.6 also asserts the federate received none of its own event identifiers back | the checks ask "NED got the fire with that identity" / "nothing went back to its source" - the identity is the one the gateway has |
+| S-2.2, S-8.1, S-8.3, S-11.1 | RPR FOM 2.0 has no simulation control (R-107): the gateway still sends one `RprSimulationControl` per command (all assertions on the gateway's output unchanged); **added**: the transport counted exactly that many as dropped | the success condition is about what the gateway sends; over HLA the RTI carries nothing, the counter proves the drop is the only loss |
+| S-6.1 | RPR FOM 2.0 has no damage percentage (R-105): the gateway's `RprObjectUpdate` is unchanged (`DamagePercent = 33`); **added**: the transport dropped it (counted) and the federate received nothing | same |
+| S-11.2 | **added**: the federate received no fire or detonation during the replay | |
+| S-4.5, S-9.2 | unchanged text; they need DD-008 **P-89**: the Wolf unit's keep-alive is an aggregate reflection (always `RprAggregateEntity`), and the gateway no longer rewrites the members it already links | a silent member of a live unit still ages out (R-068); without P-89 these two cannot hold over HLA |
+
+Scripted RPR input differences the gateway sees: orientation and velocity travel as float32 (the FOM), a Static object has no velocity attribute, the unit's
+member list names only the members that exist (a member announced by the aggregate before its platform appears when its platform does: S-3.4 / S-3.5 pass unchanged),
+event guids are the transport's. Everything else the gateway receives is what the script says.
 
 ## Appendix B - showcase spec (stage 7, pinned before implementation)
 
