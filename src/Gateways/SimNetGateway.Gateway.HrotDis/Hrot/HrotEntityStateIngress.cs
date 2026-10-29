@@ -6,7 +6,7 @@ namespace SimNetGateway.Gateway.HrotDis;
 /// <summary>
 /// HrotEntityState: resolves or creates the pivot entity (origin hrot) and stores identity, health and, once the origin is valid,
 /// the kinematics converted to the pivot frames (DD-006 section 5): ENU position and velocity to ECEF, the HROT quaternion to
-/// geocentric Euler angles, the angular velocity to body axes, dead reckoning FPW, state time = the HROT sim time. Before a valid
+/// geocentric Euler angles, the angular velocity to body axes, dead reckoning FPW, state time = the engine clock at ingress (one time axis; the message's SimTime is only validated). Before a valid
 /// origin the entity is created and typed but gets no position (DD-006 4.1, DD-007 section 7). An id that belongs to a DIS replica is
 /// ignored (echo, R-022). The commander becomes <c>Structure.Parent</c> when it is a known HROT entity, else the link is absent.
 /// </summary>
@@ -91,7 +91,7 @@ public sealed class HrotEntityStateIngress : IGatewayModule
         changes.Set(id, _schema.Orientation, AttrValue.From(geo.ToEuler(m.Rotation)));
         changes.Set(id, _schema.AngularVelocity, AttrValue.From(geo.AngularVelocityToBody(m.Rotation, m.AngularVelocity)));
         changes.Set(id, _schema.DrAlgorithm, AttrValue.From((long)DrAlgorithms.Fpw));
-        changes.Set(id, _schema.StateTime, AttrValue.From(m.SimTime));
+        changes.Set(id, _schema.StateTime, AttrValue.From(ctx.WallTime)); // one time axis in the pivot: the engine clock (m.SimTime is only validated)
     }
 
     private void SetCommander(IngressContext ctx, EntityId id, long commanderId)

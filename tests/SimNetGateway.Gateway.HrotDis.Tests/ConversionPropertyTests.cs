@@ -74,7 +74,7 @@ public class ConversionPropertyTests
             Support.Near(omega, replica.State.AngularVelocity, 1e-9, $"sample {i} replica angular velocity");
             Support.Near(HrotVec3.Zero, replica.State.Acceleration, 1e-12, $"sample {i} replica acceleration");
             Assert.Equal(DrAlgorithms.Fpw, replica.State.DrAlgorithm);
-            Assert.Equal(i * 0.5 + 1000.0, replica.State.StateTime);
+            Assert.Equal(e.Get(h.Schema.StateTime).AsDouble() + 1000.0, replica.State.StateTime);
             Assert.Equal("M" + i, replica.Marking);
             Assert.Equal(e.Get(h.Schema.Force).AsInt(), replica.Force);
             Assert.Equal(e.Get(h.Schema.EntityType).AsInt(), replica.DisType);

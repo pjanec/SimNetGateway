@@ -425,7 +425,7 @@ see DIS entities unless they also compose the pack) - a decision for that later 
 | R-079 scope/topology | the gateway is a pack inside the editor node, not a NED node (R-091) |
 | R-082 transports | `Transport.HrotDds` dropped; the HROT side is this pack's ECS adapter (R-091); `Transport.DisUdp` unchanged |
 | R-083 identities | `hrot.entity` allocated from `HrotNodeContext.IdAllocator` (no `IdRequest` client); the rest unchanged |
-| R-084 kinematics | origin from `IGeographicTransform`; HROT sim time read directly (no offset); DIS -> HROT by per-frame posing from the DR snapshot (no re-send rule); HROT -> DIS unchanged |
+| R-084 kinematics | origin from `IGeographicTransform`; one time axis = the gateway engine clock (a HROT entity's StateTime = the clock at ingress, no offset to HROT sim time); DIS -> HROT by per-frame posing from the DR snapshot (no re-send rule); HROT -> DIS unchanged |
 | R-086 ownership | replicas owned by `DisOwnerNodeId`; no `OwnershipUpdate` handling; HROT never applies damage to replicas |
 | R-087 session/time | from `ClusterState` + `ISimClock`; `DisControlsHrot` via `ITimeCommands`; table of section 6 |
 | R-088 catalogs | TKB's `DISEntityType` / munition SISO types first; the code catalog is the fallback |
