@@ -84,14 +84,12 @@ public sealed class HrotDisProfile : IGatewayProfile
         var sources = new HrotDisSources(hrotPort.Source, disSource, rprSource);
 
         var hrotOut = builder.RequireOutbound<IGatewayToHrotMessage>("hrot");
-        var disIdentities = config.DisRuns
-            ? new DisIdentityOptions(builder.Clock, (ushort)config.Shared.Site, (ushort)config.Shared.Application, _numbering)
-            : null;
-        var rprIdentities = config.HlaRuns
+        // one entity number per hrot entity for both sides: the dis.entity map and pool serve DIS and HLA (an instantiated gateway runs at least one)
+        var disIdentities = config.DisRuns || config.HlaRuns
             ? new DisIdentityOptions(builder.Clock, (ushort)config.Shared.Site, (ushort)config.Shared.Application, _numbering)
             : null;
         var maps = HrotDisMaps.Create(builder.Identities, sources, _hrotIds ?? new HrotIdRangeAllocator(DefaultIdFirst, DefaultIdLast),
-            disIdentities, rprIdentities);
+            disIdentities, config.HlaRuns);
         var services = new HrotDisServices(config);
         Services = services;
         var publisher = new ReplicaPublisher(schema, maps, sources, services, hrotOut, builder.Engine);

@@ -407,7 +407,7 @@ public class RprSideTests
         var removed = h.RprChecker.Sent<RprObjectRemoved>().ToList();
         Assert.Equal(2, removed.Count);
         Assert.NotEqual(first, removed[1].Handle);
-        Assert.Equal(0, h.RprIds!.Count);
+        Assert.Equal(0, h.DisIds!.Count);
         Assert.Equal(0, h.RprHandles!.Count);
     }
 
@@ -474,7 +474,7 @@ public class RprSideTests
         var numbers = new List<int>();
         foreach (var e in h.Entities(h.HrotSource))
         {
-            if (h.RprIds!.TryGetKey(e.Id, out var k))
+            if (h.DisIds!.TryGetKey(e.Id, out var k))
             {
                 numbers.Add(k.Number);
             }
@@ -627,7 +627,8 @@ public class RprSideTests
         h.HrotStep(HrotDisHarness.State(1, new HrotVec3(0, 0, 0)));
         h.Steps(3);
         Assert.Single(Updates(h));
-        Assert.Null(h.Engine.Identities.Find("dis.entity"));
+        Assert.NotNull(h.Engine.Identities.Find("dis.entity")); // the one entity number space serves the HLA side alone, too
+        Assert.Null(h.Engine.Identities.Find("rpr.entityId"));
     }
 
     [Fact]

@@ -9,9 +9,11 @@ namespace SimNetGateway.Gateway.HrotDis.Tests;
 /// oracle (own FPW arithmetic, own angle measure, own marking rule):
 /// <list type="bullet">
 /// <item>origin rule (R-116): an update, a removal or an interaction names only objects of hrot entities; no entity of origin dis
-/// or rpr holds an <c>rpr.entityId</c>, none of origin rpr holds a <c>dis.entity</c>, and none of origin dis a handle;</item>
+/// or rpr holds an entity number of the pool (the one <c>dis.entity</c> pool serves both sides: one number per hrot entity on DIS and HLA),
+/// none of origin rpr holds a <c>dis.entity</c> key, and none of origin dis a handle;</item>
 /// <item>registration: tokens are unique, a handle the RTI gave is used for exactly one entity, nothing is sent for a handle before
 /// its answer or after its removal, a ready entity of an open session is registered and sent;</item>
+/// <item>one entity number for both sides: the entity identifier of an update equals the id of the Entity State PDU sent for the same entity;</item>
 /// <item>full update: every field is the one the pivot says (type, force, marking, damage, entity identifier, location predicted to
 /// now, velocities and orientation as single precision, the algorithm), never a partial update;</item>
 /// <item>threshold invariant, per side: after every step, for every sent hrot entity either an update was sent this tick or the
@@ -282,14 +284,30 @@ public sealed class RprInvariantChecker
             Violate("full", $"{what}: damage {u.DamageState} is not {damage}");
         }
 
-        if (!_h.RprIds!.TryGetKey(e.Id, out var key) || u.EntityIdentifier != new DisEntityId(key.Site, key.Application, key.Number))
+        if (!_h.DisIds!.TryGetKey(e.Id, out var key) || u.EntityIdentifier != new DisEntityId(key.Site, key.Application, key.Number))
         {
-            Violate("full", $"{what}: entity identifier {u.EntityIdentifier} is not the one bound ({(_h.RprIds.TryGetKey(e.Id, out var k2) ? k2.ToString() : "none")})");
+            Violate("full", $"{what}: entity identifier {u.EntityIdentifier} is not the one bound ({(_h.DisIds.TryGetKey(e.Id, out var k2) ? k2.ToString() : "none")})");
         }
         else if (key.Site != _h.Config.Shared.Site || key.Application != _h.Config.Shared.Application ||
                  key.Number < _h.Numbering.First || key.Number > _h.Numbering.Last)
         {
             Violate("numbers", $"{what}: identifier {key} is outside the gateway's site/application or number range");
+        }
+
+        // one entity number on both sides (DIS and RPR identifiers are one identifier space): when the DIS side runs, an Entity State PDU
+        // with exactly this identifier was sent for the same entity (judged on the PDUs as they went on the wire, not on the map)
+        if (_h.DisChecker is { } dis && u.EntityIdentifier is { } sentId)
+        {
+            var wireKey = new DisEntityKey(sentId.Site, sentId.Application, sentId.Entity);
+            var pdus = dis.StatesOf(wireKey);
+            if (pdus.Count == 0)
+            {
+                Violate("same-id", $"{what}: the identifier {wireKey} was never sent to DIS for this entity - HLA and DIS name it differently");
+            }
+            else if (DisConversions.PackType(pdus[^1].EntityType) != type.AsInt())
+            {
+                Violate("same-id", $"{what}: the identifier {wireKey} names a different entity on DIS");
+            }
         }
 
         var (position, velocity, orientation) = Truth(e, now);
@@ -363,14 +381,15 @@ public sealed class RprInvariantChecker
         long tick = _h.Engine.TickCount;
         foreach (var e in _h.Engine.State.Entities)
         {
-            bool hasKey = _h.RprIds!.TryGetKey(e.Id, out var key);
+            bool hasKey = _h.DisIds!.TryGetKey(e.Id, out var key);
             bool hasHandle = _h.RprHandles!.TryGetKey(e.Id, out var handle);
-            if (hasKey)
+            if (hasKey && e.Origin != _h.DisSource)
             {
+                // (entities of origin dis hold the key their PDUs named, not a number of the pool)
                 holders++;
                 if (!liveKeys.Add(key))
                 {
-                    Violate("numbers", $"RPR id {key} is held by two entities");
+                    Violate("numbers", $"entity id {key} is held by two entities");
                 }
             }
 
@@ -382,9 +401,9 @@ public sealed class RprInvariantChecker
             if (e.Origin != _h.HrotSource)
             {
                 // the origin rule: only hrot entities go to HLA
-                if (hasKey)
+                if (hasKey && e.Origin != _h.DisSource)
                 {
-                    Violate("origin", $"entity {e.Id.Value} of origin '{_h.Engine.Sources.NameOf(e.Origin)}' holds an RPR entity identifier");
+                    Violate("origin", $"entity {e.Id.Value} of origin '{_h.Engine.Sources.NameOf(e.Origin)}' holds an entity identifier of the pool");
                 }
 
                 if (_tracks.ContainsKey(e.Id))
@@ -474,7 +493,7 @@ public sealed class RprInvariantChecker
             }
         }
 
-        var pool = (NumberPool)((MappedAllocator<DisEntityKey>)_h.RprIds!.Allocator!).Numbers;
+        var pool = (NumberPool)((MappedAllocator<DisEntityKey>)_h.DisIds!.Allocator!).Numbers;
         if (pool.InUse != holders)
         {
             Violate("numbers", $"the pool has {pool.InUse} numbers in use but {holders} entities hold one (leak or double release)");

@@ -68,8 +68,9 @@ public class DisProfileTests
         Assert.Equal(10, smallPool.Capacity);
 
         var noDis = new HrotDisHarness(GatewayConfiguration.CreateDefault() with { Dis = null, Hla = new HlaConfiguration { Federation = "F" } });
-        Assert.Null(noDis.Engine.Identities.Find("dis.entity"));
-        Assert.Null(noDis.DisIds);
+        // the HLA side alone still needs the entity numbers: the one dis.entity pool serves both sides (T-024)
+        Assert.NotNull(noDis.Engine.Identities.Find("dis.entity"));
+        Assert.NotNull(noDis.DisIds);
         Assert.DoesNotContain(noDis.Engine.Rules, r => r.Module.StartsWith("Dis", StringComparison.Ordinal));
         Assert.False(noDis.Engine.Sources.TryGet("proc.reaper.dis", out _));
     }

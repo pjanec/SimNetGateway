@@ -196,8 +196,7 @@ public class RprRandomizedTests(Xunit.Abstractions.ITestOutputHelper output)
         h.Session(ClusterPhase.Idle);
         h.Steps(3);
         Assert.Equal(0, h.Engine.State.Count);
-        Assert.Equal(0, h.RprIds!.Count);
-        Assert.Equal(0, h.RprHandles!.Count);
+                Assert.Equal(0, h.RprHandles!.Count);
         Assert.Equal(0, h.DisIds!.Count);
         Assert.Equal(0, h.HrotIds.Count);
         Assert.Equal(0UL, h.Ids.InUse);

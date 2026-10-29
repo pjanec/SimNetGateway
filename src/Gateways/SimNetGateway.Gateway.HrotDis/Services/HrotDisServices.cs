@@ -19,20 +19,20 @@ public sealed record HrotDisSources(SourceId Hrot, SourceId Dis, SourceId Rpr = 
 /// pack are bound, ids for entities introduced to HROT (DIS entities) come from the injected allocator port. With the DIS side
 /// running there is a second map, <c>dis.entity</c> (<see cref="DisEntityKey"/>): the ids of DIS entities are bound from the PDUs,
 /// the ids of the HROT entities published to DIS come from a number pool with quarantine under the gateway's site and application.
+/// The same map and pool give the entity identifier of the HLA side (DIS and RPR entity identifiers are one identifier space: a hrot entity has ONE
+/// number on both sides, so a DIS/HLA bridge never merges two vehicles); the map exists when the DIS or the HLA side runs.
 /// </summary>
 public sealed class HrotDisMaps
 {
     private readonly IdentityMap<DisEntityKey>? _disEntity;
     private readonly IdentityMap<RprObjectHandle>? _rprHandle;
-    private readonly IdentityMap<DisEntityKey>? _rprEntity;
 
     public HrotDisMaps(IdentityMap<long> hrotEntity, IdentityMap<DisEntityKey>? disEntity = null,
-        IdentityMap<RprObjectHandle>? rprHandle = null, IdentityMap<DisEntityKey>? rprEntity = null)
+        IdentityMap<RprObjectHandle>? rprHandle = null)
     {
         HrotEntity = hrotEntity;
         _disEntity = disEntity;
         _rprHandle = rprHandle;
-        _rprEntity = rprEntity;
     }
 
     /// <summary>"hrot.entity".</summary>
@@ -45,19 +45,15 @@ public sealed class HrotDisMaps
     public IdentityMap<DisEntityKey> DisEntity =>
         _disEntity ?? throw new InvalidOperationException("The DIS side is not running: there is no dis.entity map.");
 
-    /// <summary>True when the HLA side runs and so <see cref="RprHandle"/> and <see cref="RprEntity"/> exist.</summary>
+    /// <summary>True when the HLA side runs and so <see cref="RprHandle"/> exists.</summary>
     public bool HasRpr => _rprHandle is not null;
 
     /// <summary>"rpr.handle": bound when the RTI answers a registration of a hrot entity, or when a handle is first seen on the wire (rpr entities).</summary>
     public IdentityMap<RprObjectHandle> RprHandle =>
         _rprHandle ?? throw new InvalidOperationException("The HLA side is not running: there is no rpr.handle map.");
 
-    /// <summary>"rpr.entityId": the RPR entity identifiers (site, application, number) the gateway hands out to the hrot entities it publishes to HLA; own number pool with quarantine, independent of the DIS side's.</summary>
-    public IdentityMap<DisEntityKey> RprEntity =>
-        _rprEntity ?? throw new InvalidOperationException("The HLA side is not running: there is no rpr.entityId map.");
-
     public static HrotDisMaps Create(IdentityRegistry identities, HrotDisSources sources, IIdAllocator<long> hrotIds, DisIdentityOptions? dis = null,
-        DisIdentityOptions? rpr = null)
+        bool hla = false)
     {
         ArgumentNullException.ThrowIfNull(identities);
         ArgumentNullException.ThrowIfNull(sources);
@@ -65,14 +61,12 @@ public sealed class HrotDisMaps
         var hrot = identities.Create<long>(sources.Hrot, "hrot.entity", hrotIds);
         var disMap = dis is null ? null : identities.Create<DisEntityKey>(sources.Dis, "dis.entity", dis.CreateAllocator());
         IdentityMap<RprObjectHandle>? rprHandle = null;
-        IdentityMap<DisEntityKey>? rprEntity = null;
-        if (rpr is not null)
+        if (hla)
         {
             rprHandle = identities.Create<RprObjectHandle>(sources.Rpr, "rpr.handle");
-            rprEntity = identities.Create<DisEntityKey>(sources.Rpr, "rpr.entityId", rpr.CreateAllocator());
         }
 
-        return new HrotDisMaps(hrot, disMap, rprHandle, rprEntity);
+        return new HrotDisMaps(hrot, disMap, rprHandle);
     }
 }
 
