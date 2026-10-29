@@ -790,3 +790,5 @@ expected extension when HLA ownership transfer is needed, in its own design.
 holds the readiness and unit rule); the behaviour is identical - the whole H2b suite (692 tests, `DisInvariantChecker`, randomized runs) passed unchanged after the refactor. The
 HLA side of the same gateway is the RPR modules of DD-009; with it `Gateway.HrotDis` references `Protocol.Rpr` and the vendored set grows to seven projects (the dry run of H3
 builds `Protocol.Rpr` too).
+The H2b rail "the `dis.entity` map exists only when the DIS side runs" is now **"unless the DIS or the HLA side runs"**: the one `dis.entity` map and number pool numbers the entities of
+both sides (a hrot entity has one entity number on DIS and on HLA; DIS and RPR identifiers are one identifier space). This is a test invariant (`DisProfileTests`), not a design rule.

@@ -254,7 +254,7 @@ public sealed class RprPublication
 
     private void TryRegister(EntityRecord entity, ref RprPublicationState state)
     {
-        if (!_maps.RprEntity.TryGetOrAllocate(entity.Id, out _))
+        if (!_maps.DisEntity.TryGetOrAllocate(entity.Id, out _))
         {
             if (!state.AllocationWarned)
             {
@@ -426,7 +426,7 @@ public sealed class RprPublication
             force = entity.TryGet(s.Force, out var f) ? RprConversions.ForceOf(f.AsInt()) : null;
         }
 
-        DisEntityId? identifier = _maps.RprEntity.TryGetKey(entity.Id, out var key) ? new DisEntityId(key.Site, key.Application, key.Number) : null;
+        DisEntityId? identifier = _maps.DisEntity.TryGetKey(entity.Id, out var key) ? new DisEntityId(key.Site, key.Application, key.Number) : null;
         WorldLocation? location = null;
         RprOrientation? orientation = null;
         RprVector? velocity = null, acceleration = null, angular = null;

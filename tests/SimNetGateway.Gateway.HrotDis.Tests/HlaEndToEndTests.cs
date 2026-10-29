@@ -211,6 +211,10 @@ public class HlaEndToEndTests
         Assert.Equal(new DisTypeCode(1, 1, 225, 1, 1, 3, 0).Pack(), DisConversions.PackType(pdu.EntityType));
         Assert.True((DisConversions.ToVec(pdu.EntityLocation) - expected).Length < 1.0);
         Assert.Equal(0, h.Connection.SendErrors + h.Connection.EncodeErrors + h.Connection.RejectedOutbound);
+
+        // ONE entity number for both sides: the identifier the federate decoded is the id of the Entity State PDU
+        var espduId = DisConversions.KeyOf(pdu.EntityID);
+        Assert.Equal(new EntityIdentifierStruct(new FederateIdentifierStruct(espduId.Site, espduId.Application), espduId.Number), obj.EntityIdentifier);
     }
 
     [Fact]

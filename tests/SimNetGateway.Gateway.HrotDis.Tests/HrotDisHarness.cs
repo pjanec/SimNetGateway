@@ -91,8 +91,9 @@ public sealed class HrotDisHarness
             RprOut!.Context = Engine;
             RprSource = Engine.Sources.Register("rpr");
             RprHandles = (IdentityMap<RprObjectHandle>)Engine.Identities.Find("rpr.handle")!;
-            RprIds = (IdentityMap<DisEntityKey>)Engine.Identities.Find("rpr.entityId")!;
         }
+
+        DisIds = (IdentityMap<DisEntityKey>?)Engine.Identities.Find("dis.entity");
 
         Checker = new InvariantChecker(this);
         if (installChecker)
@@ -109,7 +110,6 @@ public sealed class HrotDisHarness
         if (Config.DisRuns)
         {
             DisOut!.Context = Engine;
-            DisIds = (IdentityMap<DisEntityKey>)Engine.Identities.Find("dis.entity")!;
             DisChecker = new DisInvariantChecker(this);
             if (installChecker)
             {
@@ -127,7 +127,7 @@ public sealed class HrotDisHarness
     /// <summary>The numbering of the DIS entity numbers the gateway was built with.</summary>
     public DisNumbering Numbering { get; }
 
-    /// <summary>The "dis.entity" identity map (null when the DIS side does not run).</summary>
+    /// <summary>The "dis.entity" identity map: the one entity number space of DIS and HLA (null when neither side runs).</summary>
     public IdentityMap<DisEntityKey>? DisIds { get; }
 
     /// <summary>The invariants of the DIS half (null when the DIS side does not run); checked after every step.</summary>
@@ -166,9 +166,6 @@ public sealed class HrotDisHarness
 
     /// <summary>"rpr.handle" (null when the HLA side does not run).</summary>
     public IdentityMap<RprObjectHandle>? RprHandles { get; }
-
-    /// <summary>"rpr.entityId" (null when the HLA side does not run).</summary>
-    public IdentityMap<DisEntityKey>? RprIds { get; }
 
     /// <summary>The invariants of the HLA half (null when the HLA side does not run or the checker is not installed); checked after every step.</summary>
     public RprInvariantChecker? RprChecker { get; }
