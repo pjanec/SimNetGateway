@@ -62,7 +62,7 @@ public class ProtocolTests
             },
             MessageTypes(typeof(INedMessage).Assembly, typeof(INedMessage)).Select(t => t.Name).OrderBy(x => x, StringComparer.Ordinal));
         Assert.Equal(
-            new[] { "RprAggregateEntity", "RprMunitionDetonation", "RprObjectRegistered", "RprObjectRemoved", "RprObjectUpdate", "RprRegisterObject", "RprSimulationControl", "RprWeaponFire" },
+            new[] { "RprAggregateEntity", "RprMunitionDetonation", "RprObjectRegistered", "RprObjectRemoved", "RprObjectUpdate", "RprRegisterObject", "RprSimulationControl", "RprUpdateRequested", "RprWeaponFire" },
             MessageTypes(typeof(IRprMessage).Assembly, typeof(IRprMessage)).Select(t => t.Name).OrderBy(x => x, StringComparer.Ordinal));
         Assert.Equal(
             new[] { "DisplayEntityPosition", "DisplayEntityRemoved" },
@@ -165,7 +165,12 @@ public class ProtocolTests
         Assert.Equal(new byte[] { 0, 1, 2, 3 }, new[] { RprForceId.Other, RprForceId.Friendly, RprForceId.Opposing, RprForceId.Neutral }.Select(x => (byte)x));
         Assert.Equal(new byte[] { 0, 1, 2, 3 }, new[] { RprDamageState.NoDamage, RprDamageState.SlightDamage, RprDamageState.ModerateDamage, RprDamageState.Destroyed }.Select(x => (byte)x));
         Assert.Equal(new byte[] { 0, 1, 2, 3 }, new[] { NedDetonationResult.Other, NedDetonationResult.EntityImpact, NedDetonationResult.GroundImpact, NedDetonationResult.Detonation }.Select(x => (byte)x));
-        Assert.Equal(new byte[] { 0, 1, 2, 3 }, new[] { RprDetonationResult.Other, RprDetonationResult.EntityImpact, RprDetonationResult.GroundImpact, RprDetonationResult.Detonation }.Select(x => (byte)x));
+        // the FOM's DetonationResultCodeEnum8 numbering (R-105)
+        Assert.Equal(new byte[] { 0, 1, 2, 3, 4, 5, 6 }, new[]
+        {
+            RprDetonationResult.Other, RprDetonationResult.EntityImpact, RprDetonationResult.EntityProximateDetonation, RprDetonationResult.GroundImpact,
+            RprDetonationResult.GroundProximateDetonation, RprDetonationResult.Detonation, RprDetonationResult.None,
+        }.Select(x => (byte)x));
         Assert.Equal(new[] { 0, 1, 2, 3, 4, 5 }, Enum.GetValues<NedControlKind>().Select(x => (int)x));
         Assert.Equal(new[] { NedControlKind.Load, NedControlKind.LoadDebrief, NedControlKind.Start, NedControlKind.Pause, NedControlKind.Resume, NedControlKind.Unload }, Enum.GetValues<NedControlKind>());
         Assert.Equal(2, Enum.GetValues<RprControlKind>().Length);

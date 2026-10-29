@@ -48,6 +48,11 @@ internal static class Codecs
         Make("RelativePosition", Gen.Relative, RprFom2.EncodeRelativePosition, RprFom2.TryDecodeRelativePosition),
         Make("Spatial", r => Gen.Spatial(r), RprFom2.EncodeSpatial, RprFom2.TryDecodeSpatial),
         Make("RtiObjectId", Gen.ObjectName, RprFom2.EncodeRtiObjectId, RprFom2.TryDecodeRtiObjectId),
+        Make("AggregateMarking", Gen.AggregateMarking, RprFom2.EncodeAggregateMarking, RprFom2.TryDecodeAggregateMarking),
+        Make("RtiObjectIdArray", Gen.ObjectNames, RprFom2.EncodeRtiObjectIdArray, RprFom2.TryDecodeRtiObjectIdArray),
+        Make("UnsignedInteger16", Gen.U16, RprFom2.EncodeUnsignedInteger16, RprFom2.TryDecodeUnsignedInteger16),
+        Make("UnsignedInteger32", Gen.U32, RprFom2.EncodeUnsignedInteger32, RprFom2.TryDecodeUnsignedInteger32),
+        Make("LengthMeterFloat32", Gen.Float, RprFom2.EncodeLengthMeterFloat32, RprFom2.TryDecodeLengthMeterFloat32),
         Make("EventIdentifier", Gen.Event, RprFom2.EncodeEventIdentifier, RprFom2.TryDecodeEventIdentifier),
         Make("ArticulatedParameter", Gen.Articulated, RprFom2.EncodeArticulatedParameter, RprFom2.TryDecodeArticulatedParameter),
         Make(
