@@ -701,3 +701,45 @@ expected extension when HLA ownership transfer is needed, in its own design.
   changes, session phases, fire and detonation) against a model of "an eligible DIS entity is a replica exactly while the origin is valid
   and the session is open". Counts at the end of H2a: `Protocol.Hrot.Tests` 7, `Gateway.HrotDis.Tests` 383 (configuration, services, ingress, replicas,
   the session table with 196 transitions, events, time requests, 800 seeded conversion samples, 6 seeded random-traffic runs), architecture tests 101.
+
+**H2b (T-019): the DIS half of `Gateway.HrotDis`** (the HROT half and the contract are H2a).
+
+- Layout (`src/Gateways/SimNetGateway.Gateway.HrotDis/`): `Dis/` holds one small module per PDU kind or concern (R-003): ingress `DisEntityStateIngress`,
+  `DisFireIngress`, `DisDetonationIngress`, `DisRemoveEntityIngress`, `DisStartResumeIngress`, `DisStopFreezeIngress`; egress `DisEntityStateEgress` (rules Identity,
+  Spatial, Damage, Flush, Reconcile, Remove, Drift), `DisHeartbeatEgress`, `DisFireEgress`, `DisDetonationEgress`, `DisSessionEgress` (Siman). The stale reaper is Common's
+  `StaleEntityReaper` registered as `DisStaleReaper` (source `proc.reaper.dis`). `Services/` gains `DisIdentities` (`DisEntityKey`, `DisNumbering`), `DisConversions`,
+  `DisKinematics` and `DisPublication` (per-entity publication table and send logic, the DIS counterpart of `RprPublication`). `HrotDisMaps` has the `dis.entity` map
+  (bound from the PDU for DIS entities, `MappedAllocator` over `NumberPool` with quarantine for HROT entities published to DIS). `HrotDisProfile` exposes `Services`
+  (ingress counters) and an optional `DisNumbering` argument. The diagrams of sections 3.2, 6.1, 6.3 - 6.5 are as designed.
+- A HROT entity to DIS (6.1): contributor rules only mark groups; rule Flush builds ONE full PDU from the whole current state through every enabled contributor (a disabled
+  contributor's group stays zero), position dead-reckoned to now (R-028). Due on: first send (type, position known, origin valid, session Running or Paused, number
+  available), identity or damage change, drift of the receiver's model beyond the thresholds (strictly greater), `dis.heartbeatS` since the last send, removal (final
+  PDU with Deactivated, exactly once). The receiver's model is the DR prediction of the last PDU as sent (float32 values) by the Common predictor.
+- **Decision: the threshold check is on demand, not a time-sliced `DrExtrapolationProcessor`.** It writes nothing to the pivot and is a per-frame comparison. It runs
+  in Flush on every spatial change and at the end of every tick (rule Drift), because the two FPW models can drift apart between HROT states. The heartbeat is also a
+  tick-end rule, so "last send younger than the heartbeat" holds exactly after every tick.
+- Gates (DD-007 section 6): ESPDUs and events only in Running or Paused, Live or Replay; Edit and Idle silent; entities created in Edit get their first PDU at the start
+  (Reconcile); an Unload sends every sent entity's Deactivated PDU. Fire and Detonation: Live, or Replay with `shared.sendEventsInReplay`. The event id is the one the
+  HROT ingress assigned (the correlator links a detonation to its fire there). A shooter without a DIS id is dropped with one warning (no R-047 hold: numbers are
+  allocated synchronously).
+- DIS ingress: Entity State creates or updates origin dis, binds `dis.entity`, `Spatial.StateTime` = `ctx.ReceivedAt`, damage from the appearance bits, Deactivated removes and never
+  creates; Remove Entity removes the entity its receiving id names, only if origin dis; Fire and Detonation become DIS-side events (munition TKB left to `InjectFireEgress`);
+  Start/Resume and Stop/Freeze become Resume / Pause commands of source dis only with `dis.disControlsHrot`, when addressed to the gateway (own or "all") and a valid
+  transition. Modules route on the concrete PDU class, so the H3 transport must deliver `Deliver<EntityStatePdu>` and so on, not `Deliver<Pdu>`.
+- Echo: no Entity State PDU for origin dis; PDUs whose entity, firing, originating or event id carry the gateway's site and application, and PDUs of another exercise,
+  are ignored (counted); the transport filters too, the gateway does not rely on it.
+- SIMAN to DIS (`dis.hrotControlsDis`): Start/Resume when HROT starts or resumes, Stop/Freeze (recess) when it pauses; originating (site, application, 0), receiving all.
+  Decisions the design left open: only HROT-sourced changes are announced (a DIS-requested pause is not echoed), nothing in Replay mode, Load/Unload send nothing.
+- Deviations and decisions (1 - 3 want a ruling): (1) the number quarantine (60 s) and range (1 .. 65534) are code constants, not configuration keys - a `shared.disQuarantineS`
+  key?; (2) SIMAN is not announced in Replay mode; (3) no Frozen appearance bit while Paused; (4) the PDU's angles, velocities and accelerations are float32, so "angles 1e-9" means
+  equal to the float of the independently converted double (location: double, 1e-6 m); (5) an unknown or "other" DR algorithm is read as Static, body-axis algorithms of a
+  hrot-origin entity send body-axis velocity; (6) the platform/lifeform appearance layout is used for every kind; (7) HROT unit entities (kind 11) are not sent unless
+  `shared.forwardUnitEntities`; (8) the harness no longer counts a reaper-caused `ReplicaRemoved` as output of a quiet tick.
+- Tests (`Gateway.HrotDis.Tests`, 383 to 692): `DisInvariantChecker` runs after every step and at every send: each PDU goes through the real codec and is judged against an
+  independent oracle (own FPW arithmetic, own angle measure): full PDU, threshold, heartbeat, no redundant send, one final PDU, numbers and quarantine, session and origin
+  gate, G-1, liveness; plus the H2a checker. Suites: `DisEgressTests` 29, `DisIngressTests` 27 (600 random Entity State PDUs to pivot and ReplicaState),
+  `DisConversionTests` 5 (600 random HROT states to PDUs), `DisEventTests` 20, `DisSessionTests` 207 (all 196 transitions), `DisReaperTests` 8, `DisProfileTests` 6,
+  `DisRandomizedTests` 6 (1500 operations each, model of DIS entities and reaper, small pools, own PDUs looped back). Mutation checks (R-065), each red then restored: heartbeat
+  never; threshold ignores orientation; partial PDU (marking omitted, spatial omitted); no quarantine; ESPDUs for dis-origin entities (both guards removed - one alone is
+  covered by the other); own-site PDUs accepted; reaper by any-write recency; SIMAN with `hrotControlsDis` off; no final PDU; fresh event id; events in replay; ESPDUs in
+  Edit; exercise unfiltered; DIS SIMAN honoured without `disControlsHrot`; no tick-end drift check; Deactivated does not remove; Remove Entity removes HROT entities; no Reconcile.

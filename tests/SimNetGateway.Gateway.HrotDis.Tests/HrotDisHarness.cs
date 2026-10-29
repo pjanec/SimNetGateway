@@ -39,7 +39,7 @@ public sealed class HrotDisHarness
     private double _stateTime = 1.0;
 
     public HrotDisHarness(GatewayConfiguration? config = null, Action<GatewayBuilder>? beforeBuild = null,
-        long idFirst = 5_000_000, long idLast = 5_000_999, bool installChecker = true)
+        long idFirst = 5_000_000, long idLast = 5_000_999, bool installChecker = true, DisNumbering? numbering = null)
     {
         Config = config ?? GatewayConfiguration.CreateDefault();
         Clock = new ManualClock();
@@ -50,7 +50,10 @@ public sealed class HrotDisHarness
             DiagnosticsCapacity = 8192,
             EventLogCapacity = 4096,
         };
-        Builder = HrotDisConfigurations.For(Config, "test", Ids).CreateBuilder(Clock, options);
+        var configuration = HrotDisConfigurations.For(Config, "test", Ids, numbering);
+        Profile = (HrotDisProfile)configuration.Profile;
+        Builder = configuration.CreateBuilder(Clock, options);
+        Numbering = numbering ?? new DisNumbering();
         var hrot = Builder.RequireInbound("hrot");
         HrotIn = new InMemoryInbound(hrot.Source, "hrot");
         Builder.BindInbound("hrot", HrotIn);
@@ -78,7 +81,36 @@ public sealed class HrotDisHarness
         {
             HrotOut.Tap = Checker.OnSent;
         }
+
+        if (Config.DisRuns)
+        {
+            DisOut!.Context = Engine;
+            DisIds = (IdentityMap<DisEntityKey>)Engine.Identities.Find("dis.entity")!;
+            DisChecker = new DisInvariantChecker(this);
+            if (installChecker)
+            {
+                DisOut.Tap = DisChecker.OnSent;
+            }
+        }
     }
+
+    /// <summary>The profile that configured the gateway under test.</summary>
+    public HrotDisProfile Profile { get; }
+
+    /// <summary>The services of the gateway under test (what the DIS ingress ignored, ...).</summary>
+    public HrotDisServices Services => Profile.Services!;
+
+    /// <summary>The numbering of the DIS entity numbers the gateway was built with.</summary>
+    public DisNumbering Numbering { get; }
+
+    /// <summary>The "dis.entity" identity map (null when the DIS side does not run).</summary>
+    public IdentityMap<DisEntityKey>? DisIds { get; }
+
+    /// <summary>The invariants of the DIS half (null when the DIS side does not run); checked after every step.</summary>
+    public DisInvariantChecker? DisChecker { get; }
+
+    /// <summary>When false the harness does not check the DIS invariants after a step (a test that provokes a violation on purpose).</summary>
+    public bool CheckDis { get; set; } = true;
 
     public GatewayConfiguration Config { get; }
 
@@ -112,20 +144,28 @@ public sealed class HrotDisHarness
 
     // ---- stepping ---------------------------------------------------------------------------------------------------
 
-    /// <summary>One tick: advance the clock, tick the engine, check the invariants. A tick with no new input sends nothing to HROT.</summary>
+    /// <summary>
+    /// One tick: advance the clock, tick the engine, check the invariants. A tick with no new input sends nothing to HROT, except
+    /// the removal of a DIS entity by the stale reaper (a timer, not an input).
+    /// </summary>
     public void Step()
     {
-        int before = HrotOut.Count;
+        int before = HrotOut.Messages.Count(m => m.Message is not ReplicaRemoved);
         bool quiet = !_stimulus;
         _stimulus = false;
         Clock.Advance(Dt);
         Engine.Tick();
         if (quiet)
         {
-            Assert.True(HrotOut.Count == before, $"a tick without new input sent {HrotOut.Count - before} message(s) to HROT");
+            int sent = HrotOut.Messages.Count(m => m.Message is not ReplicaRemoved) - before;
+            Assert.True(sent == 0, $"a tick without new input sent {sent} message(s) to HROT");
         }
 
         Checker.Check();
+        if (CheckDis)
+        {
+            DisChecker?.Check();
+        }
     }
 
     public void Steps(int count)
@@ -153,6 +193,26 @@ public sealed class HrotDisHarness
         Hrot(message);
         Step();
     }
+
+    // ---- DIS side as PDUs (the DIS modules of H2b) -------------------------------------------------------------------
+
+    /// <summary>Queues a PDU on the DIS inbound channel (the type parameter must be the PDU's concrete class: that is what the ingress routes on).</summary>
+    public void Dis<T>(T pdu, double? receivedAt = null)
+        where T : Pdu
+    {
+        _stimulus = true;
+        DisIn!.Enqueue(in pdu, receivedAt);
+    }
+
+    public void DisStep<T>(T pdu, double? receivedAt = null)
+        where T : Pdu
+    {
+        Dis(pdu, receivedAt);
+        Step();
+    }
+
+    /// <summary>The DIS entity key of a pivot entity (null when it has none).</summary>
+    public DisEntityKey? DisKeyOf(EntityId id) => DisIds!.TryGetKey(id, out var key) ? key : null;
 
     public void Origin(double lat, double lon, double alt, int generation = 1)
     {
