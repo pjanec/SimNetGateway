@@ -50,3 +50,4 @@ progress and done.
 | **T-022** | todo | Engine/benchmark follow-ups: steady-state benchmark (R-110), size-classed record pool (R-111), inline display configuration (R-112) | DD-001 | low priority |
 | **T-023** | todo | Amend Convoy Ambush success conditions S-4.5 and S-9.3 (R-113) in DD-002 and the showcase checks | DD-002 | |
 | **T-024** | done | HROT gateway HLA side and the shared publication logic (DeadReckonedSendPolicy, AsyncRegistration in Common) | DD-009 | R-114 .. R-118; as-built DD-009 section 10; one entity number for DIS and HLA |
+| **T-025** | review | Design of stage H4: showcase "Border Crossing" (HROT gateway end to end, articulation, viewer) | DD-010 | P-95 .. P-101 await the user |
