@@ -32,7 +32,7 @@ public class NedToRprTests
         var update = Assert.Single(updates);
         Assert.Equal(2, h.RprOut.Count);
         Assert.Equal(requestTick + 1, h.RprOut.Messages[1].Tick);
-        Assert.Equal(new RprObjectHandle(SimulatedRti.FirstHandle), update.Handle);
+        Assert.Equal(h.RegisteredHandles[0], update.Handle);
         Assert.Equal("Hawk", update.Marking);
         Assert.Equal(T.Dis(200), update.EntityType);
         Assert.Equal(RprForceId.Friendly, update.ForceId);
@@ -369,7 +369,7 @@ public class NedToRprTests
         // The RTI answered for an entity that is gone: the object it created is deleted again, no update is sent.
         Assert.Empty(h.RprSent<RprObjectUpdate>());
         var removed = Assert.Single(h.RprSent<RprObjectRemoved>());
-        Assert.Equal(new RprObjectHandle(SimulatedRti.FirstHandle), removed.Handle);
+        Assert.Equal(h.RegisteredHandles[0], removed.Handle);
         Assert.Equal(0, h.RprHandles.Count);
     }
 

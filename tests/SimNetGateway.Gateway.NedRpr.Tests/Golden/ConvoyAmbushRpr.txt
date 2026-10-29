@@ -1,0 +1,160 @@
+120 RprRegisterObject token=1
+121 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3986154.8,993860.0,4863172.1) orientation vel=(-12.1,48.5,0.0) dr=2
+390 RprSimulationControl StartResume
+450 RprRegisterObject token=2
+450 RprRegisterObject token=3
+450 RprRegisterObject token=4
+450 RprRegisterObject token=5
+451 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3984029.1,994808.0,4864448.6) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+451 RprObjectUpdate h=H2 marking=Viper-1 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.3 loc=(3984023.9,994828.9,4864448.6) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+451 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3984018.6,994849.7,4864448.6) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+451 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1
+480 RprObjectUpdate h=H0 loc=(3986076.2,994175.4,4863172.1) orientation vel=(-12.1,48.5,0.0)
+780 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3986015.7,994417.9,4863172.1) orientation vel=(-12.1,48.5,0.0) dr=2
+780 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3984015.7,994861.4,4864448.6) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+780 RprObjectUpdate h=H2 marking=Viper-1 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.3 loc=(3984010.5,994882.2,4864448.6) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+780 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3984005.3,994903.1,4864448.6) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+780 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1
+1080 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3985955.2,994660.5,4863172.1) orientation vel=(-12.1,48.5,0.0) dr=2
+1080 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3984003.6,994909.9,4864448.6) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+1080 RprObjectUpdate h=H2 marking=Viper-1 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.3 loc=(3983998.4,994930.7,4864448.6) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+1080 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3983993.2,994951.6,4864448.6) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+1080 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1
+1284 RprObjectUpdate h=H1 loc=(3983995.6,994942.2,4864448.6) orientation vel=(-1.9,8.8,-0.2)
+1284 RprObjectUpdate h=H2 loc=(3983990.4,994963.0,4864448.6) orientation vel=(-1.9,8.8,-0.2)
+1284 RprObjectUpdate h=H3 loc=(3983985.1,994983.9,4864448.6) orientation vel=(-1.9,8.8,-0.2)
+1380 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3985894.7,994903.1,4863172.1) orientation vel=(-12.1,48.5,0.0) dr=2
+1380 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1
+1566 RprObjectUpdate h=H1 loc=(3983986.4,994983.5,4864447.6) orientation vel=(-2.9,10.6,0.2)
+1566 RprObjectUpdate h=H2 loc=(3983981.2,995004.3,4864447.6) orientation vel=(-2.9,10.6,0.2)
+1566 RprObjectUpdate h=H3 loc=(3983976.0,995025.2,4864447.6) orientation vel=(-2.9,10.6,0.2)
+1680 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3985834.2,995145.6,4863172.1) orientation vel=(-12.1,48.5,0.0) dr=2
+1680 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1
+1902 RprObjectUpdate h=H1 loc=(3983969.9,995042.8,4864449.0) orientation vel=(-2.3,9.7,-0.1)
+1902 RprObjectUpdate h=H2 loc=(3983964.7,995063.7,4864449.0) orientation vel=(-2.3,9.7,-0.1)
+1902 RprObjectUpdate h=H3 loc=(3983959.5,995084.5,4864449.0) orientation vel=(-2.3,9.7,-0.1)
+1980 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3985773.7,995388.2,4863172.1) orientation vel=(-12.1,48.5,0.0) dr=2
+1980 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1
+2220 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3983957.8,995094.4,4864448.4) orientation vel=(-2.3,9.7,-0.1) dr=2 damage=NoDamage
+2220 RprObjectUpdate h=H2 marking=Viper-1 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.3 loc=(3983952.5,995115.2,4864448.4) orientation vel=(-2.3,9.7,-0.1) dr=2 damage=NoDamage
+2220 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3983947.3,995136.1,4864448.4) orientation vel=(-2.3,9.7,-0.1) dr=2 damage=NoDamage
+2274 RprObjectUpdate h=H1 loc=(3983955.7,995103.1,4864448.3) orientation vel=(-2.1,11.8,-0.7)
+2274 RprObjectUpdate h=H2 loc=(3983950.5,995124.0,4864448.3) orientation vel=(-2.1,11.8,-0.7)
+2274 RprObjectUpdate h=H3 loc=(3983945.3,995144.9,4864448.3) orientation vel=(-2.1,11.8,-0.7)
+2280 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3985713.2,995630.8,4863172.1) orientation vel=(-12.1,48.5,0.0) dr=2
+2280 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1
+2400 RprObjectUpdate h=H0 loc=(3985689.0,995727.8,4863172.1) orientation vel=(37.2,9.3,-32.1)
+2580 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3983944.9,995163.3,4864444.9) orientation vel=(-2.1,11.8,-0.7) dr=2 damage=NoDamage
+2580 RprObjectUpdate h=H2 marking=Viper-1 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.3 loc=(3983939.7,995184.1,4864444.9) orientation vel=(-2.1,11.8,-0.7) dr=2 damage=NoDamage
+2580 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3983934.5,995205.0,4864444.9) orientation vel=(-2.1,11.8,-0.7) dr=2 damage=NoDamage
+2580 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1
+2598 RprObjectUpdate h=H1 loc=(3983944.2,995166.8,4864444.7) orientation vel=(-2.0,9.8,-0.3)
+2598 RprObjectUpdate h=H2 loc=(3983939.0,995187.7,4864444.7) orientation vel=(-2.0,9.8,-0.3)
+2598 RprObjectUpdate h=H3 loc=(3983933.8,995208.5,4864444.7) orientation vel=(-2.0,9.8,-0.3)
+2700 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3985874.8,995774.2,4863011.4) orientation vel=(37.2,9.3,-32.1) dr=2
+2880 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1
+2892 RprObjectUpdate h=H1 loc=(3983934.3,995214.8,4864443.0) orientation vel=(-2.4,9.7,0.0)
+2892 RprObjectUpdate h=H2 loc=(3983929.1,995235.6,4864443.0) orientation vel=(-2.4,9.7,0.0)
+2892 RprObjectUpdate h=H3 loc=(3983923.9,995256.5,4864443.0) orientation vel=(-2.4,9.7,0.0)
+3000 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3986060.6,995820.6,4862850.7) orientation vel=(37.2,9.3,-32.1) dr=2
+3180 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1
+3240 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3983920.2,995271.0,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+3240 RprObjectUpdate h=H2 marking=Viper-1 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.3 loc=(3983915.0,995291.9,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+3240 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3983909.8,995312.8,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+3276 RprObjectUpdate h=H1 loc=(3983918.8,995276.9,4864443.0) orientation vel=(-2.4,9.7,0.0)
+3276 RprObjectUpdate h=H2 loc=(3983913.6,995297.7,4864443.0) orientation vel=(-2.4,9.7,0.0)
+3276 RprObjectUpdate h=H3 loc=(3983908.4,995318.6,4864443.0) orientation vel=(-2.4,9.7,0.0)
+3300 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3986246.4,995867.1,4862690.0) orientation vel=(37.2,9.3,-32.1) dr=2
+3480 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1
+3600 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3986432.2,995913.5,4862529.3) orientation vel=(37.2,9.3,-32.1) dr=2
+3600 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3983905.7,995329.3,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+3600 RprObjectUpdate h=H2 marking=Viper-1 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.3 loc=(3983900.5,995350.1,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+3600 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3983895.3,995371.0,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+3720 RprObjectUpdate h=H2 damage=Destroyed
+3720 RprMunitionDetonation det=X firing=none target=H2 munition=2.9.225.2.1.1.0 result=EntityImpact
+3780 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1
+3847 RprWeaponFire fire=X firing=H3 target=H5 munition=2.9.225.2.14.1.0 qty=2
+3900 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3986618.0,995959.9,4862368.6) orientation vel=(37.2,9.3,-32.1) dr=2
+3900 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3983893.6,995377.8,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+3900 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3983883.1,995419.5,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+4020 RprObjectUpdate h=H2 marking=Viper-1 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.3 loc=(3983883.5,995418.0,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damage=Destroyed
+4080 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1
+4081 RprWeaponFire fire=X firing=H3 target=H5 munition=2.9.225.2.1.1.0 qty=1
+4200 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3986803.8,996006.3,4862207.9) orientation vel=(37.2,9.3,-32.1) dr=2
+4200 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3983881.5,995426.3,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+4200 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3983871.0,995468.0,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damage=NoDamage
+4320 RprObjectUpdate h=H2 marking=Viper-1 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.3 loc=(3983871.4,995466.5,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damage=Destroyed
+4380 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1
+4500 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3986989.6,996052.7,4862047.2) orientation vel=(37.2,9.3,-32.1) dr=2
+4500 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3983869.3,995474.8,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+4500 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3983858.9,995516.5,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+4560 RprObjectUpdate h=H4 damagePercent=33
+4620 RprObjectUpdate h=H2 marking=Viper-1 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.3 loc=(3983859.3,995515.0,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=100
+4800 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3987175.4,996099.2,4861886.5) orientation vel=(37.2,9.3,-32.1) dr=2
+4800 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3983857.2,995523.3,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+4800 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3983846.8,995565.0,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+4860 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1 damagePercent=33
+4920 RprObjectUpdate h=H2 marking=Viper-1 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.3 loc=(3983847.2,995563.6,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=100
+5010 RprObjectUpdate h=H4 damagePercent=66
+5100 RprObjectUpdate h=H4 damagePercent=100
+5100 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3987361.2,996145.6,4861725.8) orientation vel=(37.2,9.3,-32.1) dr=2
+5100 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3983845.1,995571.8,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+5100 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3983834.7,995613.5,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+5220 RprObjectUpdate h=H2 marking=Viper-1 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.3 loc=(3983835.0,995612.1,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=100
+5400 RprSimulationControl StopFreeze
+5400 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3987547.0,996192.0,4861565.1) orientation vel=(37.2,9.3,-32.1) dr=2
+5400 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3983833.0,995620.3,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+5400 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3983822.6,995662.0,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+5400 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1 damagePercent=100
+5520 RprObjectUpdate h=H2 marking=Viper-1 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.3 loc=(3983827.8,995641.2,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=100
+5700 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3987547.0,996192.0,4861565.1) orientation vel=(37.2,9.3,-32.1) dr=2
+5700 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3983833.0,995620.3,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+5700 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3983822.6,995662.0,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+5700 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1 damagePercent=100
+5820 RprObjectUpdate h=H2 marking=Viper-1 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.3 loc=(3983827.8,995641.2,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=100
+5940 RprSimulationControl StartResume
+6000 RprObjectRemoved h=H2
+6000 RprObjectUpdate h=H1 loc=(3983830.6,995630.0,4864443.0) orientation vel=(-2.4,9.7,0.0)
+6000 RprObjectUpdate h=H3 loc=(3983820.1,995671.7,4864443.0) orientation vel=(-2.4,9.7,0.0)
+6000 RprObjectUpdate h=H0 marking=Hawk type=1.2.225.50.1.0.0 force=Friendly id=1.3001.1 loc=(3987584.2,996201.3,4861533.0) orientation vel=(37.2,9.3,-32.1) dr=2
+6000 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1 damagePercent=100
+6240 RprObjectRemoved h=H0
+6300 RprRegisterObject token=6
+6300 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3983808.0,995720.2,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+6300 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3983818.4,995678.5,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+6300 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1 damagePercent=100
+6301 RprObjectUpdate h=H6 marking=Kestrel type=1.2.225.50.1.0.0 force=Friendly id=1.3001.6 loc=(3983215.5,995342.7,4865393.1) orientation vel=(9.7,-38.8,-0.0) dr=2
+6301 RprWeaponFire fire=X firing=H6 target=H5 munition=2.9.225.2.1.1.0 qty=1
+6600 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3983795.9,995768.7,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+6600 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3983806.3,995727.0,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+6600 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1 damagePercent=100
+6660 RprObjectUpdate h=H6 marking=Kestrel type=1.2.225.50.1.0.0 force=Friendly id=1.3001.6 loc=(3983273.7,995109.9,4865393.1) orientation vel=(9.7,-38.8,-0.0) dr=2
+6900 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3983783.8,995817.3,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+6900 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3983794.2,995775.5,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+6900 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1 damagePercent=100
+6960 RprObjectUpdate h=H6 marking=Kestrel type=1.2.225.50.1.0.0 force=Friendly id=1.3001.6 loc=(3983322.2,994915.8,4865393.1) orientation vel=(9.7,-38.8,-0.0) dr=2
+7200 RprObjectUpdate h=H3 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.4 loc=(3983771.6,995865.8,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+7200 RprObjectUpdate h=H1 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.2 loc=(3983782.1,995824.0,4864443.0) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+7200 RprObjectUpdate h=H4 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.5 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1 damagePercent=100
+7260 RprObjectUpdate h=H6 marking=Kestrel type=1.2.225.50.1.0.0 force=Friendly id=1.3001.6 loc=(3983370.7,994721.8,4865393.1) orientation vel=(9.7,-38.8,-0.0) dr=2
+7500 RprObjectRemoved h=H6
+7500 RprObjectRemoved h=H1
+7500 RprObjectRemoved h=H3
+7500 RprObjectRemoved h=H4
+7680 RprSimulationControl StartResume
+7710 RprRegisterObject token=7
+7710 RprRegisterObject token=8
+7710 RprRegisterObject token=9
+7710 RprRegisterObject token=10
+7711 RprObjectUpdate h=H7 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.7 loc=(3984029.2,994807.3,4864448.6) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+7711 RprObjectUpdate h=H8 marking=Viper-1 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.8 loc=(3984024.0,994828.2,4864448.6) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+7711 RprObjectUpdate h=H9 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.9 loc=(3984018.8,994849.0,4864448.6) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+7711 RprObjectUpdate h=H10 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.10 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1
+7830 RprObjectUpdate h=H8 damagePercent=100
+8040 RprObjectUpdate h=H7 marking=Viper-0 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.7 loc=(3984015.9,994860.7,4864448.6) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+8040 RprObjectUpdate h=H9 marking=Viper-2 type=1.1.225.6.1.0.0 force=Friendly id=1.3001.9 loc=(3984005.5,994902.4,4864448.6) orientation vel=(-2.4,9.7,0.0) dr=2 damagePercent=0
+8040 RprObjectUpdate h=H10 marking=Gate type=1.1.225.9.0.0.0 force=Friendly id=1.3001.10 loc=(3981026.7,996272.3,4866592.0) orientation vel=(0.0,0.0,0.0) dr=1
+8100 RprObjectRemoved h=H10
+8100 RprObjectRemoved h=H9
+8100 RprObjectRemoved h=H8
+8100 RprObjectRemoved h=H7

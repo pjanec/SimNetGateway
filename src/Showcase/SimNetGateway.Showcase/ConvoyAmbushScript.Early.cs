@@ -91,8 +91,9 @@ public sealed partial class ConvoyAmbushScript
                 var u = updates[0].Message;
                 var hawk = ctx.NedEntity(HawkId);
                 v.That(hawk is not null && ctx.HandleOf(hawk.Id) == u.Handle, "the update uses the handle that is bound to Hawk");
-                v.That(ctx.Host.Rti.Registered.Contains(u.Handle), "the handle was delivered by the RTI");
+                v.That(ctx.Host.IsRegisteredHandle(u.Handle), "the handle was delivered by the RTI");
                 NedRprConversions.GeoToPivot(HawkStart.Message(HawkId), out var p, out var o, out var vel);
+                PeerSeesFirstUpdate(v, ctx, u, updates[0].Tick, p);
                 v.Equal("Hawk", u.Marking, "marking");
                 v.Equal(DisOf(TkbUav), u.EntityType ?? default, "DIS type of TKB 200");
                 v.Equal(RprForceId.Friendly, u.ForceId ?? RprForceId.Other, "force");
@@ -129,6 +130,8 @@ public sealed partial class ConvoyAmbushScript
                     $"NED id {m.Id} is in the gateway range");
                 v.Equal(m.Id, geos[0].Message.Id, "geo-spatial id");
                 v.That(masters[0].Sequence < geos[0].Sequence, "master before geo-spatial");
+                // DD-008 section 6: the RTI's callbacks are pumped BEFORE the engine tick, so what the RPR federate announced in a tick is processed in it
+                v.Equal(ScenarioContext.TickOf(3.0), masters[0].Tick, "tick at which NED got the master (the tick the RPR federate announced T-1)");
                 v.Note($"NED id {m.Id}");
             }
 
@@ -137,8 +140,10 @@ public sealed partial class ConvoyAmbushScript
             v.That(t1 is not null, "T-1 does not exist");
             if (t1 is not null)
             {
-                v.That(ctx.Rpr.Messages.All(r => r.Message is not RprObjectUpdate { } u || u.Handle.Value != T1Handle),
+                var t1Handle = ctx.Host.ActualHandle(T1Handle);
+                v.That(ctx.Rpr.Messages.All(r => r.Message is not RprObjectUpdate { } u || u.Handle != t1Handle),
                     "an RPR message names T-1's own handle (echo)");
+                v.That(ctx.Peer.DiscoveredObject(t1Handle.Value) is null, "T-1 came back to the RPR federate that registered it (echo through the RTI)");
                 v.That(ctx.DisIdOf(t1.Id) is { Site: RedSite }, "T-1 keeps the DIS identifier the RPR side gave it");
             }
 
@@ -187,7 +192,9 @@ public sealed partial class ConvoyAmbushScript
             }
 
             v.Equal(0, ctx.NedBetween(LoadAt, 7.4).Count, "NED messages (the control came from NED: no echo)");
-            v.Note("RPR got one StartResume at Start, NED nothing");
+            // over HLA: RPR FOM 2.0 has no simulation management interaction (R-107) - the control message is the gateway's output, the transport counts it as dropped
+            v.Equal(1, ctx.Host.RprConnection.DroppedSimulationControl, "simulation controls the HLA transport dropped (not carried by RPR FOM 2.0)");
+            v.Note("RPR got one StartResume at Start (the gateway sent it; HLA carries no simulation control, R-107: dropped by the transport), NED nothing");
             return v.Result();
         });
         a.Check(7.4, "S-2.3", ctx =>
@@ -353,6 +360,20 @@ public sealed partial class ConvoyAmbushScript
             v.Equal(3, ids.Count, "distinct DIS identifiers of the members");
             v.That(regs.All(r => r.Tick == registrationTick), "all registrations were requested in the tick of the message");
             v.That(updates.Any(r => r.Message.Marking == "Gate"), "Gate was published as well");
+            // what the RPR federate received through the RTI: the four objects discovered, each with its one full update in the tick it was sent
+            v.Equal(5, ctx.Peer.Discovered.Count, "objects the RPR federate discovered so far (Hawk, 3 members, Gate)");
+            foreach (var sent in updates)
+            {
+                var seen = ctx.Peer.DiscoveredObject(sent.Message.Handle.Value);
+                v.That(seen is not null, $"the RPR federate did not discover '{sent.Message.Marking}' under handle {sent.Message.Handle.Value}");
+                if (seen is not null)
+                {
+                    v.Equal(sent.Tick, seen.LastReflectTick, $"tick at which the RPR federate received the update of {sent.Message.Marking}");
+                    v.Equal(1, seen.Count("Spatial"), $"reflections of {sent.Message.Marking}'s Spatial");
+                    PeerHoldsWhatWasSent(v, ctx, sent.Message.Handle, sent.Message.Marking ?? "?");
+                }
+            }
+
             v.Note($"3 member objects + Gate; handles {string.Join(",", handles.Select(h => MessageText.H(h)).OrderBy(s => s))}");
             return v.Result();
         });
@@ -677,6 +698,18 @@ public sealed partial class ConvoyAmbushScript
             {
                 v.That(gap >= 5.0 - 1e-6, F($"a heartbeat {gap:F3} s after the previous update at r={all[i].WallTime:F3}"));
             }
+        }
+
+        // what the RPR federate received: one reflection of Hawk's Spatial per update the gateway sent (a heartbeat is a full update), the
+        // last one in the tick of the last update, and what it holds is what the gateway said (the turn and the heartbeats re-encode the whole variant)
+        var seenHawk = ctx.Peer.DiscoveredObject(handle.Value.Value);
+        v.That(seenHawk is not null, "the RPR federate does not hold Hawk");
+        if (seenHawk is not null && all.Count > 0)
+        {
+            v.Equal(all.Count, seenHawk.Count("Spatial"), "reflections of Hawk's Spatial at the RPR federate (one per update sent)");
+            v.Equal(all[^1].Tick, seenHawk.LastReflectTick, "tick of the last reflection of Hawk at the RPR federate");
+            v.Equal(all.Count(r => r.Message.Marking is not null), seenHawk.Count("Marking"), "reflections of Hawk's Marking (one per full update: the first and the heartbeats)");
+            PeerHoldsWhatWasSent(v, ctx, handle.Value, "Hawk");
         }
 
         v.Note(F($"turn at tick {(partials.Count == 1 ? partials[0].Tick : -1)}, {beats.Count} heartbeats, worst distance from the analytic position {worst:F6} m, largest prediction offset {maxOffset:F1} m"));
