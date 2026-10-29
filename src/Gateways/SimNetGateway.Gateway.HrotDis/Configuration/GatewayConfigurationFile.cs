@@ -167,6 +167,8 @@ public static class GatewayConfigurationFile
 
                 w.WriteEndArray();
                 w.WriteBoolean("createFederation", hla.CreateFederation);
+                w.WriteNumber("positionThresholdM", hla.PositionThresholdM);
+                w.WriteNumber("orientationThresholdDeg", hla.OrientationThresholdDeg);
                 w.WriteNumber("heartbeatS", hla.HeartbeatS);
                 w.WriteNumber("timeoutS", hla.TimeoutS);
                 w.WriteEndObject();
@@ -309,6 +311,8 @@ public static class GatewayConfigurationFile
             FederateType = s.NonEmptyString("federateType", d.FederateType),
             FomModules = s.StringList("fomModules", d.FomModules),
             CreateFederation = s.Boolean("createFederation", d.CreateFederation),
+            PositionThresholdM = s.Number("positionThresholdM", d.PositionThresholdM, min: 0),
+            OrientationThresholdDeg = s.Number("orientationThresholdDeg", d.OrientationThresholdDeg, min: 0),
             HeartbeatS = s.Number("heartbeatS", d.HeartbeatS, min: 0, minExclusive: true),
             TimeoutS = s.Number("timeoutS", d.TimeoutS, min: 0, minExclusive: true),
         };

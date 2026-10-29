@@ -78,7 +78,7 @@ public sealed class DisPublication
     private const string Origin = nameof(DisPublication);
 
     /// <summary>DIS entity kind 11: HROT units, not a SISO kind; not sent unless <c>shared.forwardUnitEntities</c> (R-088).</summary>
-    public const int UnitKind = 11;
+    public const int UnitKind = Publishable.UnitKind;
 
     private readonly IOutboundChannel<Pdu> _output;
     private readonly PivotSchema _schema;
@@ -330,16 +330,7 @@ public sealed class DisPublication
     // ---- readiness and drift ------------------------------------------------------------------------------------------
 
     /// <summary>The entity has what a DIS entity needs (type and position with their time), the origin is valid and a unit is allowed.</summary>
-    public bool IsEligible(EntityRecord entity)
-    {
-        var s = _schema;
-        if (!_services.Geo.IsValid || !entity.TryGet(s.EntityType, out var type) || !entity.Has(s.Position) || !entity.Has(s.StateTime))
-        {
-            return false;
-        }
-
-        return _services.Config.Shared.ForwardUnitEntities || DisTypeCode.Unpack(type.AsInt()).Kind != UnitKind;
-    }
+    public bool IsEligible(EntityRecord entity) => Publishable.IsEligible(_schema, _services, entity);
 
     /// <summary>True when the receiver's dead-reckoning prediction of the last sent PDU is beyond the thresholds from the entity's state at <paramref name="now"/>.</summary>
     public bool Drifted(EntityRecord entity, in DisPublicationState state, double now) => _policy.Drifted(entity, in state.Sent, now);
@@ -414,23 +405,14 @@ public sealed class DisPublication
             }
         }
 
-        if (IsOn(SpatialRule) && _policy.TryRead(entity, out var basis, out int algorithm, DrAlgorithms.Static))
+        if (IsOn(SpatialRule) && DrWire.TryProject(_policy, entity, now, out var k))
         {
-            var predicted = _policy.Predict(in basis, algorithm, now);
-            double dt = now - basis.StateTime;
-            var velocity = predicted.Velocity;
-            if (DrAlgorithms.IsBodyAxis(algorithm))
-            {
-                // the PDU carries body-axis velocity for the body-axis algorithms (the predictor's is rotated into ECEF)
-                velocity = algorithm >= 8 ? basis.Velocity + basis.Acceleration * dt : basis.Velocity;
-            }
-
-            pdu.EntityLocation = DisConversions.ToDouble(predicted.Position);
-            pdu.EntityLinearVelocity = DisConversions.ToFloat(velocity);
-            pdu.EntityOrientation = DisConversions.ToEuler(predicted.Orientation);
-            pdu.DeadReckoningParameters.DeadReckoningAlgorithm = (byte)algorithm;
-            pdu.DeadReckoningParameters.EntityLinearAcceleration = DisConversions.ToFloat(basis.Acceleration);
-            pdu.DeadReckoningParameters.EntityAngularVelocity = DisConversions.ToFloat(basis.AngularVelocity);
+            pdu.EntityLocation = DisConversions.ToDouble(k.Position);
+            pdu.EntityLinearVelocity = DisConversions.ToFloat(k.Velocity);
+            pdu.EntityOrientation = DisConversions.ToEuler(k.Orientation);
+            pdu.DeadReckoningParameters.DeadReckoningAlgorithm = (byte)k.Algorithm;
+            pdu.DeadReckoningParameters.EntityLinearAcceleration = DisConversions.ToFloat(k.Acceleration);
+            pdu.DeadReckoningParameters.EntityAngularVelocity = DisConversions.ToFloat(k.AngularVelocity);
         }
 
         int damage = IsOn(DamageRule) && entity.TryGet(s.Damage, out var d) ? (int)d.AsInt() : 0;

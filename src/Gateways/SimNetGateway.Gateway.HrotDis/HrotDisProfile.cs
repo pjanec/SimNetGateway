@@ -2,6 +2,7 @@ using DISnet;
 using SimNetGateway.Common;
 using SimNetGateway.Engine;
 using SimNetGateway.Protocol.Hrot;
+using SimNetGateway.Protocol.Rpr;
 using EngineConfiguration = SimNetGateway.Engine.GatewayConfiguration;
 
 namespace SimNetGateway.Gateway.HrotDis;
@@ -10,12 +11,14 @@ namespace SimNetGateway.Gateway.HrotDis;
 public sealed record HrotDisSettings(GatewayConfiguration Config) : GatewaySettings;
 
 /// <summary>
-/// The HROT DIS gateway (R-051, DD-006 section 0, DD-007): declares the ports "hrot" (inbound, one multi-type channel of
-/// <see cref="IHrotToGatewayMessage"/>; outbound <see cref="IGatewayToHrotMessage"/>) and, when the DIS side runs, "dis"
-/// (inbound, outbound <see cref="Pdu"/>), and registers the pivot schema, the sources, the identity map, the services and the
+/// The HROT DIS gateway (R-051, DD-006 section 0, DD-007, DD-009): declares the ports "hrot" (inbound, one multi-type channel of
+/// <see cref="IHrotToGatewayMessage"/>; outbound <see cref="IGatewayToHrotMessage"/>), when the DIS side runs "dis"
+/// (inbound, outbound <see cref="Pdu"/>) and when the HLA side runs "rpr" (inbound, outbound <see cref="IRprMessage"/>), and registers the pivot schema, the sources, the identity map, the services and the
 /// modules of the HROT side and, when the DIS side runs, of the DIS side (H2b: ingress of Entity State, Fire, Detonation, Remove
 /// Entity, Start/Resume and Stop/Freeze PDUs, egress of Entity State, Fire, Detonation and the simulation management PDUs, and the
-/// stale reaper). Module order is the order in which same-trigger rules fire.
+/// stale reaper) and, when the HLA side runs, of the HLA side (DD-009: ingress of object updates, removals, registration answers,
+/// update requests, fire and detonation; egress of entities, fire and detonation; its own stale reaper). Module order is the order
+/// in which same-trigger rules fire.
 /// </summary>
 public sealed class HrotDisProfile : IGatewayProfile
 {
@@ -62,7 +65,7 @@ public sealed class HrotDisProfile : IGatewayProfile
 
         var schema = new PivotSchema(builder.Attributes, builder.EventTypes);
         var hrotPort = builder.RequireInbound("hrot");
-        var sources = new HrotDisSources(hrotPort.Source, builder.Sources.Register("dis"));
+        var disSource = builder.Sources.Register("dis");
         IOutboundChannel<Pdu>? disOut = null;
         if (config.DisRuns)
         {
@@ -70,11 +73,25 @@ public sealed class HrotDisProfile : IGatewayProfile
             disOut = builder.RequireOutbound<Pdu>("dis");
         }
 
+        IOutboundChannel<IRprMessage>? rprOut = null;
+        var rprSource = SourceId.None;
+        if (config.HlaRuns)
+        {
+            rprSource = builder.RequireInbound("rpr").Source;
+            rprOut = builder.RequireOutbound<IRprMessage>("rpr");
+        }
+
+        var sources = new HrotDisSources(hrotPort.Source, disSource, rprSource);
+
         var hrotOut = builder.RequireOutbound<IGatewayToHrotMessage>("hrot");
         var disIdentities = config.DisRuns
             ? new DisIdentityOptions(builder.Clock, (ushort)config.Shared.Site, (ushort)config.Shared.Application, _numbering)
             : null;
-        var maps = HrotDisMaps.Create(builder.Identities, sources, _hrotIds ?? new HrotIdRangeAllocator(DefaultIdFirst, DefaultIdLast), disIdentities);
+        var rprIdentities = config.HlaRuns
+            ? new DisIdentityOptions(builder.Clock, (ushort)config.Shared.Site, (ushort)config.Shared.Application, _numbering)
+            : null;
+        var maps = HrotDisMaps.Create(builder.Identities, sources, _hrotIds ?? new HrotIdRangeAllocator(DefaultIdFirst, DefaultIdLast),
+            disIdentities, rprIdentities);
         var services = new HrotDisServices(config);
         Services = services;
         var publisher = new ReplicaPublisher(schema, maps, sources, services, hrotOut, builder.Engine);
@@ -95,11 +112,20 @@ public sealed class HrotDisProfile : IGatewayProfile
         builder.AddModule(new InjectDetonationEgress(schema, maps, sources, services, hrotOut));
         builder.AddModule(new TimeRequestEgress(sources, services, hrotOut));
 
-        if (disOut is null)
+        if (disOut is not null)
         {
-            return;
+            ConfigureDis(builder, config, schema, maps, sources, services, disOut);
         }
 
+        if (rprOut is not null)
+        {
+            ConfigureRpr(builder, config, schema, maps, sources, services, rprOut);
+        }
+    }
+
+    private static void ConfigureDis(GatewayBuilder builder, GatewayConfiguration config, PivotSchema schema, HrotDisMaps maps,
+        HrotDisSources sources, HrotDisServices services, IOutboundChannel<Pdu> disOut)
+    {
         // DIS ingress
         builder.AddModule(new DisEntityStateIngress(schema, maps, sources, services));
         builder.AddModule(new DisFireIngress(schema, maps, services));
@@ -120,6 +146,29 @@ public sealed class HrotDisProfile : IGatewayProfile
         var timeout = TimeSpan.FromSeconds(config.Dis!.TimeoutS);
         var period = TimeSpan.FromSeconds(Math.Min(ReaperCheckPeriod.TotalSeconds, config.Dis.TimeoutS / 4.0));
         builder.AddModule(new StaleEntityReaper("DisStaleReaper", sources.Dis, timeout, period, builder.Sources.Register("proc.reaper.dis")));
+    }
+
+    private static void ConfigureRpr(GatewayBuilder builder, GatewayConfiguration config, PivotSchema schema, HrotDisMaps maps,
+        HrotDisSources sources, HrotDisServices services, IOutboundChannel<IRprMessage> rprOut)
+    {
+        // RPR ingress (HLA -> pivot, origin rpr)
+        var publication = new RprPublication(rprOut, schema, maps, sources, services);
+        builder.AddModule(new RprObjectUpdateIngress(schema, maps));
+        builder.AddModule(new RprObjectRemovedIngress(maps));
+        builder.AddModule(new RprObjectRegisteredIngress(maps, publication));
+        builder.AddModule(new RprUpdateRequestedResponder(maps, publication));
+        builder.AddModule(new RprFireIngress(schema, maps));
+        builder.AddModule(new RprDetonationIngress(schema, maps));
+
+        // RPR egress (the entity rules register before the sweep looks at the same tick)
+        builder.AddModule(new RprEntityEgress(schema, publication, sources));
+        builder.AddModule(new RprFireEgress(schema, maps, sources, services, rprOut));
+        builder.AddModule(new RprDetonationEgress(schema, maps, sources, services, rprOut));
+
+        // Processors
+        var timeout = TimeSpan.FromSeconds(config.Hla!.TimeoutS);
+        var period = TimeSpan.FromSeconds(Math.Min(ReaperCheckPeriod.TotalSeconds, config.Hla.TimeoutS / 4.0));
+        builder.AddModule(new StaleEntityReaper("RprStaleReaper", sources.Rpr, timeout, period, builder.Sources.Register("proc.reaper.rpr")));
     }
 }
 

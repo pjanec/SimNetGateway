@@ -21,9 +21,14 @@ internal enum EntityResolution
 /// <summary>Resolve-or-create with the echo rule that every HROT ingress shares (DD-001 7, DD-006 3.2).</summary>
 internal static class HrotIngress
 {
-    public static EntityResolution Resolve(IngressContext ctx, HrotDisMaps maps, long hrotId, bool create, out EntityId id)
+    public static EntityResolution Resolve(IngressContext ctx, HrotDisMaps maps, long hrotId, bool create, out EntityId id) =>
+        Resolve(ctx, maps.HrotEntity, hrotId, create, out id);
+
+    /// <summary>The same for any wire key (a DIS entity id, an RPR object handle): an entity of another origin than the ingress source is an echo.</summary>
+    public static EntityResolution Resolve<TKey>(IngressContext ctx, IdentityMap<TKey> map, in TKey key, bool create, out EntityId id)
+        where TKey : notnull, IEquatable<TKey>
     {
-        if (maps.HrotEntity.TryResolve(ctx.Changes, hrotId, out id))
+        if (map.TryResolve(ctx.Changes, key, out id))
         {
             var record = ctx.State.Find(id);
             if (record is not null && record.Origin != ctx.Source)
@@ -40,7 +45,7 @@ internal static class HrotIngress
         }
 
         id = ctx.Changes.CreateEntity();
-        maps.HrotEntity.Bind(ctx.Changes, id, hrotId);
+        map.Bind(ctx.Changes, id, key);
         return EntityResolution.Created;
     }
 

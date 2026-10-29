@@ -19,7 +19,7 @@ public class ConfigurationTests
                       "hrotControlsDis": true, "disControlsHrot": false },
           "hla":    { "enabled": false, "rti": "fake", "federation": "RPR", "federateName": "HROT-Gateway",
                       "federateType": "SimNetGateway", "fomModules": ["RPR-FOM-2.0"], "createFederation": true,
-                      "heartbeatS": 5, "timeoutS": 12 }
+                      "positionThresholdM": 1.0, "orientationThresholdDeg": 3.0, "heartbeatS": 5, "timeoutS": 12 }
         }
         """;
 
@@ -73,6 +73,8 @@ public class ConfigurationTests
         Assert.Equal("SimNetGateway", hla.FederateType);
         Assert.Equal(["RPR-FOM-2.0"], hla.FomModules);
         Assert.True(hla.CreateFederation);
+        Assert.Equal(1.0, hla.PositionThresholdM);
+        Assert.Equal(3.0, hla.OrientationThresholdDeg);
         Assert.Equal(5, hla.HeartbeatS);
         Assert.Equal(12, hla.TimeoutS);
     }
@@ -89,6 +91,24 @@ public class ConfigurationTests
         Assert.Equal(full.Hla! with { Enabled = true }, minimal.Hla);
         Assert.Equal(full.Shared, new SharedConfiguration());
         Assert.Equal(full.Hrot, new HrotConfiguration());
+    }
+
+    [Fact]
+    public void The_hla_thresholds_are_their_own_keys_and_independent_of_the_dis_section()
+    {
+        var c = Load("""
+            { "dis": { "exerciseId": 1, "positionThresholdM": 7, "orientationThresholdDeg": 9 },
+              "hla": { "federation": "F", "positionThresholdM": 2.5, "orientationThresholdDeg": 4.5 } }
+            """);
+        Assert.Equal(7, c.Dis!.PositionThresholdM);
+        Assert.Equal(9, c.Dis.OrientationThresholdDeg);
+        Assert.Equal(2.5, c.Hla!.PositionThresholdM);
+        Assert.Equal(4.5, c.Hla.OrientationThresholdDeg);
+        Assert.Equal(c, Load(GatewayConfigurationFile.ToJson(c)));
+        // not given: the hla defaults (1 m, 3 deg), whatever the dis section says
+        var d = Load("""{ "dis": { "exerciseId": 1, "positionThresholdM": 7, "orientationThresholdDeg": 9 }, "hla": { "federation": "F" } }""");
+        Assert.Equal(1.0, d.Hla!.PositionThresholdM);
+        Assert.Equal(3.0, d.Hla.OrientationThresholdDeg);
     }
 
     [Fact]
@@ -195,6 +215,8 @@ public class ConfigurationTests
         { """{ "shared": { "damageThresholds": { "moderate": -0.1 } } }""", "shared.damageThresholds.moderate" },
         { """{ "shared": { "damageThresholds": { "slight": 1.5 } } }""", "shared.damageThresholds.slight" },
         { """{ "shared": { "damageThresholds": { "slight": 0.2, "moderate": 0.3 } } }""", "shared.damageThresholds.moderate" },
+        { """{ "hla": { "federation": "F", "positionThresholdM": -0.5 } }""", "hla.positionThresholdM" },
+        { """{ "hla": { "federation": "F", "orientationThresholdDeg": -1 } }""", "hla.orientationThresholdDeg" },
         { """{ "hla": { "federation": "F", "heartbeatS": 0 } }""", "hla.heartbeatS" },
         { """{ "hla": { "federation": "F", "timeoutS": 0 } }""", "hla.timeoutS" },
         { """{ "hla": { "federation": "F", "fomModules": [] } }""", "hla.fomModules" },
@@ -232,7 +254,7 @@ public class ConfigurationTests
         var random = new Random(20261029);
         var leaves = new List<string>();
         Collect(JsonNode.Parse(Example)!, "", leaves);
-        Assert.Equal(30, leaves.Count); // every key of the example
+        Assert.Equal(32, leaves.Count); // every key of the example (32 since T-024: hla.positionThresholdM, hla.orientationThresholdDeg)
 
         int corrupted = 0;
         foreach (var path in leaves)
@@ -269,7 +291,7 @@ public class ConfigurationTests
             corrupted++;
         }
 
-        Assert.Equal(30 + 6 + 2, corrupted); // every key, every object, both required keys
+        Assert.Equal(32 + 6 + 2, corrupted); // every key, every object, both required keys
     }
 
     /// <summary>A value of a JSON kind that the key at hand does not accept.</summary>

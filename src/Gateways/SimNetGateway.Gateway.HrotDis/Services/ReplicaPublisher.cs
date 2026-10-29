@@ -4,7 +4,8 @@ using SimNetGateway.Protocol.Hrot;
 namespace SimNetGateway.Gateway.HrotDis;
 
 /// <summary>
-/// Turns pivot entities of origin dis into <see cref="ReplicaState"/> / <see cref="ReplicaRemoved"/> messages for the pack
+/// Turns pivot entities of origin dis or rpr (the replicas of the peer simulations, DD-009 section 3 item 4) into
+/// <see cref="ReplicaState"/> / <see cref="ReplicaRemoved"/> messages for the pack
 /// (DD-006 section 0, DD-007 sections 3 and 5.2). It remembers which entities HROT knows; the HROT id of an entity comes
 /// from the allocator port once (on introduction) and goes back when the entity is removed. A state is sent only
 /// when a new DIS state arrived (the callers' triggers), never per tick.
@@ -13,20 +14,21 @@ public sealed class ReplicaPublisher
 {
     private readonly PivotSchema _schema;
     private readonly HrotDisMaps _maps;
-    private readonly SourceId _dis;
+    private readonly HrotDisSources _sources;
     private readonly HrotDisServices _services;
     private readonly IOutboundChannel<IGatewayToHrotMessage> _output;
     private readonly IGatewayContext _gateway;
     private readonly HashSet<EntityId> _introduced = new();
     private readonly HashSet<EntityId> _exhaustionWarned = new();
     private readonly List<EntityRecord> _scratch = new();
+    private readonly List<EntityRecord> _scratchRpr = new();
 
     public ReplicaPublisher(PivotSchema schema, HrotDisMaps maps, HrotDisSources sources, HrotDisServices services,
         IOutboundChannel<IGatewayToHrotMessage> output, IGatewayContext gateway)
     {
         _schema = schema;
         _maps = maps;
-        _dis = sources.Dis;
+        _sources = sources;
         _services = services;
         _output = output;
         _gateway = gateway;
@@ -46,7 +48,7 @@ public sealed class ReplicaPublisher
     /// </summary>
     public void Publish(EntityRecord entity)
     {
-        if (entity.Origin != _dis || !IsOpen || !IsEligible(entity))
+        if (!_sources.IsReplicaOrigin(entity.Origin) || !IsOpen || !IsEligible(entity))
         {
             return;
         }
@@ -67,7 +69,7 @@ public sealed class ReplicaPublisher
         _output.Send(Build(entity, hrotId));
     }
 
-    /// <summary>Publishes every DIS entity (the origin changed: the ENU values of all replicas change).</summary>
+    /// <summary>Publishes every replica of a peer simulation (the origin changed: the ENU values of all replicas change).</summary>
     public void PublishAll(bool onlyNew)
     {
         if (!IsOpen)
@@ -75,10 +77,24 @@ public sealed class ReplicaPublisher
             return;
         }
 
-        _gateway.State.Query().FromOrigin(_dis).CopyTo(_scratch);
+        _gateway.State.Query().FromOrigin(_sources.Dis).CopyTo(_scratch);
+        bool rpr = _sources.Rpr != SourceId.None;
+        if (rpr)
+        {
+            _gateway.State.Query().FromOrigin(_sources.Rpr).CopyTo(_scratchRpr);
+        }
+
         try
         {
             foreach (var entity in _scratch)
+            {
+                if (!onlyNew || !_introduced.Contains(entity.Id))
+                {
+                    Publish(entity);
+                }
+            }
+
+            foreach (var entity in _scratchRpr)
             {
                 if (!onlyNew || !_introduced.Contains(entity.Id))
                 {
@@ -89,6 +105,7 @@ public sealed class ReplicaPublisher
         finally
         {
             _scratch.Clear();
+            _scratchRpr.Clear();
         }
     }
 

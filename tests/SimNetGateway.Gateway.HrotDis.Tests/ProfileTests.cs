@@ -63,8 +63,9 @@ public class ProfileTests
     {
         var config = GatewayConfiguration.CreateDefault() with { Dis = null, Hla = new HlaConfiguration { Federation = "F" } };
         var h = new HrotDisHarness(config);
-        Assert.Equal(["hrot"], h.Binding.InboundPorts.Select(p => p.Name).ToArray());
-        Assert.Equal(["hrot"], h.Binding.OutboundPorts.Select(p => p.Name).ToArray());
+        // the HLA side runs (T-024, DD-009): its "rpr" port is declared, the dis ports are not
+        Assert.Equal(["hrot", "rpr"], h.Binding.InboundPorts.Select(p => p.Name).Order().ToArray());
+        Assert.Equal(["hrot", "rpr"], h.Binding.OutboundPorts.Select(p => p.Name).Order().ToArray());
         Assert.Null(h.DisOut);
         // the HROT half still works
         h.GoLive();
@@ -81,7 +82,7 @@ public class ProfileTests
             Hla = new HlaConfiguration { Federation = "F" },
         };
         var h = new HrotDisHarness(config);
-        Assert.Equal(["hrot"], h.Binding.InboundPorts.Select(p => p.Name).ToArray());
+        Assert.Equal(["hrot", "rpr"], h.Binding.InboundPorts.Select(p => p.Name).Order().ToArray());
     }
 
     [Fact]

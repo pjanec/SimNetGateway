@@ -5,7 +5,7 @@ namespace SimNetGateway.Gateway.HrotDis.Tests;
 
 /// <summary>
 /// The invariants of DD-002 section 6 that apply to the HROT half, checked after every step (and, for the messages, at the moment they
-/// are sent): G-1 no echo (a ReplicaState / ReplicaRemoved describes only entities of origin dis, an Inject* only events of the DIS
+/// are sent): G-1 no echo (a ReplicaState / ReplicaRemoved describes only entities of origin dis or rpr, an Inject* only events of the DIS
 /// side), G-2 identity consistency (every key round-trips, nothing destroyed stays bound, a DIS entity has a HROT id exactly while
 /// HROT knows it as a replica and every id it holds is the allocator's), G-4 received state is never overwritten by derived logic
 /// (every Spatial slot was written by an ingress side), G-5 outbound references are valid (a replica id is bound to a live DIS
@@ -67,7 +67,7 @@ public sealed class InvariantChecker
         {
             Violate("G-5", $"{what} {id}: the entity is gone");
         }
-        else if (record.Origin != _h.DisSource)
+        else if (!_h.IsReplica(record.Origin))
         {
             Violate("G-1", $"{what} {id} describes an entity of origin '{_h.Engine.Sources.NameOf(record.Origin)}' (echo)");
         }
@@ -208,7 +208,7 @@ public sealed class InvariantChecker
                 Violate("G-2", $"hrot.entity: entity {entity.Id.Value} has key {key}, which resolves to {back.Value}");
             }
 
-            if (entity.Origin == _h.DisSource)
+            if (_h.IsReplica(entity.Origin))
             {
                 disBound++;
                 if (!_introduced.Contains(key))
@@ -254,7 +254,7 @@ public sealed class InvariantChecker
         {
             foreach (var attr in spatial)
             {
-                if (entity.TryGetSlot(attr, out var slot) && slot.Meta.Source != _h.HrotSource && slot.Meta.Source != _h.DisSource)
+                if (entity.TryGetSlot(attr, out var slot) && slot.Meta.Source != _h.HrotSource && !_h.IsReplica(slot.Meta.Source))
                 {
                     Violate("G-4", $"Spatial slot {_h.Engine.Attributes[attr].Name} of entity {entity.Id.Value} was written by source {_h.Engine.Sources.NameOf(slot.Meta.Source)}");
                 }
