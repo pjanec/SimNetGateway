@@ -209,9 +209,15 @@ public sealed class ScenarioContext
     public EntityRecord? NedMember(ulong formation, int index) =>
         Host.NedMembers.TryResolve(new NedMemberKey(formation, index), out var entity) ? Engine.State.Find(entity) : null;
 
-    /// <summary>The live entity of an RPR object handle, or null.</summary>
+    /// <summary>
+    /// The live entity of an RPR object of the RPR side, or null. The handle is the SCRIPT handle the object was announced under
+    /// (the RTI assigns the real one, <see cref="NedRprHost.ActualHandle"/>); a handle the script never announced is taken as an RTI handle.
+    /// </summary>
     public EntityRecord? RprEntity(uint handle) =>
-        Host.RprHandles.TryResolve(new RprObjectHandle(handle), out var entity) ? Engine.State.Find(entity) : null;
+        Host.RprHandles.TryResolve(Host.ActualHandle(handle), out var entity) ? Engine.State.Find(entity) : null;
+
+    /// <summary>The scripted RPR federate: what the RPR side received through the RTI is read from it.</summary>
+    public ScriptedRprFederate Peer => Host.RprPeer;
 
     /// <summary>The RPR handle of an entity, or null.</summary>
     public RprObjectHandle? HandleOf(EntityId entity) => Host.RprHandles.TryGetKey(entity, out var handle) ? handle : null;

@@ -238,9 +238,11 @@ public class IngressTests
         var a = T.PublishNed(h, T.Hawk, "Hawk");
         var b = T.PublishNed(h, T.Viper, "Viper", 100, T.Geo(T.Viper, lat: 50.1));
 
-        Assert.Equal(new RprObjectHandle(SimulatedRti.FirstHandle), h.HandleOf(a));
-        Assert.Equal(new RprObjectHandle(SimulatedRti.FirstHandle + 1), h.HandleOf(b));
+        // the handles are the RTI's: assigned by the fake RTI at the registration, answered in request order, distinct
+        Assert.Equal(2, h.RegisteredHandles.Count);
+        Assert.NotEqual(h.RegisteredHandles[0], h.RegisteredHandles[1]);
+        Assert.Equal(h.RegisteredHandles[0], h.HandleOf(a));
+        Assert.Equal(h.RegisteredHandles[1], h.HandleOf(b));
         Assert.Equal(2, h.RprHandles.Count);
-        Assert.Equal(2, h.Rti.Registered.Count);
     }
 }

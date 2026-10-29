@@ -2059,7 +2059,7 @@ candidates, so it proves correct results, not that the index (rather than a scan
 
 ### Stage 5 - NED-RPR gateway (T-004b, 2026-10-24)
 
-Built in two delegated parts: 5a protocols, `SimulatedRti`, `PivotSchema`, `TypeCatalog`, conversions;
+Built in two delegated parts: 5a protocols, `SimulatedRti` (retired in stage HLA-3, R-108, DD-008 section 12b), `PivotSchema`, `TypeCatalog`, conversions;
 5b modules, `NedRprProfile`, `NedRprConfigurations` (Default) and end-to-end tests with the DD-002
 invariants G-1, G-2, G-4, G-5, G-8 checked after every tick. The wire model and module details that
 sections 7 and 9 left open were pinned in a spec before implementation - **Appendix A** below, as built.
@@ -2121,7 +2121,7 @@ allocate), `sealed record` (class) otherwise. Every message implements its side'
 - `RprMunitionDetonation(Guid EventId, RprObjectHandle? FiringObject, RprObjectHandle? TargetObject, WorldLocation Location, DisEntityType Munition, RprDetonationResult Result)`; `enum RprDetonationResult : byte { Other = 0, EntityImpact = 1, GroundImpact = 2, Detonation = 3 }`.
 - `RprSimulationControl(RprControlKind Kind)`; `enum RprControlKind : byte { StartResume, StopFreeze }`.
 - **Asynchronous registration, uniform through messages** (DD-003 section 7 alternative chosen so the gateway needs no transport interface): the gateway sends `RprRegisterObject(long Token)` (an `IRprMessage`, token opaque to the RTI) on the RPR outbound port; the RTI answers later with the inbound message `RprObjectRegistered(long Token, RprObjectHandle Handle)`.
-- `SimulatedRti` (PoC, in Protocol.Rpr, references nothing): `void Observe(IRprMessage outbound)` (wired by the host as the RPR outbound recorder's tap; it reacts to `RprRegisterObject` and ignores everything else), `int DeliverPending(Action<RprObjectRegistered> deliver)` (called by the host/test once per tick before `Tick()`, delivers every registration requested before this call - so handles arrive one tick later), handles allocated sequentially from 0x2A01, `IReadOnlyCollection<RprObjectHandle> Registered`, plus `Exhaust()`-style hooks are NOT needed in stage 5.
+- **SUPERSEDED - retired in stage HLA-3 (R-108): the RPR side is the HLA transport on the fake RTI, DD-008 section 12b; what follows is history.** `SimulatedRti` (PoC, in Protocol.Rpr, references nothing): `void Observe(IRprMessage outbound)` (wired by the host as the RPR outbound recorder's tap; it reacts to `RprRegisterObject` and ignores everything else), `int DeliverPending(Action<RprObjectRegistered> deliver)` (called by the host/test once per tick before `Tick()`, delivers every registration requested before this call - so handles arrive one tick later), handles allocated sequentially from 0x2A01, `IReadOnlyCollection<RprObjectHandle> Registered`, plus `Exhaust()`-style hooks are NOT needed in stage 5.
 
 #### SimNetGateway.Protocol.Display
 - `DisplayEntityPosition(string Label, double LatitudeDeg, double LongitudeDeg, double Altitude, double HeadingDeg)`, `DisplayEntityRemoved(string Label)`.

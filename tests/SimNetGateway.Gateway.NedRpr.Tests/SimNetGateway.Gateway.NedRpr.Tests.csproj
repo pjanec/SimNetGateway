@@ -6,4 +6,9 @@
     <ProjectReference Include="../../src/Showcase/SimNetGateway.Showcase/SimNetGateway.Showcase.csproj" />
   </ItemGroup>
 
+  <!-- what the gateway sent before the RPR side ran over HLA (ConvoyAmbushOverHlaTests) -->
+  <ItemGroup>
+    <None Include="Golden/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

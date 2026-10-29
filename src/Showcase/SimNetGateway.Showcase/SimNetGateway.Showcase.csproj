@@ -8,6 +8,8 @@
     <ProjectReference Include="../../Protocols/SimNetGateway.Protocol.Rpr/SimNetGateway.Protocol.Rpr.csproj" />
     <ProjectReference Include="../../Protocols/SimNetGateway.Protocol.Display/SimNetGateway.Protocol.Display.csproj" />
     <ProjectReference Include="../../Gateways/SimNetGateway.Gateway.NedRpr/SimNetGateway.Gateway.NedRpr.csproj" />
+    <ProjectReference Include="../../Transports/SimNetGateway.Transport.HlaRpr/SimNetGateway.Transport.HlaRpr.csproj" />
+    <ProjectReference Include="../../Transports/SimNetGateway.Transport.FakeRti/SimNetGateway.Transport.FakeRti.csproj" />
   </ItemGroup>
 
 </Project>

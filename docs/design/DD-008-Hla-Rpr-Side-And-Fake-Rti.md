@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | approved: P-77 .. P-86 are R-100 .. R-109; HLA-1 and HLA-2 built (section 12) |
+| **Status** | approved: P-77 .. P-86 are R-100 .. R-109; HLA-1, HLA-2 and HLA-3 built (sections 12, 12a, 12b); P-88, P-89 (found in HLA-3) await approval |
 | **Tasks** | T-021 |
 | **Rulings honoured** | R-002, R-003, R-012, R-018, R-019 .. R-022, R-045, R-047, R-050, R-051, R-053, R-054, R-063 .. R-067, R-089 (HLA readiness) |
 | **Inputs** | RPR FOM 2.0 modules (SISO-STD-001.1-2015 Annex A, copy in `github.com/IVCTool/TS_RPR_FOM`, `RPR-FOM-v2.0/RPR-{Foundation,Base,Physical,Warfare,Enumerations,Aggregate}_v2.0.xml`); IEEE 1516.1-2010 Java/C++ interfaces as copied in `github.com/openlvc/portico` (`codebase/src/java/portico/hla/rti1516e`, `codebase/src/cpp/ieee1516e/include/RTI`); padded encoders of `github.com/Pitch-Technologies/FedProClient` (`cpp/src/fedpro/services-common/encoding`) and `github.com/TNO-MST/object-oriented-rti`; the DIS <-> RPR gateway `github.com/openlvc/disco` |
@@ -10,8 +10,8 @@
 
 <!--STATUS
 state: LIVE
-updated: 2026-10-28
-current-answer: whole document
+updated: 2026-10-29
+current-answer: whole document; section 12b is the as-built truth of how the showcase, demo and viewer run the RPR side (HLA-3)
 stale-below: none
 related-designs:
   - docs/design/DD-001-Gateway-Engine-PoC.md - engine, channels, the RPR side as the PoC models it (sections 3, 8)
@@ -44,7 +44,7 @@ no codebase-memory index exists for it):
 |---|---|
 | `Protocol.Rpr` messages (`RprObjectUpdate`, `RprWeaponFire`, `RprMunitionDetonation`, `RprRegisterObject`/`RprObjectRegistered`, `RprObjectRemoved`, `RprAggregateEntity`, `RprSimulationControl`) | the gateway <-> HLA-transport contract, extended (section 3.4) - the gateway modules stay as they are |
 | `Gateway.NedRpr` RPR modules (`RprPublication` pending/bound pattern, contributors R-045, heartbeat, event hold) | unchanged; they now drive a real HLA path |
-| `Protocol.Rpr.SimulatedRti` (53 lines, message-level stand-in that answers registrations) | **retired** in stage HLA-3 once the showcase runs on the fake RTI (no two RTI stand-ins) |
+| `Protocol.Rpr.SimulatedRti` (53 lines, message-level stand-in that answers registrations) | **retired** in stage HLA-3 (done, section 12b): the showcase runs on the fake RTI, no two RTI stand-ins |
 
 ## 2. Block diagram
 
@@ -414,7 +414,7 @@ RPR FOM 2.0 XML modules; `RprFom2.Model()` is checked against them by a test.
 |---|---|---|
 | HLA-1 | `Protocol.Rpr`: `Hla` port, `Hla.Encoding`, `Fom` (`FomModel`, `RprFom2` model + codecs); `Transport.FakeRti`; test projects | encoding goldens, fake-RTI reference-model invariants |
 | HLA-2 (built) | `Transport.HlaRpr`; message additions (3.4); `RprUpdateRequested` module in NedRpr; `RprDetonationResult` renumbered | transport tests; all existing suites green |
-| HLA-3 | Convoy Ambush over the fake RTI; `SimulatedRti` retired; Demo/Viewer option to run the RPR side over the fake RTI | 48/48 |
+| HLA-3 (built, section 12b) | Convoy Ambush over the fake RTI; `SimulatedRti` retired; Demo/Viewer run the RPR side over the fake RTI (one wiring, `NedRprHost`) | 48/48 |
 | HLA-4 | real binding (section 9) | interop with a real RTI |
 
 ## 11. Proposals awaiting approval
@@ -431,6 +431,8 @@ RPR FOM 2.0 XML modules; `RprFom2.Model()` is checked against them by a test.
 | **P-84** (approved, R-107) | `RprSimulationControl` **not carried** over HLA (no RPR 2.0 interaction for it in the used modules); counted and warned. | Map it to a custom interaction class (non-standard). |
 | **P-85** (approved, R-108) | **Retire `SimulatedRti`** in HLA-3 when Convoy Ambush passes on the fake RTI. | Keep both stand-ins (two implementations of one concept). |
 | **P-86** (approved, R-109) | **Stages HLA-1 .. HLA-4** of section 10; the HROT gateway gets the same HLA side when `Gateway.HrotDis` reaches it, by sharing the RPR modules then (their extraction is that stage's design question, not this one). | Build the HLA side for `Gateway.HrotDis` first (it does not exist yet). |
+| **P-88** (found in HLA-3, awaiting approval) | **The showcase layer may reference transports** (`LayerRules`: `Showcase` -> `Transport` allowed; `Host` and the rest unchanged). `NedRprHost` is the one host assembly of the demo, the viewer, the benchmark and the tests (DD-003 section 5), so the HLA wiring lives there once. | Hosts wire the transport and hand the showcase the channels by interface: `ScenarioRunner`, `DemoScenario` and ~20 test classes construct the host themselves, a host may not reference another host (Demo and Viewer would each carry a copy), and a factory would have to be threaded through every caller. |
+| **P-89** (found in HLA-3, awaiting approval) | **A re-sent aggregate does not write the members it already links** (`RprAggregateEntityIngress`: same unit and same index = no write). The heartbeat of an HLA unit is an aggregate reflection, always delivered as `RprAggregateEntity`; without this a live unit refreshes every member and a silent member of a live unit never ages out (R-068, S-4.5, S-9.2). | Keep the write and change the showcase: S-4.5 and S-9.2 cannot be expressed over HLA (a marking-only unit refresh has no HLA form); or a transport rule "an aggregate reflection that carries only the marking is an `RprObjectUpdate`" (contradicts section 3.4). |
 
 
 ## 12. As-built notes (stage HLA-1, T-021)
@@ -473,7 +475,7 @@ AggregateEntity (parent `BaseEntity`, module `RPR-Aggregate_v2.0.xml`), attribut
 Built: `Transport.HlaRpr` (`RprHlaConnection`, `RprHlaSettings`, `RprHlaClasses`; internal `RprHlaHandles`, `SpatialCache`,
 `EventCorrelation`), the message changes of 3.4, the NedRpr module `RprUpdateRequestedResponder`, the renumbered
 `RprDetonationResult`, new codecs in `Protocol.Rpr.Fom`, test project `Transport.HlaRpr.Tests` with the `ScriptedRprFederate`
-peer. `Showcase` / `NedRprHost` still run on `SimulatedRti` (HLA-3 retires it).
+peer. `Showcase` / `NedRprHost` still run on `SimulatedRti` (HLA-3 retired it, section 12b).
 
 ```mermaid
 classDiagram
@@ -586,3 +588,165 @@ mutation table of this stage is:
 | NedRpr: detonation result keeps the old numbering | ConversionTests, the NED detonation-result theory, end-to-end NED detonation |
 | NedRpr: RprRegisterObject without the entity type | end-to-end class test |
 
+## 12b. As-built notes (stage HLA-3, T-021)
+
+Built: the RPR side of the host assembly `NedRprHost` (`src/Showcase`) is the HLA transport on the fake RTI plus the scripted RPR
+federate; Convoy Ambush, the demo, the benchmark, the viewer and the gateway tests all run on that one wiring. `SimulatedRti` and its
+tests are gone from the code (R-108); this document and DD-001 / DD-002 / DD-003 mention it only as history.
+
+```mermaid
+flowchart TD
+    subgraph CALLERS["who runs a host tick"]
+        SR["ScenarioRun.Step (showcase, viewer)"]
+        ST["NedRprHost.Step (demo, benchmark, GatewayHarness, ScenarioInstance)"]
+    end
+    subgraph HOST["NedRprHost (Showcase)"]
+        PUMP["PumpRti"]
+        MUX["RprInboundMux: RprIn (direct queue) first, then the transport"]
+        TEE["RprOutboundTee: recorder or counter first, then the transport"]
+        EVK["EvokePeer"]
+    end
+    ENG["GatewayEngine (Gateway.NedRpr)"]
+    TR["RprHlaConnection (Transport.HlaRpr)"]
+    RTI["FakeRtiHub (Transport.FakeRti)"]
+    PEER["ScriptedRprFederate (Showcase)"]
+    SCRIPT["scripts: SendRpr(IRprMessage)"]
+    SR -->|"1"| PUMP
+    ST -->|"1"| PUMP
+    PUMP --> TR
+    SR -->|"2 Tick"| ENG
+    ST -->|"2 Tick"| ENG
+    ENG -->|"Drain"| MUX
+    MUX --> TR
+    ENG -->|"Send"| TEE
+    TEE --> TR
+    SR -->|"3"| EVK
+    ST -->|"3"| EVK
+    EVK --> PEER
+    TR <--> RTI
+    PEER <--> RTI
+    SCRIPT -->|"Inject"| PEER
+```
+
+Caption - what the picture shows that prose hid: there is exactly one path between the gateway and the RPR side, through the RTI; the
+numbers are the tick order of section 6 (pump, engine tick, the federate's evoke). The direct queue `RprIn` is the only other way into
+the engine's "rpr" port and nothing in `src/` outside `NedRprHost` uses it.
+
+```mermaid
+sequenceDiagram
+    participant S as Script (tick N)
+    participant P as ScriptedRprFederate
+    participant R as FakeRtiHub
+    participant T as RprHlaConnection
+    participant E as GatewayEngine
+    S->>P: SendRpr(RprObjectUpdate, script handle 0x601)
+    P->>R: RegisterObjectInstance, UpdateAttributeValues (RprFom2 values)
+    S->>T: 1 Pump
+    T->>R: EvokeMultipleCallbacks
+    R-->>T: discover, reflect
+    T-->>E: RprObjectUpdate (RTI handle) waits for the drain
+    S->>E: 2 Tick
+    E->>E: drain: direct queue, then transport, rules
+    E->>T: Send(RprRegisterObject) and later Send(RprObjectUpdate)
+    T->>R: RegisterObjectInstance, UpdateAttributeValues
+    S->>P: 3 Evoke
+    R-->>P: discover, reflect (decoded with RprFom2)
+    Note over S,E: tick N+1: the Pump queues RprObjectRegistered (the RTI's handle), the engine sends the first full update, the evoke delivers it
+```
+
+```mermaid
+classDiagram
+    direction LR
+    class NedRprHost {
+        +Hub FakeRtiHub
+        +RprConnection RprHlaConnection
+        +RprPeer ScriptedRprFederate
+        +RprIn InMemoryInbound
+        +SendRpr(message)
+        +ActualHandle(scriptHandle) RprObjectHandle
+        +SeenEventId(scriptedId) Guid
+        +RegisteredHandles
+        +PumpRti()
+        +EvokePeer()
+        +Step(dt)
+    }
+    class ScriptedRprFederate {
+        <<Showcase, moved from Transport.HlaRpr.Tests>>
+        +DeclareForGateway()
+        +Inject(IRprMessage)
+        +ActualHandle(scriptHandle)
+        +NameOfHandle(instanceHandle)
+        +DiscoveredObject(instanceHandle) PeerObject
+        +Fires, Detonations, RemovedHandles
+        +TickSource, Decode
+    }
+    class PeerObject {
+        +LastReflectTick
+        +decoded attributes, Carried counts
+    }
+    class RtiMirror {
+        <<static>>
+        +Merge(state, update)
+        +Differences(sent, seen) list
+    }
+    class InvariantChecker {
+        +CheckRti G-9
+        +SentState(handle)
+        +MirrorDifferences(handle)
+    }
+    class RprHlaConnection {
+        <<Transport.HlaRpr, unchanged>>
+    }
+    class FakeRtiHub {
+        <<Transport.FakeRti, unchanged>>
+    }
+    NedRprHost *-- RprHlaConnection
+    NedRprHost *-- ScriptedRprFederate
+    NedRprHost *-- FakeRtiHub
+    ScriptedRprFederate o-- PeerObject
+    InvariantChecker ..> RtiMirror
+    InvariantChecker ..> NedRprHost
+    RtiMirror ..> PeerObject
+```
+
+The class diagram of section 4 holds; `RprHlaConnection` and `FakeRti` did not change. Decisions and deviations:
+
+| Topic | As built | Why |
+|---|---|---|
+| Layer rule (**P-88**) | `LayerRules`: `Showcase` may reference `Transport` (the only rule change; `LayerRulesTests` moves the pair from forbidden to allowed). `Showcase` now references `Transport.HlaRpr` and `Transport.FakeRti` | `NedRprHost` is the shared host assembly; see P-88 for the rejected alternative. DD-003 sections 3 and 9 carry a note |
+| One federate for everyone | `ScriptedRprFederate` (with `PeerObject`, `PeerFire`, `PeerDetonation`) moved from `tests/Transport.HlaRpr.Tests` to `src/Showcase`; the transport tests reference the Showcase project and use that one class. New: `DeclareForGateway`, the message level API `Inject`, `TickSource` (tick stamps on what it receives), `Decode` (off = drain only), `ActualHandle` / `NameOfHandle` / `DiscoveredObject` / `EventIdentifierOf` | the brief: one implementation for showcase, viewer and tests. The low level API is unchanged |
+| `Inject` | `RprObjectUpdate` -> register on the first message of a script handle (class from the entity type, `PhysicalEntity` without one) + `updateAttributeValues` with `RprFom2` values (the spatial variant re-encoded from the federate's own merged state, same rule as 3.4); `RprAggregateEntity` -> `AggregateEntity` object, members named by the RTI names of the objects with those DIS identifiers, a member that does not exist yet gets a **reserved name** that its later registration takes; `RprObjectUpdate` on a unit = its aggregate attributes (the unit's keep-alive); `RprObjectRemoved` -> `deleteObjectInstance` (an unknown handle sends nothing: a federate cannot delete what it never registered); fire / detonation -> `sendInteraction`, references are RTI names, `EventIdentifier` = (count per issuing object, issuer), the same scripted id gets the same identifier, an event without a firing object is issued by the federate itself (two federates must not share an identifier). A damage percentage is never sent | the scripts keep their message-level wording; everything crosses the RTI |
+| Script handles | the handle numbers in the RPR messages of a script (0x601, 0x700, ...) are **keys**; the RTI assigns the real handles (1-based counter of the federation). `NedRprHost.ActualHandle(script)` and `ScenarioContext.RprEntity(script)` translate; a number the federate never registered is taken as an RTI handle (the gateway's own objects, as in fires at them) | handles are assigned by the RTI (the brief) |
+| Registration | answered by the next `Pump` (tick + 1, as before); the order of answers is `NedRprHost.RegisteredHandles`; G-5 asks `IsRegisteredHandle` | replaces `Rti.Registered` |
+| Event ids | HLA carries no guid: the transport makes one per (count, issuer). `NedRprHost.SeenEventId(scriptedId)` is the id the gateway saw for an injected event (FIFO of injected events against the transport's deliveries); the checker's `OnRprReceived` gets what the engine receives (`OnRprDelivered`) | G-1 and the event checks compare the ids the gateway works with |
+| Direct queue | `NedRprHost.RprIn` stays as a test seam: a message enqueued there reaches the engine without the RTI (drained before the transport's). Used only by the gateway module tests that need an exact message (a handle of their own choosing); `DeliverRti = false` now means "the transport is not pumped" | no RTI stand-in is involved; it is the engine's input channel |
+| Pump / evoke | `NedRprHost.Step`, `ScenarioRun.Step`, the viewer's `StepHost` run `PumpRti`, `Engine.Tick`, `EvokePeer`; the engine tick count stamps what the federate receives | section 6 |
+| **G-9** (DD-002 section 6) | new invariant, on in the showcase runner (`InvariantChecker.CheckRti`): every tick, what the gateway sent to the RPR side (registrations, attribute updates merged per object, removals, fires, detonations) equals what the federate decoded (`RtiMirror`: exact, float32 against the same cast), updates are reflected in the tick they were sent, one event id = one RTI event identifier, the transport counted no loss and dropped exactly the damage percentages and simulation controls the gateway sent | "the script's RPR expectations are checked on what the RPR side actually receives" |
+| **P-89**, gateway | `RprAggregateEntityIngress` writes `Structure.Parent` / `MemberIndex` of a listed member only when they differ (6 lines) | an HLA unit's heartbeat is an aggregate reflection (always `RprAggregateEntity`); the old script refreshed the unit with a marking-only `RprObjectUpdate`, which has no HLA form. Without P-89 a live unit would refresh every member: S-4.5 (Wolf-1 / Wolf-2 silent for 10 s) and S-9.2 (Wolf-3 reaped) would fail; the unit's own write still counts. Tests: `AggregateTests` (2); mutation below |
+| Not carried (as designed) | `RprSimulationControl` (R-107) and `DamagePercent` (R-105): the gateway's output is unchanged, the transport counts them dropped, the federate receives nothing; S-2.2, S-8.1, S-8.3, S-11.1 (controls) and S-6.1 (percent) assert the counters and that nothing arrived | the success conditions keep their intent: "the gateway sends it"; see DD-002 as-built |
+| Benchmark / traffic | `NedRprHostOptions.PeerDecodes` follows `Record`: the benchmark host drains the federate's callbacks without decoding. The 10k benchmark runs over the RTI (Debug, 5 s: 1.1x real time, 14.9 KB per inbound message, 0 diagnostics) | the benchmark has no `SimulatedRti` to fall back on; the Release numbers of stage 6 are not comparable |
+| Unchanged | transport, fake RTI, protocol and every other module; the NED, display and RPR output of Convoy Ambush (below) | |
+
+Result of Convoy Ambush on the fake RTI: **48 of 48 conditions PASS, no G-1 .. G-9 violation in 8,400 ticks**, final state empty (the federate holds none of the
+gateway's objects), the report identical in two runs. What the gateway sent, compared with the run before this stage (the message-level SimulatedRti),
+pinned as golden files in `tests/SimNetGateway.Gateway.NedRpr.Tests/Golden` (`ConvoyAmbushOverHlaTests`): NED 46 messages identical (ticks and text), display 5,334 messages
+identical (SHA-256), RPR 160 messages identical up to the numbers of the handles (0x2A01.. before, the RTI's 1.. now) - the only difference anywhere is the
+first 8 hex digits of the guid of the RPR fire E1 on the NED side (`e1000000` before, `00000001` now: the transport's event guid).
+
+Mutation checks of this stage (R-065); each was restored:
+
+| Mutation | Failing |
+|---|---|
+| the host never evokes the federate (`EvokePeer` empty) | 41 tests: S-1.2, S-3.2, S-4.1, S-5.1 .. S-5.4, S-5.6, S-6.1, S-9.1, S-9.3, S-9.5, S-10.1, S-11.1, G-9 in the acceptance test and in 12 random-traffic seeds, `HlaShowcaseTests` |
+| the host pumps after the engine tick instead of before | S-1.3 (NED got the RPR object one tick late), the golden NED and display tests, the `HlaShowcaseTests` tick-order and pump tests, 2 `NedToRprTests` |
+| the transport drops the spatial cache merge | G-9 in `HlaShowcaseTests.G9_a_static_entity_that_moves_...` and 4 `Transport.HlaRpr.Tests`; **not** the 48 conditions: Convoy Ambush never sends a location-only update, so the added G-9 test covers it |
+| `RprAggregateEntityIngress` rewrites linked members again | S-4.5, S-9.2, golden NED, `AggregateTests` |
+| `RtiMirror.Differences` always empty | 13 tests (`RtiMirrorTests`, `G9_detects_an_update_the_federate_does_not_hold`) |
+| the federate names a not-yet-existing member without reserving the name | S-3.5, S-7.6, S-9.2, `PeerInjectionTests` (aggregate) |
+| the scripted event id is not mapped to the transport's | S-5.1, S-5.6, S-10.3, `HlaShowcaseTests` (event ids) |
+| the host does not remember the registration answers | 228 tests (G-5 on every RPR handle) |
+| the federate's removal does not delete the object | S-9.1, S-10.1 and 21 more, `PeerInjectionTests` |
+
+Test inventory: `Transport.HlaRpr.Tests` 98 (78 + 20 `PeerInjectionTests`: registration once per script handle, partial updates, 9 seeded random sequences against the independent `SpatialModel`,
+aggregates with reserved names, fire / detonation event identifiers, removals, tick stamps, `Decode` off); `Gateway.NedRpr.Tests` 601 (566 - 8 `SimulatedRtiTests` + 43: `HlaShowcaseTests` 16, `RtiMirrorTests` 19,
+`ConvoyAmbushOverHlaTests` 6, 2 `AggregateTests`); `Architecture.Tests` 97 (the Showcase -> Transport pair moved from forbidden to allowed); the viewer's headless smoke 94, unchanged.

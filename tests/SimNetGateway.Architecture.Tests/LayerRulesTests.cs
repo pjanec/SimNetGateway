@@ -20,7 +20,6 @@ public class LayerRulesTests
     [InlineData(Layer.Gateway, Layer.EngineSupport)]
     [InlineData(Layer.Transport, Layer.Gateway)]
     [InlineData(Layer.Transport, Layer.Common)]
-    [InlineData(Layer.Showcase, Layer.Transport)]
     [InlineData(Layer.Showcase, Layer.Host)]
     [InlineData(Layer.Host, Layer.Host)]
     public void Forbidden_reference_is_reported(Layer from, Layer to)
@@ -40,6 +39,7 @@ public class LayerRulesTests
     [InlineData(Layer.Transport, Layer.Protocol)]
     [InlineData(Layer.Showcase, Layer.Gateway)]
     [InlineData(Layer.Showcase, Layer.EngineSupport)]
+    [InlineData(Layer.Showcase, Layer.Transport)]
     [InlineData(Layer.Host, Layer.Gateway)]
     [InlineData(Layer.Host, Layer.Transport)]
     [InlineData(Layer.Host, Layer.Showcase)]

@@ -79,6 +79,13 @@ public sealed class RprAggregateEntityIngress : IGatewayModule
             }
 
             linked.Add(member);
+            if (AlreadyLinked(record, unit, index))
+            {
+                // a re-sent aggregate (an HLA unit's heartbeat) re-asserts the membership; it is the UNIT that spoke, so the member is not
+                // written (R-068: staleness counts only the writes of the entity itself - a silent member of a live unit must still age out)
+                continue;
+            }
+
             changes.Set(member, _schema.Parent, AttrValue.From(unit));
             changes.Set(member, _schema.MemberIndex, AttrValue.From(index));
         }
@@ -99,6 +106,11 @@ public sealed class RprAggregateEntityIngress : IGatewayModule
             _scratch.Clear();
         }
     }
+
+    /// <summary>True when the member is already linked to this unit at this position.</summary>
+    private bool AlreadyLinked(EntityRecord member, EntityId unit, int index) =>
+        member.TryGet(_schema.Parent, out var parent) && !parent.IsNone && parent.AsEntity() == unit &&
+        member.TryGet(_schema.MemberIndex, out var stored) && !stored.IsNone && stored.AsInt() == index;
 
     /// <summary>True when the unit already holds exactly this member list (the stored object is then left untouched).</summary>
     private bool SameList(IngressContext ctx, EntityId unit, DisEntityId[] received)

@@ -189,7 +189,6 @@ public static class DemoScenario
         };
         host.RprOut!.Tap = message =>
         {
-            host.Rti.Observe(message);
             Record(host, timeline, counts, "RPR", "-> RPR", message.GetType().Name, Describe(message));
             options.OnRprSent?.Invoke(message);
         };
@@ -230,7 +229,7 @@ public static class DemoScenario
             where T : IRprMessage
         {
             Input("RPR", text);
-            host.RprIn.Enqueue(in message);
+            host.SendRpr(message);
         }
 
         At(1 * NedRprHost.Dt, () => InjectNed(new NedSimControl(NedControlKind.Load, "demo"), "NedSimControl Load demo"));
@@ -379,7 +378,7 @@ public static class DemoScenario
         s_catalog.TryToDis(tkb, out var dis) ? dis : throw new InvalidOperationException($"Unknown munition TKB {tkb}.");
 
     private static ulong NedIdOf(NedRprHost host, RprObjectHandle handle) =>
-        host.RprHandles.TryResolve(handle, out var entity) && host.NedIds.TryGetKey(entity, out ulong id) ? id : 0UL;
+        host.RprHandles.TryResolve(host.ActualHandle(handle.Value), out var entity) && host.NedIds.TryGetKey(entity, out ulong id) ? id : 0UL;
 
     // ---- message summaries --------------------------------------------------------------------------------------------
 

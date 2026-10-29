@@ -2,7 +2,7 @@ using SimNetGateway.Protocol.Rpr.Fom;
 using SimNetGateway.Protocol.Rpr.Hla;
 using SimNetGateway.Transport.FakeRti;
 
-namespace SimNetGateway.Transport.HlaRpr.Tests;
+namespace SimNetGateway.Showcase;
 
 /// <summary>What the peer last decoded of one object, attribute by attribute, with how many reflections carried each attribute.</summary>
 public sealed class PeerObject
@@ -20,6 +20,9 @@ public sealed class PeerObject
 
     /// <summary>The class the peer knows the object as (the closest class it subscribed to).</summary>
     public string ClassName { get; }
+
+    /// <summary>The tick (<see cref="ScriptedRprFederate.TickSource"/>) of the last reflection of this object; -1 = none.</summary>
+    public long LastReflectTick { get; set; } = -1;
 
     public EntityTypeStruct? EntityType { get; set; }
     public EntityIdentifierStruct? EntityIdentifier { get; set; }
@@ -40,20 +43,30 @@ public sealed class PeerObject
 public sealed record PeerFire(
     EventIdentifierStruct Event, string Firing, string Target, string MunitionObject, EntityTypeStruct Munition,
     WorldLocationStruct Location, ushort Quantity, ushort Rate, FuseTypeEnum16 Fuse, WarheadTypeEnum16 Warhead, float Range,
-    uint MissionIndex, VelocityVectorStruct Velocity);
+    uint MissionIndex, VelocityVectorStruct Velocity)
+{
+    /// <summary>The tick the peer received the interaction at (<see cref="ScriptedRprFederate.TickSource"/>).</summary>
+    public long Tick { get; init; }
+}
 
 /// <summary>A MunitionDetonation as the peer decoded it.</summary>
 public sealed record PeerDetonation(
     EventIdentifierStruct Event, string Firing, string Target, string MunitionObject, EntityTypeStruct Munition,
     WorldLocationStruct Location, ushort Quantity, ushort Rate, FuseTypeEnum16 Fuse, WarheadTypeEnum16 Warhead,
-    DetonationResultCodeEnum8 Result, VelocityVectorStruct Velocity, RelativePositionStruct Relative, int ArticulatedPartDataLength);
+    DetonationResultCodeEnum8 Result, VelocityVectorStruct Velocity, RelativePositionStruct Relative, int ArticulatedPartDataLength)
+{
+    /// <summary>The tick the peer received the interaction at (<see cref="ScriptedRprFederate.TickSource"/>).</summary>
+    public long Tick { get; init; }
+}
 
 /// <summary>
-/// The test peer (DD-008 section 8): another federate on the same <see cref="FakeRtiHub"/> that encodes and decodes every value
-/// itself by calling <see cref="RprFom2"/> directly - it shares no mapping code with the transport under test. Callbacks are
-/// recorded and decoded when <see cref="Evoke"/> is called.
+/// The scripted RPR federate (DD-008 sections 6, 8 and 12b): another federate on the same <see cref="FakeRtiHub"/> that encodes and
+/// decodes every value itself by calling <see cref="RprFom2"/> directly - it shares no mapping code with the transport. Callbacks
+/// are recorded and decoded when <see cref="Evoke"/> is called. The ONE implementation of the RPR side's peer: the transport tests,
+/// the showcase (Convoy Ambush), the demo and the viewer use it. Low level API here (declarations, <see cref="Update"/>,
+/// <see cref="SendFire(Dictionary{string, byte[]})"/>, ...); the message level API (<c>Inject</c>) is in ScriptedRprFederate.Messages.cs.
 /// </summary>
-public sealed class ScriptedRprFederate : IFederateAmbassador
+public sealed partial class ScriptedRprFederate : IFederateAmbassador
 {
     private readonly Dictionary<int, PeerObject> _objects = new();
     private readonly AttributeHandle _entityType, _entityIdentifier, _spatial, _marking, _force, _damage;
@@ -109,12 +122,26 @@ public sealed class ScriptedRprFederate : IFederateAmbassador
 
     public FakeRtiAmbassador Rti { get; }
 
+    /// <summary>The tick number stamped on what the peer receives (the host sets the engine's tick count); null = 0.</summary>
+    public Func<long>? TickSource { get; set; }
+
+    /// <summary>
+    /// False: callbacks are evoked (the RTI's queue is drained) but nothing is decoded or kept. For hosts that only need the
+    /// traffic to flow (the benchmark and the traffic generator), not to be inspected.
+    /// </summary>
+    public bool Decode { get; set; } = true;
+
+    private long Now => TickSource?.Invoke() ?? 0;
+
     /// <summary>The objects the peer discovered, in discovery order.</summary>
     public List<PeerObject> Discovered { get; } = new();
 
     public IEnumerable<PeerObject> Objects => _objects.Values;
 
     public List<string> RemovedNames { get; } = new();
+
+    /// <summary>The instance handle values of the objects removed, with the tick the removal was received at.</summary>
+    public List<(int Handle, long Tick)> RemovedHandles { get; } = new();
 
     public List<PeerFire> Fires { get; } = new();
 
@@ -295,6 +322,11 @@ public sealed class ScriptedRprFederate : IFederateAmbassador
 
     void IFederateAmbassador.DiscoverObjectInstance(ObjectInstanceHandle theObject, ObjectClassHandle theObjectClass, string objectName)
     {
+        if (!Decode)
+        {
+            return;
+        }
+
         var obj = new PeerObject(theObject, objectName, _classNames.TryGetValue(theObjectClass, out var c) ? c : "?");
         _objects[theObject.Value] = obj;
         Discovered.Add(obj);
@@ -302,7 +334,13 @@ public sealed class ScriptedRprFederate : IFederateAmbassador
 
     void IFederateAmbassador.ReflectAttributeValues(ObjectInstanceHandle theObject, AttributeHandleValueMap theAttributes, byte[] userSuppliedTag)
     {
+        if (!Decode)
+        {
+            return;
+        }
+
         var o = _objects[theObject.Value];
+        o.LastReflectTick = Now;
         foreach (var (attribute, bytes) in theAttributes)
         {
             string? simple = null;
@@ -329,17 +367,28 @@ public sealed class ScriptedRprFederate : IFederateAmbassador
 
     void IFederateAmbassador.RemoveObjectInstance(ObjectInstanceHandle theObject, byte[] userSuppliedTag)
     {
-        if (_objects.Remove(theObject.Value, out var o))
+        if (Decode && _objects.Remove(theObject.Value, out var o))
         {
             RemovedNames.Add(o.Name);
+            RemovedHandles.Add((theObject.Value, Now));
         }
     }
 
-    void IFederateAmbassador.ProvideAttributeValueUpdate(ObjectInstanceHandle theObject, AttributeHandleSet theAttributes, byte[] userSuppliedTag) =>
-        ProvideRequests.Add(theObject);
+    void IFederateAmbassador.ProvideAttributeValueUpdate(ObjectInstanceHandle theObject, AttributeHandleSet theAttributes, byte[] userSuppliedTag)
+    {
+        if (Decode)
+        {
+            ProvideRequests.Add(theObject);
+        }
+    }
 
     void IFederateAmbassador.ReceiveInteraction(InteractionClassHandle interactionClass, ParameterHandleValueMap theParameters, byte[] userSuppliedTag)
     {
+        if (!Decode)
+        {
+            return;
+        }
+
         if (interactionClass == _fireClass)
         {
             DecodeFire(theParameters);
@@ -379,7 +428,10 @@ public sealed class ScriptedRprFederate : IFederateAmbassador
             Get<WarheadTypeEnum16>(v, p, "WarheadType", RprFom2.TryDecodeWarheadType),
             Get<float>(v, p, "FireControlSolutionRange", RprFom2.TryDecodeLengthMeterFloat32),
             Get<uint>(v, p, "FireMissionIndex", RprFom2.TryDecodeUnsignedInteger32),
-            Get<VelocityVectorStruct>(v, p, "InitialVelocityVector", RprFom2.TryDecodeVelocityVector)));
+            Get<VelocityVectorStruct>(v, p, "InitialVelocityVector", RprFom2.TryDecodeVelocityVector))
+        {
+            Tick = Now,
+        });
     }
 
     private void DecodeDetonation(ParameterHandleValueMap v)
@@ -399,6 +451,9 @@ public sealed class ScriptedRprFederate : IFederateAmbassador
             Get<DetonationResultCodeEnum8>(v, p, "DetonationResultCode", RprFom2.TryDecodeDetonationResultCode),
             Get<VelocityVectorStruct>(v, p, "FinalVelocityVector", RprFom2.TryDecodeVelocityVector),
             Get<RelativePositionStruct>(v, p, "RelativeDetonationLocation", RprFom2.TryDecodeRelativePosition),
-            v.TryGetValue(p["ArticulatedPartData"], out var parts) && RprFom2.TryDecodeArticulatedParameters(parts, out var list) ? list.Length : -1));
+            v.TryGetValue(p["ArticulatedPartData"], out var parts) && RprFom2.TryDecodeArticulatedParameters(parts, out var list) ? list.Length : -1)
+        {
+            Tick = Now,
+        });
     }
 }

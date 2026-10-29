@@ -108,6 +108,8 @@ deviation discovered during implementation is reported, not silently chosen. Tri
   (DD-003): `tests/SimNetGateway.Engine.Tests`, `.Common.Tests`, `.Gateway.NedRpr.Tests` and
   `tests/SimNetGateway.Architecture.Tests` (dependency rules and conventions of DD-003 section 3;
   a forbidden project reference fails it). Deterministic, `ManualClock`, no sleeping.
+- `bash scripts/mermaid-check.sh docs/design/*.md` - parses every mermaid block (needs node; installs mermaid once into
+  `~/.cache`); run it on every design doc you change - a semicolon inside a sequence-diagram message breaks it.
 - `dotnet run --project src/Hosts/SimNetGateway.Demo` - console demo; `-- --bench` for the 10k
   benchmark (from stage 6).
 - Layout (DD-003 section 2): `src/Engine`, `src/Common`, `src/Protocols`, `src/Gateways`,
