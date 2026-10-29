@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | approved: P-90 .. P-94 are R-114 .. R-118 |
+| **Status** | approved: P-90 .. P-94 are R-114 .. R-118; built (T-024, stage HLA-H), as-built notes in section 10 |
 | **Tasks** | T-024 |
 | **Rulings honoured** | R-003, R-045, R-047, R-068, R-069, R-079 .. R-113 (esp. R-094 configuration file, R-100 .. R-109 HLA side) |
 | **Inputs** | DD-006 section 14 (as-built H2a / H2b: `DisPublication` with dead-reckoned send policy), DD-008 sections 3.4 - 3.6 and 12 - 12b (HLA transport, fake RTI, Convoy Ambush over HLA), `Gateway.NedRpr/Services/RprPublication.cs` (asynchronous registration None -> Pending -> Bound) |
@@ -13,6 +13,7 @@ state: LIVE
 updated: 2026-10-29
 current-answer: whole document
 stale-below: none
+known-rot: section 4 (class diagram) shows the sketch; section 10 has the as-built API (stateless policy with a caller-owned SentModel, RegistrationAnswer, rpr.entityId) - section 10 wins
 related-designs:
   - docs/design/DD-006-Gateway-Hrot-Dis.md - the HROT gateway's pivot and DIS side; this design adds its HLA side
   - docs/design/DD-007-Hrot-Dis-Pack.md - the HROT pack that hosts both sides; its config section `hla` (3a) is consumed here
@@ -200,3 +201,38 @@ with both transports pumped first (DD-008 section 6 order).
 | **P-92** (approved, R-116) | **Origin rule**: only `hrot` entities and events go to DIS and HLA; `dis` and `rpr` both become HROT replicas; no DIS <-> HLA relaying. | Relay DIS <-> HLA through the gateway (a bridge product of its own; relayed-origin handling). |
 | **P-93** (approved, R-117) | **HROT gateway RPR modules** of 3.3 in `Gateway.HrotDis/Rpr`, configured by the `hla` section with new keys `positionThresholdM` / `orientationThresholdDeg`, stale reaping after `hla.timeoutS`. | Reuse NedRpr's modules directly (they are bound to the NED pivot). |
 | **P-94** (approved, R-118) | **Stage** `HLA-H` (T-024): extraction + refactor first (both gateways green, goldens identical), then the HROT RPR side; the HROT pack (H5) composes the HLA transport when `hla` is present, with `rti: "fake"` the only value until HLA-4. | HROT pack DIS-only until a real RTI exists. |
+
+## 10. As-built notes (T-024, stage HLA-H)
+
+Built in three parts (commits "T-024: HLA-H part A / B / C"). What differs from sections 3 and 4, and why:
+
+| # | Design said | As built | Why |
+|---|---|---|---|
+| 1 | `DeadReckonedSendPolicy` owns a per-entity last-sent model: `NeedsSend`, `Sent`, `Forget`, `SweepDue`; `SendPolicyAttributes` | **Stateless** policy over a caller-owned `SentModel` struct: `Drifted`, `HeartbeatDue`, `NeedsSend`, `Held`, `Predict`, `TryRead`, `Exceeds`; settings `SendPolicySettings` (`FromDegrees`); the attribute ids are the existing Common `DrAttributeSet` (no second record of the same seven ids). `SentModel.Of(...)` builds the model. The sweep over the entities stays in each publication | The model lives in the publication's `EntityTable`, so it dies with the entity (a policy-side dictionary needs `Forget` calls and a second lifetime), and the DIS sweep order stays exactly the table's, which is what keeps DIS behaviour identical. `DisKinematics` is gone (its functions are the policy's); `DrWire` (the position / velocity / orientation a full update carries, body-axis velocity rule) and `Publishable` (readiness and the unit rule) are shared by both publications |
+| 2 | `AsyncRegistration<THandle>`: `Request` -> token, `OnRegistered` -> `EntityId?`, `StatusOf`, `Release` | `Request` returns the token, or **0 when the entity is already Pending or Bound** (the caller coalesces); `OnRegistered(token, handle, out entity, isAlive)` returns `RegistrationAnswer` (`Unknown`, `Released`, `Accepted`) - an answer for a released or dead entity is queued as an **orphan**, a second answer to a token is `Unknown`; **two-phase**: `Accepted` queues an arrival and the entity stays Pending until `Complete(entity, handle)` after the identity binding committed (as NedRpr always did); `TryGetHandle`, `TryGetToken`, `Arrivals`, `Orphans`, counts | The NedRpr machine confirms Bound only after the binding transaction committed and distinguishes "unknown token" (warning) from "entity gone" (delete the object again); the sketch could express neither. NedRpr's `RprPublicationState` lost `Status` and `Token` (they are `Registration.StatusOf` / `TryGetToken`); its inspector string changed accordingly |
+| 3 | Identity: `rpr.handle` | `rpr.handle` (`IdentityMap<RprObjectHandle>`, owner rpr) **and `rpr.entityId`** (`IdentityMap<DisEntityKey>`, owner rpr, own number pool with quarantine under `shared.site` / `shared.application`, `DisNumbering` of the profile) for the `EntityIdentifier` of the objects published to HLA | An RPR object needs an entity identifier (NedRpr has `rpr.entityId` too). Not shared with `dis.entity` so that the DIS maps stay absent without the DIS side (an H2b rail) and the two networks stay independent: the same HROT entity can have different numbers on DIS and on HLA. `HrotDisMaps.HasRpr`, `HrotDisSources.Rpr` (`SourceId.None` without the HLA side) and `IsReplicaOrigin` are new |
+| 4 | Modules `RprEntityEgress` "via RprPublication", heartbeat | `RprEntityEgress` (rules Identity, Spatial, Damage, Flush, Registered, Reconcile, Remove, **Sweep**); no separate heartbeat module: the end-of-tick **Sweep** sends when `NeedsSend` (drift or heartbeat), at most one update per entity per tick. Ingress: `RprObjectUpdateIngress`, `RprObjectRemovedIngress`, `RprObjectRegisteredIngress`, `RprUpdateRequestedResponder`, `RprFireIngress`, `RprDetonationIngress`; egress `RprFireEgress`, `RprDetonationEgress` | one decision point for the two triggers; DIS has two modules only because H2b was built before the policy was shared |
+| 5 | Fire / detonation outbound "interactions" | An event naming an entity whose registration is pending or that has no handle is sent with a **null handle** ("no object"); there is **no R-047 hold** (NedRpr's `RprEventHold` is bound to the NED pivot). The event guid is derived from the DIS event id the HROT ingress assigned, so a fire and its detonation share it | HROT entities register when their first state arrives, long before they fire; a hold can be added when a measured case needs it |
+| 6 | Profile registers RPR modules when the hla side runs | Also: the `rpr` port (`IRprMessage`), the reaper `RprStaleReaper` (source `proc.reaper.rpr`, `hla.timeoutS`, same check period rule as DIS). **`Gateway.HrotDis` references `Protocol.Rpr`** (a gateway references the protocols it connects, DD-003 rule 4; `LayerRules` needed no change). Consequence: **`Protocol.Rpr` joins the vendored set** (`scripts/vendor-dry-run.sh`, CLAUDE.md, DD-007 section 2: seven projects; BCL-only, 0 warnings under the hostile parent) | the vendored gateway composes the HLA side; the HLA transport and the RTI stay out |
+| 7 | Config `hla.positionThresholdM` / `orientationThresholdDeg` | As designed (defaults 1.0 / 3.0, `min: 0`, own keys, never read from the dis section); DD-007 3a updated | |
+
+Behaviour decisions the design left open (want a ruling if the user disagrees): inbound `StateTime` is the engine clock at receipt (`ctx.ReceivedAt`, as for DIS); an inbound
+`DamagePercent` is ignored (the pivot has damage levels only); a `RprAggregateEntity` and a `RprSimulationControl` have no handler in this gateway (no unit/aggregate model,
+HLA carries no simulation control, R-107) and change nothing; the object class an HLA object is registered as follows from the entity type at registration, a later type change
+is sent as an attribute but does not re-register; with `dis` absent the `dis.entity` map and DIS ports do not exist (H2b rails unchanged), with `hla` absent the `rpr.*` maps,
+the port and the reaper source do not exist.
+
+Existing H2b tests touched (expectations changed only because the HLA side now exists): two `ProfileTests` cases that used `Hla = {...}` merely as "another
+side" now see the `rpr` port (ports `["hrot", "rpr"]`); `ConfigurationTests` counts the two new example keys (30 -> 32 leaves). The H2a `InvariantChecker` treats origins dis **and**
+rpr as replicas; the harness gained the in-memory `rpr` port and a fake RTI that answers registrations one tick later (`AutoRegister`, `DeliverRti`).
+
+Tests: Common 165 -> 175 (`DeadReckonedSendPolicyTests` 6: 600 seeded sequences against an oracle with own FPW arithmetic and own angle measure, one send per instant;
+`AsyncRegistrationTests` 4: model-checked over 300 seeded random request / answer / complete / release sequences); NedRpr 601 -> 601 (goldens unchanged); HrotDis 692 -> 743
+(`RprSideTests` 35: every row of 3.3 both ways, origin rule, registration, thresholds per side, reaper, composition; `RprRandomizedTests` 6 x 1500 operations with BOTH sides, a
+silent RTI, echoes, model of the rpr entities; `HlaEndToEndTests` 7: HROT entity at the federate and as an ESPDU, federate entity as a replica, fire / detonation both ways,
+removal and late answer, update request, the federate's view within the thresholds over 1500 ticks; `ConfigurationTests` +3: one test and two invalid-key rows). `RprInvariantChecker` runs after every step and at
+every send (origin rule, tokens, full update against the oracle, threshold and heartbeat per side, no redundant send, one removal per object, numbers, liveness).
+Mutations (each red, then restored): policy ignores orientation; heartbeat never due; registration answer after release binds anyway (two guards removed); Request does not
+coalesce; rpr entity forwarded to DIS (both guards); dis entity forwarded to HLA (both guards); rpr reaper by any-write recency; HLA thresholds and heartbeat read from the dis
+section; the sent model is not recorded (a send every tick); an update of an hrot entity's handle is not an echo. Not a behaviour change, so not detectable: dropping the
+send in `CompleteRegistrations` (the end-of-tick sweep sends the first update in the same tick).

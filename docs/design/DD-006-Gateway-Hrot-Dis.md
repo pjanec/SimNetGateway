@@ -784,3 +784,9 @@ expected extension when HLA ownership transfer is needed, in its own design.
 - Mutation checks (R-065), each red then restored: no exercise filter (14 tests incl. the random runs and the e2e filter test); no echo filter (random runs, echo tests); delivery as `Pdu` (concrete-class
   tests, random runs, e2e); delivery on the receive thread (threading test, stress, e2e, overflow test); only the first PDU of a datagram (multi-PDU tests, random runs, raw-socket test); unsupported
   not counted (random runs, garbage); echo by site only; Fire echo ignoring the event id; queue unbounded; dispose without joining the thread; delivered not counted; Entity State delivered as `Pdu`.
+
+**T-024 (HLA-H), effect on the DIS half (details: DD-009 section 10):** `DisPublication` now takes its drift and heartbeat decisions from Common's `DeadReckonedSendPolicy`
+(the held model is a `SentModel` in `DisPublicationState.Sent`; `DisKinematics` was removed, `DrWire` projects the position / velocity / orientation of a full PDU, `Publishable`
+holds the readiness and unit rule); the behaviour is identical - the whole H2b suite (692 tests, `DisInvariantChecker`, randomized runs) passed unchanged after the refactor. The
+HLA side of the same gateway is the RPR modules of DD-009; with it `Gateway.HrotDis` references `Protocol.Rpr` and the vendored set grows to seven projects (the dry run of H3
+builds `Protocol.Rpr` too).
