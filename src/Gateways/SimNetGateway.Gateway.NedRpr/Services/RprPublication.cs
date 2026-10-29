@@ -108,6 +108,7 @@ public sealed class RprPublication
     private readonly Dictionary<long, EntityId> _tokens = new();
     private readonly List<(EntityId Entity, RprObjectHandle Handle)> _arrivals = new();
     private readonly List<RprObjectHandle> _orphans = new();
+    private readonly List<EntityId> _requests = new();
     private EntityTable<RprPublicationState>? _table;
     private IGatewayContext? _gateway;
     private long _lastToken;
@@ -133,6 +134,13 @@ public sealed class RprPublication
     /// news to the egress. Valid after <see cref="Attach"/>.
     /// </summary>
     public EventTypeId HandleBoundEvent { get; private set; }
+
+    /// <summary>
+    /// The internal event "another federate asked for the full state of one of our objects" (<see cref="RprUpdateRequested"/>,
+    /// R-105): ingress cannot send, so <see cref="RprUpdateRequestedResponder"/> notes the entity and publishes this event, and
+    /// its rule sends the updates. Valid after <see cref="Attach"/>.
+    /// </summary>
+    public EventTypeId UpdateRequestedEvent { get; private set; }
 
     // ---- the contributor rules (R-045) --------------------------------------------------------------------------------------
     // A full update (first update after the handle arrives, heartbeat) is built through the same attribute groups as a partial
@@ -173,6 +181,8 @@ public sealed class RprPublication
         _table = setup.CreateEntityTable<RprPublicationState>("RprPublication.State");
         HandleBoundEvent = setup.EventTypes.Register("RprPublication.HandleBound",
             "An RTI registration answer was bound to its entity (internal)");
+        UpdateRequestedEvent = setup.EventTypes.Register("RprPublication.UpdateRequested",
+            "An RTI federate asked for the full state of a published entity (internal)");
     }
 
     // ---- contributors ---------------------------------------------------------------------------------------------
@@ -279,7 +289,7 @@ public sealed class RprPublication
 
     private void TryRegister(EntityRecord entity, ref RprPublicationState state)
     {
-        if (!entity.Has(_schema.TypeTkb) || !entity.Has(_schema.Position))
+        if (!entity.TryGet(_schema.TypeTkb, out var tkb) || !entity.Has(_schema.Position))
         {
             return; // not published until type and position are known
         }
@@ -299,7 +309,7 @@ public sealed class RprPublication
         state.Token = ++_lastToken;
         state.Status = RprPublicationStatus.Pending;
         _tokens[state.Token] = entity.Id;
-        _output.Send(new RprRegisterObject(state.Token));
+        _output.Send(new RprRegisterObject(state.Token, ToDis((int)tkb.AsInt())));
     }
 
     // ---- registration answers ---------------------------------------------------------------------------------------
@@ -392,6 +402,38 @@ public sealed class RprPublication
             state.ClearPending();
             SendUpdate(BuildFull(entity, handle, predictToNow: true), ref state);
         }
+    }
+
+    // ---- update requests (R-105) ---------------------------------------------------------------------------------------
+
+    /// <summary>Notes an entity whose full state another federate asked for; sent by <see cref="SendRequestedUpdates"/>.</summary>
+    public void AddUpdateRequest(EntityId entity) => _requests.Add(entity);
+
+    /// <summary>
+    /// Sends the full update (the heartbeat's: everything the entity has, position predicted to now) of every entity noted by
+    /// <see cref="AddUpdateRequest"/> that is bound. Returns how many were sent.
+    /// </summary>
+    public int SendRequestedUpdates()
+    {
+        int sent = 0;
+        var gateway = Gateway;
+        for (int i = 0; i < _requests.Count; i++)
+        {
+            var id = _requests[i];
+            ref var state = ref Table.GetOrAdd(id);
+            var entity = gateway.State.Find(id);
+            if (state.Status != RprPublicationStatus.Bound || entity is null || !entity.IsAlive || !_maps.RprHandle.TryGetKey(id, out var handle))
+            {
+                continue;
+            }
+
+            state.ClearPending();
+            SendUpdate(BuildFull(entity, handle, predictToNow: true), ref state);
+            sent++;
+        }
+
+        _requests.Clear();
+        return sent;
     }
 
     // ---- building and sending --------------------------------------------------------------------------------------

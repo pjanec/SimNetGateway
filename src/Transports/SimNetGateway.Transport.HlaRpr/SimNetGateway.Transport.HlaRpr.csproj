@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The HLA transport of the RPR side (DD-008 section 3.4 - 3.6): maps the gateway's IRprMessage contract onto the 1516e-mirroring
+       port of Protocol.Rpr (fake RTI now, a real RTI binding later). A transport references the engine and ONE protocol (DD-003 rule 5). -->
+  <ItemGroup>
+    <ProjectReference Include="../../Engine/SimNetGateway.Engine/SimNetGateway.Engine.csproj" />
+    <ProjectReference Include="../../Protocols/SimNetGateway.Protocol.Rpr/SimNetGateway.Protocol.Rpr.csproj" />
+  </ItemGroup>
+
+</Project>
