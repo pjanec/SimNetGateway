@@ -646,3 +646,63 @@ expected extension when HLA ownership transfer is needed, in its own design.
   `LocalToGeocentricOrientation` (the composite of section 5 plus the vector-part quaternion and the angular velocity
   conversions), `Matrix3.Determinant()`. The composite takes the frame **at the HROT origin** (the flat-world
   assumption of section 5), not at the entity.
+
+**H1, part 2 and H2a (T-019): `Protocol.Hrot` and the HROT half of `Gateway.HrotDis`** (the DIS-side modules are H2b).
+
+- Layout: `src/Protocols/SimNetGateway.Protocol.Hrot/` (BCL only, `HrotMessages.cs`) with `tests/SimNetGateway.Protocol.Hrot.Tests`;
+  `src/Gateways/SimNetGateway.Gateway.HrotDis/` with `Configuration/` (`GatewayConfiguration` records, `GatewayConfigurationFile`),
+  `Schema/PivotSchema.cs`, `Services/` (GeoFrame, catalogs, DamageMapping, DisEventIds, FireCorrelator, `HrotIdRangeAllocator`,
+  `ReplicaPublisher`, `HrotDisServices`), `Hrot/` (the modules) and `HrotDisProfile.cs` (profile and `HrotDisConfigurations`);
+  tests in `tests/SimNetGateway.Gateway.HrotDis.Tests`. References: Engine, Common, Protocol.Hrot, Protocol.Dis7 (only for the
+  `Pdu` type of the declared DIS ports). Both new projects are in the architecture tests' project list and layer rules.
+- `Protocol.Hrot` is exactly the section 0 table: `HrotOrigin`, `HrotSession`, `HrotEntityState`, `HrotEntityRemoved`,
+  `HrotTurretPose`, `HrotFire`, `HrotDetonation` (marker `IHrotToGatewayMessage`) and `ReplicaState`, `ReplicaRemoved`,
+  `InjectFire`, `InjectDetonation`, `TimeRequest` (marker `IGatewayToHrotMessage`), `ClusterPhase`, `TimeRequestKind`, the value types
+  `HrotVec3`, `HrotQuat` (x, y, z, w; the default is not a rotation, use `Identity`) and `HrotDrSnapshot` (what `ReplicaState.State`
+  carries). Snapshot conventions: position and rotation in the ENU frame of the origin current when the message was built; velocity
+  and acceleration in ENU for the world-axis DR algorithms (1 .. 5) and in the DIS body axes (FRD, unchanged) for the body-axis ones
+  (6 .. 9); angular velocity always in ENU axes. `StateTime` is the pivot's `Spatial.StateTime` unchanged.
+- Configuration (R-094, DD-007 3a): `GatewayConfiguration(Shared, Hrot, Dis?, Hla?)`; `GatewayConfigurationFile.TryLoad(path, out config, out errors)`
+  (true only for a loaded file), `Load(path)` / `Parse(json, source)` returning a `ConfigurationLoadResult` with the kind
+  `Missing` / `Invalid` / `Loaded`, `ResolvePath()` (`SIMNETGATEWAY_CONFIG`, else `simnetgateway.json` in the current directory; an overload takes
+  the environment lookup), `ToJson(config)`. Strict: JSON errors, unknown keys at any level, duplicate keys, wrong types, out-of-range
+  values and missing required keys (`dis.exerciseId`, `hla.federation`) are errors that all appear together, each as
+  `<source>: <dotted.key>: <reason>`. Ranges: ports 1 .. 65535, exercise id 0 .. 255, site / application 0 .. 65535, rates and timeouts and
+  `entityMaxHealth` > 0, thresholds >= 0, damage thresholds 0 <= moderate <= slight <= 1, `dis.address` an IP address, `fomModules`
+  a non-empty list of non-empty strings.
+- Modules (one per message kind, R-003): ingress `HrotOriginIngress`, `HrotSessionIngress`, `HrotEntityStateIngress`,
+  `HrotEntityRemovedIngress`, `HrotTurretPoseIngress`, `HrotFireIngress`, `HrotDetonationIngress`; egress `ReplicaStateEgress`
+  (rules State, Rebase, Reconcile), `ReplicaRemovedEgress`, `InjectFireEgress`, `InjectDetonationEgress`, `TimeRequestEgress` (rules
+  Veto, Request). `HrotDisProfile` declares the ports "hrot" (in: `IHrotToGatewayMessage`; out: `IGatewayToHrotMessage`) and, when the DIS side
+  runs, "dis" (in; out: `Pdu`); a configuration without a running side throws "not instantiated". The HROT id allocator is the port
+  `IIdAllocator<long>` given to the profile (default: `HrotIdRangeAllocator` 1 000 000 .. 1 999 999 over Common's `RangeAllocator`).
+- Deviations and decisions (all are small; the first two want a ruling or a design edit):
+  1. **`hla.enabled` defaults to true.** The DD-007 3a example shows `"enabled": false` for the HLA section, but the rule table says a side
+     runs "when its section is present and `enabled` is not false", so a missing key means enabled for both sides; the example's `false` is an
+     explicit value. (Question for the user: or should `hla.enabled` default to false?)
+  2. **`Spatial.StateTime` of HROT entities is the HROT sim time unchanged** (DD-007 section 9: "HROT sim time read directly, no offset"; section
+     3.1 above still says "mapped to gateway sim time"). DIS-origin entities will carry the gateway's sim time. The two axes are
+     the same only if the pack keeps them in step: for the DIS egress (H2b) and the pack's poser, "now" must be on the axis of the
+     entity's `StateTime`. To be settled with H2b / the HROT lane.
+  3. The name `GatewayConfiguration` is also the engine's (profile name + settings); inside `Gateway.HrotDis` it means the file's records,
+     the engine's is aliased in `HrotDisConfigurations`.
+  4. One internal pivot event `Hrot.FrameRebased` (attribute `Hrot.FrameGeneration`) carries "the origin became valid or changed" from the
+     origin ingress to the replica egress, which then re-sends every replica in the new frame. Nothing else uses it.
+  5. A replica is shown to HROT in Loaded (Edit), Running and Paused sessions of the Live mode and not in Idle or Replay; **DIS Fire and
+     Detonation reach HROT (`Inject*`) only while Running in Live mode** (no authoring-time damage, nothing while paused or in replay). A
+     return to Loaded from Running / Paused and any change of mode go through the engine's Unload, which removes every pivot entity (HROT
+     reports its entities again, DIS entities come back with their next PDU).
+  6. DIS session commands (Pause / Resume of the DIS side, H2b) are vetoed when `dis.disControlsHrot` is false, so the engine session
+     mirrors HROT only; with the setting they become `TimeRequest` and the session follows the next `HrotSession`.
+  7. Damage to health (replicas): 100 / 75 / 40 / 0 percent of `entityMaxHealth`, moved into the band of the level when custom thresholds leave
+     the preferred value outside it, so that the damage reads back from the health for every threshold set. Detonation results use the
+     SISO-REF-010 numbering (1 entity impact, 3 ground impact); the DIS warhead 1000 and fuse 8000 of the two catalogue munitions are to be
+     checked against SISO-REF-010 when H2b uses them. The catalogue tables are PoC values; the pack's `DisType` comes first.
+  8. A DIS entity whose HROT id could not be allocated (range exhausted) is not shown (one warning) and is tried again on its next DIS state.
+     There is no HROT stale reaper: HROT removes its entities explicitly (`HrotEntityRemoved`).
+  9. A session that never loaded (Idle from the start) keeps the entities it receives; only an Unload clears the pivot.
+- Test plan as built: the invariants G-1, G-2, G-4, G-5, G-7 (no rule threw) and G-8 plus "a tick without new input sends nothing to HROT" are checked
+  after every step by the test project's `InvariantChecker`; the randomised tests run seeded traffic of both sides (including origin
+  changes, session phases, fire and detonation) against a model of "an eligible DIS entity is a replica exactly while the origin is valid
+  and the session is open". Counts at the end of H2a: `Protocol.Hrot.Tests` 7, `Gateway.HrotDis.Tests` 383 (configuration, services, ingress, replicas,
+  the session table with 196 transitions, events, time requests, 800 seeded conversion samples, 6 seeded random-traffic runs), architecture tests 101.

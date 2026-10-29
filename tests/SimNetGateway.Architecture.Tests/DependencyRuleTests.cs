@@ -25,8 +25,8 @@ public class DependencyRuleTests
         string[] expected =
         [
             "SimNetGateway.Engine", "SimNetGateway.Engine.InMemory", "SimNetGateway.Engine.Monitoring", "SimNetGateway.Common",
-            "SimNetGateway.Protocol.Ned", "SimNetGateway.Protocol.Rpr", "SimNetGateway.Protocol.Display", "SimNetGateway.Protocol.Dis7",
-            "SimNetGateway.Transport.FakeRti", "SimNetGateway.Gateway.NedRpr", "SimNetGateway.Showcase", "SimNetGateway.Demo", "SimNetGateway.Viewer",
+            "SimNetGateway.Protocol.Ned", "SimNetGateway.Protocol.Rpr", "SimNetGateway.Protocol.Display", "SimNetGateway.Protocol.Dis7", "SimNetGateway.Protocol.Hrot",
+            "SimNetGateway.Transport.FakeRti", "SimNetGateway.Gateway.NedRpr", "SimNetGateway.Gateway.HrotDis", "SimNetGateway.Showcase", "SimNetGateway.Demo", "SimNetGateway.Viewer",
         ];
         var actual = SourceTree.SrcProjects.Select(p => p.Name).ToList();
         Assert.All(expected, name => Assert.Contains(name, actual));
