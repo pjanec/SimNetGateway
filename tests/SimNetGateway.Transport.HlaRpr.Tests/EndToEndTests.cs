@@ -1,3 +1,4 @@
+using SimNetGateway.Showcase;
 using SimNetGateway.Engine;
 using SimNetGateway.Engine.InMemory;
 using SimNetGateway.Gateway.NedRpr;

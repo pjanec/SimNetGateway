@@ -106,7 +106,8 @@ public class UpdateRequestedTests
         h.Steps(2);
         h.ClearOutput();
 
-        h.RprStep(new RprUpdateRequested(new RprObjectHandle(SimulatedRti.FirstHandle)));
+        // the handle the RTI gave the pending registration (the first instance of the federation); the gateway has not been told yet
+        h.RprStep(new RprUpdateRequested(new RprObjectHandle(1)));
         h.Steps(2);
 
         Assert.Empty(h.RprSent<RprObjectUpdate>());
