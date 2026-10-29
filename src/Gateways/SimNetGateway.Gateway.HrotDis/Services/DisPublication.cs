@@ -37,8 +37,8 @@ public struct DisPublicationState
 {
     public DisPublicationStatus Status;
 
-    /// <summary>Wall time of the last Entity State PDU (also the state time of the held model).</summary>
-    public double LastSendWall;
+    /// <summary>The dead-reckoning model a receiver holds after the last Entity State PDU (its <see cref="SentModel.Time"/> is the wall time of that PDU).</summary>
+    public SentModel Sent;
 
     public bool Queued;
     public bool AllocationWarned;
@@ -47,17 +47,13 @@ public struct DisPublicationState
     /// <summary>Entity State PDUs sent for the entity (the final one included).</summary>
     public int Sends;
 
-    public Vec3 SentPosition;
-    public Vec3 SentVelocity;
-    public Vec3 SentAcceleration;
-    public Vec3 SentOrientation;
-    public Vec3 SentAngularVelocity;
-    public byte SentAlgorithm;
+    /// <summary>Wall time of the last Entity State PDU.</summary>
+    public readonly double LastSendWall => Sent.Time;
 
     /// <summary>The state as the inspector shows it (R-077).</summary>
     public override readonly string ToString() =>
         string.Create(System.Globalization.CultureInfo.InvariantCulture,
-            $"status {Status}, sends {Sends}, last send {LastSendWall:F3} s, queued {Queued}, pending {Pending}, held algorithm {SentAlgorithm}");
+            $"status {Status}, sends {Sends}, last send {LastSendWall:F3} s, queued {Queued}, pending {Pending}, held algorithm {Sent.Algorithm}");
 }
 
 /// <summary>
@@ -90,9 +86,7 @@ public sealed class DisPublication
     private readonly HrotDisSources _sources;
     private readonly HrotDisServices _services;
     private readonly byte _exercise;
-    private readonly double _positionThreshold;
-    private readonly double _orientationThreshold;
-    private readonly double _heartbeat;
+    private readonly DeadReckonedSendPolicy _policy;
     private readonly List<EntityId> _queue = new();
     private readonly List<EntityRecord> _scratch = new();
     private EntityTable<DisPublicationState>? _table;
@@ -112,9 +106,11 @@ public sealed class DisPublication
         _sources = sources;
         _services = services;
         _exercise = (byte)dis.ExerciseId;
-        _positionThreshold = dis.PositionThresholdM;
-        _orientationThreshold = dis.OrientationThresholdDeg * Math.PI / 180.0;
-        _heartbeat = dis.HeartbeatS;
+        _policy = new DeadReckonedSendPolicy(
+            new DrAttributeSet(schema.Position, schema.Velocity, schema.Acceleration, schema.Orientation, schema.AngularVelocity,
+                schema.DrAlgorithm, schema.StateTime),
+            SendPolicySettings.FromDegrees(dis.PositionThresholdM, dis.OrientationThresholdDeg, dis.HeartbeatS),
+            services.Predictors);
     }
 
     // ---- the contributor rules (R-045) --------------------------------------------------------------------------------------
@@ -143,7 +139,10 @@ public sealed class DisPublication
     public bool IsOpen => _services.DisSessionOpen(Gateway.Session);
 
     /// <summary>The heartbeat period in seconds.</summary>
-    public double Heartbeat => _heartbeat;
+    public double Heartbeat => _policy.Settings.HeartbeatS;
+
+    /// <summary>The send policy of this side (shared with the RPR side, DD-009).</summary>
+    public DeadReckonedSendPolicy Policy => _policy;
 
     /// <summary>Creates the entity table (once); every module that uses the service calls it from Register.</summary>
     public void Attach(ModuleSetup setup)
@@ -296,7 +295,7 @@ public sealed class DisPublication
         for (int i = 0; i < table.Count; i++)
         {
             ref var state = ref table.ValueAt(i);
-            if (state.Status != DisPublicationStatus.Sent || now - state.LastSendWall < _heartbeat)
+            if (state.Status != DisPublicationStatus.Sent || !_policy.HeartbeatDue(in state.Sent, now))
             {
                 continue;
             }
@@ -343,25 +342,10 @@ public sealed class DisPublication
     }
 
     /// <summary>True when the receiver's dead-reckoning prediction of the last sent PDU is beyond the thresholds from the entity's state at <paramref name="now"/>.</summary>
-    public bool Drifted(EntityRecord entity, in DisPublicationState state, double now)
-    {
-        if (!DisKinematics.TryRead(_schema, entity, out var basis, out int algorithm))
-        {
-            return false;
-        }
-
-        var truth = DisKinematics.Predict(_services.Predictors, in basis, algorithm, now);
-        var held = Held(in state, now);
-        return DisKinematics.Exceeds(in truth, in held, _positionThreshold, _orientationThreshold);
-    }
+    public bool Drifted(EntityRecord entity, in DisPublicationState state, double now) => _policy.Drifted(entity, in state.Sent, now);
 
     /// <summary>The state a DIS receiver predicts at <paramref name="time"/> from the last sent PDU.</summary>
-    public PredictedState Held(in DisPublicationState state, double time)
-    {
-        var basis = new PredictionBasis(state.SentPosition, state.SentVelocity, state.SentAcceleration, state.SentOrientation,
-            state.SentAngularVelocity, state.LastSendWall);
-        return DisKinematics.Predict(_services.Predictors, in basis, state.SentAlgorithm, time);
-    }
+    public PredictedState Held(in DisPublicationState state, double time) => _policy.Held(in state.Sent, time);
 
     // ---- building and sending -----------------------------------------------------------------------------------------
 
@@ -385,14 +369,15 @@ public sealed class DisPublication
         _output.Send(in message);
 
         state.Status = final ? DisPublicationStatus.Removed : DisPublicationStatus.Sent;
-        state.LastSendWall = now;
         state.Sends++;
-        state.SentPosition = DisConversions.ToVec(pdu.EntityLocation);
-        state.SentVelocity = DisConversions.ToVec(pdu.EntityLinearVelocity);
-        state.SentAcceleration = DisConversions.ToVec(pdu.DeadReckoningParameters.EntityLinearAcceleration);
-        state.SentOrientation = DisConversions.ToVec(pdu.EntityOrientation);
-        state.SentAngularVelocity = DisConversions.ToVec(pdu.DeadReckoningParameters.EntityAngularVelocity);
-        state.SentAlgorithm = pdu.DeadReckoningParameters.DeadReckoningAlgorithm;
+        state.Sent = SentModel.Of(
+            DisConversions.ToVec(pdu.EntityLocation),
+            DisConversions.ToVec(pdu.EntityLinearVelocity),
+            DisConversions.ToVec(pdu.DeadReckoningParameters.EntityLinearAcceleration),
+            DisConversions.ToVec(pdu.EntityOrientation),
+            DisConversions.ToVec(pdu.DeadReckoningParameters.EntityAngularVelocity),
+            pdu.DeadReckoningParameters.DeadReckoningAlgorithm,
+            now);
         return true;
     }
 
@@ -429,9 +414,9 @@ public sealed class DisPublication
             }
         }
 
-        if (IsOn(SpatialRule) && DisKinematics.TryRead(s, entity, out var basis, out int algorithm))
+        if (IsOn(SpatialRule) && _policy.TryRead(entity, out var basis, out int algorithm, DrAlgorithms.Static))
         {
-            var predicted = DisKinematics.Predict(_services.Predictors, in basis, algorithm, now);
+            var predicted = _policy.Predict(in basis, algorithm, now);
             double dt = now - basis.StateTime;
             var velocity = predicted.Velocity;
             if (DrAlgorithms.IsBodyAxis(algorithm))
