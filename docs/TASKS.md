@@ -51,3 +51,5 @@ progress and done.
 | **T-023** | done | Amend Convoy Ambush success conditions S-4.5 and S-9.3 (R-113) in DD-002 and the showcase checks | DD-002 | R-113: DD-002 wording amended (old text struck through); S-4.5 asserts the exact Position set and updated + Derived.* set, S-9.3 checks unavailable-during / available-after (3 checks); no design question left |
 | **T-024** | done | HROT gateway HLA side and the shared publication logic (DeadReckonedSendPolicy, AsyncRegistration in Common) | DD-009 | R-114 .. R-118; as-built DD-009 section 10; one entity number for DIS and HLA |
 | **T-025** | review | Design of stage H4: showcase "Border Crossing" (HROT gateway end to end, articulation, viewer) | DD-010 | P-95 .. P-101 await the user |
+| **T-026** | review | Two HROT adapters, the loadable HROT module and the protocol-side seam (T-026a: seam + DIS/HLA moved) | DD-011 | R-122; P-102 .. P-107 await the user |
+| **T-027** | review | POC: fake BDC-like descriptor protocol side (SDP) and per-descriptor ownership | DD-012 | P-108 .. P-114 await the user |
