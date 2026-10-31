@@ -114,21 +114,78 @@ public sealed record HlaConfiguration
 
 /// <summary>
 /// The whole configuration file: <see cref="Shared"/> and <see cref="Hrot"/> always exist (defaults), <see cref="Dis"/> and
-/// <see cref="Hla"/> only when their section is present. Not to be confused with the engine's
+/// <see cref="Hla"/> only when their section is present. The settings of a side of another project (<see cref="IProtocolSide"/>)
+/// are in <see cref="Sides"/> by the side's key. Not to be confused with the engine's
 /// <c>SimNetGateway.Engine.GatewayConfiguration</c> (a named profile with settings), which <see cref="HrotDisConfigurations"/> builds from this.
 /// </summary>
 public sealed record GatewayConfiguration(SharedConfiguration Shared, HrotConfiguration Hrot, DisConfiguration? Dis, HlaConfiguration? Hla)
 {
+    private static readonly IReadOnlyDictionary<string, object> NoSides = new Dictionary<string, object>();
+
+    /// <summary>Settings of the sides that are not built in, by <see cref="IProtocolSide.Key"/> (empty by default).</summary>
+    public IReadOnlyDictionary<string, object> Sides { get; init; } = NoSides;
+
     /// <summary>The DIS side runs: its section is present and not disabled.</summary>
     public bool DisRuns => Dis is { Enabled: true };
 
     /// <summary>The HLA side runs: its section is present and not disabled.</summary>
     public bool HlaRuns => Hla is { Enabled: true };
 
-    /// <summary>False: no side runs and the gateway is not instantiated (DD-007 section 3a).</summary>
-    public bool AnySideEnabled => DisRuns || HlaRuns;
+    /// <summary>
+    /// False: no built-in side runs and the gateway is not instantiated (DD-007 section 3a). Sides of other projects are not
+    /// known here: use <see cref="AnySideEnabledIn"/> with the registry that parsed this configuration.
+    /// </summary>
+    public bool AnySideEnabled => AnySideEnabledIn(SideRegistry.Builtin);
+
+    /// <summary>True when at least one side of <paramref name="sides"/> has settings in this configuration and runs.</summary>
+    public bool AnySideEnabledIn(SideRegistry sides)
+    {
+        ArgumentNullException.ThrowIfNull(sides);
+        foreach (var side in sides.Sides)
+        {
+            if (SettingsOf(side.Key) is { } settings && side.Runs(settings))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>The settings of the side with the given key (the typed <see cref="Dis"/> / <see cref="Hla"/> for the built-in ones), null when its section is absent.</summary>
+    public object? SettingsOf(string key) => key switch
+    {
+        DisSide.SideKey => Dis,
+        HlaSide.SideKey => Hla,
+        _ => Sides.TryGetValue(key, out var settings) ? settings : null,
+    };
+
+    /// <summary>A copy with the settings of the side with the given key replaced (the typed <see cref="Dis"/> / <see cref="Hla"/> for the built-in ones).</summary>
+    public GatewayConfiguration WithSide(string key, object settings)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        ArgumentNullException.ThrowIfNull(settings);
+        switch (key)
+        {
+            case DisSide.SideKey:
+                return this with { Dis = (DisConfiguration)settings };
+            case HlaSide.SideKey:
+                return this with { Hla = (HlaConfiguration)settings };
+            default:
+                var sides = new Dictionary<string, object>(Sides, StringComparer.Ordinal) { [key] = settings };
+                return this with { Sides = sides };
+        }
+    }
 
     /// <summary>All defaults with a DIS section for the given exercise (for hosts and tests that configure in code).</summary>
     public static GatewayConfiguration CreateDefault(int disExerciseId = 1) =>
         new(new SharedConfiguration(), new HrotConfiguration(), new DisConfiguration { ExerciseId = disExerciseId }, null);
+
+    /// <summary>Value equality including the settings of <see cref="Sides"/> (compared with their own equality).</summary>
+    public bool Equals(GatewayConfiguration? other) =>
+        other is not null && Shared == other.Shared && Hrot == other.Hrot && Equals(Dis, other.Dis) && Equals(Hla, other.Hla) &&
+        Sides.Count == other.Sides.Count &&
+        Sides.All(p => other.Sides.TryGetValue(p.Key, out var o) && Equals(p.Value, o));
+
+    public override int GetHashCode() => HashCode.Combine(Shared, Hrot, Dis, Hla, Sides.Count);
 }
