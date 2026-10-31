@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | in review - proposals P-102 .. P-107 await the user |
+| **Status** | approved (R-129) as revised by R-128: SimNetGateway references nothing from HROT; the pack / loadable module, HROT seam and NED adapter live in the private gateway repository |
 | **Tasks** | T-026 |
 | **Rulings honoured** | R-122 (two HROT adapters behind `Protocol.Hrot`, pivot and DIS/HLA unchanged, sibling HROT checkout acceptable), R-094/R-119 (configuration file), R-100 .. R-121, R-012, R-050 .. R-053 |
 | **Inputs** | user 2026-10-30: BDC is proprietary and lives in a private repository with HROT and SimNetGateway as submodules; "count with this BDC as the third protocol"; the gateway pluggable into the HROT editor as a loadable module connected to the ECS. HROT `coordinator` @ `3991e0ce0`: `Hrot.Common/Infrastructure/DeploymentAssemblies.cs` (`LoadAll`), `ClusterRunner/SubsystemFactory.Scan`, `NodeCapability.cs`, `EditorCapabilities.cs`, `docs/reference/NED_DDS_Protocol.md` step 0a and Concepts 15 (IDL, derived topic names), R-4095 (HROT's own BDC stack removed). SimNetGateway: `Gateway.HrotDis/HrotDisProfile.cs:70-92` (sides switched by hard-coded `if`), `GatewayConfigurationFile.cs:29` (strict reader) |
@@ -181,9 +181,9 @@ Caption: the pack's frame and the NED app's loop are the only two callers; a sid
 
 | ID | Proposal (lean) | Main alternative |
 |---|---|---|
-| **P-102** | **`IProtocolSide` + side registry**; DIS and HLA moved onto it with identical behaviour; strict config with sections claimed by side key. | Keep the hard-coded `if`s and fork `HrotDisProfile` in the private repo (two profiles drift). |
-| **P-103** | **Sides passed by the composition root** (code list, compiled from sources via submodules); no runtime DLL scanning in the gateway. | Gateway-side DLL plugins (public binary API over the pivot - the cons you saw). |
-| **P-104** | **Loadable HROT module** `Hrot.SimNetGateway` found by a small HROT discovery seam (HROT lane); refuses a HROT build it was not compiled against; supersedes vendoring (R-092) and the compiled-in pack (R-093). | Keep vendoring (gateway code in HROT sources). |
-| **P-105** | **`SimNetGateway.Hrot.sln` against a sibling HROT checkout** for the pack; main solution HROT-free; HROT's CycloneDDS.NET version pinned in the bundle. | HROT NuGet packages (HROT publishes none). |
-| **P-106** | **NED adapter** as a standalone app with NED types generated from HROT's IDL; DD-006 section 4.1 (NED node duties) revived for it. | Reference HROT's assemblies (imports HROT's ECS closure). |
-| **P-107** | **Order**: seam -> fake BDC side (DD-012) -> loadable pack with the HROT lane -> NED adapter. | NED adapter first. |
+| **P-102** (approved, R-129) | **`IProtocolSide` + side registry**; DIS and HLA moved onto it with identical behaviour; strict config with sections claimed by side key. | Keep the hard-coded `if`s and fork `HrotDisProfile` in the private repo (two profiles drift). |
+| **P-103** (approved, R-129) | **Sides passed by the composition root** (code list, compiled from sources via submodules); no runtime DLL scanning in the gateway. | Gateway-side DLL plugins (public binary API over the pivot - the cons you saw). |
+| **P-104** (approved, R-129; lives in the private repo, R-128) | **Loadable HROT module** `Hrot.SimNetGateway` found by a small HROT discovery seam (HROT lane); refuses a HROT build it was not compiled against; supersedes vendoring (R-092) and the compiled-in pack (R-093). | Keep vendoring (gateway code in HROT sources). |
+| **P-105** (REPLACED by R-128: no HROT build in SimNetGateway) | **`SimNetGateway.Hrot.sln` against a sibling HROT checkout** for the pack; main solution HROT-free; HROT's CycloneDDS.NET version pinned in the bundle. | HROT NuGet packages (HROT publishes none). |
+| **P-106** (approved, R-129; in the private repo, R-128) | **NED adapter** as a standalone app with NED types generated from HROT's IDL; DD-006 section 4.1 (NED node duties) revived for it. | Reference HROT's assemblies (imports HROT's ECS closure). |
+| **P-107** (approved, R-129) | **Order**: seam -> fake BDC side (DD-012) -> loadable pack with the HROT lane -> NED adapter. | NED adapter first. |

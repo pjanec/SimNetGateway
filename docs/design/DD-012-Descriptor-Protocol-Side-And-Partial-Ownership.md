@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | in review - proposals P-108 .. P-114 await the user |
+| **Status** | approved with changes (R-130): built in the private repository on the real generated types; SDP dropped; range-based ids; DDS transport + in-memory bus; the public parts are GroupOwnership/policy (Common) and the Protocol.Hrot ownership messages |
 | **Tasks** | T-027 |
 | **Rulings honoured** | R-122, R-057 (extended, not replaced), R-061 (one source per peer), R-068, R-094, R-114 .. R-118 (shared send policy and registration), R-116 (origin rule) |
 | **Inputs** | user 2026-10-30: BDC is proprietary (private repository); build a fake from the description and adapt it to the real BDC later: "they use similar EntityMaster, they have different descriptor for position (similar to what NED used to have before we unified all to local coordinates), they have fire and detonation inspired by HLA RPR and they have same multi-instance descriptor concept used for articulated parts, same way of partial ownership per descriptor". HROT: `docs/reference/BDC_NED_SST_Descriptor_Rules.md` (entities as descriptors, per-descriptor owner, `OwnershipUpdate`, default-to-master), `Fdp.Toolkits/Replication/Services/OwnershipApplier.cs` ("the ONE way a node applies descriptor key K of entity E is now owned by node N") and `DescriptorOwnershipMap.cs`. SimNetGateway: `Engine/Authority/IWriteAuthorityPolicy.cs` (`CanWrite(entity, writer, attr)` - already per attribute) |
@@ -214,10 +214,10 @@ flowchart TD
 
 | ID | Proposal (lean) | Main alternative |
 |---|---|---|
-| **P-108** | **SDP**, the fake protocol of section 3, in `samples/` built only against public seams; replaced by the real BDC in the private repo later. | Wait for the real wire. |
-| **P-109** | **Descriptors = pivot attribute groups** (`Master`, `Spatial`, `Info`, `Damage`, `Articulation:<instance>`). | Ownership per single attribute (no descriptor meaning). |
-| **P-110** | **`GroupOwnership` + `GroupOwnershipPolicy` in Common**, enforced through the engine's existing per-attribute `CanWrite`; R-057's entity owner stays the master owner; no engine change. | Change the engine's owner model (larger blast radius). |
-| **P-111** | **External ownership of HROT entities' descriptors** through `HrotDescriptorOwnership` / `ExternalState` in `Protocol.Hrot`, applied by the pack with HROT's `OwnershipApplier`; modelled by `ScriptedHrotPack` now, real pack mapping in H5. | Refuse ownership requests for HROT entities (would not match "same way of partial ownership"). |
-| **P-112** | **Sample entity ids from a configured block** and a configured gateway node id; the real BDC's allocation replaces it. | Model an id-allocator service in the fake. |
-| **P-113** | **In-memory SDP bus only** in the POC; the DDS transport belongs to the private BDC repo. | Also a DDS transport for SDP (CycloneDDS in tests). |
-| **P-114** | **Stage T-027 after T-026a** (the side seam), before the loadable pack. | Build the fake inside `Gateway.HrotDis` (would not prove the external path). |
+| **P-108** (DROPPED by R-130: real types exist) | **SDP**, the fake protocol of section 3, in `samples/` built only against public seams; replaced by the real BDC in the private repo later. | Wait for the real wire. |
+| **P-109** (approved, R-130) | **Descriptors = pivot attribute groups** (`Master`, `Spatial`, `Info`, `Damage`, `Articulation:<instance>`). | Ownership per single attribute (no descriptor meaning). |
+| **P-110** (approved, R-130) | **`GroupOwnership` + `GroupOwnershipPolicy` in Common**, enforced through the engine's existing per-attribute `CanWrite`; R-057's entity owner stays the master owner; no engine change. | Change the engine's owner model (larger blast radius). |
+| **P-111** (approved, R-130) | **External ownership of HROT entities' descriptors** through `HrotDescriptorOwnership` / `ExternalState` in `Protocol.Hrot`, applied by the pack with HROT's `OwnershipApplier`; modelled by `ScriptedHrotPack` now, real pack mapping in H5. | Refuse ownership requests for HROT entities (would not match "same way of partial ownership"). |
+| **P-112** (approved as range-based ids, R-130) | **Sample entity ids from a configured block** and a configured gateway node id; the real BDC's allocation replaces it. | Model an id-allocator service in the fake. |
+| **P-113** (CHANGED by R-130: DDS transport + in-memory bus) | **In-memory SDP bus only** in the POC; the DDS transport belongs to the private BDC repo. | Also a DDS transport for SDP (CycloneDDS in tests). |
+| **P-114** (approved, R-130) | **Stage T-027 after T-026a** (the side seam), before the loadable pack. | Build the fake inside `Gateway.HrotDis` (would not prove the external path). |
