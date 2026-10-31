@@ -108,6 +108,7 @@ deviation discovered during implementation is reported, not silently chosen. Tri
   (DD-003): `tests/SimNetGateway.Engine.Tests`, `.Common.Tests`, `.Gateway.NedRpr.Tests` and
   `tests/SimNetGateway.Architecture.Tests` (dependency rules and conventions of DD-003 section 3;
   a forbidden project reference fails it). Deterministic, `ManualClock`, no sleeping.
+- `bash scripts/legacy-idl-import-test.sh` - tests of the legacy IDL import script (DD-013) on synthetic fixtures; pipeline tests need `LEGACY_IDL_TOOLS=<CycloneDDS.NET package tools/ dir>` (and offline `LEGACY_IDL_PACKAGE_SOURCE=<folder with the nupkg>`), otherwise only the parser tests run; not part of `scripts/test.sh`.
 - `bash scripts/mermaid-check.sh docs/design/*.md` - parses every mermaid block (needs node; installs mermaid once into
   `~/.cache`); run it on every design doc you change - a semicolon inside a sequence-diagram message breaks it.
 - `bash scripts/vendor-dry-run.sh` - vendorability dry run (R-092, DD-007 section 2): copies Engine, Common, Protocol.Dis7, Protocol.Hrot, Protocol.Rpr,
