@@ -32,16 +32,18 @@ related-designs:
 
 ```mermaid
 flowchart LR
-    subgraph PUB["SimNetGateway (public)"]
+    subgraph PUB["SimNetGateway (public, references nothing from HROT - R-128)"]
         CORE["Engine, Common, pivot (Gateway.HrotDis)"]
+        CONTRACT["Protocol.Hrot (BCL-only contract)"]
         SEAM["IProtocolSide seam + side registry"]
         DIS["DIS side + Transport.DisUdp"]
         HLA["HLA side + Transport.HlaRpr"]
-        PACK["Hrot.SimNetGateway<br/>(ECS pack, built vs sibling HROT)"]
-        NEDA["Transport.Ned + Hosts.NedGateway<br/>(standalone app, IDL-generated types)"]
+        SCRIPT["scripted HROT side (Showcase, demo without HROT)"]
     end
-    subgraph PRIV["private BDC repo (submodules: HROT, SimNetGateway)"]
-        BDC["BDC side + Protocol.Bdc + Transport.BdcDds"]
+    subgraph PRIV["private repo (submodules: HROT, SimNetGateway)"]
+        PACK["Hrot.SimNetGateway<br/>(ECS pack, loadable module, built vs external/hrot)"]
+        NEDA["NED adapter app<br/>(NED types generated from HROT's IDL)"]
+        BDC["BDC side + BDC DDS transport"]
         BUNDLE["bundle build: pack + DIS + HLA + BDC"]
     end
     subgraph HROT["HROT editor process"]
@@ -54,6 +56,10 @@ flowchart LR
     SEAM --> CORE
     PACK --> CORE
     NEDA --> CORE
+    SCRIPT -->|"Protocol.Hrot"| CONTRACT
+    PACK --> CONTRACT
+    NEDA --> CONTRACT
+    CONTRACT --> CORE
     BUNDLE --> PACK
     BUNDLE --> BDC
     DISC -->|"finds the pack in loaded Hrot.* assemblies"| PACK
@@ -62,7 +68,9 @@ flowchart LR
 ```
 
 Caption - what the picture shows that prose hid: BDC reaches the core only through the same seam DIS and HLA use;
-the pack and the NED app are the only two things that know HROT, and only the pack runs inside HROT.
+the pack and the NED app are the only two things that know HROT, both live in the private repo (R-128), and only the
+pack runs inside HROT. SimNetGateway alone builds and demos through the scripted HROT side on the same `Protocol.Hrot`
+contract. The NED app knows only the NED wire (IDL-generated types), not HROT's ECS or assemblies.
 
 ## 3. Decisions
 
@@ -81,7 +89,9 @@ the pack and the NED app are the only two things that know HROT, and only the pa
    `ISubsystem`). The bundle is installed by copying its DLLs next to HROT's; it records the HROT commit it was built
    against and refuses to compose against another (fail fast, one error). Without `simnetgateway.json` it adds
    nothing (R-094).
-4. **Build** (P-105): SimNetGateway gets `SimNetGateway.Hrot.sln` (everything plus the pack) built against a sibling
+4. **Build** (P-105, REPLACED by R-128: the pack, the HROT seam client and the NED adapter are built in the private
+   repo from its `external/hrot` and `external/SimNetGateway` submodules; SimNetGateway has no HROT build at all. Original
+   text kept for history:) SimNetGateway gets `SimNetGateway.Hrot.sln` (everything plus the pack) built against a sibling
    HROT checkout (`HrotRoot`, default `../hrot`) - the withdrawn P-68 shape, now for the pack only; the main
    solution stays HROT-free. The private repo builds the same projects from its submodules. The bundle uses HROT's
    pinned CycloneDDS.NET version (one version per process).
