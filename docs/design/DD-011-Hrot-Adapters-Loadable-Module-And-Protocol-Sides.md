@@ -103,7 +103,105 @@ contract. The NED app knows only the NED wire (IDL-generated types), not HROT's 
 6. **Order** (P-107): seam + DIS/HLA moved (T-026a) -> fake BDC side through the seam (DD-012) -> loadable pack and
    the HROT seam (with a HROT lane) -> NED adapter last (no user need named yet beyond "decouple").
 
-## 4. Class diagram
+## 3a. Seam shape (T-026a, approved by the user 2026-10-31 "ok approved go")
+
+Measured in `HrotDisProfile.Configure` (`HrotDisProfile.cs:58-121`): the sides are not independent. DIS and HLA share
+the `dis.entity` map and number pool (one number per HROT entity on both wires, DD-009); the HROT side's replica rule
+reads a fixed source tuple (`HrotDisSources(Hrot, Dis, Rpr)`, `IsReplicaOrigin`); identity maps are created in one place,
+before any module, in the order hrot.entity, dis.entity, rpr.handle. So a side is configured in **two phases**: every
+running side **declares** first (ports, its origin source, whether it uses the shared entity numbers, identity maps it
+needs), then the profile builds the shared context once, then every side **registers** its modules. Registry order is
+the order of both phases, so the built-in list `[dis, hla]` reproduces today's port, source, map and module order exactly.
+
+```mermaid
+classDiagram
+    direction LR
+    class IProtocolSide {
+        <<interface>>
+        +Key string
+        +Parse(ConfigSection section) object?
+        +Write(Utf8JsonWriter w, object settings)
+        +Runs(object settings) bool
+        +Declare(SideDeclaration d, object settings)
+        +Register(SideContext c, object settings)
+    }
+    class SideRegistry {
+        +Builtin SideRegistry$
+        +Sides IReadOnlyList~IProtocolSide~
+        +With(IProtocolSide) SideRegistry
+        +Find(string key) IProtocolSide?
+    }
+    class SideDeclaration {
+        +Builder GatewayBuilder
+        +Origin SourceId
+        +UsesEntityNumbers bool
+        +RequestMap~TKey~(string name)
+    }
+    class SideContext {
+        +Builder GatewayBuilder
+        +Config GatewayConfiguration
+        +Schema PivotSchema
+        +Maps HrotDisMaps
+        +Sources HrotDisSources
+        +Services HrotDisServices
+        +HrotOut IOutboundChannel~IGatewayToHrotMessage~
+    }
+    class ConfigSection {
+        <<public, was the private Section of GatewayConfigurationFile>>
+    }
+    class GatewayConfiguration {
+        <<existing record>>
+        +Dis DisConfiguration?
+        +Hla HlaConfiguration?
+        +Sides IReadOnlyDictionary~string,object~
+    }
+    IProtocolSide <|.. DisSide
+    IProtocolSide <|.. HlaSide
+    SideRegistry o-- IProtocolSide
+    HrotDisProfile --> SideRegistry
+    HrotDisProfile ..> SideDeclaration : phase 1
+    HrotDisProfile ..> SideContext : phase 2
+    GatewayConfigurationFile --> SideRegistry : top-level key claimed by Key
+    IProtocolSide ..> ConfigSection
+```
+
+Caption - what the picture shows that prose hid: a side never creates its transport here. `Gateway.HrotDis` may not
+reference transports (DD-003), so **binding ports to transports stays with the composition root** (hosts today, the
+pack and the NED app in the private repo), keyed by the same side key. This replaces `CreateTransport` of the section 4
+diagram (a correction found while measuring; section 4 is kept as the original proposal).
+
+```mermaid
+sequenceDiagram
+    participant H as composition root
+    participant F as GatewayConfigurationFile
+    participant P as HrotDisProfile
+    participant S as each running side (registry order)
+    H->>F: Parse(json, registry)
+    F->>S: Parse(section) for each top-level key a side claims
+    F-->>H: errors for an unclaimed key (one per key, naming it)
+    H->>P: Configure(builder)
+    P->>P: require the hrot port, register the dis source (as today)
+    P->>S: Declare(d) - ports, origin, UsesEntityNumbers, RequestMap
+    P->>P: build sources (replica origins = every declared origin), maps (hrot.entity, dis.entity if any side uses entity numbers, then requested maps in order), services, publisher
+    P->>P: HROT ingress and egress modules (unchanged)
+    P->>S: Register(c) - the side's modules and processors
+```
+
+Rules the build must keep:
+
+1. **Behaviour identical**: every existing suite and golden unchanged; port, source, identity-map and module order for
+   DIS only, HLA only and both equal to the order before the refactor.
+2. **No side key in the profile**: `HrotDisProfile` holds no `if` on `dis`/`hla`; it walks the registry. Built-in sides may
+   use internal members of the gateway project (the HLA side tells the profile its source is the `Rpr` of
+   `HrotDisSources`); an external side sees only public members.
+3. **`GatewayConfiguration` stays source-compatible**: `Dis` and `Hla` remain the typed settings of the built-in sides; an
+   external side's settings live in `Sides[key]`. `AnySideEnabled` means any registered side runs.
+4. **Strict file**: known top-level keys are `shared`, `hrot` and the registry's keys; errors keep today's text format.
+   `ToJson` writes every side through `Write`, and parse -> write -> parse round-trips.
+5. **Entry points**: `HrotDisConfigurations.For(..., SideRegistry? sides = null)` and `HrotDisProfile(..., SideRegistry? sides = null)`;
+   null = `SideRegistry.Builtin`.
+
+## 4. Class diagram (original proposal; the seam as built is section 3a)
 
 ```mermaid
 classDiagram
