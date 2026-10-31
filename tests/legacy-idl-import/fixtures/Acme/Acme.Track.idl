@@ -1,0 +1,116 @@
+// Synthetic master fixture (invented names): topics, QoS spellings, keys.
+#include "..\Shared\Shared.idl"
+
+module Acme
+{
+  module Sys
+  {
+    @bit_bound(16)
+    enum Kind
+    {
+      KIND_UNKNOWN,
+      @value(10) KIND_AIR,
+      KIND_SEA
+    };
+
+    enum Plain { P_A, P_B, P_C };
+
+    struct Track
+    {
+      long Id;
+      Shared::Pose Where;       // [m] position, [deg] heading
+      Kind What;
+      Shared::Mode Mode;
+      Shared::Counter Hits;
+      string Callsign;
+      string<16> Tag;
+      sequence<double> Samples;
+      sequence<string> Notes;
+      sequence<Shared::Vec3> Path;
+      sequence<Shared::Vec3, 4> Corners;
+      Shared::FiveLongs Five;
+    };
+    #pragma keylist Track Id
+    #pragma topic
+    #pragma topic reliability best_effort // frequent changes
+    #pragma topic durability volatile
+    #pragma topic history keep_last 1
+
+    struct Link
+    {
+      long From;
+      long To;
+      short Weight;
+    };
+    #pragma keylist Link From To
+    #pragma topic reliable transient_local keep_last 2
+
+    struct Pair
+    {
+      long A;
+      long B;
+      string Note;
+    };
+    #pragma keylist Pair B A
+
+    struct Alarm
+    {
+      string Text;
+      @optional long Code;
+    };
+    #pragma keylist Alarm
+    #pragma topic reliable volatile keep_all 1
+
+    struct Ping
+    {
+      long Seq;
+    };
+    #pragma keylist Ping
+    #pragma topic
+
+    struct Bare
+    {
+      long A;
+      long B;
+      long C;
+    };
+    #pragma keylist Bare A B C
+
+    @mutable
+    struct Cfg
+    {
+      @id(5) long Level;
+      Plain Choice;
+    };
+    #pragma keylist Cfg
+    #pragma topic best_effort persistent keep_last 7
+
+    struct Owned
+    {
+      Shared::NodeRef Node;
+      Shared::Guid16 Guid;
+      Shared::Name8 Label;
+      Shared::Name8 Labels[2];
+      long Grid[2][3];
+    };
+    #pragma keylist Owned Node.Index
+    #pragma topic reliable transient_local keep_last 1
+
+    union Payload switch (Kind)
+    {
+      case KIND_UNKNOWN:
+      case KIND_SEA:
+        long Num;
+      case KIND_AIR:
+        double Real;
+    };
+
+    struct Wrapper
+    {
+      long Id;
+      Payload Body;
+    };
+    #pragma keylist Wrapper Id
+    #pragma topic reliability reliable
+  };
+};

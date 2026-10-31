@@ -1,0 +1,49 @@
+// Synthetic include fixture (invented names) - shared building blocks.
+#ifndef SHARED_FIXTURE_IDL
+#define SHARED_FIXTURE_IDL
+
+module Shared
+{
+  typedef long Counter;
+  typedef sequence<long, 5> FiveLongs;
+  typedef octet Guid16[16];
+  typedef char Name8[8];
+
+  struct NodeRef
+  {
+    long Index;
+  };
+
+  @bit_bound(8)
+  enum Mode
+  {
+    MODE_OFF,
+    @value(5) MODE_ON,
+    MODE_AUTO
+  };
+
+  struct Vec3
+  {
+    double X;
+    double Y;
+    double Z;
+  };
+
+  struct Pose
+  {
+    Vec3 Position;   // [m]
+    float Heading;   // [deg]
+  };
+
+  struct StampedRef
+  {
+    long Id;
+    unsigned long long Stamp;
+  };
+  #pragma keylist StampedRef Id
+  #pragma topic reliability reliable
+  #pragma topic durability transient_local
+  #pragma topic history keep_last 3
+};
+
+#endif
