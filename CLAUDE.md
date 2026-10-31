@@ -50,7 +50,7 @@ in its report. The main session does **not** run mutation checks itself: its rev
 and that report and asks whether they **cover enough and really check what matters**, and checks
 the brief/design itself for errors, which no test derived from it can catch.
 
-### Warm Sonnet worker (imported from HROT's CLAUDE.md 2026-10-31; items marked PENDING await the user)
+### Warm Sonnet worker (imported from HROT's CLAUDE.md 2026-10-31; R-125 .. R-127)
 
 Measured in HROT (2026-10-29): a fresh agent spends ~100k+ tokens re-reading before any work and 8-42 min per task,
 mostly cold builds; three parallel agents hit the 5-hour rate limit twice. Hence:
@@ -59,12 +59,12 @@ mostly cold builds; three parallel agents hit the 5-hour rate limit twice. Hence
 |---|---|
 | **One standing worker at a time, kept warm and reused**: the next task goes to it with `SendMessage`, naming only the delta. A fresh agent only after a container restart or when its context is too full. | no re-reading, warm build output |
 | **Sonnet: every well-specified build task, small ones too** (the brief names the files, the seam to reuse and test-decidable success conditions). **Opus: judgment** - design and trade-offs, a defect of unknown cause, subtle semantics (scheduler, wire, replay timing), ambiguous work, reviews, merges. Test: a brief that would have to say "figure out why" or "decide which" is Opus's. | |
-| **No warm worker and a one-file fix**: Opus does it directly (still with its test, and the worker's reporting rules do not apply). PENDING (refines R-063). | a cold start costs more than the fix |
-| **The worker runs in the main checkout, no worktree** (warm `bin/obj`); both sides commit only their own files, by path, never `git add -A`. Worktrees only when a second, parallel worker is genuinely needed. PENDING. | worktrees rebuild cold and need merges |
+| **No warm worker and a one-file fix**: Opus does it directly (still with its test, and the worker's reporting rules do not apply). (R-125, refines R-063). | a cold start costs more than the fix |
+| **The worker runs in the main checkout, no worktree** (warm `bin/obj`); both sides commit only their own files, by path, never `git add -A`. Worktrees only when a second, parallel worker is genuinely needed (R-126). | worktrees rebuild cold and need merges |
 | **One build at a time on the machine**: Opus starts no build while the worker builds. | parallel builds of the same projects fight over one compiler |
 | **After a killed worker: `git diff` its work in progress for leftover mutations first.** | mutation checks edit source |
 | **The brief hands over what Opus measured** (file:line, the seam, the test class to extend) and checkable success conditions; never "make it work", never "re-discover". | |
-| **Proof is proportionate to risk**: a visual or cosmetic change red-proves one key test and runs the touched test classes; the full mutation set is for engine, wire, scheduler, replay and cross-side changes. PENDING (refines R-065). | in HROT 8 mutations took ~15 min for drawn ground outside the play area |
+| **Proof is proportionate to risk**: a visual or cosmetic change red-proves one key test and runs the touched test classes; the full mutation set is for engine, wire, scheduler, replay and cross-side changes (R-127, refines R-065). | in HROT 8 mutations took ~15 min for drawn ground outside the play area |
 | **Verify every "cannot be done / does not exist / not reachable" claim** of a worker before accepting it (one grep for a precedent); a test weakened by such a claim goes back. | |
 | The rest is unchanged: the worker writes its own tests, runs the full build and test suite as its last step and reports the result lines (R-066, R-067); Opus reviews the tests and the diff and does not rerun them. | in this repository the full suite runs in minutes, so HROT's "touched classes only, broad suites after the merge by Opus" is not adopted (it would contradict R-066) |
 
