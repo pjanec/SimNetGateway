@@ -53,3 +53,4 @@ progress and done.
 | **T-025** | review | Design of stage H4: showcase "Border Crossing" (HROT gateway end to end, articulation, viewer) | DD-010 | P-95 .. P-101 await the user |
 | **T-026** | review | Two HROT adapters, the loadable HROT module and the protocol-side seam (T-026a: seam + DIS/HLA moved) | DD-011 | R-122; P-102 .. P-107 await the user |
 | **T-027** | review | POC: fake BDC-like descriptor protocol side (SDP) and per-descriptor ownership | DD-012 | P-108 .. P-114 await the user |
+| **T-028** | in-progress | Legacy IDL import pipeline (script, post-pass, verification) - first use: the BDC IDL (originals never committed) | DD-013 | P-115 .. P-119 in review; importer issues in docs/IDL-IMPORTER-ISSUES.md |
