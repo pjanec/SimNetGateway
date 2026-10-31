@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | approved: P-69, P-70, P-72 .. P-76 are R-092 .. R-099; P-71 replaced by the user's ruling R-094 (configuration file on disk, section 3a); P-87 approved (R-119) |
+| **Status** | approved: P-69, P-70, P-72 .. P-76 are R-092 .. R-099; P-71 replaced by the user's ruling R-094 (configuration file on disk, section 3a); P-87 approved (R-119) | **R-128 (2026-10-31): the pack is built in the private gateway repository against its HROT submodule, not vendored into HROT (R-092/R-093 superseded); SimNetGateway references nothing from HROT.** |
 | **Tasks** | T-020 (this design) |
 | **Rulings honoured** | R-091 (in-process ECS-level pack, vendored into HROT), R-079 .. R-090 as amended by section 9, R-092 .. R-099, R-012, R-050 .. R-053, R-054 (as limited by R-094), R-057 |
 | **Inputs** | HROT `coordinator` @ `34f249e`: `Hrot.Traffic` (the precedent: `TrafficPack`, `TrafficReplicas`, `TrafficBodies`, `TrafficModules`), `Hrot.Common/Infrastructure/NodeCapability.cs`, `Hrot.Editor/EditorSubsystem.cs` + `EditorCapabilities.cs` + `OfflineNetworkFactory.cs`, `Fdp.Toolkits` Combat / Replication / Time / Geographic, `docs/blueprints/Architect_Question_93_Sumo_Traffic_Node.md` (AQ93) section 11, `docs/reference/NED_DDS_Protocol.md` "For a protocol gateway" |
