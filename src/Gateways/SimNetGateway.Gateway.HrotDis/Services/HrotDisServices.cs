@@ -10,8 +10,27 @@ namespace SimNetGateway.Gateway.HrotDis;
 /// </summary>
 public sealed record HrotDisSources(SourceId Hrot, SourceId Dis, SourceId Rpr = default)
 {
-    /// <summary>True for an entity origin that is a replica of a peer simulation (dis or rpr), not the HROT side's own.</summary>
-    public bool IsReplicaOrigin(SourceId origin) => origin == Dis || (Rpr != SourceId.None && origin == Rpr);
+    /// <summary>The origins declared by sides of other projects (<see cref="SideDeclaration.Origin"/>); entities of these origins are replicas too.</summary>
+    public IReadOnlyList<SourceId> Others { get; init; } = Array.Empty<SourceId>();
+
+    /// <summary>True for an entity origin that is a replica of a peer simulation (any declared side origin: dis, rpr or another side's), not the HROT side's own.</summary>
+    public bool IsReplicaOrigin(SourceId origin)
+    {
+        if (origin == Dis || (Rpr != SourceId.None && origin == Rpr))
+        {
+            return true;
+        }
+
+        for (int i = 0; i < Others.Count; i++)
+        {
+            if (Others[i] == origin)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
 
 /// <summary>

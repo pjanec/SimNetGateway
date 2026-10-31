@@ -295,3 +295,22 @@ Caption: the pack's frame and the NED app's loop are the only two callers; a sid
 | **P-105** (REPLACED by R-128: no HROT build in SimNetGateway) | **`SimNetGateway.Hrot.sln` against a sibling HROT checkout** for the pack; main solution HROT-free; HROT's CycloneDDS.NET version pinned in the bundle. | HROT NuGet packages (HROT publishes none). |
 | **P-106** (approved, R-129; in the private repo, R-128) | **NED adapter** as a standalone app with NED types generated from HROT's IDL; DD-006 section 4.1 (NED node duties) revived for it. | Reference HROT's assemblies (imports HROT's ECS closure). |
 | **P-107** (approved, R-129) | **Order**: seam -> fake BDC side (DD-012) -> loadable pack with the HROT lane -> NED adapter. | NED adapter first. |
+
+## 9. As-built notes
+
+T-026a (seam, DIS and HLA moved onto it), 2026-10-31. Files: `Gateway.HrotDis/Sides/{IProtocolSide,DisSide,HlaSide}.cs`,
+`Configuration/ConfigSection.cs` (the former private `Section`, public, same error text); tests `SideOrderTests`,
+`ExternalSideTests`. Deviations from section 3a:
+
+1. `SideDeclaration.RequestMap<TKey>(name, allocator?)` returns nothing; sides are stateless singletons and read the map in
+   `Register` with `SideContext.Map<TKey>(name)`. Requested maps are created after hrot.entity, dis.entity, rpr.handle.
+2. The HLA side sets the internal `SideDeclaration.IsRprSide`; the profile takes `HrotDisSources.Rpr` and creates `rpr.handle`
+   from it. External origins go to `HrotDisSources.Others`, which `IsReplicaOrigin` checks.
+3. `GatewayConfiguration.AnySideEnabled` still knows only the built-in sides; `AnySideEnabledIn(registry)` is the general
+   form, used by the profile, and must be used by any host that registers an external side.
+4. `IProtocolSide.Write` writes the section's properties only (the caller writes the object); `Parse` is called only for a
+   present section and calls `Finish()` itself.
+5. `SideRegistry.With` rejects a duplicate key and the reserved keys `shared`, `hrot`.
+6. `GatewayConfiguration.Sides` is an `init` property (the 4-argument constructor and `with` are unchanged); equality
+   compares `Sides` by key and value.
+7. The order test covers rule-owning modules only (the engine exposes no list of ingress-only modules).

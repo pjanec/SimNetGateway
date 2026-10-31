@@ -40,7 +40,8 @@ public sealed class HrotDisHarness
     private double _stateTime = 1.0;
 
     public HrotDisHarness(GatewayConfiguration? config = null, Action<GatewayBuilder>? beforeBuild = null,
-        long idFirst = 5_000_000, long idLast = 5_000_999, bool installChecker = true, DisNumbering? numbering = null)
+        long idFirst = 5_000_000, long idLast = 5_000_999, bool installChecker = true, DisNumbering? numbering = null,
+        SideRegistry? sides = null)
     {
         Config = config ?? GatewayConfiguration.CreateDefault();
         Clock = new ManualClock();
@@ -51,7 +52,7 @@ public sealed class HrotDisHarness
             DiagnosticsCapacity = 8192,
             EventLogCapacity = 4096,
         };
-        var configuration = HrotDisConfigurations.For(Config, "test", Ids, numbering);
+        var configuration = HrotDisConfigurations.For(Config, "test", Ids, numbering, sides);
         Profile = (HrotDisProfile)configuration.Profile;
         Builder = configuration.CreateBuilder(Clock, options);
         Numbering = numbering ?? new DisNumbering();
@@ -158,7 +159,11 @@ public sealed class HrotDisHarness
     public SourceId RprSource { get; }
 
     /// <summary>True for the origin of a replica of a peer simulation (dis or rpr).</summary>
-    public bool IsReplica(SourceId origin) => origin == DisSource || (RprSource != SourceId.None && origin == RprSource);
+    public bool IsReplica(SourceId origin) =>
+        origin == DisSource || (RprSource != SourceId.None && origin == RprSource) || ExtraReplicaOrigins.Contains(origin);
+
+    /// <summary>The origins of sides defined by a test (T-026a); the oracle treats them as replica origins like dis and rpr.</summary>
+    public List<SourceId> ExtraReplicaOrigins { get; } = new();
 
     public InMemoryInbound? RprIn { get; }
 

@@ -1,4 +1,3 @@
-using DISnet;
 using SimNetGateway.Common;
 using SimNetGateway.Engine;
 using SimNetGateway.Protocol.Hrot;
@@ -24,14 +23,17 @@ public sealed class HrotDisProfile : IGatewayProfile
 {
     private readonly IIdAllocator<long>? _hrotIds;
     private readonly DisNumbering _numbering;
+    private readonly SideRegistry _sides;
 
     /// <param name="hrotIds">
     /// The HROT entity id allocator port (DD-007 section 3 item 3): the pack passes an allocator over
     /// <c>HrotNodeContext.IdAllocator</c>; null = a built-in range (<see cref="DefaultIdFirst"/> .. <see cref="DefaultIdLast"/>).
     /// </param>
     /// <param name="numbering">The range and quarantine of the DIS entity numbers the gateway hands out; null = 1 .. 65534, 60 s.</param>
-    public HrotDisProfile(IIdAllocator<long>? hrotIds = null, DisNumbering? numbering = null)
+    /// <param name="sides">The sides the gateway can run; null = <see cref="SideRegistry.Builtin"/> (DIS and HLA).</param>
+    public HrotDisProfile(IIdAllocator<long>? hrotIds = null, DisNumbering? numbering = null, SideRegistry? sides = null)
     {
+        _sides = sides ?? SideRegistry.Builtin;
         _hrotIds = hrotIds;
         _numbering = numbering ?? new DisNumbering();
         _numbering.Validate();
@@ -58,7 +60,7 @@ public sealed class HrotDisProfile : IGatewayProfile
     {
         ArgumentNullException.ThrowIfNull(builder);
         var config = builder.SettingsAs<HrotDisSettings>().Config;
-        if (!config.AnySideEnabled)
+        if (!config.AnySideEnabledIn(_sides))
         {
             throw new InvalidOperationException("No protocol side is enabled in the gateway configuration: the gateway is not instantiated (DD-007 section 3a).");
         }
@@ -66,30 +68,50 @@ public sealed class HrotDisProfile : IGatewayProfile
         var schema = new PivotSchema(builder.Attributes, builder.EventTypes);
         var hrotPort = builder.RequireInbound("hrot");
         var disSource = builder.Sources.Register("dis");
-        IOutboundChannel<Pdu>? disOut = null;
-        if (config.DisRuns)
+
+        // phase 1: every running side declares (registry order): ports, origin, entity numbers, maps
+        var running = new List<(IProtocolSide Side, object Settings, SideDeclaration Declaration)>();
+        foreach (var side in _sides.Sides)
         {
-            builder.RequireInbound("dis");
-            disOut = builder.RequireOutbound<Pdu>("dis");
+            if (config.SettingsOf(side.Key) is { } settings && side.Runs(settings))
+            {
+                var declaration = new SideDeclaration(builder, side.Key);
+                side.Declare(declaration, settings);
+                running.Add((side, settings, declaration));
+            }
         }
 
-        IOutboundChannel<IRprMessage>? rprOut = null;
         var rprSource = SourceId.None;
-        if (config.HlaRuns)
+        var otherOrigins = new List<SourceId>();
+        foreach (var (_, _, declaration) in running)
         {
-            rprSource = builder.RequireInbound("rpr").Source;
-            rprOut = builder.RequireOutbound<IRprMessage>("rpr");
+            if (declaration.IsRprSide)
+            {
+                rprSource = declaration.Origin;
+            }
+            else if (declaration.Origin != SourceId.None && declaration.Origin != disSource && !otherOrigins.Contains(declaration.Origin))
+            {
+                otherOrigins.Add(declaration.Origin);
+            }
         }
 
-        var sources = new HrotDisSources(hrotPort.Source, disSource, rprSource);
+        var sources = new HrotDisSources(hrotPort.Source, disSource, rprSource) { Others = otherOrigins.ToArray() };
 
         var hrotOut = builder.RequireOutbound<IGatewayToHrotMessage>("hrot");
         // one entity number per hrot entity for both sides: the dis.entity map and pool serve DIS and HLA (an instantiated gateway runs at least one)
-        var disIdentities = config.DisRuns || config.HlaRuns
+        var disIdentities = running.Any(r => r.Declaration.UsesEntityNumbers)
             ? new DisIdentityOptions(builder.Clock, (ushort)config.Shared.Site, (ushort)config.Shared.Application, _numbering)
             : null;
         var maps = HrotDisMaps.Create(builder.Identities, sources, _hrotIds ?? new HrotIdRangeAllocator(DefaultIdFirst, DefaultIdLast),
-            disIdentities, config.HlaRuns);
+            disIdentities, rprSource != SourceId.None);
+        foreach (var (_, _, declaration) in running)
+        {
+            foreach (var request in declaration.MapRequests)
+            {
+                request(builder.Identities);
+            }
+        }
+
         var services = new HrotDisServices(config);
         Services = services;
         var publisher = new ReplicaPublisher(schema, maps, sources, services, hrotOut, builder.Engine);
@@ -110,63 +132,12 @@ public sealed class HrotDisProfile : IGatewayProfile
         builder.AddModule(new InjectDetonationEgress(schema, maps, sources, services, hrotOut));
         builder.AddModule(new TimeRequestEgress(sources, services, hrotOut));
 
-        if (disOut is not null)
+        // phase 2: every running side registers its modules (registry order)
+        var context = new SideContext(builder, config, schema, maps, sources, services, hrotOut);
+        foreach (var (side, settings, _) in running)
         {
-            ConfigureDis(builder, config, schema, maps, sources, services, disOut);
+            side.Register(context, settings);
         }
-
-        if (rprOut is not null)
-        {
-            ConfigureRpr(builder, config, schema, maps, sources, services, rprOut);
-        }
-    }
-
-    private static void ConfigureDis(GatewayBuilder builder, GatewayConfiguration config, PivotSchema schema, HrotDisMaps maps,
-        HrotDisSources sources, HrotDisServices services, IOutboundChannel<Pdu> disOut)
-    {
-        // DIS ingress
-        builder.AddModule(new DisEntityStateIngress(schema, maps, sources, services));
-        builder.AddModule(new DisFireIngress(schema, maps, services));
-        builder.AddModule(new DisDetonationIngress(schema, maps, services));
-        builder.AddModule(new DisRemoveEntityIngress(maps, sources, services));
-        builder.AddModule(new DisStartResumeIngress(services));
-        builder.AddModule(new DisStopFreezeIngress(services));
-
-        // DIS egress (the entity rules send before the heartbeat rule looks at the same tick)
-        var publication = new DisPublication(disOut, schema, maps, sources, services);
-        builder.AddModule(new DisEntityStateEgress(schema, publication, sources));
-        builder.AddModule(new DisHeartbeatEgress(publication));
-        builder.AddModule(new DisFireEgress(schema, maps, sources, services, disOut));
-        builder.AddModule(new DisDetonationEgress(schema, maps, sources, services, disOut));
-        builder.AddModule(new DisSessionEgress(sources, services, disOut));
-
-        // Processors
-        var timeout = TimeSpan.FromSeconds(config.Dis!.TimeoutS);
-        var period = TimeSpan.FromSeconds(Math.Min(ReaperCheckPeriod.TotalSeconds, config.Dis.TimeoutS / 4.0));
-        builder.AddModule(new StaleEntityReaper("DisStaleReaper", sources.Dis, timeout, period, builder.Sources.Register("proc.reaper.dis")));
-    }
-
-    private static void ConfigureRpr(GatewayBuilder builder, GatewayConfiguration config, PivotSchema schema, HrotDisMaps maps,
-        HrotDisSources sources, HrotDisServices services, IOutboundChannel<IRprMessage> rprOut)
-    {
-        // RPR ingress (HLA -> pivot, origin rpr)
-        var publication = new RprPublication(rprOut, schema, maps, sources, services);
-        builder.AddModule(new RprObjectUpdateIngress(schema, maps));
-        builder.AddModule(new RprObjectRemovedIngress(maps));
-        builder.AddModule(new RprObjectRegisteredIngress(maps, publication));
-        builder.AddModule(new RprUpdateRequestedResponder(maps, publication));
-        builder.AddModule(new RprFireIngress(schema, maps));
-        builder.AddModule(new RprDetonationIngress(schema, maps));
-
-        // RPR egress (the entity rules register before the sweep looks at the same tick)
-        builder.AddModule(new RprEntityEgress(schema, publication, sources));
-        builder.AddModule(new RprFireEgress(schema, maps, sources, services, rprOut));
-        builder.AddModule(new RprDetonationEgress(schema, maps, sources, services, rprOut));
-
-        // Processors
-        var timeout = TimeSpan.FromSeconds(config.Hla!.TimeoutS);
-        var period = TimeSpan.FromSeconds(Math.Min(ReaperCheckPeriod.TotalSeconds, config.Hla.TimeoutS / 4.0));
-        builder.AddModule(new StaleEntityReaper("RprStaleReaper", sources.Rpr, timeout, period, builder.Sources.Register("proc.reaper.rpr")));
     }
 }
 
@@ -176,12 +147,12 @@ public static class HrotDisConfigurations
     /// <summary>All defaults with a DIS side for exercise 1 and the built-in HROT id range.</summary>
     public static EngineConfiguration Default { get; } = For(GatewayConfiguration.CreateDefault(), "hrot-dis/default");
 
-    /// <summary>The profile for a configuration read from the file; <paramref name="hrotIds"/> is the HROT id allocator port, <paramref name="numbering"/> the DIS entity numbers.</summary>
+    /// <summary>The profile for a configuration read from the file; <paramref name="hrotIds"/> is the HROT id allocator port, <paramref name="numbering"/> the DIS entity numbers, <paramref name="sides"/> the sides that can run (null = built-in DIS and HLA).</summary>
     public static EngineConfiguration For(GatewayConfiguration config, string name = "hrot-dis/file", IIdAllocator<long>? hrotIds = null,
-        DisNumbering? numbering = null)
+        DisNumbering? numbering = null, SideRegistry? sides = null)
     {
         ArgumentNullException.ThrowIfNull(config);
-        return new EngineConfiguration(name, new HrotDisProfile(hrotIds, numbering), new HrotDisSettings(config));
+        return new EngineConfiguration(name, new HrotDisProfile(hrotIds, numbering, sides), new HrotDisSettings(config));
     }
 
     /// <summary>Every fixed configuration of this gateway.</summary>
