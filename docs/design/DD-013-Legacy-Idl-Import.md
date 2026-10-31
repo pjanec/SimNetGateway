@@ -83,7 +83,7 @@ generator emits back with the cleaned input.
 | **P-115** | **Generic preprocessing script** with a BDC profile on the command line. | A BDC-only script. |
 | **P-116** | **Import every type**; the gateway uses a subset. | Strip the IDL to the supported subset (less code, but "identical" is harder to show and every re-import has to repeat the cut). |
 | **P-117** | **Post-pass workarounds** for importer gaps, each tagged with its issue id; the issues logged in `docs/IDL-IMPORTER-ISSUES.md` for a CycloneDDS.NET fix. | Fix the importer first. |
-| **P-118** | **Output in `Transport.BdcDds/Generated/`** of SimNetGateway with a provenance header. | A separate private repository (the C# is a functional copy of the protocol). |
+| **P-118** (decided otherwise: R-123 - the output lives in the private repository) | **Output in `Transport.BdcDds/Generated/`** of SimNetGateway with a provenance header. | A separate private repository (the C# is a functional copy of the protocol). |
 | **P-119** | **Compile + IDL round-trip verification**, synthetic fixtures in tests, real files only locally. | Trust the importer's output. |
 
 ## 6. As-built notes
