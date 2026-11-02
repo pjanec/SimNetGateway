@@ -26,7 +26,7 @@ public class DisReaperTests
     {
         var h = Live();
         h.DisStep(EntityState(5, h.Frame!.PointToEcef(new Vec3(10, 10, 0))));
-        long replica = h.Sent<ReplicaState>().Single().Id;
+        int replica = h.Sent<ReplicaState>().Single().Id;
         h.Run(11.5);
         Assert.True(Exists(h, Key));
         h.Run(2.0); // 13.5 s: past the timeout and the check period

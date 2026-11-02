@@ -34,7 +34,7 @@ public sealed record HrotDisSources(SourceId Hrot, SourceId Dis, SourceId Rpr = 
 }
 
 /// <summary>
-/// The identity maps of the gateway (DD-006 section 3.2, DD-007 section 3 item 3): HROT entity ids (<c>long</c>); wire ids from the
+/// The identity maps of the gateway (DD-006 section 3.2, DD-007 section 3 item 3): HROT entity ids (<c>int</c>, 32-bit like the engine and the NED wire, 0 = invalid); wire ids from the
 /// pack are bound, ids for entities introduced to HROT (DIS entities) come from the injected allocator port. With the DIS side
 /// running there is a second map, <c>dis.entity</c> (<see cref="DisEntityKey"/>): the ids of DIS entities are bound from the PDUs,
 /// the ids of the HROT entities published to DIS come from a number pool with quarantine under the gateway's site and application.
@@ -46,7 +46,7 @@ public sealed class HrotDisMaps
     private readonly IdentityMap<DisEntityKey>? _disEntity;
     private readonly IdentityMap<RprObjectHandle>? _rprHandle;
 
-    public HrotDisMaps(IdentityMap<long> hrotEntity, IdentityMap<DisEntityKey>? disEntity = null,
+    public HrotDisMaps(IdentityMap<int> hrotEntity, IdentityMap<DisEntityKey>? disEntity = null,
         IdentityMap<RprObjectHandle>? rprHandle = null)
     {
         HrotEntity = hrotEntity;
@@ -55,7 +55,7 @@ public sealed class HrotDisMaps
     }
 
     /// <summary>"hrot.entity".</summary>
-    public IdentityMap<long> HrotEntity { get; }
+    public IdentityMap<int> HrotEntity { get; }
 
     /// <summary>True when the DIS side runs and so <see cref="DisEntity"/> exists.</summary>
     public bool HasDis => _disEntity is not null;
@@ -71,13 +71,13 @@ public sealed class HrotDisMaps
     public IdentityMap<RprObjectHandle> RprHandle =>
         _rprHandle ?? throw new InvalidOperationException("The HLA side is not running: there is no rpr.handle map.");
 
-    public static HrotDisMaps Create(IdentityRegistry identities, HrotDisSources sources, IIdAllocator<long> hrotIds, DisIdentityOptions? dis = null,
+    public static HrotDisMaps Create(IdentityRegistry identities, HrotDisSources sources, IIdAllocator<int> hrotIds, DisIdentityOptions? dis = null,
         bool hla = false)
     {
         ArgumentNullException.ThrowIfNull(identities);
         ArgumentNullException.ThrowIfNull(sources);
         ArgumentNullException.ThrowIfNull(hrotIds);
-        var hrot = identities.Create<long>(sources.Hrot, "hrot.entity", hrotIds);
+        var hrot = identities.Create<int>(sources.Hrot, "hrot.entity", hrotIds);
         var disMap = dis is null ? null : identities.Create<DisEntityKey>(sources.Dis, "dis.entity", dis.CreateAllocator());
         IdentityMap<RprObjectHandle>? rprHandle = null;
         if (hla)

@@ -63,7 +63,7 @@ public static class RprMessages
     }
 
     /// <summary>The handle the fake RTI of the harness gave to the registration of a hrot entity (null while pending).</summary>
-    public static RprObjectHandle? HandleOf(HrotDisHarness h, long hrotId) =>
+    public static RprObjectHandle? HandleOf(HrotDisHarness h, int hrotId) =>
         h.HrotIds.TryResolve(hrotId, out var e) && h.RprHandles!.TryGetKey(e, out var handle) ? handle : null;
 
     public static void Settle(HrotDisHarness h, int ticks = 3) => h.Steps(ticks);

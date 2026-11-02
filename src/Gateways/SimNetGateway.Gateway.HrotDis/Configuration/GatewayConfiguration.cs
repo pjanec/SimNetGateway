@@ -41,7 +41,7 @@ public sealed record HrotConfiguration
     public double SampleRateHz { get; init; } = 20;
 
     /// <summary>The owner id of DIS replicas in HROT (a reserved id, not equal to any node id); read by the pack.</summary>
-    public long ReplicaOwnerNodeId { get; init; } = 65000;
+    public int ReplicaOwnerNodeId { get; init; } = 65000;
 
     /// <summary>True: an origin of exactly (0, 0, 0) is a real origin; false: it means "not set".</summary>
     public bool AllowZeroOrigin { get; init; }

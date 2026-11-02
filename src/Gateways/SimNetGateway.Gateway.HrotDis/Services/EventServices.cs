@@ -76,15 +76,15 @@ public sealed class FireCorrelator
 /// The HROT entity id allocator port as a range of ids (<see cref="RangeAllocator"/>): the default of the profile and what the
 /// tests inject. The HROT pack replaces it by an allocator over <c>HrotNodeContext.IdAllocator</c> (DD-007 section 3 item 3).
 /// </summary>
-public sealed class HrotIdRangeAllocator : IIdAllocator<long>
+public sealed class HrotIdRangeAllocator : IIdAllocator<int>
 {
     private readonly RangeAllocator _range;
 
-    public HrotIdRangeAllocator(long first, long last)
+    public HrotIdRangeAllocator(int first, int last)
     {
-        if (first < 0 || last < first)
+        if (first < 1 || last < first)
         {
-            throw new ArgumentException("The range must be non-negative and not empty.");
+            throw new ArgumentException("The range must start at 1 or more (0 is the invalid id) and not be empty.");
         }
 
         _range = new RangeAllocator((ulong)first, (ulong)last);
@@ -94,16 +94,16 @@ public sealed class HrotIdRangeAllocator : IIdAllocator<long>
 
     public ulong Available => _range.Available;
 
-    public bool TryAllocate(out long key)
+    public bool TryAllocate(out int key)
     {
         bool ok = _range.TryAllocate(out ulong value);
-        key = (long)value;
+        key = (int)value;
         return ok;
     }
 
-    public void Release(in long key)
+    public void Release(in int key)
     {
-        if (key >= 0)
+        if (key >= 1)
         {
             _range.Release((ulong)key);
         }

@@ -81,12 +81,12 @@ public readonly record struct HrotSession(ClusterPhase Phase, bool Advancing, do
 /// uses the DIS numbering (0 other, 1 friendly, 2 opposing, 3 neutral). <see cref="CommanderId"/> 0 = none.
 /// </summary>
 public readonly record struct HrotEntityState(
-    long Id,
+    int Id,
     long TkbType,
     long DisType,
     string Marking,
     int Force,
-    long CommanderId,
+    int CommanderId,
     HrotVec3 Position,
     HrotQuat Rotation,
     HrotVec3 Velocity,
@@ -95,15 +95,15 @@ public readonly record struct HrotEntityState(
     double HealthMax,
     double SimTime) : IHrotToGatewayMessage;
 
-public readonly record struct HrotEntityRemoved(long Id) : IHrotToGatewayMessage;
+public readonly record struct HrotEntityRemoved(int Id) : IHrotToGatewayMessage;
 
 /// <summary>The pose of one turret (articulated part) of an entity, radians (stage H4).</summary>
-public readonly record struct HrotTurretPose(long Id, int PartId, double Azimuth, double Elevation) : IHrotToGatewayMessage;
+public readonly record struct HrotTurretPose(int Id, int PartId, double Azimuth, double Elevation) : IHrotToGatewayMessage;
 
 /// <summary><see cref="TargetId"/> 0 = none. <see cref="Origin"/> and <see cref="Velocity"/> are ENU.</summary>
 public readonly record struct HrotFire(
-    long ShooterId,
-    long TargetId,
+    int ShooterId,
+    int TargetId,
     long MunitionTkb,
     long MunitionDisType,
     HrotVec3 Origin,
@@ -112,8 +112,8 @@ public readonly record struct HrotFire(
 
 /// <summary><see cref="TargetId"/> 0 = ground. <see cref="Location"/> and <see cref="Velocity"/> are ENU.</summary>
 public readonly record struct HrotDetonation(
-    long ShooterId,
-    long TargetId,
+    int ShooterId,
+    int TargetId,
     long MunitionTkb,
     long MunitionDisType,
     HrotVec3 Location,
@@ -127,7 +127,7 @@ public readonly record struct HrotDetonation(
 /// damage state; <see cref="Deactivated"/> says the entity announced that it is leaving.
 /// </summary>
 public readonly record struct ReplicaState(
-    long Id,
+    int Id,
     long TkbType,
     long DisType,
     string Marking,
@@ -137,12 +137,12 @@ public readonly record struct ReplicaState(
     double HealthMax,
     bool Deactivated) : IGatewayToHrotMessage;
 
-public readonly record struct ReplicaRemoved(long Id) : IGatewayToHrotMessage;
+public readonly record struct ReplicaRemoved(int Id) : IGatewayToHrotMessage;
 
 /// <summary>A DIS Fire as HROT effects; <see cref="TargetIsHrot"/> says that <see cref="TargetId"/> is an entity simulated by HROT.</summary>
 public readonly record struct InjectFire(
-    long ShooterId,
-    long TargetId,
+    int ShooterId,
+    int TargetId,
     long MunitionTkb,
     long MunitionDisType,
     HrotVec3 Origin,
@@ -152,8 +152,8 @@ public readonly record struct InjectFire(
 
 /// <summary>A DIS Detonation; with <see cref="TargetIsHrot"/> HROT computes the damage itself (DD-007 section 3 item 7).</summary>
 public readonly record struct InjectDetonation(
-    long ShooterId,
-    long TargetId,
+    int ShooterId,
+    int TargetId,
     long MunitionTkb,
     long MunitionDisType,
     HrotVec3 Location,

@@ -152,15 +152,15 @@ public class ProfileTests
     {
         var allocator = new HrotIdRangeAllocator(7_000, 7_001);
         var builder = HrotDisConfigurations.For(GatewayConfiguration.CreateDefault(), "x", allocator).CreateBuilder(new ManualClock());
-        var map = (IdentityMap<long>)builder.Identities.Find("hrot.entity")!;
+        var map = (IdentityMap<int>)builder.Identities.Find("hrot.entity")!;
         Assert.Same(allocator, map.Allocator);
 
         var defaults = HrotDisConfigurations.Default.CreateBuilder(new ManualClock());
-        var defaultMap = (IdentityMap<long>)defaults.Identities.Find("hrot.entity")!;
+        var defaultMap = (IdentityMap<int>)defaults.Identities.Find("hrot.entity")!;
         Assert.IsType<HrotIdRangeAllocator>(defaultMap.Allocator);
         Assert.NotSame(map.Allocator, defaultMap.Allocator);
         // two gateways built from the static default do not share an allocator
-        var again = (IdentityMap<long>)HrotDisConfigurations.Default.CreateBuilder(new ManualClock()).Identities.Find("hrot.entity")!;
+        var again = (IdentityMap<int>)HrotDisConfigurations.Default.CreateBuilder(new ManualClock()).Identities.Find("hrot.entity")!;
         Assert.NotSame(defaultMap.Allocator, again.Allocator);
     }
 

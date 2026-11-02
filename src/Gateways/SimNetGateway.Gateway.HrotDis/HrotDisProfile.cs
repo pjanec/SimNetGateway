@@ -21,7 +21,7 @@ public sealed record HrotDisSettings(GatewayConfiguration Config) : GatewaySetti
 /// </summary>
 public sealed class HrotDisProfile : IGatewayProfile
 {
-    private readonly IIdAllocator<long>? _hrotIds;
+    private readonly IIdAllocator<int>? _hrotIds;
     private readonly DisNumbering _numbering;
     private readonly SideRegistry _sides;
 
@@ -31,7 +31,7 @@ public sealed class HrotDisProfile : IGatewayProfile
     /// </param>
     /// <param name="numbering">The range and quarantine of the DIS entity numbers the gateway hands out; null = 1 .. 65534, 60 s.</param>
     /// <param name="sides">The sides the gateway can run; null = <see cref="SideRegistry.Builtin"/> (DIS and HLA).</param>
-    public HrotDisProfile(IIdAllocator<long>? hrotIds = null, DisNumbering? numbering = null, SideRegistry? sides = null)
+    public HrotDisProfile(IIdAllocator<int>? hrotIds = null, DisNumbering? numbering = null, SideRegistry? sides = null)
     {
         _sides = sides ?? SideRegistry.Builtin;
         _hrotIds = hrotIds;
@@ -49,10 +49,10 @@ public sealed class HrotDisProfile : IGatewayProfile
     public HrotDisServices? Services { get; private set; }
 
     /// <summary>First id of the built-in allocator range.</summary>
-    public const long DefaultIdFirst = 1_000_000;
+    public const int DefaultIdFirst = 1_000_000;
 
     /// <summary>Last id of the built-in allocator range.</summary>
-    public const long DefaultIdLast = 1_999_999;
+    public const int DefaultIdLast = 1_999_999;
 
     public string Name => "hrot-dis";
 
@@ -148,7 +148,7 @@ public static class HrotDisConfigurations
     public static EngineConfiguration Default { get; } = For(GatewayConfiguration.CreateDefault(), "hrot-dis/default");
 
     /// <summary>The profile for a configuration read from the file; <paramref name="hrotIds"/> is the HROT id allocator port, <paramref name="numbering"/> the DIS entity numbers, <paramref name="sides"/> the sides that can run (null = built-in DIS and HLA).</summary>
-    public static EngineConfiguration For(GatewayConfiguration config, string name = "hrot-dis/file", IIdAllocator<long>? hrotIds = null,
+    public static EngineConfiguration For(GatewayConfiguration config, string name = "hrot-dis/file", IIdAllocator<int>? hrotIds = null,
         DisNumbering? numbering = null, SideRegistry? sides = null)
     {
         ArgumentNullException.ThrowIfNull(config);

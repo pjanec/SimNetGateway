@@ -23,11 +23,11 @@ public sealed class HrotDisHlaHost
 {
     public const double Dt = 1.0 / 60.0;
 
-    public HrotDisHlaHost(GatewayConfiguration? config = null)
+    public HrotDisHlaHost(GatewayConfiguration? config = null, HrotIdRangeAllocator? hrotIds = null)
     {
         Config = config ?? Both();
         Clock = new ManualClock();
-        var ids = new HrotIdRangeAllocator(5_000_000, 5_000_999);
+        var ids = hrotIds ?? new HrotIdRangeAllocator(5_000_000, 5_000_999);
         var configuration = HrotDisConfigurations.For(Config, "e2e", ids);
         Profile = (HrotDisProfile)configuration.Profile;
         Builder = configuration.CreateBuilder(Clock, new GatewayOptions { JournalCapacity = 16384, DiagnosticsCapacity = 8192, EventLogCapacity = 4096 });
@@ -65,7 +65,7 @@ public sealed class HrotDisHlaHost
         Schema = new PivotSchema(Engine.Attributes, Engine.EventTypes);
         HrotSource = hrot.Source;
         RprSource = Engine.Sources.Register("rpr");
-        HrotIds = (IdentityMap<long>)Engine.Identities.Find("hrot.entity")!;
+        HrotIds = (IdentityMap<int>)Engine.Identities.Find("hrot.entity")!;
         RprHandles = (IdentityMap<RprObjectHandle>)Engine.Identities.Find("rpr.handle")!;
     }
 
@@ -107,7 +107,7 @@ public sealed class HrotDisHlaHost
 
     public SourceId RprSource { get; }
 
-    public IdentityMap<long> HrotIds { get; }
+    public IdentityMap<int> HrotIds { get; }
 
     public IdentityMap<RprObjectHandle> RprHandles { get; }
 
@@ -266,7 +266,7 @@ public class HlaEndToEndTests
         var ours = h.RprHandles.TryGetKey(h.HrotIds.TryResolve(1, out var e) ? e : default, out var handle) ? handle : throw new InvalidOperationException("not registered");
         h.Peer.Inject(Update(h.Frame!, Peer(1), new Vec3(-300, 0, 0)));
         h.Steps(2);
-        long shooter = h.HrotOut.OfType<ReplicaState>().Single().Id;
+        int shooter = h.HrotOut.OfType<ReplicaState>().Single().Id;
 
         // the federate fires at our entity (the target is named by our object's RTI handle), then the munition detonates on it
         h.Peer.Inject(new RprWeaponFire(Guid.NewGuid(), Peer(1), ours, RprConversions.ToLocation(h.Frame!.PointToEcef(new Vec3(-300, 0, 2))), MunitionKind, 2));

@@ -253,7 +253,7 @@ public class DisIngressTests
             var replicas = h.Sent<ReplicaState>();
             Assert.Equal(before + 1, replicas.Count); // exactly one replica state per PDU
             var replica = replicas[^1];
-            Assert.True(h.HrotIds.TryGetKey(e.Id, out long hrotId));
+            Assert.True(h.HrotIds.TryGetKey(e.Id, out int hrotId));
             Assert.Equal(hrotId, replica.Id);
             Support.Near(h.Frame.PointFromEcef(ecef), replica.State.Position, 1e-6, "replica position");
             Support.Near(h.Frame.VectorFromEcef(new Vec3(pdu.EntityLinearVelocity.X, pdu.EntityLinearVelocity.Y, pdu.EntityLinearVelocity.Z)),

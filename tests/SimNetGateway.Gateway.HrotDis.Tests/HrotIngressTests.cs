@@ -322,7 +322,7 @@ public class HrotIngressTests
         h.GoLive();
         var dis = h.DisCreate(h.DisStateAt(new HrotVec3(10, 20, 0)));
         h.Step();
-        long replicaId = h.Sent<ReplicaState>().Single().Id;
+        int replicaId = h.Sent<ReplicaState>().Single().Id;
         var before = h.Engine.State.Find(dis)!.Get(h.Schema.Position).AsVec3();
 
         // HROT (wrongly or by loopback) reports the replica back as its own entity, removes it, poses a turret on it

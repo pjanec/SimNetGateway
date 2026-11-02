@@ -47,7 +47,7 @@ public class RprRandomizedTests(Xunit.Abstractions.ITestOutputHelper output)
         h.RprChecker!.ExpectAllSent = !smallPool;
         double timeout = config.Hla!.TimeoutS;
         double reaperPeriod = HrotDisProfile.ReaperCheckPeriod.TotalSeconds;
-        var positions = new Dictionary<long, HrotVec3>();
+        var positions = new Dictionary<int, HrotVec3>();
         var model = new Dictionary<uint, double>(); // rpr objects that must exist: handle -> time of the last accepted update
         var rows = SessionTests.Table;
         bool originValid = false;
@@ -211,7 +211,7 @@ public class RprRandomizedTests(Xunit.Abstractions.ITestOutputHelper output)
     private static HrotVec3 RandomPoint(Random random) =>
         new(random.NextDouble() * 4000 - 2000, random.NextDouble() * 4000 - 2000, random.NextDouble() * 100);
 
-    private static HrotEntityState RandomState(Random random, long id, Dictionary<long, HrotVec3> positions)
+    private static HrotEntityState RandomState(Random random, int id, Dictionary<int, HrotVec3> positions)
     {
         positions.TryGetValue(id, out var last);
         HrotVec3 position = random.Next(10) switch
@@ -231,12 +231,12 @@ public class RprRandomizedTests(Xunit.Abstractions.ITestOutputHelper output)
         return HrotDisHarness.State(id, position, tkb, marking, 1 + random.Next(3), health, 100, rotation: rotation, velocity: velocity, disType: disType);
     }
 
-    private static long LiveHrotId(HrotDisHarness h, Random random)
+    private static int LiveHrotId(HrotDisHarness h, Random random)
     {
-        var ids = new List<long>();
+        var ids = new List<int>();
         foreach (var e in h.Entities(h.HrotSource))
         {
-            if (h.HrotIds.TryGetKey(e.Id, out long id))
+            if (h.HrotIds.TryGetKey(e.Id, out int id))
             {
                 ids.Add(id);
             }
