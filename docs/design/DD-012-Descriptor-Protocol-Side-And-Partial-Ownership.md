@@ -296,4 +296,4 @@ model), `DescriptorOwnershipTests`, `HrotModel` (the test HROT side), checker in
    transfer alone sends only `HrotDescriptorOwnership`, values follow with the owner's first write.
 5. `TryTransfer` takes the requesting side's origin explicitly (a side with per-node sub-sources passes its own).
 6. Found by the build: two reaper tests wrote `Identity.Marking` of a DIS / RPR entity from a non-owner source; the
-   policy now refuses that write, so their premise moved to a trusted `proc.` writer (follow-up commit).
+   policy now refuses that write, so their premise moved to a trusted `proc.derived` writer registered by a test side during configuration, and they assert the write committed. Consequence: the trusted set is fixed when the profile configures - a `proc.` source registered later (e.g. by a host after Configure) is not trusted.

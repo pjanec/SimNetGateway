@@ -11,13 +11,21 @@ public class DisReaperTests
 {
     private static readonly DisEntityKey Key = new(PeerSite, PeerApplication, 5);
 
-    private static HrotDisHarness Live(double timeoutS = 12)
+    private static HrotDisHarness Live(double timeoutS = 12, bool derived = false)
     {
         var config = GatewayConfiguration.CreateDefault() with { Dis = new DisConfiguration { ExerciseId = 1, TimeoutS = timeoutS } };
-        var h = new HrotDisHarness(config);
+        var sides = (SideRegistry?)null;
+        if (derived)
+        {
+            (config, sides) = DerivedProcessorHelper(config);
+        }
+
+        var h = new HrotDisHarness(config, sides: sides);
         h.GoLive();
         return h;
     }
+
+    private static (GatewayConfiguration, SideRegistry) DerivedProcessorHelper(GatewayConfiguration config) => RprMessages.WithDerivedProcessor(config);
 
     private static bool Exists(HrotDisHarness h, DisEntityKey key) => h.DisIds!.TryResolve(key, out var id) && h.Engine.State.Find(id) is not null;
 
@@ -71,21 +79,27 @@ public class DisReaperTests
     [Fact]
     public void Writes_of_other_sources_do_not_keep_a_dis_entity_alive()
     {
-        var h = Live();
+        // a derived-data processor: a trusted source (a side that registers it while the profile configures, so the group policy trusts it), whose write commits
+        var h = Live(derived: true);
         h.DisStep(EntityState(5));
-        var derived = h.Engine.Sources.Register("test.derived");
+        var derived = h.Engine.Sources.Register(RprMessages.DerivedProcessorSide.SourceName);
+        int committed = 0;
         for (int second = 0; second < 14; second++)
         {
             if (Exists(h, Key))
             {
                 var changes = h.Engine.BeginChange(derived);
-                changes.Set(h.DisIds!.TryResolve(Key, out var id) ? id : default, h.Schema.Marking, AttrValue.From("D" + second));
-                changes.Commit();
+                h.DisIds!.TryResolve(Key, out var id);
+                changes.Set(id, h.Schema.Marking, AttrValue.From("D" + second));
+                Assert.True(changes.Commit().Succeeded);
+                Assert.Equal("D" + second, h.Engine.State.Find(id)!.Get(h.Schema.Marking).AsString()); // the derived write really committed
+                committed++;
             }
 
             h.Run(1);
         }
 
+        Assert.True(committed > 0);
         Assert.False(Exists(h, Key)); // a processor kept writing, the exercise did not
     }
 
