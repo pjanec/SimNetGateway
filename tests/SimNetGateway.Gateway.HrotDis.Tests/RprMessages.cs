@@ -29,9 +29,35 @@ public static class RprMessages
     public static GatewayConfiguration HlaOnly(Func<HlaConfiguration, HlaConfiguration>? hla = null, SharedConfiguration? shared = null) =>
         Both(hla, shared: shared) with { Dis = null };
 
-    public static HrotDisHarness Live(GatewayConfiguration? config = null, bool checker = true)
+    /// <summary>A derived-data processor as a test side (no ports): it registers the trusted processor source "proc.derived" while the profile configures.</summary>
+    public sealed class DerivedProcessorSide : IProtocolSide
     {
-        var h = new HrotDisHarness(config ?? Both(), installChecker: checker);
+        public const string SourceName = "proc.derived";
+
+        public string Key => "derived";
+
+        public object? Parse(ConfigSection section) => null;
+
+        public void Write(System.Text.Json.Utf8JsonWriter writer, object settings)
+        {
+        }
+
+        public bool Runs(object settings) => true;
+
+        public void Declare(SideDeclaration declaration, object settings) => declaration.Builder.Sources.Register(SourceName);
+
+        public void Register(SideContext context, object settings)
+        {
+        }
+    }
+
+    /// <summary>The configuration with the derived-processor side switched on, and the registry that knows it.</summary>
+    public static (GatewayConfiguration Config, SideRegistry Sides) WithDerivedProcessor(GatewayConfiguration config) =>
+        (config.WithSide("derived", new object()), SideRegistry.Builtin.With(new DerivedProcessorSide()));
+
+    public static HrotDisHarness Live(GatewayConfiguration? config = null, bool checker = true, SideRegistry? sides = null)
+    {
+        var h = new HrotDisHarness(config ?? Both(), installChecker: checker, sides: sides);
         h.GoLive();
         return h;
     }

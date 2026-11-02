@@ -585,10 +585,13 @@ public class RprSideTests
     [Fact]
     public void Updates_within_the_timeout_keep_an_rpr_entity_but_writes_of_other_sources_do_not()
     {
-        var h = Live(Both(hla: x => x with { TimeoutS = 6.0 }));
+        // a derived-data processor: a trusted source (a side that registers it while the profile configures, so the group policy trusts it), whose write commits
+        var (config, sides) = WithDerivedProcessor(Both(hla: x => x with { TimeoutS = 6.0 }));
+        var h = Live(config, sides: sides);
         h.RprStep(Update(h, Peer(1), new Vec3(1, 1, 0)));
         h.RprStep(Update(h, Peer(2), new Vec3(2, 2, 0)));
-        var derived = h.Engine.Sources.Register("test.derived");
+        var derived = h.Engine.Sources.Register(DerivedProcessorSide.SourceName);
+        int committed = 0;
         for (int second = 0; second < 10; second++)
         {
             h.Run(1);
@@ -597,10 +600,13 @@ public class RprSideTests
             {
                 var changes = h.Engine.BeginChange(derived);
                 changes.Set(id, h.Schema.Marking, AttrValue.From("D" + second)); // someone else keeps writing Peer 2
-                changes.Commit();
+                Assert.True(changes.Commit().Succeeded);
+                Assert.Equal("D" + second, h.Engine.State.Find(id)!.Get(h.Schema.Marking).AsString()); // the derived write really committed
+                committed++;
             }
         }
 
+        Assert.True(committed > 0);
         Assert.True(h.RprHandles!.TryResolve(Peer(1), out _));
         Assert.False(h.RprHandles.TryResolve(Peer(2), out _));
     }
