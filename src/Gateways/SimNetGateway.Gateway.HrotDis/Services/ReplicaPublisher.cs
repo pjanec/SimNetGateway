@@ -53,7 +53,7 @@ public sealed class ReplicaPublisher
             return;
         }
 
-        if (!_maps.HrotEntity.TryGetOrAllocate(entity.Id, out long hrotId))
+        if (!_maps.HrotEntity.TryGetOrAllocate(entity.Id, out int hrotId))
         {
             if (_exhaustionWarned.Add(entity.Id))
             {
@@ -113,7 +113,7 @@ public sealed class ReplicaPublisher
     public void Remove(EntityId id)
     {
         _exhaustionWarned.Remove(id);
-        if (_introduced.Remove(id) && _maps.HrotEntity.TryGetKey(id, out long hrotId))
+        if (_introduced.Remove(id) && _maps.HrotEntity.TryGetKey(id, out int hrotId))
         {
             _output.Send(new ReplicaRemoved(hrotId));
         }
@@ -135,7 +135,7 @@ public sealed class ReplicaPublisher
     private bool IsEligible(EntityRecord entity) =>
         entity.Has(_schema.EntityType) && entity.Has(_schema.Position) && entity.Has(_schema.StateTime);
 
-    private ReplicaState Build(EntityRecord entity, long hrotId)
+    private ReplicaState Build(EntityRecord entity, int hrotId)
     {
         var geo = _services.Geo;
         long packedType = entity.Get(_schema.EntityType).AsInt();

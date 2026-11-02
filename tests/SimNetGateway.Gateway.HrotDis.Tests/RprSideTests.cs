@@ -92,7 +92,7 @@ public class RprSideTests
     {
         var h = Live();
         h.RprStep(Update(h, Peer(1), new Vec3(1, 1, 0)));
-        long replica = h.Sent<ReplicaState>().Single().Id;
+        int replica = h.Sent<ReplicaState>().Single().Id;
         h.RprStep(new RprObjectRemoved(Peer(99)));
         Assert.Empty(h.Sent<ReplicaRemoved>());
         h.RprStep(new RprObjectRemoved(Peer(1)));
@@ -148,7 +148,7 @@ public class RprSideTests
         h.Steps(2);
         var ours = HandleOf(h, 1)!.Value;
         h.RprStep(Update(h, Peer(1), new Vec3(-300, 0, 0)));
-        long shooter = h.Sent<ReplicaState>().Single().Id;
+        int shooter = h.Sent<ReplicaState>().Single().Id;
         var origin = new Vec3(-300, 0, 2);
         h.RprStep(new RprWeaponFire(Guid.NewGuid(), Peer(1), ours, RprConversions.ToLocation(h.Frame!.PointToEcef(origin)), MunitionKind, 3)
         {
@@ -199,7 +199,7 @@ public class RprSideTests
         h.Steps(2);
         var ours = HandleOf(h, 1)!.Value;
         h.RprStep(Update(h, Peer(1), new Vec3(-300, 0, 0)));
-        long shooter = h.Sent<ReplicaState>().Single().Id;
+        int shooter = h.Sent<ReplicaState>().Single().Id;
         var at = new Vec3(98, 1, 0);
         h.RprStep(new RprMunitionDetonation(Guid.NewGuid(), Peer(1), ours, RprConversions.ToLocation(h.Frame!.PointToEcef(at)), MunitionKind, RprDetonationResult.EntityImpact)
         {
@@ -573,7 +573,7 @@ public class RprSideTests
     {
         var h = Live(Both(hla: x => x with { TimeoutS = 6.0 }, dis: x => x with { TimeoutS = 60.0 }));
         h.RprStep(Update(h, Peer(1), new Vec3(1, 1, 0)));
-        long replica = h.Sent<ReplicaState>().Single().Id;
+        int replica = h.Sent<ReplicaState>().Single().Id;
         h.Run(5.5);
         Assert.True(h.RprHandles!.TryResolve(Peer(1), out _));
         h.Run(2.0);

@@ -45,7 +45,7 @@ public class DisRandomizedTests(Xunit.Abstractions.ITestOutputHelper output)
         h.DisChecker!.ExpectAllSent = !smallPool;
         double timeout = config.Dis!.TimeoutS;
         double reaperPeriod = HrotDisProfile.ReaperCheckPeriod.TotalSeconds;
-        var positions = new Dictionary<long, HrotVec3>();
+        var positions = new Dictionary<int, HrotVec3>();
         var model = new Dictionary<DisEntityKey, double>(); // DIS entities that must exist: key -> time of the last accepted PDU
         var rows = SessionTests.Table;
         bool originValid = false;
@@ -62,7 +62,7 @@ public class DisRandomizedTests(Xunit.Abstractions.ITestOutputHelper output)
                 case 3:
                 case 4:
                 case 5:
-                    long id = 1 + random.Next(40);
+                    int id = 1 + random.Next(40);
                     h.Hrot(RandomState(random, id, positions));
                     break;
                 case 6:
@@ -198,7 +198,7 @@ public class DisRandomizedTests(Xunit.Abstractions.ITestOutputHelper output)
         output.WriteLine($"states {h.DisChecker.States.Count} finals {h.DisChecker.States.Count(s => Protocol.Dis7.EntityAppearance.GetDeactivated(s.Pdu.EntityAppearance))} fires {h.DisChecker.Sent<FirePdu>().Count()} detonations {h.DisChecker.Sent<DetonationPdu>().Count()} start {h.DisChecker.Sent<StartResumePdu>().Count()} stop {h.DisChecker.Sent<StopFreezePdu>().Count()} echoes {h.Services.DisIngress.Echoes} siman-ignored {h.Services.DisIngress.SimanIgnored} injectFire {h.Sent<InjectFire>().Count} replicas {h.Sent<ReplicaState>().Count} removed {h.Sent<ReplicaRemoved>().Count} timeRequests {h.Sent<TimeRequest>().Count}");
     }
 
-    private static HrotEntityState RandomState(Random random, long id, Dictionary<long, HrotVec3> positions)
+    private static HrotEntityState RandomState(Random random, int id, Dictionary<int, HrotVec3> positions)
     {
         positions.TryGetValue(id, out var last);
         HrotVec3 position = random.Next(10) switch
@@ -219,12 +219,12 @@ public class DisRandomizedTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     /// <summary>The HROT id of a random live HROT entity (an id that may not exist when there is none).</summary>
-    private static long LiveHrotId(HrotDisHarness h, Random random)
+    private static int LiveHrotId(HrotDisHarness h, Random random)
     {
-        var ids = new List<long>();
+        var ids = new List<int>();
         foreach (var e in h.Entities(h.HrotSource))
         {
-            if (h.HrotIds.TryGetKey(e.Id, out long id))
+            if (h.HrotIds.TryGetKey(e.Id, out int id))
             {
                 ids.Add(id);
             }

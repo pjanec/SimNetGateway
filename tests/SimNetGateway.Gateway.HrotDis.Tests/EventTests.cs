@@ -87,7 +87,7 @@ public class EventTests
         Assert.Equal(0, Support.CountEvents(h, h.Schema.WeaponFire));
 
         var dis = h.DisCreate(h.DisStateAt(new HrotVec3(5, 5, 0)));
-        h.HrotIds.TryGetKey(dis, out long replicaId);
+        h.HrotIds.TryGetKey(dis, out int replicaId);
         h.HrotStep(new HrotFire(replicaId, 0, 501, 0, default, default, 1)); // an echo
         Assert.Equal(0, Support.CountEvents(h, h.Schema.WeaponFire));
         Assert.Equal(3, h.Engine.Diagnostics.TransactionFailures);
@@ -99,7 +99,7 @@ public class EventTests
         var h = Live();
         h.HrotStep(HrotDisHarness.State(1, new HrotVec3(0, 0, 0)));
         var dis = h.DisCreate(h.DisStateAt(new HrotVec3(100, 0, 0)));
-        h.HrotIds.TryGetKey(dis, out long replicaId);
+        h.HrotIds.TryGetKey(dis, out int replicaId);
         h.HrotStep(new HrotFire(1, replicaId, 501, 0, default, default, 1));
         Assert.Equal(dis, Support.LastEvent(h, h.Schema.WeaponFire).Get(h.Schema.EventTarget).AsEntity());
         h.HrotStep(new HrotDetonation(1, replicaId, 501, 0, new HrotVec3(100, 0, 0), default));
@@ -226,10 +226,10 @@ public class EventTests
 
     // ---- DIS -> HROT ---------------------------------------------------------------------------------------------------
 
-    private static (EntityId Shooter, long ShooterId) DisShooter(HrotDisHarness h, double east)
+    private static (EntityId Shooter, int ShooterId) DisShooter(HrotDisHarness h, double east)
     {
         var e = h.DisCreate(h.DisStateAt(new HrotVec3(east, 0, 0)));
-        h.HrotIds.TryGetKey(e, out long id);
+        h.HrotIds.TryGetKey(e, out int id);
         return (e, id);
     }
 

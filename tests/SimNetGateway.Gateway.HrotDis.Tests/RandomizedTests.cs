@@ -27,7 +27,7 @@ public class RandomizedTests
         bool originValid = false;
         int generation = 0;
         var disEntities = new List<EntityId>();
-        var hrotIds = new HashSet<long>();
+        var hrotIds = new HashSet<int>();
         var sessionRows = SessionTests.Table;
 
         for (int op = 0; op < 1500; op++)
@@ -39,7 +39,7 @@ public class RandomizedTests
                 case 1:
                 case 2:
                 case 3:
-                    long id = 1000 + random.Next(30);
+                    int id = 1000 + random.Next(30);
                     h.Hrot(HrotDisHarness.State(id, RandomPoint(random), tkb: random.Next(4) == 0 ? 9999 : 100, rotation: ServiceTests.RandomQuaternion(random),
                         velocity: new HrotVec3(random.NextDouble() * 20, 0, 0), health: random.NextDouble() * 110, simTime: op * 0.1,
                         commander: random.Next(3) == 0 ? 1000 + random.Next(30) : 0));
@@ -161,7 +161,7 @@ public class RandomizedTests
     }
 
     /// <summary>Forget the entities the engine no longer has (an unload or a reaper destroys them behind the test's back).</summary>
-    private static void Prune(HrotDisHarness h, List<EntityId> disEntities, HashSet<long> hrotIds)
+    private static void Prune(HrotDisHarness h, List<EntityId> disEntities, HashSet<int> hrotIds)
     {
         disEntities.RemoveAll(id => h.Engine.State.Find(id) is null);
         hrotIds.RemoveWhere(id => h.EntityOfHrot(id) is null);
@@ -177,7 +177,7 @@ public class RandomizedTests
         foreach (var entity in h.Entities(h.DisSource))
         {
             bool eligible = entity.Has(s.EntityType) && entity.Has(s.Position) && entity.Has(s.StateTime);
-            bool shown = h.HrotIds.TryGetKey(entity.Id, out long key) && h.Checker.Introduced.Contains(key);
+            bool shown = h.HrotIds.TryGetKey(entity.Id, out int key) && h.Checker.Introduced.Contains(key);
             Assert.True(shown == (open && eligible),
                 $"entity {entity.Id.Value}: shown={shown}, open={open}, eligible={eligible}, session {session.State}/{session.Mode}");
             if (shown)

@@ -15,7 +15,7 @@ namespace SimNetGateway.Gateway.HrotDis.Tests;
 public sealed class InvariantChecker
 {
     private readonly HrotDisHarness _h;
-    private readonly HashSet<long> _introduced = new();
+    private readonly HashSet<int> _introduced = new();
     private readonly HashSet<long> _seenCorrelations = new();
     private readonly List<string> _violations = new();
     private long _lastCorrelation;
@@ -25,7 +25,7 @@ public sealed class InvariantChecker
     public InvariantChecker(HrotDisHarness harness) => _h = harness;
 
     /// <summary>The HROT ids that HROT currently knows as replicas, as the message stream says.</summary>
-    public IReadOnlyCollection<long> Introduced => _introduced;
+    public IReadOnlyCollection<int> Introduced => _introduced;
 
     /// <summary>Called by the outbound recorder at the moment the gateway sends (the entity and its key are still bound).</summary>
     public void OnSent(IGatewayToHrotMessage message)
@@ -54,7 +54,7 @@ public sealed class InvariantChecker
         }
     }
 
-    private void RequireReplica(long id, string what)
+    private void RequireReplica(int id, string what)
     {
         if (!_h.HrotIds.TryResolve(id, out var entity))
         {
@@ -73,7 +73,7 @@ public sealed class InvariantChecker
         }
     }
 
-    private void RequireKnownOrZero(long id, string what)
+    private void RequireKnownOrZero(int id, string what)
     {
         if (id != 0 && !_h.HrotIds.TryResolve(id, out _))
         {
@@ -81,7 +81,7 @@ public sealed class InvariantChecker
         }
     }
 
-    private void RequireTarget(long id, bool isHrot, string what)
+    private void RequireTarget(int id, bool isHrot, string what)
     {
         RequireKnownOrZero(id, what + ".TargetId");
         if (id == 0)
@@ -194,10 +194,10 @@ public sealed class InvariantChecker
         var map = _h.HrotIds;
         int bound = 0;
         int disBound = 0;
-        var ownedByHrot = new HashSet<long>();
+        var ownedByHrot = new HashSet<int>();
         foreach (var entity in _h.Engine.State.Entities)
         {
-            if (!map.TryGetKey(entity.Id, out long key))
+            if (!map.TryGetKey(entity.Id, out int key))
             {
                 continue;
             }

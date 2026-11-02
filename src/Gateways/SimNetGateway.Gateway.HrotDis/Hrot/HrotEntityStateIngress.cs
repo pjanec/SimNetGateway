@@ -94,7 +94,7 @@ public sealed class HrotEntityStateIngress : IGatewayModule
         changes.Set(id, _schema.StateTime, AttrValue.From(ctx.WallTime)); // one time axis in the pivot: the engine clock (m.SimTime is only validated)
     }
 
-    private void SetCommander(IngressContext ctx, EntityId id, long commanderId)
+    private void SetCommander(IngressContext ctx, EntityId id, int commanderId)
     {
         if (commanderId != 0 &&
             _maps.HrotEntity.TryResolve(ctx.Changes, commanderId, out var commander) &&

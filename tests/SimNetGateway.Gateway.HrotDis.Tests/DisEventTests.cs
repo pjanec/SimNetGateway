@@ -24,12 +24,12 @@ public class DisEventTests
         return h;
     }
 
-    private static DisEntityKey KeyOfHrot(HrotDisHarness h, long hrotId) => h.DisKeyOf(h.EntityOfHrot(hrotId)!.Id)!.Value;
+    private static DisEntityKey KeyOfHrot(HrotDisHarness h, int hrotId) => h.DisKeyOf(h.EntityOfHrot(hrotId)!.Id)!.Value;
 
-    private static HrotFire Shot(long shooter, long target, long tkb = 501, double x = 5) =>
+    private static HrotFire Shot(int shooter, int target, long tkb = 501, double x = 5) =>
         new(shooter, target, tkb, 0, new HrotVec3(x, 0, 2), new HrotVec3(800, 0, 0), 1);
 
-    private static HrotDetonation Blast(long shooter, long target, long tkb = 501, double x = 300, double y = 2) =>
+    private static HrotDetonation Blast(int shooter, int target, long tkb = 501, double x = 300, double y = 2) =>
         new(shooter, target, tkb, 0, new HrotVec3(x, y, 0), new HrotVec3(0, 0, -50));
 
     [Fact]
@@ -75,7 +75,7 @@ public class DisEventTests
     {
         var h = Setup();
         h.DisStep(EntityState(3, h.Frame!.PointToEcef(new Vec3(100, 100, 0))));
-        long replica = h.Sent<ReplicaState>().Last().Id;
+        int replica = h.Sent<ReplicaState>().Last().Id;
         h.HrotStep(Shot(1, replica));
         var fire = h.DisChecker!.Sent<FirePdu>().Single();
         Assert.Equal(new DisEntityKey(PeerSite, PeerApplication, 3), DisConversions.KeyOf(fire.TargetEntityID));
@@ -201,7 +201,7 @@ public class DisEventTests
         var h = Setup();
         h.DisStep(EntityState(3, h.Frame!.PointToEcef(new Vec3(100, 100, 0))));
         var shooter = new DisEntityKey(PeerSite, PeerApplication, 3);
-        long replica = h.Sent<ReplicaState>().Last().Id;
+        int replica = h.Sent<ReplicaState>().Last().Id;
         var target = KeyOfHrot(h, 1);
         var location = h.Frame.PointToEcef(new Vec3(110, 100, 1));
         var velocity = h.Frame.VectorToEcef(new Vec3(0, -700, 0));
@@ -236,7 +236,7 @@ public class DisEventTests
     {
         var h = Setup();
         h.DisStep(EntityState(3, h.Frame!.PointToEcef(new Vec3(100, 100, 0))));
-        long replica = h.Sent<ReplicaState>().Last().Id;
+        int replica = h.Sent<ReplicaState>().Last().Id;
         var shooter = new DisEntityKey(PeerSite, PeerApplication, 3);
         var location = h.Frame.PointToEcef(new Vec3(299, 1, 0));
         h.DisStep(Detonation(shooter, KeyOfHrot(h, 2), location, new Vec3(1, 2, 3), new Vec3(0, 0, -30), Munition501, result: 1, eventNumber: 7));
@@ -340,7 +340,7 @@ public class DisEventTests
         var h = Setup();
         h.DisStep(EntityState(3, h.Frame!.PointToEcef(new Vec3(100, 100, 0))));
         var dis3 = new DisEntityKey(PeerSite, PeerApplication, 3);
-        long replica = h.Sent<ReplicaState>().Last().Id;
+        int replica = h.Sent<ReplicaState>().Last().Id;
         h.DisStep(Fire(dis3, KeyOfHrot(h, 1), h.Frame.PointToEcef(new Vec3(100, 100, 1)), default, Munition501, eventNumber: 9));
         // HROT answers with a shot at the replica
         h.HrotStep(Shot(1, replica));

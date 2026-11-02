@@ -253,7 +253,7 @@ public static class GatewayConfigurationFile
         var result = new HrotConfiguration
         {
             SampleRateHz = s.Number("sampleRateHz", d.SampleRateHz, min: 0, minExclusive: true),
-            ReplicaOwnerNodeId = s.Integer("replicaOwnerNodeId", d.ReplicaOwnerNodeId, 0, int.MaxValue),
+            ReplicaOwnerNodeId = (int)s.Integer("replicaOwnerNodeId", d.ReplicaOwnerNodeId, 0, int.MaxValue),
             AllowZeroOrigin = s.Boolean("allowZeroOrigin", d.AllowZeroOrigin),
         };
         s.Finish();

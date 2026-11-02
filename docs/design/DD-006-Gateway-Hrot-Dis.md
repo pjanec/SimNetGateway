@@ -19,6 +19,7 @@ all)"* (R-091). The HROT side is now **DD-007** (the pack). What it changes here
 | 1 scope, 3 pivot, 5 conversions (ENU <-> ECEF, quaternion <-> Euler), 7 DIS side, 10 HLA readiness | **unchanged** |
 | 2 block diagram - the HROT half ("Transport.HrotDds", NED topics) | **superseded** by DD-007 section 2; the gateway's HROT ports carry `Protocol.Hrot` messages over in-memory channels to the pack |
 | 3.2 `hrot.entity` allocator `HrotIdPool` (IdRequest / IdResponse) | **superseded**: an `IIdAllocator<long>` port, implemented in the pack over `HrotNodeContext.IdAllocator` (DD-007 3.3) |
+| HROT id width (`long` / int64 in 3.2, 4.x and the class diagrams) | **revised by T-030 (2026-11-02)**: HROT entity ids and node ids are 32-bit since HROT CE-4200 (`coordinator` 481e8a9a4, NED wire `int32`, 0 = invalid); `Protocol.Hrot` ids, the `hrot.entity` map and the allocator port are `int` (`IIdAllocator<int>`); TKB and packed DIS types stay `long`. `long` below is history |
 | 4.1 being a NED node (GeoReference topic, node id, heartbeat, capabilities) | **superseded**: HROT services (DD-007 3.8) |
 | 4.2 / 4.3 HROT ingress / egress over NED descriptors | **superseded** by the `Protocol.Hrot` contract below; the pivot effects of each row stay the same |
 | 4.3 `HrotWorldPosEgress/Keep` re-send rule (0.5 m / 3 deg / 5 s) | **dropped**: the gateway sends a replica state only on a new DIS state; the pack poses per frame (DD-007 3.4) |

@@ -348,17 +348,17 @@ public class ServiceTests
     public void The_range_allocator_hands_out_distinct_ids_and_takes_them_back()
     {
         var allocator = new HrotIdRangeAllocator(1000, 1002);
-        Assert.True(allocator.TryAllocate(out long a));
-        Assert.True(allocator.TryAllocate(out long b));
-        Assert.True(allocator.TryAllocate(out long c));
-        Assert.Equal(new long[] { 1000, 1001, 1002 }, new[] { a, b, c }.Order().ToArray());
+        Assert.True(allocator.TryAllocate(out int a));
+        Assert.True(allocator.TryAllocate(out int b));
+        Assert.True(allocator.TryAllocate(out int c));
+        Assert.Equal(new int[] { 1000, 1001, 1002 }, new[] { a, b, c }.Order().ToArray());
         Assert.False(allocator.TryAllocate(out _));
         Assert.Equal(3UL, allocator.InUse);
         allocator.Release(in b);
         Assert.Equal(1UL, allocator.Available);
-        Assert.True(allocator.TryAllocate(out long d));
+        Assert.True(allocator.TryAllocate(out int d));
         Assert.Equal(b, d);
-        long outside = 5;
+        int outside = 5;
         allocator.Release(in outside); // ignored
         Assert.Equal(3UL, allocator.InUse);
         Assert.Throws<ArgumentException>(() => new HrotIdRangeAllocator(5, 4));

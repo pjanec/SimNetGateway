@@ -40,7 +40,7 @@ public sealed class HrotDisHarness
     private double _stateTime = 1.0;
 
     public HrotDisHarness(GatewayConfiguration? config = null, Action<GatewayBuilder>? beforeBuild = null,
-        long idFirst = 5_000_000, long idLast = 5_000_999, bool installChecker = true, DisNumbering? numbering = null,
+        int idFirst = 5_000_000, int idLast = 5_000_999, bool installChecker = true, DisNumbering? numbering = null,
         SideRegistry? sides = null)
     {
         Config = config ?? GatewayConfiguration.CreateDefault();
@@ -86,7 +86,7 @@ public sealed class HrotDisHarness
         Schema = new PivotSchema(Engine.Attributes, Engine.EventTypes);
         HrotSource = hrot.Source;
         DisSource = Engine.Sources.Register("dis");
-        HrotIds = (IdentityMap<long>)Engine.Identities.Find("hrot.entity")!;
+        HrotIds = (IdentityMap<int>)Engine.Identities.Find("hrot.entity")!;
         if (Config.HlaRuns)
         {
             RprOut!.Context = Engine;
@@ -203,7 +203,7 @@ public sealed class HrotDisHarness
 
     public InMemoryOutbound<Pdu>? DisOut { get; }
 
-    public IdentityMap<long> HrotIds { get; }
+    public IdentityMap<int> HrotIds { get; }
 
     public InvariantChecker Checker { get; }
 
@@ -348,9 +348,9 @@ public sealed class HrotDisHarness
         Session(ClusterPhase.Live);
     }
 
-    public static HrotEntityState State(long id, HrotVec3 position = default, long tkb = 100, string marking = "T1", int force = 1,
+    public static HrotEntityState State(int id, HrotVec3 position = default, long tkb = 100, string marking = "T1", int force = 1,
         double health = 100, double healthMax = 100, double simTime = 1.0, HrotQuat? rotation = null, HrotVec3 velocity = default,
-        HrotVec3 angularVelocity = default, long commander = 0, long disType = 0) =>
+        HrotVec3 angularVelocity = default, int commander = 0, long disType = 0) =>
         new(id, tkb, disType, marking, force, commander, position, rotation ?? HrotQuat.Identity, velocity, angularVelocity, health, healthMax, simTime);
 
     // ---- DIS side (writes into the pivot as the DIS source) -------------------------------------------------------------
@@ -432,7 +432,7 @@ public sealed class HrotDisHarness
     public List<T> Sent<T>()
         where T : IGatewayToHrotMessage => HrotOut.OfType<T>().ToList();
 
-    public EntityRecord? EntityOfHrot(long id) => HrotIds.TryResolve(id, out var e) ? Engine.State.Find(e) : null;
+    public EntityRecord? EntityOfHrot(int id) => HrotIds.TryResolve(id, out var e) ? Engine.State.Find(e) : null;
 
     public IEnumerable<EntityRecord> Entities(SourceId origin)
     {

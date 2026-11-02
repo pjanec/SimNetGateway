@@ -10,7 +10,7 @@ public class ReplicaTests
 {
     private static readonly DisTypeCode Tank = new(1, 1, 225, 1, 1, 3, 0);
 
-    private static HrotDisHarness Live(GatewayConfiguration? config = null, long idLast = 5_000_999)
+    private static HrotDisHarness Live(GatewayConfiguration? config = null, int idLast = 5_000_999)
     {
         var h = new HrotDisHarness(config, idLast: idLast);
         h.GoLive();
@@ -251,8 +251,8 @@ public class ReplicaTests
         h.DisUpdate(a, h.DisStateAt(new HrotVec3(1.5, 0, 0)));
         h.DisUpdate(a, h.DisStateAt(new HrotVec3(1.6, 0, 0)));
         Assert.Equal(2UL, h.Ids.InUse); // one id per entity however many states
-        h.HrotIds.TryGetKey(a, out long idA);
-        h.HrotIds.TryGetKey(b, out long idB);
+        h.HrotIds.TryGetKey(a, out int idA);
+        h.HrotIds.TryGetKey(b, out int idB);
         Assert.NotEqual(idA, idB);
         Assert.Equal(3, h.Sent<ReplicaState>().Count(s => s.Id == idA));
 

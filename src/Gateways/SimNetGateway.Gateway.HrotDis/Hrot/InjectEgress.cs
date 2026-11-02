@@ -7,7 +7,7 @@ namespace SimNetGateway.Gateway.HrotDis;
 internal static class InjectSupport
 {
     /// <summary>The HROT id of an entity named by the event (0 when the event names none or HROT does not know it) and whether HROT simulates it.</summary>
-    public static long HrotIdOf(IGatewayContext gateway, HrotDisMaps maps, HrotDisSources sources, AttributeBag payload, AttrId attr,
+    public static int HrotIdOf(IGatewayContext gateway, HrotDisMaps maps, HrotDisSources sources, AttributeBag payload, AttrId attr,
         out bool isHrotEntity)
     {
         isHrotEntity = false;
@@ -17,7 +17,7 @@ internal static class InjectSupport
         }
 
         var entity = value.AsEntity();
-        if (!maps.HrotEntity.TryGetKey(entity, out long id))
+        if (!maps.HrotEntity.TryGetKey(entity, out int id))
         {
             return 0;
         }
@@ -67,8 +67,8 @@ public sealed class InjectFireEgress : IGatewayModule
     {
         var p = t.Payload;
         var geo = _services.Geo;
-        long shooter = InjectSupport.HrotIdOf(_gateway, _maps, _sources, p, _schema.EventFiring, out _);
-        long target = InjectSupport.HrotIdOf(_gateway, _maps, _sources, p, _schema.EventTarget, out bool targetIsHrot);
+        int shooter = InjectSupport.HrotIdOf(_gateway, _maps, _sources, p, _schema.EventFiring, out _);
+        int target = InjectSupport.HrotIdOf(_gateway, _maps, _sources, p, _schema.EventTarget, out bool targetIsHrot);
         long munitionType = p.TryGet(_schema.EventMunitionType, out var mt) ? mt.AsInt() : 0;
         long tkb = p.TryGet(_schema.EventMunitionTkb, out var m) ? m.AsInt() : ResolveTkb(munitionType);
         var origin = p.TryGet(_schema.EventLocation, out var l) ? geo.PointFromEcef(l.AsVec3()) : default;
@@ -133,8 +133,8 @@ public sealed class InjectDetonationEgress : IGatewayModule
     {
         var p = t.Payload;
         var geo = _services.Geo;
-        long shooter = InjectSupport.HrotIdOf(_gateway, _maps, _sources, p, _schema.EventFiring, out _);
-        long target = InjectSupport.HrotIdOf(_gateway, _maps, _sources, p, _schema.EventTarget, out bool targetIsHrot);
+        int shooter = InjectSupport.HrotIdOf(_gateway, _maps, _sources, p, _schema.EventFiring, out _);
+        int target = InjectSupport.HrotIdOf(_gateway, _maps, _sources, p, _schema.EventTarget, out bool targetIsHrot);
         long munitionType = p.TryGet(_schema.EventMunitionType, out var mt) ? mt.AsInt() : 0;
         long tkb = p.TryGet(_schema.EventMunitionTkb, out var m) ? m.AsInt() : ResolveTkb(munitionType);
         var location = p.TryGet(_schema.EventLocation, out var l) ? geo.PointFromEcef(l.AsVec3()) : default;
