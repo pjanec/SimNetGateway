@@ -98,6 +98,63 @@ Every sample carries `SenderNode`; each SDP node is its own pivot source `sdp:<n
 6. **DIS and HLA** read the pivot as before: a HROT entity whose damage an SDP node owns is still published to DIS
    and HLA with the pivot value. No relaying between SDP, DIS and HLA entities (R-116 extended: only `hrot` goes out).
 
+## 4a. As measured for T-027 (the public parts) - corrections to section 4
+
+Measured 2026-11-02 before building: (1) the write policy is fixed when the engine is constructed
+(`GatewayOptions.WriteAuthority`, `GatewayEngine.cs:72`, `StateRepository` holds it readonly) while the profile runs
+later, so a profile cannot install `GroupOwnershipPolicy`; (2) `EntityTable<T>` is not transactional, so an owner table
+cannot give the all-or-nothing transfer section 4 item 2 promises; (3) there is no scripted HROT side in the solution
+(DD-010's `ScriptedHrotPack` is not built) - the HROT side is `HrotDisHarness` in the tests; (4) rule triggers carry the
+writer (`Triggers.cs`, `Source`). Hence:
+
+1. **Owners are pivot attributes**, not a table: `Ownership.Spatial`, `Ownership.Info`, `Ownership.Damage`,
+   `Ownership.Articulation` (`Int`, a `SourceId` value; absent or `SourceId.None` = the entity's master `Owner`,
+   default-to-master). A transfer is an ordinary write in a change set, so it is all-or-nothing, journaled, visible in the
+   monitor and dropped with the entity. `GroupOwnership` (Common) is the stateless helper: group definitions, attribute ->
+   group, `OwnerOf(record, group)`, and the writes for transfer and reset-to-master.
+2. **Groups** (P-109): `Spatial` = position, orientation, velocities, acceleration, DR algorithm, state time; `Info` =
+   marking, force; `Damage` = damage, health; `Articulation` = articulated parts (**one group per entity in T-027**; per
+   instance needs a policy that sees the new value and is decided with the real BDC articulation descriptor);
+   `Master` = everything else of the entity, owned by `Owner` and moved only by the engine's owner transfer.
+   Ownership attributes and attributes outside every group fall through to the inner policy.
+3. **Policy installation - one small engine change** (deviation from P-110's "no engine change"; composition only, the
+   owner model is unchanged): `GatewayBuilder.UseWriteAuthority(policy)` callable while the profile configures; it
+   replaces the repository's policy and throws once a transaction has committed. `GroupOwnershipPolicy(inner, groups,
+   trusted)` allows a grouped write iff the writer is the group's effective owner, the engine or a trusted source
+   (processors, e.g. the reapers).
+4. **The HROT ingress never writes a group it does not own** (otherwise the commit check rejects its whole change set):
+   `HrotEntityStateIngress` and `HrotTurretPoseIngress` leave out externally owned groups.
+5. **`Protocol.Hrot`** (P-111): `HrotDescriptor` flags `Spatial = 1, Info = 2, Damage = 4, Articulation = 8`.
+   `HrotDescriptorOwnership(int Id, HrotDescriptor External)` - the whole set currently owned outside HROT for a HROT entity
+   (absolute, idempotent; `None` = all local), sent whenever the set changes. `ExternalState(int Id, HrotDescriptor
+   Descriptors, HrotDrSnapshot State, string Marking, int Force, double HealthCurrent, double HealthMax)` - values of the
+   external groups only (fields of other groups are default), sent when a writer other than `hrot` changes an external
+   group of a HROT entity. Articulation values to HROT come with H4 (no part pose goes to HROT yet).
+6. **Who may own**: a group of a HROT entity or of an entity of the transferring side's own origin; a transfer of a DIS or
+   HLA entity's group is refused (no relaying, R-116). The side validates who asks (in BDC: `OwnershipUpdate`).
+7. **Scripted HROT side**: the test HROT model (in `HrotDisHarness`) honours the two messages - it stops reporting
+   external groups and adopts `ExternalState` values - and so stands for the pack until the private-repo pack (H5) exists.
+
+```mermaid
+sequenceDiagram
+    participant X as external side (test side now, BDC later)
+    participant E as engine commit
+    participant O as HrotDescriptorOwnershipEgress
+    participant V as ExternalStateEgress
+    participant H as HROT side (harness model)
+    X->>E: change set: Ownership.Damage of Lion-1 := x
+    E-->>O: Ownership.* changed on a hrot entity
+    O->>H: HrotDescriptorOwnership(Lion-1, Damage)
+    H->>E: HrotEntityState(Lion-1) - ingress writes Spatial and Info only
+    X->>E: change set: Damage of Lion-1 (writer x owns Damage - allowed)
+    E-->>V: Damage changed by x on a hrot entity
+    V->>H: ExternalState(Lion-1, Damage, health)
+    X->>E: change set: Damage written by dis - rejected by GroupOwnershipPolicy
+```
+
+Caption: ownership moves and value writes are separate change sets (the policy checks against the committed owner), and
+the HROT ingress shrinks its own writes the moment the set changes.
+
 ## 5. Class diagram
 
 ```mermaid
