@@ -135,21 +135,20 @@ public sealed class ReplicaPublisher
     private bool IsEligible(EntityRecord entity) =>
         entity.Has(_schema.EntityType) && entity.Has(_schema.Position) && entity.Has(_schema.StateTime);
 
-    private ReplicaState Build(EntityRecord entity, int hrotId)
+    /// <summary>The dead-reckoning snapshot of an entity's spatial attributes in the HROT frame (needs Position and StateTime and a valid origin).</summary>
+    internal static HrotDrSnapshot Snapshot(PivotSchema schema, GeoFrame geo, EntityRecord entity)
     {
-        var geo = _services.Geo;
-        long packedType = entity.Get(_schema.EntityType).AsInt();
-        var ecefPosition = entity.Get(_schema.Position).AsVec3();
-        var velocity = entity.TryGet(_schema.Velocity, out var v) ? v.AsVec3() : default;
-        var acceleration = entity.TryGet(_schema.Acceleration, out var a) ? a.AsVec3() : default;
-        var euler = entity.TryGet(_schema.Orientation, out var o) ? o.AsVec3() : default;
-        var omegaBody = entity.TryGet(_schema.AngularVelocity, out var w) ? w.AsVec3() : default;
-        int algorithm = entity.TryGet(_schema.DrAlgorithm, out var d) ? (int)d.AsInt() : DrAlgorithms.Static;
-        double stateTime = entity.Get(_schema.StateTime).AsDouble();
+        var ecefPosition = entity.Get(schema.Position).AsVec3();
+        var velocity = entity.TryGet(schema.Velocity, out var v) ? v.AsVec3() : default;
+        var acceleration = entity.TryGet(schema.Acceleration, out var a) ? a.AsVec3() : default;
+        var euler = entity.TryGet(schema.Orientation, out var o) ? o.AsVec3() : default;
+        var omegaBody = entity.TryGet(schema.AngularVelocity, out var w) ? w.AsVec3() : default;
+        int algorithm = entity.TryGet(schema.DrAlgorithm, out var d) ? (int)d.AsInt() : DrAlgorithms.Static;
+        double stateTime = entity.Get(schema.StateTime).AsDouble();
 
         var rotation = geo.FromEuler(euler);
         bool bodyAxes = DrAlgorithms.IsBodyAxis(algorithm);
-        var snapshot = new HrotDrSnapshot(
+        return new HrotDrSnapshot(
             geo.PointFromEcef(ecefPosition),
             bodyAxes ? GeoFrame.FromVec(velocity) : geo.VectorFromEcef(velocity),
             bodyAxes ? GeoFrame.FromVec(acceleration) : geo.VectorFromEcef(acceleration),
@@ -157,6 +156,12 @@ public sealed class ReplicaPublisher
             geo.AngularVelocityFromBody(rotation, omegaBody),
             algorithm,
             stateTime);
+    }
+
+    private ReplicaState Build(EntityRecord entity, int hrotId)
+    {
+        long packedType = entity.Get(_schema.EntityType).AsInt();
+        var snapshot = Snapshot(_schema, _services.Geo, entity);
 
         long tkb = _services.EntityTypes.DefaultTkb;
         if (_services.EntityTypes.TryDisToTkb(packedType, out long matched))

@@ -278,3 +278,22 @@ flowchart TD
 | **P-112** (approved as range-based ids, R-130) | **Sample entity ids from a configured block** and a configured gateway node id; the real BDC's allocation replaces it. | Model an id-allocator service in the fake. |
 | **P-113** (CHANGED by R-130: DDS transport + in-memory bus) | **In-memory SDP bus only** in the POC; the DDS transport belongs to the private BDC repo. | Also a DDS transport for SDP (CycloneDDS in tests). |
 | **P-114** (approved, R-130) | **Stage T-027 after T-026a** (the side seam), before the loadable pack. | Build the fake inside `Gateway.HrotDis` (would not prove the external path). |
+
+## 10. As-built notes (T-027, public parts, 2026-11-02)
+
+Files: Engine `GatewayBuilder.UseWriteAuthority`, `StateRepository` (replaceable policy, `HasCommitted`); Common
+`Ownership/GroupOwnership.cs` (`AttributeGroup`, `GroupOwnership`, `GroupOwnershipPolicy`); `Protocol.Hrot`
+`HrotDescriptor`, `HrotDescriptorOwnership`, `ExternalState`; Gateway.HrotDis `PivotSchema` groups and `Ownership.*`
+attributes, `Hrot/HrotDescriptorOwnershipEgress.cs` (both egress modules), `Sides/SideOwnership.cs` (`SideContext.Ownership`:
+`TryTransfer`, `ResetToMaster`, `Group`, `OwnerOf`); tests `UseWriteAuthorityTests`, `GroupOwnershipTests` (seeded brute-force
+model), `DescriptorOwnershipTests`, `HrotModel` (the test HROT side), checker invariant G-8. Deviations from section 4a:
+
+1. The two egress modules are registered after the sides' modules (module order literals stay append-only).
+2. Trusted sources = every source whose name starts with `proc.`, collected after the side register phase; the policy
+   wraps the engine's current policy (permissive by default).
+3. A transfer to the master owner clears the owner attribute (one representation of "master").
+4. `ExternalState` takes health from `Hrot.Health` when written in the same change set, else from the damage level; a
+   transfer alone sends only `HrotDescriptorOwnership`, values follow with the owner's first write.
+5. `TryTransfer` takes the requesting side's origin explicitly (a side with per-node sub-sources passes its own).
+6. Found by the build: two reaper tests wrote `Identity.Marking` of a DIS / RPR entity from a non-owner source; the
+   policy now refuses that write, so their premise moved to a trusted `proc.` writer (follow-up commit).

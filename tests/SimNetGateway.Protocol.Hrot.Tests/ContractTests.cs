@@ -23,7 +23,8 @@ public class ContractTests
     [Fact]
     public void The_gateway_to_pack_messages_are_exactly_those_of_the_contract_table()
     {
-        string[] expected = ["InjectDetonation", "InjectFire", "ReplicaRemoved", "ReplicaState", "TimeRequest"];
+        string[] expected =
+            ["ExternalState", "HrotDescriptorOwnership", "InjectDetonation", "InjectFire", "ReplicaRemoved", "ReplicaState", "TimeRequest"];
         var actual = Messages.Where(t => typeof(IGatewayToHrotMessage).IsAssignableFrom(t)).Select(t => t.Name).Order().ToArray();
         Assert.Equal(expected, actual);
     }
@@ -100,5 +101,18 @@ public class ContractTests
         Assert.Equal(replica, typeof(ReplicaState).GetProperties().Where(p => p.Name != "EqualityContract").Select(p => p.Name).ToArray());
         string[] snapshot = ["Position", "Velocity", "Acceleration", "Rotation", "AngularVelocity", "DrAlgorithm", "StateTime"];
         Assert.Equal(snapshot, typeof(HrotDrSnapshot).GetProperties().Where(p => p.Name != "EqualityContract").Select(p => p.Name).ToArray());
+    }
+
+    [Fact]
+    public void The_descriptor_flags_and_the_external_messages_are_those_of_the_design()
+    {
+        Assert.Equal(["None", "Spatial", "Info", "Damage", "Articulation"], Enum.GetNames<HrotDescriptor>());
+        Assert.Equal([0, 1, 2, 4, 8], Enum.GetValues<HrotDescriptor>().Select(v => (int)v).ToArray());
+        Assert.NotNull(typeof(HrotDescriptor).GetCustomAttribute<FlagsAttribute>());
+        Assert.Equal(["Id", "External"], typeof(HrotDescriptorOwnership).GetProperties().Where(p => p.Name != "EqualityContract").Select(p => p.Name).ToArray());
+        Assert.Equal(["Id", "Descriptors", "State", "Marking", "Force", "HealthCurrent", "HealthMax"],
+            typeof(ExternalState).GetProperties().Where(p => p.Name != "EqualityContract").Select(p => p.Name).ToArray());
+        Assert.Equal(typeof(int), typeof(ExternalState).GetProperty("Id")!.PropertyType);
+        Assert.Equal(new HrotDescriptorOwnership(1, HrotDescriptor.Damage | HrotDescriptor.Info), new HrotDescriptorOwnership(1, (HrotDescriptor)6));
     }
 }

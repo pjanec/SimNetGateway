@@ -138,6 +138,23 @@ public sealed class HrotDisProfile : IGatewayProfile
         {
             side.Register(context, settings);
         }
+
+        // descriptor ownership towards HROT (after the sides: their rules keep their place in the order)
+        builder.AddModule(new HrotDescriptorOwnershipEgress(schema, maps, sources, hrotOut));
+        builder.AddModule(new ExternalStateEgress(schema, maps, sources, services, hrotOut));
+
+        // group ownership (DD-012 section 4a item 3): installed last so that every processor source registered above is trusted
+        var trusted = new List<SourceId>();
+        for (int i = 1; i <= builder.Sources.Count; i++)
+        {
+            var id = new SourceId(i);
+            if (builder.Sources.NameOf(id).StartsWith("proc.", StringComparison.Ordinal))
+            {
+                trusted.Add(id);
+            }
+        }
+
+        builder.UseWriteAuthority(new GroupOwnershipPolicy(builder.Engine.State.Policy, schema.Groups, trusted));
     }
 }
 

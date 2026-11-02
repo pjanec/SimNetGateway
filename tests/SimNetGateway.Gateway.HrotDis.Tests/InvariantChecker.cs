@@ -111,6 +111,7 @@ public sealed class InvariantChecker
         CheckJournal();
         CheckIdentities();
         CheckReceivedState();
+        CheckDescriptors();
         if (_h.Engine.Diagnostics.RuleFailures != 0)
         {
             Violate("G-7", $"{_h.Engine.Diagnostics.RuleFailures} rule(s) threw an exception");
@@ -121,6 +122,61 @@ public sealed class InvariantChecker
             var all = string.Join(Environment.NewLine, _violations);
             _violations.Clear();
             Assert.Fail($"Invariant violation(s) at tick {_h.Engine.TickCount}:{Environment.NewLine}{all}");
+        }
+    }
+
+    private readonly Dictionary<(EntityId, string), HashSet<SourceId>> _seenOwners = new();
+    private int _modelViolations;
+
+    /// <summary>
+    /// G-8 descriptor ownership (DD-012 section 4a): the gateway never sends ExternalState for a group that is not external; the HROT model's
+    /// external set equals the pivot's for every HROT entity; a slot of a grouped attribute was written by an owner the group had (or by
+    /// the master owner, the engine or a processor).
+    /// </summary>
+    private void CheckDescriptors()
+    {
+        for (; _modelViolations < _h.HrotModel.Violations.Count; _modelViolations++)
+        {
+            Violate("G-8", _h.HrotModel.Violations[_modelViolations]);
+        }
+
+        var schema = _h.Schema;
+        foreach (var entity in _h.Engine.State.Entities)
+        {
+            if (entity.Origin == _h.HrotSource && _h.HrotIds.TryGetKey(entity.Id, out int hrotId))
+            {
+                var pivot = schema.ExternalSet(entity, _h.HrotSource);
+                if (pivot != _h.HrotModel.ExternalOf(hrotId))
+                {
+                    Violate("G-8", $"entity {hrotId}: HROT believes {_h.HrotModel.ExternalOf(hrotId)} is external, the pivot says {pivot}");
+                }
+            }
+
+            foreach (var group in schema.Groups.Groups)
+            {
+                var owner = schema.Groups.OwnerOf(entity, group);
+                if (!_seenOwners.TryGetValue((entity.Id, group.Name), out var seen))
+                {
+                    _seenOwners[(entity.Id, group.Name)] = seen = new HashSet<SourceId>();
+                }
+
+                seen.Add(owner);
+                foreach (var attr in group.Attributes)
+                {
+                    if (!entity.TryGetSlot(attr, out var slot))
+                    {
+                        continue;
+                    }
+
+                    var writer = slot.Meta.Source;
+                    bool allowed = seen.Contains(writer) || writer == entity.Owner || writer == SourceRegistry.Engine ||
+                        _h.Engine.Sources.NameOf(writer).StartsWith("proc.", StringComparison.Ordinal);
+                    if (!allowed)
+                    {
+                        Violate("G-8", $"entity {entity.Id.Value}: {_h.Engine.Attributes[attr].Name} was written by '{_h.Engine.Sources.NameOf(writer)}', which never owned group {group.Name}");
+                    }
+                }
+            }
         }
     }
 

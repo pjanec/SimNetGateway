@@ -1,4 +1,6 @@
+using SimNetGateway.Common;
 using SimNetGateway.Engine;
+using SimNetGateway.Protocol.Hrot;
 
 namespace SimNetGateway.Gateway.HrotDis;
 
@@ -58,6 +60,16 @@ public sealed class PivotSchema
         EventRelativeLocation = attributes.Register("Event.RelativeLocation", AttrKind.Vec3, "Detonation location in the target's body coordinates (FRD), metres");
         EventResult = attributes.Register("Event.Result", AttrKind.Int, "DIS detonation result (1 entity impact, 3 ground impact)");
 
+        OwnerSpatial = attributes.Register("Ownership.Spatial", AttrKind.Int, "Owner (a source id) of the Spatial group; absent or 0 = the entity's master owner");
+        OwnerInfo = attributes.Register("Ownership.Info", AttrKind.Int, "Owner (a source id) of the Info group (marking, force); absent or 0 = the master owner");
+        OwnerDamage = attributes.Register("Ownership.Damage", AttrKind.Int, "Owner (a source id) of the Damage group (damage, health); absent or 0 = the master owner");
+        OwnerArticulation = attributes.Register("Ownership.Articulation", AttrKind.Int, "Owner (a source id) of the Articulation group; absent or 0 = the master owner");
+        SpatialGroup = new AttributeGroup("Spatial", OwnerSpatial, [Position, Orientation, Velocity, Acceleration, AngularVelocity, DrAlgorithm, StateTime]);
+        InfoGroup = new AttributeGroup("Info", OwnerInfo, [Marking, Force]);
+        DamageGroup = new AttributeGroup("Damage", OwnerDamage, [Damage, Health]);
+        ArticulationGroup = new AttributeGroup("Articulation", OwnerArticulation, [ArticulationParts]);
+        Groups = new GroupOwnership([SpatialGroup, InfoGroup, DamageGroup, ArticulationGroup]);
+
         FrameGeneration = attributes.Register("Hrot.FrameGeneration", AttrKind.Int, "Generation of the HROT origin that was just applied");
 
         WeaponFire = events.Register("WeaponFire", "A weapon was fired (payload Event.*)");
@@ -107,6 +119,68 @@ public sealed class PivotSchema
     public AttrId EventResult { get; }
 
     public AttrId FrameGeneration { get; }
+
+    /// <summary>Owner of the Spatial group (<c>Ownership.Spatial</c>).</summary>
+    public AttrId OwnerSpatial { get; }
+
+    /// <summary>Owner of the Info group.</summary>
+    public AttrId OwnerInfo { get; }
+
+    /// <summary>Owner of the Damage group.</summary>
+    public AttrId OwnerDamage { get; }
+
+    /// <summary>Owner of the Articulation group.</summary>
+    public AttrId OwnerArticulation { get; }
+
+    /// <summary>Position, orientation, velocities, acceleration, DR algorithm, state time (DD-012 section 4a item 2).</summary>
+    public AttributeGroup SpatialGroup { get; }
+
+    /// <summary>Marking, force.</summary>
+    public AttributeGroup InfoGroup { get; }
+
+    /// <summary>Damage, health.</summary>
+    public AttributeGroup DamageGroup { get; }
+
+    /// <summary>Articulated parts (one group per entity in T-027).</summary>
+    public AttributeGroup ArticulationGroup { get; }
+
+    /// <summary>The four groups and their owner attributes.</summary>
+    public GroupOwnership Groups { get; }
+
+    /// <summary>The <see cref="HrotDescriptor"/> flag of a group.</summary>
+    public HrotDescriptor DescriptorOf(AttributeGroup group) =>
+        ReferenceEquals(group, SpatialGroup) ? HrotDescriptor.Spatial
+        : ReferenceEquals(group, InfoGroup) ? HrotDescriptor.Info
+        : ReferenceEquals(group, DamageGroup) ? HrotDescriptor.Damage
+        : ReferenceEquals(group, ArticulationGroup) ? HrotDescriptor.Articulation
+        : throw new ArgumentException($"'{group.Name}' is not a group of this schema.", nameof(group));
+
+    /// <summary>The groups of a descriptor set, in group order.</summary>
+    public IEnumerable<AttributeGroup> GroupsOf(HrotDescriptor descriptors)
+    {
+        foreach (var group in Groups.Groups)
+        {
+            if ((DescriptorOf(group) & descriptors) != 0)
+            {
+                yield return group;
+            }
+        }
+    }
+
+    /// <summary>The set of groups of an entity that are owned by a source other than <paramref name="master"/>.</summary>
+    public HrotDescriptor ExternalSet(EntityRecord entity, SourceId master)
+    {
+        var set = HrotDescriptor.None;
+        foreach (var group in Groups.Groups)
+        {
+            if (Groups.IsExternal(entity, group, master))
+            {
+                set |= DescriptorOf(group);
+            }
+        }
+
+        return set;
+    }
 
     public EventTypeId WeaponFire { get; }
     public EventTypeId MunitionDetonation { get; }

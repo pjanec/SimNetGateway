@@ -162,3 +162,46 @@ public readonly record struct InjectDetonation(
 
 /// <summary>Pause or resume HROT's time; sent only when the configuration says that DIS controls HROT.</summary>
 public readonly record struct TimeRequest(TimeRequestKind Kind) : IGatewayToHrotMessage;
+
+/// <summary>
+/// The groups of an entity's state that are owned as a unit (descriptors, DD-012 section 4a): they can be owned by a source other
+/// than the HROT side, see <see cref="HrotDescriptorOwnership"/>.
+/// </summary>
+[Flags]
+public enum HrotDescriptor
+{
+    /// <summary>No group (all local).</summary>
+    None = 0,
+
+    /// <summary>Position, orientation, velocities, acceleration, dead-reckoning algorithm, state time.</summary>
+    Spatial = 1,
+
+    /// <summary>Marking and force.</summary>
+    Info = 2,
+
+    /// <summary>Damage state and health.</summary>
+    Damage = 4,
+
+    /// <summary>Articulated parts (turret poses).</summary>
+    Articulation = 8,
+}
+
+/// <summary>
+/// The whole set of groups of a HROT entity that is currently owned outside HROT (absolute and idempotent; <see cref="HrotDescriptor.None"/>
+/// = all local), sent whenever the set changes. HROT stops writing the groups in the set and adopts <see cref="ExternalState"/> for them.
+/// </summary>
+public readonly record struct HrotDescriptorOwnership(int Id, HrotDescriptor External) : IGatewayToHrotMessage;
+
+/// <summary>
+/// The values of the externally owned groups of a HROT entity, sent when a writer other than HROT changes one of them. Only the fields of the
+/// groups named in <see cref="Descriptors"/> are meaningful (<see cref="State"/> for Spatial, <see cref="Marking"/> and <see cref="Force"/>
+/// for Info, the health pair for Damage); the others are default.
+/// </summary>
+public readonly record struct ExternalState(
+    int Id,
+    HrotDescriptor Descriptors,
+    HrotDrSnapshot State,
+    string Marking,
+    int Force,
+    double HealthCurrent,
+    double HealthMax) : IGatewayToHrotMessage;

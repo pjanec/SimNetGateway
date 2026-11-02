@@ -42,6 +42,12 @@ public sealed class HrotTurretPoseIngress : IGatewayModule
 
         // One message is one transaction and this is the only writer of the attribute, so the stored value is the current one.
         ArticulationParts current = ArticulationParts.Empty;
+        var existing = ctx.State.Find(id);
+        if (existing is not null && _schema.Groups.OwnerOf(existing, _schema.ArticulationGroup) != ctx.Source)
+        {
+            return; // the group is owned outside HROT (DD-012 section 4a item 4)
+        }
+
         if (ctx.State.Find(id) is { } record && record.TryGet(_schema.ArticulationParts, out var stored))
         {
             current = stored.AsObject<ArticulationParts>();
