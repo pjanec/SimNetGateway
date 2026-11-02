@@ -44,7 +44,7 @@ public class SideOrderTests
             new[] { "hrot.entity", "dis.entity", "rpr.handle" },
             r.Maps);
         Assert.Equal(
-            new[] { "ReplicaStateEgress", "ReplicaRemovedEgress", "InjectFireEgress", "InjectDetonationEgress", "TimeRequestEgress", "DisEntityStateEgress", "DisHeartbeatEgress", "DisFireEgress", "DisDetonationEgress", "DisSessionEgress", "DisStaleReaper", "RprUpdateRequestedResponder", "RprEntityEgress", "RprFireEgress", "RprDetonationEgress", "RprStaleReaper" },
+            new[] { "ReplicaStateEgress", "ReplicaRemovedEgress", "InjectFireEgress", "InjectDetonationEgress", "TimeRequestEgress", "DisEntityStateEgress", "DisHeartbeatEgress", "DisFireEgress", "DisDetonationEgress", "DisSessionEgress", "DisStaleReaper", "RprUpdateRequestedResponder", "RprEntityEgress", "RprFireEgress", "RprDetonationEgress", "RprStaleReaper", "HrotDescriptorOwnershipEgress", "ExternalStateEgress" },
             r.Modules);
     }
 
@@ -65,7 +65,7 @@ public class SideOrderTests
             new[] { "hrot.entity", "dis.entity" },
             r.Maps);
         Assert.Equal(
-            new[] { "ReplicaStateEgress", "ReplicaRemovedEgress", "InjectFireEgress", "InjectDetonationEgress", "TimeRequestEgress", "DisEntityStateEgress", "DisHeartbeatEgress", "DisFireEgress", "DisDetonationEgress", "DisSessionEgress", "DisStaleReaper" },
+            new[] { "ReplicaStateEgress", "ReplicaRemovedEgress", "InjectFireEgress", "InjectDetonationEgress", "TimeRequestEgress", "DisEntityStateEgress", "DisHeartbeatEgress", "DisFireEgress", "DisDetonationEgress", "DisSessionEgress", "DisStaleReaper", "HrotDescriptorOwnershipEgress", "ExternalStateEgress" },
             r.Modules);
     }
 
@@ -86,7 +86,7 @@ public class SideOrderTests
             new[] { "hrot.entity", "dis.entity", "rpr.handle" },
             r.Maps);
         Assert.Equal(
-            new[] { "ReplicaStateEgress", "ReplicaRemovedEgress", "InjectFireEgress", "InjectDetonationEgress", "TimeRequestEgress", "RprUpdateRequestedResponder", "RprEntityEgress", "RprFireEgress", "RprDetonationEgress", "RprStaleReaper" },
+            new[] { "ReplicaStateEgress", "ReplicaRemovedEgress", "InjectFireEgress", "InjectDetonationEgress", "TimeRequestEgress", "RprUpdateRequestedResponder", "RprEntityEgress", "RprFireEgress", "RprDetonationEgress", "RprStaleReaper", "HrotDescriptorOwnershipEgress", "ExternalStateEgress" },
             r.Modules);
     }
 }

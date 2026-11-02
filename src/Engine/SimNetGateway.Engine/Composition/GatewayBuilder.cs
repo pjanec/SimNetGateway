@@ -103,6 +103,19 @@ public sealed class GatewayBuilder
         return port;
     }
 
+    /// <summary>
+    /// Replaces the engine's write authority policy (R-057, DD-012 section 4a item 3): a profile composes its policy while it
+    /// configures, because the policy otherwise is fixed when the engine is constructed. Throws once a transaction has committed
+    /// or the gateway was built. The last call wins; a profile that wraps the previous policy reads <see cref="GatewayEngine"/>'s
+    /// <c>State.Policy</c> first.
+    /// </summary>
+    public void UseWriteAuthority(IWriteAuthorityPolicy policy)
+    {
+        EnsureOpen();
+        ArgumentNullException.ThrowIfNull(policy);
+        Engine.State.ReplacePolicy(policy);
+    }
+
     public void AddModule(IGatewayModule module)
     {
         EnsureOpen();

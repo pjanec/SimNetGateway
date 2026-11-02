@@ -97,10 +97,11 @@ public sealed class HrotDisHarness
         DisIds = (IdentityMap<DisEntityKey>?)Engine.Identities.Find("dis.entity");
 
         Checker = new InvariantChecker(this);
-        if (installChecker)
+        HrotOut.Tap = installChecker ? m =>
         {
-            HrotOut.Tap = Checker.OnSent;
-        }
+            HrotModel.OnSent(m);
+            Checker.OnSent(m);
+        } : HrotModel.OnSent;
 
         if (Config.HlaRuns && installChecker)
         {
@@ -207,6 +208,9 @@ public sealed class HrotDisHarness
 
     public InvariantChecker Checker { get; }
 
+    /// <summary>The test HROT side's record of descriptor ownership and adopted external values (DD-012 section 4a item 7).</summary>
+    public HrotModel HrotModel { get; } = new();
+
     // ---- stepping ---------------------------------------------------------------------------------------------------
 
     /// <summary>
@@ -295,6 +299,11 @@ public sealed class HrotDisHarness
         where T : IHrotToGatewayMessage
     {
         _stimulus = true;
+        if (message is HrotEntityRemoved removed)
+        {
+            HrotModel.Forget(removed.Id);
+        }
+
         HrotIn.Enqueue(in message);
     }
 

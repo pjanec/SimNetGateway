@@ -11,7 +11,8 @@ public sealed partial class StateRepository : IStateView
 {
     private readonly Dictionary<EntityId, EntityRecord> _entities = new();
     private readonly AttributeRegistry _attributes;
-    private readonly IWriteAuthorityPolicy _policy;
+    private IWriteAuthorityPolicy _policy;
+    private bool _hasCommitted;
     private readonly RecordPools _pools = new();
     private readonly ChangeSet _changeSet;
     private readonly ChangeJournal _journal;
@@ -50,6 +51,21 @@ public sealed partial class StateRepository : IStateView
     internal CorrelationId AllocateCorrelation() => new(_nextCorrelation++);
 
     public IWriteAuthorityPolicy Policy => _policy;
+
+    /// <summary>True once any change set was applied (a commit that was not rejected).</summary>
+    internal bool HasCommitted => _hasCommitted;
+
+    /// <summary>Replaces the write policy; only before the first commit (a policy that changes under committed state would judge old writes by new rules).</summary>
+    internal void ReplacePolicy(IWriteAuthorityPolicy policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        if (_hasCommitted)
+        {
+            throw new InvalidOperationException("The write authority policy cannot be replaced after a transaction has committed.");
+        }
+
+        _policy = policy;
+    }
 
     public int Count => _entities.Count;
 
@@ -121,6 +137,7 @@ public sealed partial class StateRepository : IStateView
             return CommitResult.Rejected(reason);
         }
 
+        _hasCommitted = true;
         var record = Apply(changeSet);
         var participants = changeSet.Participants;
         for (int i = 0; i < participants.Count; i++)

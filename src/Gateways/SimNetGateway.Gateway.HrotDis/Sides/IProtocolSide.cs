@@ -85,6 +85,7 @@ public sealed class SideContext
     internal SideContext(GatewayBuilder builder, GatewayConfiguration config, PivotSchema schema, HrotDisMaps maps, HrotDisSources sources,
         HrotDisServices services, IOutboundChannel<IGatewayToHrotMessage> hrotOut)
     {
+        Ownership = new SideOwnership(schema, sources);
         Builder = builder;
         Config = config;
         Schema = schema;
@@ -111,6 +112,9 @@ public sealed class SideContext
 
     /// <summary>The services shared by the modules.</summary>
     public HrotDisServices Services { get; }
+
+    /// <summary>Moving the ownership of attribute groups of entities (descriptors), with the rules of DD-012 section 4a item 6.</summary>
+    public SideOwnership Ownership { get; }
 
     /// <summary>The outbound port to HROT.</summary>
     public IOutboundChannel<IGatewayToHrotMessage> HrotOut { get; }

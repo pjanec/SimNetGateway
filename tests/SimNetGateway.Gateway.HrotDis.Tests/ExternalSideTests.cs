@@ -13,18 +13,38 @@ public sealed record ExtSettings(bool Enabled = true, int Level = 1);
 /// <summary>A message on the test side's port: one entity state.</summary>
 public readonly record struct ExtMessage(string Name, double X);
 
+/// <summary>The side's node takes (or hands back) a group of a HROT entity.</summary>
+public readonly record struct ExtTransfer(int HrotId, string Group, bool Take);
+
+/// <summary>The side asks to move a group of an arbitrary pivot entity (a DIS entity, for example): must be refused.</summary>
+public readonly record struct ExtTransferEntity(EntityId Entity, string Group);
+
+/// <summary>The side's node writes the damage group of a HROT entity (health, and the damage level derived from it).</summary>
+public readonly record struct ExtDamage(int HrotId, double Health, double Max);
+
+/// <summary>The side's node writes the info group of a HROT entity.</summary>
+public readonly record struct ExtInfo(int HrotId, string Marking, int Force);
+
+/// <summary>The side's node writes the spatial group of a HROT entity (ECEF position and a state time).</summary>
+public readonly record struct ExtSpatial(int HrotId, Vec3 Ecef, double StateTime);
+
+/// <summary>The side's node left: every group it owned returns to the master.</summary>
+public readonly record struct ExtLeave;
+
 /// <summary>Writes the entity of an <see cref="ExtMessage"/> into the pivot as the test side's origin, exactly as an ingress module of a side does.</summary>
 public sealed class ExtIngress : IGatewayModule
 {
     private readonly PivotSchema _schema;
     private readonly SideContext _context;
     private readonly List<ExtMessage> _received;
+    private readonly List<string> _refusals;
 
-    public ExtIngress(SideContext context, List<ExtMessage> received)
+    public ExtIngress(SideContext context, List<ExtMessage> received, List<string> refusals)
     {
         _schema = context.Schema;
         _context = context;
         _received = received;
+        _refusals = refusals;
     }
 
     public string Name => nameof(ExtIngress);
@@ -34,7 +54,81 @@ public sealed class ExtIngress : IGatewayModule
         var sc = _schema;
         setup.Produces(sc.EntityType, sc.Marking, sc.Force, sc.Position, sc.Orientation, sc.Velocity, sc.Acceleration, sc.AngularVelocity,
             sc.DrAlgorithm, sc.StateTime, sc.Damage);
+        setup.Produces(sc.Health, sc.OwnerSpatial, sc.OwnerInfo, sc.OwnerDamage, sc.OwnerArticulation);
         setup.OnMessage<ExtMessage>(Handle);
+        setup.OnMessage<ExtTransfer>(Transfer);
+        setup.OnMessage<ExtTransferEntity>(TransferEntity);
+        setup.OnMessage<ExtDamage>(Damage);
+        setup.OnMessage<ExtInfo>(Info);
+        setup.OnMessage<ExtSpatial>(Spatial);
+        setup.OnMessage<ExtLeave>(Leave);
+    }
+
+    private bool Find(IngressContext ctx, int hrotId, out EntityRecord record)
+    {
+        record = null!;
+        if (!_context.Maps.HrotEntity.TryResolve(ctx.Changes, hrotId, out var id) || ctx.State.Find(id) is not { } found)
+        {
+            return false;
+        }
+
+        record = found;
+        return true;
+    }
+
+    private void Transfer(in ExtTransfer m, IngressContext ctx)
+    {
+        if (Find(ctx, m.HrotId, out var record) && _context.Ownership.Group(m.Group) is { } group)
+        {
+            if (!_context.Ownership.TryTransfer(ctx.Changes, record, group, m.Take ? ctx.Source : SourceId.None, ctx.Source, out var refusal))
+            {
+                _refusals.Add(refusal!);
+            }
+        }
+    }
+
+    private void TransferEntity(in ExtTransferEntity m, IngressContext ctx)
+    {
+        if (ctx.State.Find(m.Entity) is { } record && _context.Ownership.Group(m.Group) is { } group &&
+            !_context.Ownership.TryTransfer(ctx.Changes, record, group, ctx.Source, ctx.Source, out var refusal))
+        {
+            _refusals.Add(refusal!);
+        }
+    }
+
+    private void Damage(in ExtDamage m, IngressContext ctx)
+    {
+        if (Find(ctx, m.HrotId, out var record))
+        {
+            ctx.Changes.Set(record.Id, _schema.Health, AttrValue.From(new Vec3(m.Health, m.Max, 0)));
+            ctx.Changes.Set(record.Id, _schema.Damage, AttrValue.From((long)_context.Services.Damage.DamageOf(m.Health, m.Max)));
+        }
+    }
+
+    private void Info(in ExtInfo m, IngressContext ctx)
+    {
+        if (Find(ctx, m.HrotId, out var record))
+        {
+            ctx.Changes.Set(record.Id, _schema.Marking, AttrValue.From(m.Marking));
+            ctx.Changes.Set(record.Id, _schema.Force, AttrValue.From((long)m.Force));
+        }
+    }
+
+    private void Spatial(in ExtSpatial m, IngressContext ctx)
+    {
+        if (Find(ctx, m.HrotId, out var record))
+        {
+            ctx.Changes.Set(record.Id, _schema.Position, AttrValue.From(m.Ecef));
+            ctx.Changes.Set(record.Id, _schema.StateTime, AttrValue.From(m.StateTime));
+        }
+    }
+
+    private void Leave(in ExtLeave m, IngressContext ctx)
+    {
+        foreach (var entity in ctx.State.Entities)
+        {
+            _context.Ownership.ResetToMaster(ctx.Changes, entity, ctx.Source);
+        }
     }
 
     private void Handle(in ExtMessage m, IngressContext ctx)
@@ -63,6 +157,9 @@ public sealed class ExtSide : IProtocolSide
 {
     public List<ExtMessage> Received { get; } = new();
 
+    /// <summary>The refusals of transfers the side asked for.</summary>
+    public List<string> Refusals { get; } = new();
+
     public string Key => "ext";
 
     public object? Parse(ConfigSection section)
@@ -87,13 +184,13 @@ public sealed class ExtSide : IProtocolSide
         d.RequestMap<long>("ext.id");
     }
 
-    public void Register(SideContext c, object settings) => c.Builder.AddModule(new ExtIngress(c, Received));
+    public void Register(SideContext c, object settings) => c.Builder.AddModule(new ExtIngress(c, Received, Refusals));
 }
 
 /// <summary>A side from another project plugs into the profile through <see cref="SideRegistry"/> (T-026a, DD-011 section 3a).</summary>
 public class ExternalSideTests
 {
-    private static HrotDisHarness Build(ExtSide side, out InMemoryInbound extIn, GatewayConfiguration? config = null)
+    internal static HrotDisHarness Build(ExtSide side, out InMemoryInbound extIn, GatewayConfiguration? config = null)
     {
         var registry = SideRegistry.Builtin.With(side);
         InMemoryInbound? inbound = null;

@@ -1,3 +1,4 @@
+using SimNetGateway.Common;
 using SimNetGateway.Engine;
 using SimNetGateway.Protocol.Hrot;
 
@@ -73,14 +74,25 @@ public sealed class HrotEntityStateIngress : IGatewayModule
         }
 
         changes.Set(id, _schema.TkbType, AttrValue.From(m.TkbType));
-        changes.Set(id, _schema.Marking, AttrValue.From(m.Marking ?? string.Empty));
-        changes.Set(id, _schema.Force, AttrValue.From((long)m.Force));
-        changes.Set(id, _schema.Health, AttrValue.From(new Vec3(m.HealthCurrent, m.HealthMax, 0.0)));
-        changes.Set(id, _schema.Damage, AttrValue.From((long)_services.Damage.DamageOf(m.HealthCurrent, m.HealthMax)));
+        // groups owned outside HROT are left out: the policy would reject the whole change set (DD-012 section 4a item 4)
+        var record = ctx.State.Find(id);
+        bool Local(AttributeGroup group) => record is null || _schema.Groups.OwnerOf(record, group) == ctx.Source;
+        if (Local(_schema.InfoGroup))
+        {
+            changes.Set(id, _schema.Marking, AttrValue.From(m.Marking ?? string.Empty));
+            changes.Set(id, _schema.Force, AttrValue.From((long)m.Force));
+        }
+
+        if (Local(_schema.DamageGroup))
+        {
+            changes.Set(id, _schema.Health, AttrValue.From(new Vec3(m.HealthCurrent, m.HealthMax, 0.0)));
+            changes.Set(id, _schema.Damage, AttrValue.From((long)_services.Damage.DamageOf(m.HealthCurrent, m.HealthMax)));
+        }
+
         SetCommander(ctx, id, m.CommanderId);
 
         var geo = _services.Geo;
-        if (!geo.IsValid)
+        if (!geo.IsValid || !Local(_schema.SpatialGroup))
         {
             return;
         }
