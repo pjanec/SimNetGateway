@@ -314,3 +314,19 @@ T-026a (seam, DIS and HLA moved onto it), 2026-10-31. Files: `Gateway.HrotDis/Si
 6. `GatewayConfiguration.Sides` is an `init` property (the 4-argument constructor and `with` are unchanged); equality
    compares `Sides` by key and value.
 7. The order test covers rule-owning modules only (the engine exposes no list of ingress-only modules).
+
+## 10. Revision 2026-11-07: HROT `coordinator` @ 0554a0c1a
+
+Checked HROT's changes since `78ce6fca0` (886 commits) for what touches the two adapters.
+
+| HROT change | Effect here |
+|---|---|
+| CE-4270 B7-B11 (R-3077): ONE role table (`Hrot.SimHost/RoleCapabilityTable.Plan`) and ONE orchestration step (`HostOrchestration`) for CGF, SimHost, the fused `-m server` and the editor; `EditorCapabilities` now only declares the editor's role | **section 3 item 3 and the section 5 sequence**: the discovery seam (append capability factories found in loaded `Hrot.*` assemblies) belongs in that shared composition, not in `EditorSubsystem`, so every host gets it by construction; the module stays config-gated (no `simnetgateway.json` = nothing composed). Still a HROT-lane change; no extension point exists yet (`RoleTableInputs` has fixed slots) |
+| CE-4200: entity and node ids 32-bit | done here as T-030 |
+| CE-4266: `EntityMaster.RequestId` and `CreationRequestId` removed; an author that must know its entity pre-allocates its network id (`EntityCreation.AllocateNetworkId`) | NED adapter: a gateway-created entity takes its id from its id-allocator block first, then publishes; no request-id correlation |
+| CE-4000 / CE-4007: every egress writer deletes what it wrote (on destruction, on a wipe) and unregisters on a hand-over, through one path (`PublishedInstances<T>`) - a late joiner sees no dead entity | NED adapter: dispose every descriptor instance it wrote when the pivot entity goes and unregister on an ownership hand-over; the same rule for the BDC side's DDS writer (private repo) |
+| CE-2417: heartbeats gate on load progress; CE-4075: `NodeHeartbeat.CpuUsage` dropped | NED adapter: regenerated types; the gateway node does not load scenarios, it beats as a waiting node |
+| new descriptors (`EntityStableGuid`, `EntityRefKey`, macro, rules, gameplay topics) and `EntityManDowned`, `EntityEditOutcome` | NED adapter: ignored unless a mapping needs them; `EntityStableGuid` is published once by the creator - a gateway replica needs none (replicas are not saved) |
+| CycloneDDS.NET still 1.2.20 | one version per process holds |
+
+Nothing in the public gateway (pivot, `Protocol.Hrot`, DIS, HLA, the side seam, DD-012's ownership) changes.
