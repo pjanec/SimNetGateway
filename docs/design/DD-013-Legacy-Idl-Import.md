@@ -118,3 +118,6 @@ Built under T-028 (not yet approved proposals P-115 .. P-119: implemented as lea
   wire-identical. Honouring a hint would be a profile decision (e.g. `Guid`), recorded in I-11.
 - **Real run (local only, never committed)**: see the T-028 report; the result is committed only once the includes and a decision on I-9 / I-10 are in.
 
+- **Output folder name (found 2026-11-07, I-12)**: the importer output must not live under a directory named `Generated` -
+  CycloneDDS.NET's code generator skips such directories, so the types compile without marshalling code. The private
+  consumer keeps them in `Wire/`. The diagram's `Generated/*.cs` above means "the generated files", not the folder name.
