@@ -200,7 +200,7 @@ public class DisIngressTests
     public void A_dis_entity_becomes_a_replica_for_hrot_with_the_ecef_values_in_the_local_frame()
     {
         var h = Live();
-        h.DisStep(EntityState(5, Ecef(h, 120, -30, 4), velocity: h.Frame!.VectorToEcef(new Vec3(2, 3, 0)), marking: "PEER-5", force: 2, damage: 1));
+        h.DisStep(EntityState(5, Ecef(h, 120, -30, 4), velocity: h.Frame!.VectorToEcef(new Vec3(120, -30, 4), new Vec3(2, 3, 0)), marking: "PEER-5", force: 2, damage: 1));
         var replica = Assert.Single(h.Sent<ReplicaState>());
         Support.Near(new Vec3(120, -30, 4), replica.State.Position, 1e-6, "replica position");
         Support.Near(new Vec3(2, 3, 0), replica.State.Velocity, 1e-4, "replica velocity");
@@ -232,7 +232,7 @@ public class DisIngressTests
             string marking = "R" + random.Next(100000);
             byte force = (byte)random.Next(4);
             var ecef = h.Frame!.PointToEcef(enu);
-            var velocity = h.Frame.VectorToEcef(velocityEnu);
+            var velocity = h.Frame.VectorToEcef(enu, velocityEnu);
             var angular = new Vec3(random.NextDouble() - 0.5, random.NextDouble() - 0.5, random.NextDouble() - 0.5);
             var pdu = EntityState(number, ecef, euler, velocity, default, angular, algorithm, damage, marking: marking, force: force);
             int before = h.Sent<ReplicaState>().Count;
@@ -256,14 +256,14 @@ public class DisIngressTests
             Assert.True(h.HrotIds.TryGetKey(e.Id, out int hrotId));
             Assert.Equal(hrotId, replica.Id);
             Support.Near(h.Frame.PointFromEcef(ecef), replica.State.Position, 1e-6, "replica position");
-            Support.Near(h.Frame.VectorFromEcef(new Vec3(pdu.EntityLinearVelocity.X, pdu.EntityLinearVelocity.Y, pdu.EntityLinearVelocity.Z)),
+            Support.Near(h.Frame.VectorFromEcef(enu, new Vec3(pdu.EntityLinearVelocity.X, pdu.EntityLinearVelocity.Y, pdu.EntityLinearVelocity.Z)),
                 replica.State.Velocity, 1e-6, "replica velocity");
             Assert.Equal(algorithm, replica.State.DrAlgorithm);
             Assert.Equal(marking, replica.Marking);
             Assert.Equal(force, replica.Force);
             Assert.Equal(h.Clock.Now, replica.State.StateTime);
             // the rotation of the replica is the same attitude as the PDU's Euler angles
-            var back = LocalToGeocentricOrientation.ToDisEuler(GeoFrame.ToQuaternion(replica.State.Rotation), h.Frame);
+            var back = h.Frame.ToDisEuler(enu, GeoFrame.ToQuaternion(replica.State.Rotation));
             Assert.True(DisInvariantChecker.AngleBetween(back, e.Get(s.Orientation).AsVec3()) < 1e-6, "replica attitude");
         }
 

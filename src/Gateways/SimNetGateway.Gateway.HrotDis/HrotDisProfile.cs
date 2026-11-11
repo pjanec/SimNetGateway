@@ -118,7 +118,7 @@ public sealed class HrotDisProfile : IGatewayProfile
 
         // HROT ingress
         builder.AddModule(new HrotOriginIngress(schema, services));
-        builder.AddModule(new HrotSessionIngress());
+        builder.AddModule(new HrotSessionIngress(services));
         builder.AddModule(new HrotEntityStateIngress(schema, maps, services));
         builder.AddModule(new HrotEntityRemovedIngress(maps));
         builder.AddModule(new HrotTurretPoseIngress(schema, maps));

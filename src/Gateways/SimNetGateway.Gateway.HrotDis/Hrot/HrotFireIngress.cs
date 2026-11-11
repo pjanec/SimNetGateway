@@ -91,7 +91,7 @@ public sealed class HrotFireIngress : IGatewayModule
         bag.Set(_schema.EventQuantity, AttrValue.From((long)m.Quantity));
         bag.Set(_schema.EventRate, AttrValue.From(0L));
         bag.Set(_schema.EventLocation, AttrValue.From(location));
-        bag.Set(_schema.EventVelocity, AttrValue.From(geo.VectorToEcef(m.Velocity)));
+        bag.Set(_schema.EventVelocity, AttrValue.From(geo.VectorToEcef(m.Origin, m.Velocity)));
         bag.Set(_schema.EventRange, AttrValue.From(range));
         ctx.Publish(_schema.WeaponFire, bag);
     }

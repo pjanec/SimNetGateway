@@ -36,7 +36,7 @@ public class RprSideTests
         Assert.Equal(2, e.Get(s.Force).AsInt());
         Assert.Equal(1, e.Get(s.Damage).AsInt());
         Support.Near(h.Frame!.PointToEcef(enu), e.Get(s.Position).AsVec3(), 1e-6, "position");
-        Support.Near(h.Frame.VectorToEcef(new Vec3(3, 4, 0)), e.Get(s.Velocity).AsVec3(), 1e-9, "velocity");
+        Support.Near(h.Frame.VectorToEcef(enu, new Vec3(3, 4, 0)), e.Get(s.Velocity).AsVec3(), 1e-9, "velocity");
         Assert.Equal(2, e.Get(s.DrAlgorithm).AsInt());
         Assert.Equal(h.Engine.WallTime, e.Get(s.StateTime).AsDouble(), 1e-9); // the engine clock at receipt
 
@@ -152,7 +152,7 @@ public class RprSideTests
         var origin = new Vec3(-300, 0, 2);
         h.RprStep(new RprWeaponFire(Guid.NewGuid(), Peer(1), ours, RprConversions.ToLocation(h.Frame!.PointToEcef(origin)), MunitionKind, 3)
         {
-            InitialVelocity = RprConversions.ToVector(h.Frame.VectorToEcef(new Vec3(400, 0, 0))),
+            InitialVelocity = RprConversions.ToVector(h.Frame.VectorToEcef(origin, new Vec3(400, 0, 0))),
             WarheadType = 1000,
             FuseType = 8000,
         });
@@ -203,7 +203,7 @@ public class RprSideTests
         var at = new Vec3(98, 1, 0);
         h.RprStep(new RprMunitionDetonation(Guid.NewGuid(), Peer(1), ours, RprConversions.ToLocation(h.Frame!.PointToEcef(at)), MunitionKind, RprDetonationResult.EntityImpact)
         {
-            FinalVelocity = RprConversions.ToVector(h.Frame.VectorToEcef(new Vec3(0, 0, -10))),
+            FinalVelocity = RprConversions.ToVector(h.Frame.VectorToEcef(at, new Vec3(0, 0, -10))),
             RelativeDetonationLocation = new RprVector(1, 0, 0),
         });
 
@@ -268,7 +268,7 @@ public class RprSideTests
         Assert.Equal(RprDamageState.NoDamage, update.DamageState);
         Assert.Equal(new DisEntityId(1, 3001, 1), update.EntityIdentifier);
         Support.Near(h.Frame!.PointToEcef(new Vec3(100, 200, 10)), RprConversions.ToVec(update.WorldLocation!.Value), 0.2, "location (predicted a tick ahead)");
-        Support.Near(h.Frame.VectorToEcef(new Vec3(3, 4, 0)), RprConversions.ToVec(update.VelocityVector!.Value), 1e-4, "velocity");
+        Support.Near(h.Frame.VectorToEcef(new Vec3(100, 200, 10), new Vec3(3, 4, 0)), RprConversions.ToVec(update.VelocityVector!.Value), 1e-4, "velocity");
         h.Run(0.5);
         Assert.Single(Updates(h)); // steady: nothing more while it follows its model
     }
@@ -503,7 +503,7 @@ public class RprSideTests
         Assert.Equal(target, fire.TargetObject);
         Assert.Equal(2, fire.Quantity);
         Support.Near(h.Frame!.PointToEcef(new Vec3(0, 0, 2)), RprConversions.ToVec(fire.Location), 1e-6, "fire location");
-        Support.Near(h.Frame.VectorToEcef(new Vec3(400, 0, 0)), RprConversions.ToVec(fire.InitialVelocity!.Value), 1e-3, "initial velocity");
+        Support.Near(h.Frame.VectorToEcef(new Vec3(0, 0, 2), new Vec3(400, 0, 0)), RprConversions.ToVec(fire.InitialVelocity!.Value), 1e-3, "initial velocity");
         var detonation = Assert.Single(h.RprChecker.Sent<RprMunitionDetonation>());
         Assert.Equal(fire.EventId, detonation.EventId); // the correlator linked them (one DIS event id -> one guid)
         Assert.Equal(shooter, detonation.FiringObject);

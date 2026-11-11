@@ -126,6 +126,9 @@ public sealed class HrotDisServices
 
     public GeoFrame Geo { get; }
 
+    /// <summary>The HROT time scale of the last <c>HrotSession</c> (1 until one arrived).</summary>
+    public double TimeScale { get; internal set; } = 1.0;
+
     public EntityTypeCatalog EntityTypes { get; }
 
     public MunitionCatalog Munitions { get; }

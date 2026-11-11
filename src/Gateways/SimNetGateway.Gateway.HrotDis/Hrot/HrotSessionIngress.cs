@@ -15,7 +15,10 @@ public sealed class HrotSessionIngress : IGatewayModule
     /// <summary>The scenario name of the session loaded for the cluster.</summary>
     public const string ScenarioName = "hrot";
 
+    private readonly HrotDisServices _services;
     private bool _warnedTimeScale;
+
+    public HrotSessionIngress(HrotDisServices services) => _services = services ?? throw new ArgumentNullException(nameof(services));
 
     public string Name => nameof(HrotSessionIngress);
 
@@ -92,6 +95,7 @@ public sealed class HrotSessionIngress : IGatewayModule
             return;
         }
 
+        _services.TimeScale = m.TimeScale;
         var (state, mode) = Target(m.Phase, m.Advancing);
         foreach (var command in Plan(ctx.Session.State, ctx.Session.Mode, state, mode))
         {

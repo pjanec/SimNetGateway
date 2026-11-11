@@ -313,7 +313,7 @@ public class ReplicaTests
 
         h.Session(ClusterPhase.Preview, advancing: false);
         h.Session(ClusterPhase.Live);
-        h.HrotStep(new HrotOrigin(51, 15, 100, 2));
+        h.HrotStep(HrotOrigin.Utm(51, 15, 100, 2));
         h.HrotStep(new HrotEntityRemoved(105));
         h.Run(1.0);
         Assert.Empty(h.Sent<ReplicaState>());
@@ -352,8 +352,8 @@ public class ReplicaTests
         var world = h.DisStateAt(new HrotVec3(0, 0, 0)) with { DrAlgorithm = 4, Velocity = new Vec3(11, 22, 33), Acceleration = new Vec3(1, 2, 3) };
         h.DisCreate(world);
         var w = h.Sent<ReplicaState>().Last();
-        Support.Near(h.Frame!.VectorFromEcef(world.Velocity), w.State.Velocity, 1e-9, "world velocity is rotated to ENU");
-        Support.Near(h.Frame.VectorFromEcef(world.Acceleration), w.State.Acceleration, 1e-9, "world acceleration is rotated to ENU");
+        Support.Near(h.Frame!.VectorFromEcef(new Vec3(0, 0, 0), world.Velocity), w.State.Velocity, 1e-9, "world velocity is rotated to ENU");
+        Support.Near(h.Frame.VectorFromEcef(new Vec3(0, 0, 0), world.Acceleration), w.State.Acceleration, 1e-9, "world acceleration is rotated to ENU");
     }
 
     [Fact]
@@ -365,7 +365,7 @@ public class ReplicaTests
         var omegaEnu = new Vec3(0.2, -0.1, 0.4);
         var state = h.DisStateAt(new HrotVec3(0, 0, 0)) with
         {
-            Orientation = LocalToGeocentricOrientation.ToDisEuler(quaternion, h.Frame!),
+            Orientation = h.Frame!.ToDisEuler(new Vec3(0, 0, 0), quaternion),
             AngularVelocity = LocalToGeocentricOrientation.AngularVelocityEnuToBodyFrd(quaternion, omegaEnu),
         };
         h.DisCreate(state);

@@ -60,7 +60,7 @@ public class DisEgressTests
         Assert.Equal(0u, pdu.EntityAppearance);
         Assert.False(DisTimestamp.IsAbsolute(pdu.Timestamp));
         Support.Near(h.Frame!.PointToEcef(V(enu)), DisConversions.ToVec(pdu.EntityLocation), 1e-6, "location");
-        Support.Near(h.Frame.VectorToEcef(new Vec3(3, 4, 0)), DisConversions.ToVec(pdu.EntityLinearVelocity), 1e-4, "velocity");
+        Support.Near(h.Frame.VectorToEcef(V(enu), new Vec3(3, 4, 0)), DisConversions.ToVec(pdu.EntityLinearVelocity), 1e-4, "velocity");
         Assert.True(h.HrotIds.TryResolve(7, out var id));
         Assert.Equal(new DisEntityKey(1, 3001, 1), h.DisKeyOf(id));
     }
@@ -169,7 +169,7 @@ public class DisEgressTests
         SentCount(h, 2);
         double sentAt = h.DisChecker!.States[1].Wall;
         Assert.InRange(sentAt - t0, 0.5 - 1e-9, 0.5 + HrotDisHarness.Dt + 1e-9); // 1 m after 0.5 m + 1 m/s * 0.5 s
-        Support.Near(h.Frame!.PointToEcef(new Vec3(0.5 + (sentAt - t0), 0, 0)), DisConversions.ToVec(Espdus(h)[1].EntityLocation), 1e-6, "location");
+        Support.Near(h.Frame!.PointToEcef(new Vec3(0.5 + (sentAt - t0), 0, 0)), DisConversions.ToVec(Espdus(h)[1].EntityLocation), 1e-3, "location"); // the DR line is straight in ECEF, the grid path is curved: millimetres
     }
 
     [Fact]

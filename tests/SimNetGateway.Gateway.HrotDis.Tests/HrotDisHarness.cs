@@ -343,8 +343,8 @@ public sealed class HrotDisHarness
     /// <summary>Queues a valid origin (and updates the tests' own oracle frame) without ticking.</summary>
     public void SendOrigin(double lat, double lon, double alt, int generation = 1)
     {
-        Frame = new LocalTangentFrame(Geodetic.FromDegrees(lat, lon, alt));
-        Hrot(new HrotOrigin(lat, lon, alt, generation));
+        Frame = new TestFrame(lat, lon, alt);
+        Hrot(HrotOrigin.Utm(lat, lon, alt, generation));
     }
 
     public void Session(ClusterPhase phase, bool advancing = true) =>
@@ -365,20 +365,21 @@ public sealed class HrotDisHarness
     // ---- DIS side (writes into the pivot as the DIS source) -------------------------------------------------------------
 
     /// <summary>
-    /// The independent oracle of the tests: the tangent frame of the last origin built straight from Common (not through the
+    /// The independent oracle of the tests: the frame of the last origin built straight from Common (not through the
     /// gateway's <see cref="GeoFrame"/>), so that a defect in the gateway's use of the frame is not mirrored in the expectation.
     /// </summary>
-    public LocalTangentFrame? Frame { get; private set; }
+    public TestFrame? Frame { get; private set; }
 
     /// <summary>A DIS state at a point of the origin's ENU frame (so the replica is where the test expects it).</summary>
     public DisState DisStateAt(HrotVec3 enu, HrotVec3 enuVelocity = default, int damage = 0, double? stateTime = null)
     {
         var frame = Frame ?? throw new InvalidOperationException("No origin was sent yet.");
+        var at = new Vec3(enu.X, enu.Y, enu.Z);
         return new DisState
         {
-            Position = frame.PointToEcef(new Vec3(enu.X, enu.Y, enu.Z)),
-            Velocity = frame.VectorToEcef(new Vec3(enuVelocity.X, enuVelocity.Y, enuVelocity.Z)),
-            Orientation = LocalToGeocentricOrientation.ToDisEuler(Quaternion.Identity, frame),
+            Position = frame.PointToEcef(at),
+            Velocity = frame.VectorToEcef(at, new Vec3(enuVelocity.X, enuVelocity.Y, enuVelocity.Z)),
+            Orientation = frame.ToDisEuler(at, Quaternion.Identity),
             Damage = damage,
             StateTime = stateTime ?? NextStateTime(),
         };

@@ -111,7 +111,7 @@ public sealed class HrotDisHlaHost
 
     public IdentityMap<RprObjectHandle> RprHandles { get; }
 
-    public LocalTangentFrame? Frame { get; private set; }
+    public TestFrame? Frame { get; private set; }
 
     /// <summary>The live entities of an origin.</summary>
     public List<EntityRecord> EntitiesOf(SourceId origin)
@@ -159,8 +159,8 @@ public sealed class HrotDisHlaHost
 
     public void GoLive(double lat = 50.0, double lon = 14.0, double alt = 300.0)
     {
-        Frame = new LocalTangentFrame(Geodetic.FromDegrees(lat, lon, alt));
-        HrotStep(new HrotOrigin(lat, lon, alt, 1));
+        Frame = new TestFrame(lat, lon, alt);
+        HrotStep(HrotOrigin.Utm(lat, lon, alt, 1));
         HrotStep(new HrotSession(ClusterPhase.Live, true, 1.0, 0.0));
     }
 
@@ -202,7 +202,7 @@ public class HlaEndToEndTests
         var expected = h.Frame!.PointToEcef(new Vec3(100, 200, 10));
         var at = new Vec3(spatial.WorldLocation.X, spatial.WorldLocation.Y, spatial.WorldLocation.Z);
         Assert.True((at - expected).Length < 1.0, $"location {at} is not near {expected}");
-        var v = h.Frame.VectorToEcef(new Vec3(3, 4, 0));
+        var v = h.Frame.VectorToEcef(new Vec3(100, 200, 10), new Vec3(3, 4, 0));
         Assert.True((new Vec3(spatial.Velocity.X, spatial.Velocity.Y, spatial.Velocity.Z) - v).Length < 1e-3);
 
         // the same entity as an Entity State PDU on the DIS side

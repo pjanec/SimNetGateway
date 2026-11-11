@@ -1,4 +1,5 @@
 using SimNetGateway.Common;
+using SimNetGateway.Common.Geo;
 using SimNetGateway.Engine;
 using SimNetGateway.Gateway.HrotDis;
 using SimNetGateway.Protocol.Hrot;
@@ -53,9 +54,9 @@ public class HrotIngressTests
     public void An_unacceptable_origin_aborts_and_leaves_the_frame_invalid()
     {
         var h = new HrotDisHarness();
-        h.HrotStep(new HrotOrigin(0, 0, 0, 1)); // 'not set'
-        h.HrotStep(new HrotOrigin(95, 0, 0, 2));
-        h.HrotStep(new HrotOrigin(double.NaN, 0, 0, 3));
+        h.HrotStep(HrotOrigin.Utm(0, 0, 0, 1)); // 'not set'
+        h.HrotStep(HrotOrigin.Utm(95, 0, 0, 2));
+        h.HrotStep(HrotOrigin.Utm(double.NaN, 0, 0, 3));
         Assert.Equal(3, h.Engine.Diagnostics.TransactionFailures);
         h.HrotStep(HrotDisHarness.State(1, new HrotVec3(1, 2, 3)));
         Assert.False(h.EntityOfHrot(1)!.Has(h.Schema.Position));
@@ -67,32 +68,108 @@ public class HrotIngressTests
     {
         var config = GatewayConfiguration.CreateDefault() with { Hrot = new HrotConfiguration { AllowZeroOrigin = true } };
         var h = new HrotDisHarness(config);
-        h.HrotStep(new HrotOrigin(0, 0, 0, 1));
+        h.HrotStep(HrotOrigin.Utm(0, 0, 0, 1));
         h.HrotStep(HrotDisHarness.State(1, new HrotVec3(0, 0, 0)));
         Support.Near(new Vec3(Wgs84.A, 0, 0), h.EntityOfHrot(1)!.Get(h.Schema.Position).AsVec3(), 1e-6, "origin");
     }
 
+    [Fact]
+    public void A_local_only_frame_sends_nothing_positional_and_a_utm_frame_after_it_shows_everything()
+    {
+        var h = new HrotDisHarness();
+        h.HrotStep(HrotOrigin.None(1));
+        h.HrotStep(new HrotSession(ClusterPhase.Live, true, 1.0, 0.0));
+        h.HrotStep(HrotDisHarness.State(1, new HrotVec3(1, 2, 3), velocity: new HrotVec3(1, 0, 0)));
+        Assert.True(h.Services.Geo.IsLocalOnly);
+        Assert.False(h.Services.Geo.IsValid);
+        Assert.False(h.EntityOfHrot(1)!.Has(h.Schema.Position));
+        h.HrotStep(new HrotFire(1, 0, 501, 0, new HrotVec3(1, 2, 3), new HrotVec3(100, 0, 0), 1));
+        h.HrotStep(new HrotDetonation(1, 0, 501, 0, new HrotVec3(5, 5, 0), default));
+        Assert.Equal(0, Support.CountEvents(h, h.Schema.WeaponFire));
+        Assert.Equal(0, Support.CountEvents(h, h.Schema.MunitionDetonation));
+        Assert.Empty(h.Sent<ReplicaState>());
+
+        h.Origin(50.0, 14.0, 300.0, generation: 2);
+        h.HrotStep(HrotDisHarness.State(1, new HrotVec3(1, 2, 3)));
+        Assert.True(h.EntityOfHrot(1)!.Has(h.Schema.Position));
+    }
+
+    [Theory]
+    [InlineData(1, (byte)1)]
+    [InlineData(2, (byte)0)]
+    [InlineData(2, (byte)3)]
+    public void An_old_version_or_an_unknown_frame_is_refused_once_and_nothing_positional_follows(int version, byte frame)
+    {
+        var h = new HrotDisHarness();
+        h.HrotStep(new HrotOrigin(version, frame, 50.0, 14.0, 300.0, 0, false, 1));
+        h.HrotStep(new HrotOrigin(version, frame, 50.0, 14.0, 300.0, 0, false, 1)); // the same generation again: not reported again
+        h.HrotStep(new HrotSession(ClusterPhase.Live, true, 1.0, 0.0));
+        h.HrotStep(HrotDisHarness.State(1, new HrotVec3(1, 2, 3)));
+        Assert.False(h.Services.Geo.IsValid);
+        Assert.False(h.Services.Geo.IsLocalOnly);
+        Assert.False(h.EntityOfHrot(1)!.Has(h.Schema.Position));
+        Assert.Equal(0, Support.CountEvents(h, h.Schema.FrameRebased));
+        int reports = 0;
+        foreach (var entry in h.Engine.Diagnostics.Recent)
+        {
+            if (entry.Message.Contains("geo reference"))
+            {
+                reports++;
+            }
+        }
+
+        Assert.Equal(1, reports);
+    }
+
+    [Fact]
+    public void The_hrot_time_scale_of_the_last_session_is_kept()
+    {
+        var h = new HrotDisHarness();
+        Assert.Equal(1.0, h.Services.TimeScale);
+        h.HrotStep(new HrotSession(ClusterPhase.Live, true, 2.5, 0.0));
+        Assert.Equal(2.5, h.Services.TimeScale);
+        h.HrotStep(new HrotSession(ClusterPhase.Live, false, 1.0, 3.0));
+        Assert.Equal(1.0, h.Services.TimeScale);
+    }
+
     // ---- conversions --------------------------------------------------------------------------------------------------
+    // The central meridian of UTM zone 31 (3 degrees east) at the equator: grid axes are the true axes there (no convergence) and the scale is
+    // exactly k0, so the expectations below are hand-written. ECEF axes at (0, 3 E): east (-sin, cos, 0), north (0, 0, 1), up (cos, sin, 0).
+    private const double CentralMeridianRad = 3.0 * Math.PI / 180.0;
+    private const double K0 = 0.9996;
+
+    private static HrotDisHarness LiveOnCentralMeridian(double alt)
+    {
+        var h = new HrotDisHarness();
+        h.Origin(0.0, 3.0, alt);
+        h.Session(ClusterPhase.Live);
+        return h;
+    }
 
     [Fact]
     public void East_north_up_become_the_ecef_axes_at_the_equator()
     {
-        var h = LiveAtEquator(100.0);
+        var h = LiveOnCentralMeridian(100.0);
         h.HrotStep(HrotDisHarness.State(1, new HrotVec3(100, 200, 5), velocity: new HrotVec3(3, 4, 5), simTime: 12.5));
         var e = h.EntityOfHrot(1)!;
-        // at latitude 0, longitude 0: ECEF x is up, y is east, z is north
-        Support.Near(new Vec3(Wgs84.A + 100 + 5, 100, 200), e.Get(h.Schema.Position).AsVec3(), 1e-6, "position");
-        Support.Near(new Vec3(5, 3, 4), e.Get(h.Schema.Velocity).AsVec3(), 1e-9, "velocity");
+        var east = new Vec3(-Math.Sin(CentralMeridianRad), Math.Cos(CentralMeridianRad), 0);
+        var north = new Vec3(0, 0, 1);
+        var up = new Vec3(Math.Cos(CentralMeridianRad), Math.Sin(CentralMeridianRad), 0);
+        // grid metres are true metres / k0; the ellipsoid curves away from the tangent line by under 4 mm over 224 m
+        var expected = up * (Wgs84.A + 100 + 5) + east * (100 / K0) + north * (200 / K0);
+        Support.Near(expected, e.Get(h.Schema.Position).AsVec3(), 1e-2, "position");
+        // the axes at the entity (224 m away) are tilted by about 3.5e-5 rad against those at the origin
+        Support.Near(east * 3 + north * 4 + up * 5, e.Get(h.Schema.Velocity).AsVec3(), 1e-3, "velocity");
     }
 
     [Fact]
     public void A_north_pointing_identity_body_has_the_known_geocentric_euler_angles()
     {
         // Identity quaternion: HROT body x (forward) = east, y (left) = north, z (up) = up. The DIS body is x forward, y right, z down:
-        // x = east = ECEF (0,1,0), y = -north = (0,0,-1), z = -up = (-1,0,0) at (0, 0). Euler ZYX of that matrix: psi = pi/2, theta = 0, phi = -pi/2.
-        var h = LiveAtEquator();
-        h.HrotStep(HrotDisHarness.State(1, new HrotVec3(1, 2, 3)));
-        Support.Near(new Vec3(Math.PI / 2, 0, -Math.PI / 2), h.EntityOfHrot(1)!.Get(h.Schema.Orientation).AsVec3(), 1e-9, "euler");
+        // x = east = (-sin L, cos L, 0), y = -north = (0, 0, -1), z = -up = (-cos L, -sin L, 0) at (0, L). Euler ZYX: psi = pi/2 + L, theta = 0, phi = -pi/2.
+        var h = LiveOnCentralMeridian(100.0);
+        h.HrotStep(HrotDisHarness.State(1, new HrotVec3(0, 0, 0)));
+        Support.Near(new Vec3(Math.PI / 2 + CentralMeridianRad, 0, -Math.PI / 2), h.EntityOfHrot(1)!.Get(h.Schema.Orientation).AsVec3(), 1e-9, "euler");
     }
 
     [Fact]
@@ -110,8 +187,8 @@ public class HrotIngressTests
         var e = h.EntityOfHrot(5)!;
         var quaternion = new Quaternion(q.W, q.X, q.Y, q.Z);
         Support.Near(frame.PointToEcef(Support.V(enu)), e.Get(h.Schema.Position).AsVec3(), 1e-6, "position");
-        Support.Near(frame.VectorToEcef(Support.V(velocity)), e.Get(h.Schema.Velocity).AsVec3(), 1e-9, "velocity");
-        Support.Near(LocalToGeocentricOrientation.ToDisEuler(quaternion, frame), e.Get(h.Schema.Orientation).AsVec3(), 1e-12, "orientation");
+        Support.Near(frame.VectorToEcef(Support.V(enu), Support.V(velocity)), e.Get(h.Schema.Velocity).AsVec3(), 1e-9, "velocity");
+        Support.Near(frame.ToDisEuler(Support.V(enu), quaternion), e.Get(h.Schema.Orientation).AsVec3(), 1e-12, "orientation");
         Support.Near(LocalToGeocentricOrientation.AngularVelocityEnuToBodyFrd(quaternion, Support.V(omega)), e.Get(h.Schema.AngularVelocity).AsVec3(), 1e-12, "angular velocity");
         Assert.Equal(Vec3.Zero, e.Get(h.Schema.Acceleration).AsVec3());
         Assert.Equal((long)DrAlgorithms.Fpw, e.Get(h.Schema.DrAlgorithm).AsInt());
@@ -194,7 +271,7 @@ public class HrotIngressTests
         h.DisCreate(h.DisStateAt(new HrotVec3(1, 2, 3)));
         h.Step();
         int sent = h.Sent<ReplicaState>().Count;
-        h.HrotStep(new HrotOrigin(50, 14, 300, 1));
+        h.HrotStep(HrotOrigin.Utm(50, 14, 300, 1));
         Assert.Equal(sent, h.Sent<ReplicaState>().Count);
         Assert.Equal(1, Support.CountEvents(h, h.Schema.FrameRebased));
     }

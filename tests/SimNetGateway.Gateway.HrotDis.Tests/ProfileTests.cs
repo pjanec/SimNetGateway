@@ -102,7 +102,7 @@ public class ProfileTests
         h.GoLive();
         var messages = new IHrotToGatewayMessage[]
         {
-            new HrotOrigin(50, 14, 300, 1),
+            HrotOrigin.Utm(50, 14, 300, 1),
             new HrotSession(ClusterPhase.Live, true, 1, 0),
             HrotDisHarness.State(1),
             new HrotTurretPose(1, 1, 0, 0),

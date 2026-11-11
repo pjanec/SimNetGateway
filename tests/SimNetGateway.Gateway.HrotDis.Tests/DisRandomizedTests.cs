@@ -240,8 +240,9 @@ public class DisRandomizedTests(Xunit.Abstractions.ITestOutputHelper output)
 
     private static EntityStatePdu RandomEntityState(HrotDisHarness h, Random random, DisEntityKey key)
     {
-        var ecef = h.Frame!.PointToEcef(Support.V(RandomPoint(random)));
-        var velocity = h.Frame.VectorToEcef(new Vec3(random.NextDouble() * 20 - 10, random.NextDouble() * 20 - 10, 0));
+        var enu = Support.V(RandomPoint(random));
+        var ecef = h.Frame!.PointToEcef(enu);
+        var velocity = h.Frame.VectorToEcef(enu, new Vec3(random.NextDouble() * 20 - 10, random.NextDouble() * 20 - 10, 0));
         return EntityState(key.Number, ecef, new Vec3(random.NextDouble() * 6 - 3, random.NextDouble() * 2 - 1, random.NextDouble() * 6 - 3), velocity,
             algorithm: random.Next(1, 6), damage: random.Next(4), deactivated: random.Next(12) == 0, marking: "D" + random.Next(100),
             force: (byte)random.Next(4), site: key.Site, application: key.Application);

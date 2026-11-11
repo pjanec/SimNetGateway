@@ -39,8 +39,8 @@ public class ConversionPropertyTests
             var e = h.EntityOfHrot(1)!;
             var q = new Quaternion(rotation.W, rotation.X, rotation.Y, rotation.Z);
             Support.Near(frame.PointToEcef(Support.V(position)), e.Get(h.Schema.Position).AsVec3(), 1e-6, $"sample {i} pivot position");
-            Support.Near(frame.VectorToEcef(Support.V(velocity)), e.Get(h.Schema.Velocity).AsVec3(), 1e-9, $"sample {i} pivot velocity");
-            Support.Near(LocalToGeocentricOrientation.ToDisEuler(q, frame), e.Get(h.Schema.Orientation).AsVec3(), 1e-12, $"sample {i} pivot orientation");
+            Support.Near(frame.VectorToEcef(Support.V(position), Support.V(velocity)), e.Get(h.Schema.Velocity).AsVec3(), 1e-9, $"sample {i} pivot velocity");
+            Support.Near(frame.ToDisEuler(Support.V(position), q), e.Get(h.Schema.Orientation).AsVec3(), 1e-12, $"sample {i} pivot orientation");
 
             // a DIS-origin copy of it
             var state = new DisState

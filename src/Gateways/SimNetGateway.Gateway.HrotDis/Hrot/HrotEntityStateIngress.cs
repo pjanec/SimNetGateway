@@ -98,10 +98,10 @@ public sealed class HrotEntityStateIngress : IGatewayModule
         }
 
         changes.Set(id, _schema.Position, AttrValue.From(geo.PointToEcef(m.Position)));
-        changes.Set(id, _schema.Velocity, AttrValue.From(geo.VectorToEcef(m.Velocity)));
+        changes.Set(id, _schema.Velocity, AttrValue.From(geo.VectorToEcef(m.Position, m.Velocity)));
         changes.Set(id, _schema.Acceleration, AttrValue.From(Vec3.Zero));
-        changes.Set(id, _schema.Orientation, AttrValue.From(geo.ToEuler(m.Rotation)));
-        changes.Set(id, _schema.AngularVelocity, AttrValue.From(geo.AngularVelocityToBody(m.Rotation, m.AngularVelocity)));
+        changes.Set(id, _schema.Orientation, AttrValue.From(geo.ToEuler(m.Position, m.Rotation)));
+        changes.Set(id, _schema.AngularVelocity, AttrValue.From(geo.AngularVelocityToBody(m.Position, m.Rotation, m.AngularVelocity)));
         changes.Set(id, _schema.DrAlgorithm, AttrValue.From((long)DrAlgorithms.Fpw));
         changes.Set(id, _schema.StateTime, AttrValue.From(ctx.WallTime)); // one time axis in the pivot: the engine clock (m.SimTime is only validated)
     }

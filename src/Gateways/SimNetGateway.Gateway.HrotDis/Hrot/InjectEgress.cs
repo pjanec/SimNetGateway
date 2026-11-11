@@ -72,7 +72,7 @@ public sealed class InjectFireEgress : IGatewayModule
         long munitionType = p.TryGet(_schema.EventMunitionType, out var mt) ? mt.AsInt() : 0;
         long tkb = p.TryGet(_schema.EventMunitionTkb, out var m) ? m.AsInt() : ResolveTkb(munitionType);
         var origin = p.TryGet(_schema.EventLocation, out var l) ? geo.PointFromEcef(l.AsVec3()) : default;
-        var velocity = p.TryGet(_schema.EventVelocity, out var v) ? geo.VectorFromEcef(v.AsVec3()) : default;
+        var velocity = p.TryGet(_schema.EventVelocity, out var v) ? geo.VectorFromEcef(origin, v.AsVec3()) : default;
         int quantity = p.TryGet(_schema.EventQuantity, out var q) ? (int)q.AsInt() : 1;
         _output.Send(new InjectFire(shooter, target, tkb, munitionType, origin, velocity, quantity, targetIsHrot));
     }
@@ -138,7 +138,7 @@ public sealed class InjectDetonationEgress : IGatewayModule
         long munitionType = p.TryGet(_schema.EventMunitionType, out var mt) ? mt.AsInt() : 0;
         long tkb = p.TryGet(_schema.EventMunitionTkb, out var m) ? m.AsInt() : ResolveTkb(munitionType);
         var location = p.TryGet(_schema.EventLocation, out var l) ? geo.PointFromEcef(l.AsVec3()) : default;
-        var velocity = p.TryGet(_schema.EventVelocity, out var v) ? geo.VectorFromEcef(v.AsVec3()) : default;
+        var velocity = p.TryGet(_schema.EventVelocity, out var v) ? geo.VectorFromEcef(location, v.AsVec3()) : default;
         _output.Send(new InjectDetonation(shooter, target, tkb, munitionType, location, velocity, targetIsHrot));
     }
 

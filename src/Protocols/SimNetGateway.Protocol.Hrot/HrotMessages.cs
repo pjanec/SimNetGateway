@@ -69,8 +69,40 @@ public readonly record struct HrotDrSnapshot(
 
 // ---- pack -> gateway ---------------------------------------------------------------------------------------------
 
-/// <summary>The geodetic origin of the local ENU frame (<c>IGeographicTransform.Origin</c>); <see cref="Generation"/> grows with every change.</summary>
-public readonly record struct HrotOrigin(double LatitudeDeg, double LongitudeDeg, double AltitudeM, int Generation) : IHrotToGatewayMessage;
+/// <summary>
+/// HROT's geo reference, protocol version 2 (DD-014): the frame of the local metres. <see cref="Frame"/> <see cref="FrameUtm"/> = UTM grid metres minus
+/// (E0, N0, H0), x grid east, y grid north, z up; the origin is the latitude / longitude / altitude of local (0, 0, 0); the zone is the origin's
+/// longitude band unless <see cref="UtmZoneOverride"/> is not 0, the hemisphere the latitude's sign unless an override zone is given (then
+/// <see cref="UtmSouthOverride"/>). <see cref="FrameNone"/> = a local-only terrain: the local metres have no place on the Earth. <see cref="Generation"/>
+/// grows with every different origin.
+/// </summary>
+public readonly record struct HrotOrigin(
+    int ProtocolVersion,
+    byte Frame,
+    double LatitudeDeg,
+    double LongitudeDeg,
+    double AltitudeM,
+    int UtmZoneOverride,
+    bool UtmSouthOverride,
+    int Generation) : IHrotToGatewayMessage
+{
+    /// <summary>The geo reference protocol version the gateway speaks.</summary>
+    public const int CurrentProtocolVersion = 2;
+
+    /// <summary>Frame 1: UTM.</summary>
+    public const byte FrameUtm = 1;
+
+    /// <summary>Frame 2: none (local-only).</summary>
+    public const byte FrameNone = 2;
+
+    /// <summary>A UTM frame at the given origin (zone override 0 = the origin's own zone).</summary>
+    public static HrotOrigin Utm(double lat, double lon, double alt, int generation, int zoneOverride = 0, bool southOverride = false) =>
+        new(CurrentProtocolVersion, FrameUtm, lat, lon, alt, zoneOverride, southOverride, generation);
+
+    /// <summary>A local-only terrain: no frame.</summary>
+    public static HrotOrigin None(int generation) =>
+        new(CurrentProtocolVersion, FrameNone, 0.0, 0.0, 0.0, 0, false, generation);
+}
 
 /// <summary>The cluster state and the clock: <see cref="Advancing"/> says whether sim time runs.</summary>
 public readonly record struct HrotSession(ClusterPhase Phase, bool Advancing, double TimeScale, double SimTime) : IHrotToGatewayMessage;

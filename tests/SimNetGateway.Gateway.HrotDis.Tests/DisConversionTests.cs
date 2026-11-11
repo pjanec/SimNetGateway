@@ -107,11 +107,11 @@ public class DisConversionTests
             // location in metres, angles and velocities as the floats of the independent conversions
             Support.Near(frame.PointToEcef(Support.V(enu)), DisConversions.ToVec(pdu.EntityLocation), 1e-6, "location");
             var q = GeoFrame.ToQuaternion(rotation);
-            var euler = LocalToGeocentricOrientation.ToDisEuler(q, frame);
+            var euler = frame.ToDisEuler(Support.V(enu), q);
             Assert.Equal((double)(float)euler.X, pdu.EntityOrientation.Psi, 9);
             Assert.Equal((double)(float)euler.Y, pdu.EntityOrientation.Theta, 9);
             Assert.Equal((double)(float)euler.Z, pdu.EntityOrientation.Phi, 9);
-            var v = frame.VectorToEcef(Support.V(velocity));
+            var v = frame.VectorToEcef(Support.V(enu), Support.V(velocity));
             Assert.Equal((double)(float)v.X, pdu.EntityLinearVelocity.X, 9);
             Assert.Equal((double)(float)v.Y, pdu.EntityLinearVelocity.Y, 9);
             Assert.Equal((double)(float)v.Z, pdu.EntityLinearVelocity.Z, 9);

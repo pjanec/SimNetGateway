@@ -146,14 +146,15 @@ public sealed class ReplicaPublisher
         int algorithm = entity.TryGet(schema.DrAlgorithm, out var d) ? (int)d.AsInt() : DrAlgorithms.Static;
         double stateTime = entity.Get(schema.StateTime).AsDouble();
 
-        var rotation = geo.FromEuler(euler);
+        var position = geo.PointFromEcef(ecefPosition);
+        var rotation = geo.FromEuler(position, euler);
         bool bodyAxes = DrAlgorithms.IsBodyAxis(algorithm);
         return new HrotDrSnapshot(
-            geo.PointFromEcef(ecefPosition),
-            bodyAxes ? GeoFrame.FromVec(velocity) : geo.VectorFromEcef(velocity),
-            bodyAxes ? GeoFrame.FromVec(acceleration) : geo.VectorFromEcef(acceleration),
+            position,
+            bodyAxes ? GeoFrame.FromVec(velocity) : geo.VectorFromEcef(position, velocity),
+            bodyAxes ? GeoFrame.FromVec(acceleration) : geo.VectorFromEcef(position, acceleration),
             rotation,
-            geo.AngularVelocityFromBody(rotation, omegaBody),
+            geo.AngularVelocityFromBody(position, rotation, omegaBody),
             algorithm,
             stateTime);
     }

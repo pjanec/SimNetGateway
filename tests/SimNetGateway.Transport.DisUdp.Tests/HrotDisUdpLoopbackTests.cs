@@ -28,7 +28,7 @@ public sealed class HrotDisUdpLoopbackTests : IDisposable
     private readonly DisUdpTransport _transport;
     private readonly Socket _peer;
     private readonly int _gatewayPort;
-    private readonly LocalTangentFrame _frame = new(Geodetic.FromDegrees(Lat, Lon, Alt));
+    private readonly Common.Geo.UtmFrame _frame = Common.Geo.UtmFrame.AtOrigin(Lat, Lon, Alt, 0, false);
 
     public HrotDisUdpLoopbackTests()
     {
@@ -87,7 +87,7 @@ public sealed class HrotDisUdpLoopbackTests : IDisposable
 
     private void GoLive()
     {
-        var origin = new HrotOrigin(Lat, Lon, Alt, 1);
+        var origin = HrotOrigin.Utm(Lat, Lon, Alt, 1);
         var session = new HrotSession(ClusterPhase.Live, true, 1.0, 0.0);
         _hrotIn.Enqueue(in origin);
         _hrotIn.Enqueue(in session);

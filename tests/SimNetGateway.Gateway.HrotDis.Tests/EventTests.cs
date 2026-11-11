@@ -32,7 +32,7 @@ public class EventTests
         Assert.Equal(h.EntityOfHrot(1)!.Id, p.Get(s.EventFiring).AsEntity());
         Assert.Equal(h.EntityOfHrot(2)!.Id, p.Get(s.EventTarget).AsEntity());
         Support.Near(h.Frame!.PointToEcef(new Vec3(11, 21, 2)), p.Get(s.EventLocation).AsVec3(), 1e-6, "location");
-        Support.Near(h.Frame.VectorToEcef(new Vec3(100, 0, 5)), p.Get(s.EventVelocity).AsVec3(), 1e-9, "velocity");
+        Support.Near(h.Frame.VectorToEcef(new Vec3(11, 21, 2), new Vec3(100, 0, 5)), p.Get(s.EventVelocity).AsVec3(), 1e-9, "velocity");
         var munition = new MunitionCatalog().Describe(501, 0, out _);
         Assert.Equal(munition.DisType, p.Get(s.EventMunitionType).AsInt());
         Assert.Equal(501, p.Get(s.EventMunitionTkb).AsInt());
@@ -121,7 +121,7 @@ public class EventTests
         Assert.Equal(h.EntityOfHrot(2)!.Id, hit.Get(s.EventTarget).AsEntity());
         Assert.Equal(h.EntityOfHrot(1)!.Id, hit.Get(s.EventFiring).AsEntity());
         Support.Near(h.Frame!.PointToEcef(new Vec3(1001, 2, 3)), hit.Get(s.EventLocation).AsVec3(), 1e-6, "location");
-        Support.Near(h.Frame.VectorToEcef(new Vec3(0, 0, -10)), hit.Get(s.EventVelocity).AsVec3(), 1e-9, "velocity");
+        Support.Near(h.Frame.VectorToEcef(new Vec3(1001, 2, 3), new Vec3(0, 0, -10)), hit.Get(s.EventVelocity).AsVec3(), 1e-9, "velocity");
 
         // the location in the target's body axes: independent computation from Common
         var target = h.EntityOfHrot(2)!;
@@ -129,7 +129,8 @@ public class EventTests
         var expectedRelative = bodyToEcef.Transpose() * (hit.Get(s.EventLocation).AsVec3() - target.Get(s.Position).AsVec3());
         Support.Near(expectedRelative, hit.Get(s.EventRelativeLocation).AsVec3(), 1e-9, "relative location");
         // 1 m east and 2 m north and 3 m up of the target; its body (identity FLU) is x east, so relative x = +1 m forward, y = -2 m (right is south), z = -3 m (down)
-        Support.Near(new Vec3(1, -2, -3), hit.Get(s.EventRelativeLocation).AsVec3(), 1e-6, "relative location, by hand");
+        // (grid metres are not true metres: the UTM scale factor is about 0.9996 .. 1.0004, so a few millimetres at this distance)
+        Support.Near(new Vec3(1, -2, -3), hit.Get(s.EventRelativeLocation).AsVec3(), 5e-3, "relative location, by hand");
 
         h.HrotStep(new HrotDetonation(1, 0, 501, 0, new HrotVec3(5, 5, 0), default));
         var ground = Support.LastEvent(h, s.MunitionDetonation);
@@ -264,7 +265,7 @@ public class EventTests
         var (shooter, shooterId) = DisShooter(h, 100);
         var (other, otherId) = DisShooter(h, 200);
         var location = h.Frame!.PointToEcef(new Vec3(101, 2, 3));
-        var velocity = h.Frame.VectorToEcef(new Vec3(400, 0, 1));
+        var velocity = h.Frame.VectorToEcef(new Vec3(101, 2, 3), new Vec3(400, 0, 1));
         long munition = new MunitionCatalog().Describe(501, 0, out _).DisType;
 
         DisFire(h, shooter, h.EntityOfHrot(7)!.Id, location, velocity, munition, tkb: null);
@@ -298,7 +299,7 @@ public class EventTests
         h.HrotStep(HrotDisHarness.State(7, new HrotVec3(300, 0, 0)));
         var (shooter, shooterId) = DisShooter(h, 100);
         var location = h.Frame!.PointToEcef(new Vec3(299, 1, 0));
-        var velocity = h.Frame.VectorToEcef(new Vec3(0, 0, -30));
+        var velocity = h.Frame.VectorToEcef(new Vec3(299, 1, 0), new Vec3(0, 0, -30));
         long munition = new MunitionCatalog().Describe(501, 0, out _).DisType;
 
         void Detonate(EntityId? target)

@@ -50,7 +50,7 @@ public class DisEventTests
         Assert.Equal(0, fire.Descriptor.Rate);
         var location = h.Frame!.PointToEcef(new Vec3(5, 0, 2));
         Support.Near(location, DisConversions.ToVec(fire.LocationInWorldCoordinates), 1e-6, "location");
-        Support.Near(h.Frame.VectorToEcef(new Vec3(800, 0, 0)), DisConversions.ToVec(fire.Velocity), 1e-3, "velocity");
+        Support.Near(h.Frame.VectorToEcef(new Vec3(5, 0, 2), new Vec3(800, 0, 0)), DisConversions.ToVec(fire.Velocity), 1e-3, "velocity");
         double range = (h.EntityOfHrot(2)!.Get(h.Schema.Position).AsVec3() - location).Length;
         Assert.Equal(range, fire.Range, 2);
         Assert.False(DisTimestamp.IsAbsolute(fire.Timestamp));
@@ -98,9 +98,9 @@ public class DisEventTests
         Assert.Equal(Munition501, DisConversions.PackType(detonation.Descriptor.MunitionType));
         Assert.Equal(1000, detonation.Descriptor.Warhead);
         Support.Near(h.Frame!.PointToEcef(new Vec3(300, 2, 0)), DisConversions.ToVec(detonation.LocationInWorldCoordinates), 1e-6, "location");
-        Support.Near(h.Frame.VectorToEcef(new Vec3(0, 0, -50)), DisConversions.ToVec(detonation.Velocity), 1e-3, "velocity");
+        Support.Near(h.Frame.VectorToEcef(new Vec3(300, 2, 0), new Vec3(0, 0, -50)), DisConversions.ToVec(detonation.Velocity), 1e-3, "velocity");
         double relative = DisConversions.ToVec(detonation.LocationOfEntityCoordinates).Length;
-        Assert.Equal(2.0, relative, 3); // two metres from the target's reference point, in its body axes
+        Assert.Equal(2.0, relative, 2); // two metres (grid metres: within the scale factor) from the target's reference point, in its body axes
     }
 
     [Fact]
@@ -204,7 +204,7 @@ public class DisEventTests
         int replica = h.Sent<ReplicaState>().Last().Id;
         var target = KeyOfHrot(h, 1);
         var location = h.Frame.PointToEcef(new Vec3(110, 100, 1));
-        var velocity = h.Frame.VectorToEcef(new Vec3(0, -700, 0));
+        var velocity = h.Frame.VectorToEcef(new Vec3(110, 100, 1), new Vec3(0, -700, 0));
         h.DisStep(Fire(shooter, target, location, velocity, Munition501, eventNumber: 42, rate: 3, quantity: 2, range: 123.5f));
 
         var payload = LastEvent(h, h.Schema.WeaponFire);

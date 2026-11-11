@@ -69,7 +69,7 @@ public static class RprMessages
         Update(h.Frame ?? throw new InvalidOperationException("No origin was sent yet."), handle, enu, marking, type, force, damage, enuVelocity, algorithm, euler);
 
     /// <summary>A federate's full object update at a point of the ENU frame of <paramref name="frame"/>.</summary>
-    public static RprObjectUpdate Update(LocalTangentFrame frame, RprObjectHandle handle, Vec3 enu, string marking = "PEER", DisEntityType? type = null,
+    public static RprObjectUpdate Update(TestFrame frame, RprObjectHandle handle, Vec3 enu, string marking = "PEER", DisEntityType? type = null,
         RprForceId force = RprForceId.Opposing, RprDamageState damage = RprDamageState.NoDamage, Vec3 enuVelocity = default, byte algorithm = 2,
         Vec3 euler = default)
     {
@@ -80,7 +80,7 @@ public static class RprMessages
             ForceId = force,
             WorldLocation = RprConversions.ToLocation(frame.PointToEcef(enu)),
             Orientation = RprConversions.ToOrientation(euler),
-            VelocityVector = RprConversions.ToVector(frame.VectorToEcef(enuVelocity)),
+            VelocityVector = RprConversions.ToVector(frame.VectorToEcef(enu, enuVelocity)),
             AccelerationVector = default(RprVector),
             AngularVelocity = default(RprVector),
             DeadReckoningAlgorithm = algorithm,

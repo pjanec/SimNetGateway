@@ -86,7 +86,7 @@ public sealed class HrotDetonationIngress : IGatewayModule
         bag.Set(_schema.EventFuse, AttrValue.From((long)munition.Fuse));
         bag.Set(_schema.EventQuantity, AttrValue.From(1L));
         bag.Set(_schema.EventLocation, AttrValue.From(location));
-        bag.Set(_schema.EventVelocity, AttrValue.From(geo.VectorToEcef(m.Velocity)));
+        bag.Set(_schema.EventVelocity, AttrValue.From(geo.VectorToEcef(m.Location, m.Velocity)));
         bag.Set(_schema.EventResult, AttrValue.From(result));
         ctx.Publish(_schema.MunitionDetonation, bag);
     }
