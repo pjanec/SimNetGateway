@@ -57,3 +57,4 @@ progress and done.
 | **T-029** | todo | Remove the vendoring tooling or repurpose it (R-128 supersedes R-092): `scripts/vendor-dry-run.sh` and DD-007 section 2 | DD-007, DD-011 | low priority |
 | **T-030** | done | HROT entity ids are 32-bit (HROT CE-4200, `coordinator` 481e8a9a4): `Protocol.Hrot` entity ids, the `hrot.entity` map and its allocator port, and `hrot.replicaOwnerNodeId` `long` -> `int`; 0 = invalid | DD-006, DD-007 | user 2026-11-02 "Yes please"; before T-027 |
 | **T-031** | done | `GeoFrame` = HROT's UTM frame, geo reference v2 (`HrotOrigin` v2 fields, `Common.Geo.Utm` / `UtmFrame`, position-aware orientation / vectors, refusals) | DD-014 | R-084, R-131 |
+| **T-032** | done | `ConfigSection.StringMap`: a side can read an object of strings (a side's model tables) | DD-011 | generic helper for protocol sides of other projects |

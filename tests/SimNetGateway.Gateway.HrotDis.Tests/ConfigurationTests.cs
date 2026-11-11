@@ -40,6 +40,24 @@ public class ConfigurationTests
     }
 
     [Fact]
+    public void ConfigSection_StringMap_reads_an_object_of_strings_in_file_order_and_reports_errors()
+    {
+        var errors = new List<string>();
+        using var good = JsonDocument.Parse("""{ "table": { "b": "two", "a": "one" }, "bad": { "x": 1 }, "notObject": [1] }""");
+        var section = ConfigSection.Open(good.RootElement, "test", "", errors)!;
+        var fallback = new Dictionary<string, string> { ["f"] = "fallback" };
+        var read = section.StringMap("table", fallback);
+        Assert.Equal(new[] { "b", "a" }, read.Keys.ToArray());
+        Assert.Equal("one", read["a"]);
+        Assert.Same(fallback, section.StringMap("absent", fallback));
+        Assert.Same(fallback, section.StringMap("bad", fallback));
+        Assert.Same(fallback, section.StringMap("notObject", fallback));
+        Assert.Equal(2, errors.Count);
+        Assert.Contains("bad.x", errors[0]);
+        Assert.Contains("expected an object of strings", errors[1]);
+    }
+
+    [Fact]
     public void The_example_of_the_design_loads_with_its_values()
     {
         var c = Load(Example);

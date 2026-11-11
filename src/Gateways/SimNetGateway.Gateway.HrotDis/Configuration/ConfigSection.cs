@@ -236,6 +236,39 @@ public sealed class ConfigSection
         return list;
     }
 
+    /// <summary>An object whose values are all non-empty strings (e.g. a table of names), in file order; records an error and returns <paramref name="fallback"/> otherwise.</summary>
+    public IReadOnlyDictionary<string, string> StringMap(string key, IReadOnlyDictionary<string, string> fallback)
+    {
+        if (!TryGet(key, out var element))
+        {
+            return fallback;
+        }
+
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            Error(key, $"expected an object of strings, got {element.ValueKind}");
+            return fallback;
+        }
+
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var property in element.EnumerateObject())
+        {
+            if (property.Value.ValueKind != JsonValueKind.String || string.IsNullOrEmpty(property.Value.GetString()))
+            {
+                Error($"{key}.{property.Name}", "expected a non-empty string");
+                return fallback;
+            }
+
+            if (!map.TryAdd(property.Name, property.Value.GetString()!))
+            {
+                Error($"{key}.{property.Name}", "duplicate key");
+                return fallback;
+            }
+        }
+
+        return map;
+    }
+
     private bool TryGet(string key, out JsonElement element)
     {
         if (_properties.TryGetValue(key, out element))
