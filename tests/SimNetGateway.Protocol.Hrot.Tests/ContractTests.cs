@@ -94,7 +94,7 @@ public class ContractTests
         string[] expected =
         [
             "Id", "TkbType", "DisType", "Marking", "Force", "CommanderId", "Position", "Rotation", "Velocity", "AngularVelocity",
-            "HealthCurrent", "HealthMax", "SimTime",
+            "HealthCurrent", "HealthMax", "SimTime", "Stance", "Weapon", "AimPoint", "Injury",
         ];
         Assert.Equal(expected, typeof(HrotEntityState).GetProperties().Where(p => p.Name != "EqualityContract").Select(p => p.Name).ToArray());
         string[] replica = ["Id", "TkbType", "DisType", "Marking", "Force", "State", "HealthCurrent", "HealthMax", "Deactivated"];

@@ -41,6 +41,10 @@ public sealed class PivotSchema
 
         TkbType = attributes.Register("Hrot.TkbType", AttrKind.Int, "HROT template id (mirror)");
         Health = attributes.Register("Hrot.Health", AttrKind.Vec3, "HROT health (current, max, 0) (mirror)");
+        Stance = attributes.Register("Lifeform.Stance", AttrKind.Int, "Life form stance: 0 unknown, 1 standing, 2 crouched, 3 prone");
+        WeaponPosture = attributes.Register("Lifeform.WeaponPosture", AttrKind.Int, "Weapon posture: 0 none, 1 at ease, 2 ready, 3 aimed");
+        AimPoint = attributes.Register("Lifeform.AimPoint", AttrKind.Vec3, "Point the weapon is aimed at, ECEF metres (meaningful when aimed)");
+        Injury = attributes.Register("Lifeform.Injury", AttrKind.Int, "Injury: 0 ok, 1 wounded, 2 incapacitated, 3 dead");
         OwnerNode = attributes.Register("Hrot.OwnerNode", AttrKind.Int, "Node id of the HROT owner (diagnostics)");
         MasterFlags = attributes.Register("Hrot.MasterFlags", AttrKind.Int, "HROT EntityMasterFlags (mirror)");
 
@@ -99,6 +103,16 @@ public sealed class PivotSchema
 
     public AttrId TkbType { get; }
     public AttrId Health { get; }
+    /// <summary>Life form stance (<c>HrotStance</c> as an integer).</summary>
+    public AttrId Stance { get; }
+
+    public AttrId WeaponPosture { get; }
+
+    /// <summary>The aimed-at point, ECEF.</summary>
+    public AttrId AimPoint { get; }
+
+    public AttrId Injury { get; }
+
     public AttrId OwnerNode { get; }
     public AttrId MasterFlags { get; }
 

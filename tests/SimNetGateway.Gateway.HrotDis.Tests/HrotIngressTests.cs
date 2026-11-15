@@ -315,6 +315,42 @@ public class HrotIngressTests
         Assert.Equal(new Vec3(current, max, 0), h.EntityOfHrot(1)!.Get(h.Schema.Health).AsVec3());
     }
 
+
+    [Fact]
+    public void A_life_forms_stance_weapon_aim_and_injury_land_as_pivot_attributes()
+    {
+        var h = LiveAtEquator();
+        var state = HrotDisHarness.State(1, new HrotVec3(5, 6, 0)) with
+        {
+            Stance = HrotStance.Crouched, Weapon = HrotWeaponPosture.Aimed, AimPoint = new HrotVec3(10, 20, 1), Injury = HrotInjury.Wounded,
+        };
+        h.HrotStep(state);
+        var e = h.EntityOfHrot(1)!;
+        Assert.Equal((long)HrotStance.Crouched, e.Get(h.Schema.Stance).AsInt());
+        Assert.Equal((long)HrotWeaponPosture.Aimed, e.Get(h.Schema.WeaponPosture).AsInt());
+        Assert.Equal((long)HrotInjury.Wounded, e.Get(h.Schema.Injury).AsInt());
+        Assert.Equal(h.Frame.PointToEcef(new Vec3(10, 20, 1)).X, e.Get(h.Schema.AimPoint).AsVec3().X, 3); // the frame of the position
+        Assert.Equal(h.Frame.PointToEcef(new Vec3(10, 20, 1)).Y, e.Get(h.Schema.AimPoint).AsVec3().Y, 3);
+    }
+
+    [Fact]
+    public void An_entity_with_defaults_has_no_stance_weapon_or_injury()
+    {
+        var h = LiveAtEquator();
+        h.HrotStep(HrotDisHarness.State(1, new HrotVec3(5, 6, 0)));
+        var e = h.EntityOfHrot(1)!;
+        Assert.Equal(0, e.Get(h.Schema.Stance).AsInt());
+        Assert.Equal(0, e.Get(h.Schema.WeaponPosture).AsInt());
+        Assert.Equal(0, e.Get(h.Schema.Injury).AsInt());
+    }
+
+    [Fact]
+    public void A_non_finite_aim_point_is_refused()
+    {
+        var h = LiveAtEquator();
+        h.HrotStep(HrotDisHarness.State(1) with { AimPoint = new HrotVec3(double.NaN, 0, 0) });
+        Assert.Null(h.EntityOfHrot(1));
+    }
     [Fact]
     public void The_thresholds_come_from_the_configuration()
     {

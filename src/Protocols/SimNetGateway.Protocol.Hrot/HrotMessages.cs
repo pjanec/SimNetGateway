@@ -111,6 +111,8 @@ public readonly record struct HrotSession(ClusterPhase Phase, bool Advancing, do
 /// A full snapshot of a HROT entity. <see cref="DisType"/> is the DIS entity type packed in 64 bits (kind 8, domain 8,
 /// country 16, category 8, subcategory 8, specific 8, extra 8 bits, kind in the top byte), 0 = none. <see cref="Force"/>
 /// uses the DIS numbering (0 other, 1 friendly, 2 opposing, 3 neutral). <see cref="CommanderId"/> 0 = none.
+/// The last four fields describe a life form (DD-015): <see cref="AimPoint"/> is in local metres, the frame of <see cref="Position"/>, and means something only when
+/// <see cref="Weapon"/> is <see cref="HrotWeaponPosture.Aimed"/>.
 /// </summary>
 public readonly record struct HrotEntityState(
     int Id,
@@ -125,7 +127,38 @@ public readonly record struct HrotEntityState(
     HrotVec3 AngularVelocity,
     double HealthCurrent,
     double HealthMax,
-    double SimTime) : IHrotToGatewayMessage;
+    double SimTime,
+    HrotStance Stance = default,
+    HrotWeaponPosture Weapon = default,
+    HrotVec3 AimPoint = default,
+    HrotInjury Injury = default) : IHrotToGatewayMessage;
+
+/// <summary>The stance of a life form; <see cref="Unknown"/> for anything that has none (a vehicle).</summary>
+public enum HrotStance : byte
+{
+    Unknown = 0,
+    Standing = 1,
+    Crouched = 2,
+    Prone = 3,
+}
+
+/// <summary>What a life form does with the weapon it holds; <see cref="None"/> = no weapon in hand or not a life form.</summary>
+public enum HrotWeaponPosture : byte
+{
+    None = 0,
+    AtEase = 1,
+    Ready = 2,
+    Aimed = 3,
+}
+
+/// <summary>The injury state of a life form (Ok for anything else).</summary>
+public enum HrotInjury : byte
+{
+    Ok = 0,
+    Wounded = 1,
+    Incapacitated = 2,
+    Dead = 3,
+}
 
 public readonly record struct HrotEntityRemoved(int Id) : IHrotToGatewayMessage;
 

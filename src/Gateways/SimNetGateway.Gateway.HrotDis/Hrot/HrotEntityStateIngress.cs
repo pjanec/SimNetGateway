@@ -30,7 +30,7 @@ public sealed class HrotEntityStateIngress : IGatewayModule
     {
         setup.Produces(_schema.EntityType, _schema.Marking, _schema.Force, _schema.TkbType, _schema.Health, _schema.Damage,
             _schema.Parent, _schema.Position, _schema.Orientation, _schema.Velocity, _schema.Acceleration, _schema.AngularVelocity,
-            _schema.DrAlgorithm, _schema.StateTime);
+            _schema.DrAlgorithm, _schema.StateTime, _schema.Stance, _schema.WeaponPosture, _schema.AimPoint, _schema.Injury);
         setup.OnMessage<HrotEntityState>(Handle);
     }
 
@@ -48,7 +48,7 @@ public sealed class HrotEntityStateIngress : IGatewayModule
             return;
         }
 
-        if (!GeoFrame.IsFinite(m.Position) || !GeoFrame.IsFinite(m.Rotation) || !GeoFrame.IsFinite(m.Velocity) ||
+        if (!GeoFrame.IsFinite(m.Position) || !GeoFrame.IsFinite(m.AimPoint) || !GeoFrame.IsFinite(m.Rotation) || !GeoFrame.IsFinite(m.Velocity) ||
             !GeoFrame.IsFinite(m.AngularVelocity) || !double.IsFinite(m.HealthCurrent) || !double.IsFinite(m.HealthMax) ||
             !double.IsFinite(m.SimTime))
         {
@@ -91,6 +91,10 @@ public sealed class HrotEntityStateIngress : IGatewayModule
 
         SetCommander(ctx, id, m.CommanderId);
 
+        changes.Set(id, _schema.Stance, AttrValue.From((long)m.Stance));
+        changes.Set(id, _schema.WeaponPosture, AttrValue.From((long)m.Weapon));
+        changes.Set(id, _schema.Injury, AttrValue.From((long)m.Injury));
+
         var geo = _services.Geo;
         if (!geo.IsValid || !Local(_schema.SpatialGroup))
         {
@@ -98,6 +102,7 @@ public sealed class HrotEntityStateIngress : IGatewayModule
         }
 
         changes.Set(id, _schema.Position, AttrValue.From(geo.PointToEcef(m.Position)));
+        changes.Set(id, _schema.AimPoint, AttrValue.From(geo.PointToEcef(m.AimPoint)));   // meaningful when aimed; the same frame as the position
         changes.Set(id, _schema.Velocity, AttrValue.From(geo.VectorToEcef(m.Position, m.Velocity)));
         changes.Set(id, _schema.Acceleration, AttrValue.From(Vec3.Zero));
         changes.Set(id, _schema.Orientation, AttrValue.From(geo.ToEuler(m.Position, m.Rotation)));
