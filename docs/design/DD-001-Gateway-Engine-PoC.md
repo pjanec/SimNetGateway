@@ -1704,7 +1704,7 @@ sequenceDiagram
     participant ROut as RprEntityEgress
     participant RIn as RprObjectUpdateIngress
     participant BOut as NedFormationEgress
-    participant BNet as NED outbound channel
+    participant NedCh as NED outbound channel
 
     Note over BIn,ROut: coarse -> fine (shatter)
     BIn->>BIn: NedFormation 7 with members 0..2 (one message, one transaction)
@@ -1712,14 +1712,14 @@ sequenceDiagram
     BIn->>Eng: Set member attributes + Structure.Parent = E10, destroy members no longer listed
     Eng->>Disp: commit: deltas E10, E11, E12, E13
     Disp->>ROut: EntityTrigger per member - one RPR platform object each
-    Note over RIn,BNet: fine -> coarse (aggregate), for an RPR-origin unit E20 with members E21..E23
+    Note over RIn,NedCh: fine -> coarse (aggregate), for an RPR-origin unit E20 with members E21..E23
     RIn->>Eng: RprObjectUpdate for member E22 (transaction C40)
     Eng->>Disp: commit C40
     Disp->>BOut: EntityTrigger(E22 changed)
     BOut->>BOut: parent = E22.Structure.Parent = E20, mark E20 dirty
     Disp->>BOut: ChangeSetTrigger(C40) - after all entity triggers of C40
     BOut->>Eng: Query().ReferencedBy(Structure.Parent, E20).CopyTo(members)
-    BOut->>BNet: Send(NedFormation for E20 with all members) - once per dirty parent
+    BOut->>NedCh: Send(NedFormation for E20 with all members) - once per dirty parent
 ```
 
 The coarse side's modules own the structure: the ingress shatters one message into several pivot
