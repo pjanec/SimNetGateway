@@ -269,6 +269,85 @@ public sealed class ConfigSection
         return map;
     }
 
+    /// <summary>An object whose values are each a non-empty string or a non-empty array of non-empty strings (a table of names or lists of names), in file order.</summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> StringListMap(string key, IReadOnlyDictionary<string, IReadOnlyList<string>> fallback)
+    {
+        if (!TryGet(key, out var element))
+        {
+            return fallback;
+        }
+
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            Error(key, $"expected an object of strings or lists of strings, got {element.ValueKind}");
+            return fallback;
+        }
+
+        var map = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        foreach (var property in element.EnumerateObject())
+        {
+            var list = new List<string>();
+            if (property.Value.ValueKind == JsonValueKind.String)
+            {
+                list.Add(property.Value.GetString()!);
+            }
+            else if (property.Value.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in property.Value.EnumerateArray())
+                {
+                    list.Add(item.ValueKind == JsonValueKind.String ? item.GetString()! : string.Empty);
+                }
+            }
+
+            if (list.Count == 0 || list.Any(string.IsNullOrEmpty))
+            {
+                Error($"{key}.{property.Name}", "expected a non-empty string or a non-empty list of non-empty strings");
+                return fallback;
+            }
+
+            if (!map.TryAdd(property.Name, list))
+            {
+                Error($"{key}.{property.Name}", "duplicate key");
+                return fallback;
+            }
+        }
+
+        return map;
+    }
+
+    /// <summary>An object whose values are all integers within the range, in file order.</summary>
+    public IReadOnlyDictionary<string, int> IntegerMap(string key, IReadOnlyDictionary<string, int> fallback, int min, int max)
+    {
+        if (!TryGet(key, out var element))
+        {
+            return fallback;
+        }
+
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            Error(key, $"expected an object of integers, got {element.ValueKind}");
+            return fallback;
+        }
+
+        var map = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var property in element.EnumerateObject())
+        {
+            if (property.Value.ValueKind != JsonValueKind.Number || !property.Value.TryGetInt32(out int value) || value < min || value > max)
+            {
+                Error($"{key}.{property.Name}", $"expected an integer from {min} to {max}");
+                return fallback;
+            }
+
+            if (!map.TryAdd(property.Name, value))
+            {
+                Error($"{key}.{property.Name}", "duplicate key");
+                return fallback;
+            }
+        }
+
+        return map;
+    }
+
     private bool TryGet(string key, out JsonElement element)
     {
         if (_properties.TryGetValue(key, out element))

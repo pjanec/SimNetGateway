@@ -58,6 +58,27 @@ public class ConfigurationTests
     }
 
     [Fact]
+    public void ConfigSection_StringListMap_and_IntegerMap_read_values_and_report_errors()
+    {
+        var errors = new List<string>();
+        using var doc = JsonDocument.Parse("""{ "t": { "a": "one", "b": ["x", "y"] }, "bad": { "c": [] }, "n": { "p": 3, "q": 0 }, "badn": { "r": 99 }, "mixed": { "s": ["a", 1] } }""");
+        var section = ConfigSection.Open(doc.RootElement, "test", "", errors)!;
+        var emptyLists = new Dictionary<string, IReadOnlyList<string>>();
+        var lists = section.StringListMap("t", emptyLists);
+        Assert.Equal(new[] { "a", "b" }, lists.Keys.ToArray());
+        Assert.Equal(new[] { "one" }, lists["a"]);
+        Assert.Equal(new[] { "x", "y" }, lists["b"]);
+        Assert.Same(emptyLists, section.StringListMap("bad", emptyLists));
+        Assert.Same(emptyLists, section.StringListMap("mixed", emptyLists));
+
+        var emptyInts = new Dictionary<string, int>();
+        var ints = section.IntegerMap("n", emptyInts, 0, 50);
+        Assert.Equal((3, 0), (ints["p"], ints["q"]));
+        Assert.Same(emptyInts, section.IntegerMap("badn", emptyInts, 0, 50));
+        Assert.Equal(3, errors.Count);
+    }
+
+    [Fact]
     public void The_example_of_the_design_loads_with_its_values()
     {
         var c = Load(Example);
