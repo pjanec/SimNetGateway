@@ -182,11 +182,23 @@ The plugin maps them onto the host's player-station seam, which drives HROT's ow
 
 The client predicts nothing authoritative; it may smooth its own unit's camera from the control it sends (client choice).
 
-### 3.7 Gizmos (P-7, optional topic set)
+### 3.7 Gizmos (P-7)
 
-`Gizmo` instances, keyed by (producer, gizmo id), `TRANSIENT_LOCAL`: a shape (line strip, arrow, circle, polygon, box, text, icon), world
-coordinates or attached to an entity (offset), colour, width, lifetime (0 = until disposed), layer name. Disposed = removed. A client
-that does not draw gizmos does not subscribe. Producers: the simulation's debug gizmos (a later host task); the topic set is generic.
+The owner: HROT produces gizmos on a regular basis. HROT's gizmos are immediate-mode: each frame its gizmo projectors (paths, vision
+cones, contacts, action status, EQS and cover, fire traces, blast, hearing, routes, sectors, navmesh, ...) issue draw calls into a draw
+builder (`IDebugDrawBuilder`), filtered by a visibility policy (layers on / off, "selected only" families, pinned units). HROT's ruling is
+that every map host gets the full set of gizmos ("component presence defines applicable gizmos", uniform gizmo membership). DPS makes
+the gateway one more gizmo host:
+
+- The host runs HROT's projectors into its own draw builder, with a visibility policy set by the client.
+- **Client to gateway:** `GizmoView` (one per station): the layers the client wants, the selected entity ids, the pinned entity ids and
+  families, a rate (default 10 Hz).
+- **Gateway to client:** `GizmoFrame`, keyed by (`Producer`, `Layer`), `RELIABLE`, `TRANSIENT_LOCAL`, `KEEP_LAST 1`: the complete list of
+  primitives of that layer for the latest gizmo frame (line strip, arrow, circle, polygon, box, text, icon; world coordinates; colour;
+  width), so each sample replaces the previous one and a late joiner gets the current picture. A layer turned off is disposed.
+- A client that does not draw gizmos sends no `GizmoView`; the gateway then runs no projectors.
+
+Rejected: keyed per-gizmo instances with lifetimes (HROT's gizmos are redrawn every frame, so there is no stable gizmo identity to key on).
 
 ### 3.8 What the HROT host needs from HROT (G-4, generic wording)
 
@@ -212,7 +224,9 @@ Until they exist, the corresponding DPS fields stay at their "unknown" value; th
 ### 3.9 Replay (P-8)
 
 State topics follow the replayed world (the host already reads recorded state in replay). Fire and detonation come from the recorded state
-in replay as for the other sides. `Session.Mode = Replay` tells the client; the player topics are refused in replay (`PlayerSlot` =
+in replay as for the other sides. `Effect` carries HROT's effect objects that are not fire or detonation events (wreck flames and
+smoke, muzzle flashes, explosion marks: `VisualEffectState` / `EffectAnchor`, recorded, so replay has them). `Session.Mode = Replay` tells
+the client; the player topics are refused in replay (`PlayerSlot` =
 Observing).
 
 ## 4. Topic summary
@@ -228,7 +242,8 @@ Observing).
 | `Fire`, `Detonation`, `Effect` | none | event | gateway to client |
 | `PlayerSlot`, `OwnUnit` | none (one per station partition) | state | gateway to client |
 | `JoinRequest`, `ControlFrame`, `Leave` | none | player (liveliness) | client to gateway |
-| `Gizmo` | Producer, GizmoId | state | gateway to client |
+| `GizmoFrame` | Producer, Layer | state | gateway to client |
+| `GizmoView` | none (one per station partition) | player | client to gateway |
 
 ## 5. Sequence: a client joins a running exercise and plays
 

@@ -41,6 +41,7 @@ Answers two questions the later tasks rely on; no product code.
 
 - [ ] **Step 1:** In a test with two `DdsParticipant`s on one domain, verify on CycloneDDS.NET 1.2.20: (a) a partition can be set on publisher / subscriber QoS and readers in another partition get nothing; (b) a writer's liveliness lease and the reader's liveliness-changed (or publication-matched) status are exposed; (c) disposing an instance reaches a TransientLocal late joiner as not-alive. Tests: `Partition_isolates_two_stations`, `Lost_writer_is_reported`, `Disposed_instance_is_not_delivered_to_late_joiner`.
 - [ ] **Step 2:** If (a) is not exposed, the fallback is the topic name `DPS_<partition>_<Topic>`; if (b) is not exposed, the fallback is a heartbeat: the client writes `Heartbeat` every 0.5 s and the gateway treats `dps.leaseSeconds` (default 2) without any player sample as lost. Record which applies in DD-017 section 10.
+- [ ] **Step 3a:** Read HROT's gizmo pipeline (`FDP/Toolkits/Fdp.Toolkits/Diagnostics/Gizmos`: `IStatelessGizmo`, `IEntityStatefulGizmo`, `IGlobalStatelessGizmo`, `IDebugDrawBuilder`, `GizmoRegistry`, `GizmoExecutionController`, `IGizmoVisibilityPolicy`, `IGizmoViewFilter`, `IActiveViewProvider`; `docs/DESIGN_Uniform_Gizmo_Membership.md`, `docs/GUIDE_Debug_Gizmos.md`) and record in DD-017 section 10 how a node extension runs the projectors into its own draw builder with its own visibility policy (layers, selected, pinned), without disturbing the editor's own map.
 - [ ] **Step 3:** Read HROT (`external/hrot`, read-only) and record in DD-017 section 10 the exact entry points the host will call on the editor node: the Deploy client request for a role or a `Playable` unit (`Hrot/Engine/Hrot.Gameplay/DeployFlowSystem.cs`, `GameplayTopics.cs`), possession (`EntityOrders.Possess`), `OperatorControlFrameEvent` publication (`FDP/Toolkits/Fdp.Toolkits/Behavior/Possession/Possession.cs`), `ReleasePossession`, and where the slot state (`PlayerSlotTopic`, `PossessedBy`) is read. Confirm whether the deploy server runs in the editor (feature `gameplay.deploy-server`).
 - [ ] **Step 4:** Run `dotnet test tests/SimNetGateway.Protocol.DdsPlayer.Tests -m:1 --filter Spike`; expected: the tests document the behaviour (pass on the supported path).
 - [ ] **Step 5:** Commit `test(dps): spike - partitions, liveliness, dispose; HROT player-mode entry points (DD-017 section 10)`.
@@ -53,11 +54,11 @@ Answers two questions the later tasks rely on; no product code.
 - Modify: `SimNetGateway.sln`, `tests/SimNetGateway.Architecture.Tests` layer table (Protocol layer)
 
 **Interfaces:**
-- Produces (namespace `SimNetGateway.Protocol.DdsPlayer`): topic structs `Session`, `Entity`, `EntityState`, `Articulation`, `PersonState`, `Appearance`, `Fire`, `Detonation`, `Effect`, `PlayerSlot`, `OwnUnit`, `JoinRequest`, `ControlFrame`, `Leave`, (`Heartbeat` only if Task 1 chose the fallback), `Gizmo`; enums `Domain`, `Stance`, `WeaponPosture`, `HeldItem`, `Gesture`, `Injury`, `ActionKind`, `ActionState`, `SeatRole`, `CarryMode`, `SlotState`, `SessionMode` (Live, Paused, Replay), `GizmoShape`. Fields per DD-017 sections 3.3-3.7; `EntityId` is `int`; `Articulation` is keyed by (`EntityId`, `PartId`); `Gizmo` by (`Producer` string, `GizmoId` int).
+- Produces (namespace `SimNetGateway.Protocol.DdsPlayer`): topic structs `Session`, `Entity`, `EntityState`, `Articulation`, `PersonState`, `Appearance`, `Fire`, `Detonation`, `Effect`, `PlayerSlot`, `OwnUnit`, `JoinRequest`, `ControlFrame`, `Leave`, (`Heartbeat` only if Task 1 chose the fallback), `GizmoView`, `GizmoFrame`; enums `Domain`, `Stance`, `WeaponPosture`, `HeldItem`, `Gesture`, `Injury`, `ActionKind`, `ActionState`, `SeatRole`, `CarryMode`, `SlotState`, `SessionMode` (Live, Paused, Replay), `GizmoShape`. Fields per DD-017 sections 3.3-3.7; `EntityId` is `int`; `Articulation` is keyed by (`EntityId`, `PartId`); `GizmoFrame` by (`Producer` string, `Layer` string); `GizmoFrame.Primitives` is a bounded sequence (4096) of `GizmoPrimitive {Shape, Points (bounded 64), ColourRgba, Width, Text}`.
 
-- [ ] **Step 1: Failing tests** in `DpsTopicTests`: `Every_topic_round_trips` (write and read each topic with non-default values in one participant), `Late_joiner_gets_every_live_instance` (write 500 `EntityState` instances, then create the reader; it reads 500), `Disposed_entity_is_gone_for_a_late_joiner`, `Generated_idl_contains_every_topic` (the build output's generated IDL lists `DPS_Session` ... `DPS_Gizmo`).
+- [ ] **Step 1: Failing tests** in `DpsTopicTests`: `Every_topic_round_trips` (write and read each topic with non-default values in one participant), `Late_joiner_gets_every_live_instance` (write 500 `EntityState` instances, then create the reader; it reads 500), `Disposed_entity_is_gone_for_a_late_joiner`, `Generated_idl_contains_every_topic` (the build output's generated IDL lists `DPS_Session` ... `DPS_GizmoFrame`).
 - [ ] **Step 2:** `dotnet test tests/SimNetGateway.Protocol.DdsPlayer.Tests -m:1` - FAIL (types missing).
-- [ ] **Step 3:** Write the types (QoS per Global Constraints; bounded strings: names 64, kinds 32, colours 7; sequences: appearance slots 16, equipment 16, gizmo points 256).
+- [ ] **Step 3:** Write the types (QoS per Global Constraints; bounded strings: names 64, kinds 32, colours 7; sequences: appearance slots 16, equipment 16, gizmo primitives 4096).
 - [ ] **Step 4:** Tests PASS; `dotnet test tests/SimNetGateway.Architecture.Tests -m:1` PASS.
 - [ ] **Step 5:** Commit `feat(dps): the DPS topic types (CycloneDDS.NET, generated IDL), DD-017`.
 
@@ -112,7 +113,7 @@ Answers two questions the later tasks rely on; no product code.
 
 - [ ] **Step 1: Failing tests** (real CycloneDDS in-process, the reader in the configured partition): `Entity_appears_with_type_domain_side_and_name`, `Pose_is_sent_on_threshold_and_heartbeat_not_on_noise`, `Person_detail_maps_to_person_state`, `Turret_pose_maps_to_articulation_part`, `Fire_and_detonation_are_events`, `Removed_entity_is_disposed`, `Session_carries_protocol_version_geo_and_mode` (Live / Paused / Replay), `World_boundary_disposes_every_instance` (Review Focus 4), `Other_partition_sees_nothing`, `Appearance_is_published_once_with_unknown_slots` (round 1).
 - [ ] **Step 2:** `dotnet test tests/SimNetGateway.Plugin.DdsPlayer.Tests -m:1` - FAIL.
-- [ ] **Step 3:** `Effect` and `Gizmo` get no producer in round 1 (types only). Implement following the DIS side's structure (`Sides/DisSide.cs`: declare ports in `Declare`, register the outbound module in `Register`); domain mapping from the DIS kind/domain of `HrotEntityState.DisType`; side = `Force` (DIS numbering).
+- [ ] **Step 3:** `Effect` is written from HROT's effect objects (pivot `HrotEffect`, gathered by the host from `VisualEffectState` / `EffectAnchor` entities: kind, position or anchor entity, lifetime) - add the test `Wreck_flames_become_effect_samples`. Implement following the DIS side's structure (`Sides/DisSide.cs`: declare ports in `Declare`, register the outbound module in `Register`); domain mapping from the DIS kind/domain of `HrotEntityState.DisType`; side = `Force` (DIS numbering).
 - [ ] **Step 4:** Tests PASS; `scripts/package-extension.sh` puts `plugins/dps/{SimNetGateway.Plugin.DdsPlayer.dll, SimNetGateway.Protocol.DdsPlayer.dll, plugin.json}` and still contains no `CycloneDDS*`.
 - [ ] **Step 5:** Commit `feat(dps): the dps plugin publishes the world (partition per station, late-join state, events)`.
 
@@ -131,10 +132,26 @@ Answers two questions the later tasks rely on; no product code.
 - [ ] **Step 4:** Tests PASS.
 - [ ] **Step 5:** Commit `feat(dps): player topics drive the player-station seam; lost client releases the unit`.
 
+### Task 6b: Gizmos
+
+**Files:**
+- Create: `src/Hosts/SimNetGateway.HrotHost/HrotGizmoHost.cs` (runs HROT's projectors into a capturing `IDebugDrawBuilder` at the rate the view asks), `src/Hosts/SimNetGateway.Plugin.DdsPlayer/DpsGizmos.cs`
+- Modify: `IPlayerStation.cs` (Task 4) or a sibling seam `IGizmoSource` in the same folder: `void SetView(GizmoViewRequest view); IReadOnlyList<GizmoLayerFrame> Take();`
+- Test: `tests/SimNetGateway.HrotHost.Tests/GizmoHostTests.cs`, `tests/SimNetGateway.Plugin.DdsPlayer.Tests/DpsGizmoTests.cs`
+
+**Interfaces:**
+- Produces: `public readonly record struct GizmoViewRequest(IReadOnlyList<string> Layers, IReadOnlyList<int> Selected, IReadOnlyList<(int Entity, string Family)> Pinned, double RateHz);` `public readonly record struct GizmoLayerFrame(string Layer, IReadOnlyList<GizmoPrimitiveData> Primitives);` (layer names = HROT's layer rows; primitives = what the projectors drew, in local metres)
+
+- [ ] **Step 1: Failing tests:** `No_view_runs_no_projectors`, `Selected_unit_path_layer_is_captured` (a staged unit with a planned path, layer Paths, selected), `Layer_off_is_disposed`, `Frame_rate_is_capped_by_the_view`, `Editor_map_settings_are_untouched` (the editor's own layer set before and after is equal).
+- [ ] **Step 2:** Run - FAIL.
+- [ ] **Step 3:** Implement per Task 1 Step 3a.
+- [ ] **Step 4:** Tests PASS.
+- [ ] **Step 5:** Commit `feat(dps): HROT's gizmos to the station (client-chosen layers, selection and pins)`.
+
 ### Task 7: Reference client
 
 **Files:**
-- Create: `src/Hosts/SimNetGateway.DpsClient/` (`SimNetGateway.DpsClient.csproj`, `Program.cs`, `DpsWorld.cs` (subscribes, keeps the latest state per entity, dead-reckons positions from velocity), `DpsClientWindow.cs` (raylib top-down map: entities by domain and side, the own unit highlighted; keys: J join first offer, WASD move, mouse aim, LMB fire, C stance, Esc leave), `--headless --seconds N` mode printing counts)
+- Create: `src/Hosts/SimNetGateway.DpsClient/` (`SimNetGateway.DpsClient.csproj`, `Program.cs`, `DpsWorld.cs` (subscribes, keeps the latest state per entity, dead-reckons positions from velocity), `DpsClientWindow.cs` (raylib top-down map: entities by domain and side, the own unit highlighted; keys: J join first offer, WASD move, mouse aim, LMB fire, C stance, Esc leave, G toggles the Paths and Contacts gizmo layers for the clicked unit; draws received gizmo primitives), `--headless --seconds N` mode printing counts)
 - Test: `tests/SimNetGateway.DpsClient.Tests/DpsWorldTests.cs`
 - Note: DD-017 named `SimNetGateway.Viewer`; that viewer is the engine's in-process monitor, so the reference client is its own small host (record the deviation in DD-017 section 10).
 
