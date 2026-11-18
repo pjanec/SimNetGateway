@@ -3,6 +3,15 @@
   <!-- References every src project so their compiled assemblies are next to the tests and their
        metadata references can be inspected (DD-003 section 3, rule 7). The project files
        themselves are read from the source tree. -->
+  <!-- a host built against the product it extends is referenced only when that checkout exists (HrotRoot as in the host project); its declared references are checked either way -->
+  <PropertyGroup>
+    <HrotRoot Condition="'$(HrotRoot)' == ''">$(HROT_ROOT)</HrotRoot>
+    <HrotRoot Condition="'$(HrotRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', '..', '..', 'hrot'))</HrotRoot>
+    <HrotRoot>$([MSBuild]::NormalizeDirectory('$(HrotRoot)'))</HrotRoot>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('$(HrotRoot)Hrot/Engine/Hrot.Common/Hrot.Common.csproj')">
+    <ProjectReference Include="../../src/Hosts/SimNetGateway.HrotHost/SimNetGateway.HrotHost.csproj" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Engine/SimNetGateway.Engine/SimNetGateway.Engine.csproj" />
     <ProjectReference Include="../../src/Engine/SimNetGateway.Engine.InMemory/SimNetGateway.Engine.InMemory.csproj" />
@@ -21,6 +30,9 @@
     <ProjectReference Include="../../src/Showcase/SimNetGateway.Showcase/SimNetGateway.Showcase.csproj" />
     <ProjectReference Include="../../src/Hosts/SimNetGateway.Demo/SimNetGateway.Demo.csproj" />
     <ProjectReference Include="../../src/Hosts/SimNetGateway.Viewer/SimNetGateway.Viewer.csproj" />
+    <ProjectReference Include="../../src/Hosts/SimNetGateway.Plugin.Dis/SimNetGateway.Plugin.Dis.csproj" />
+    <ProjectReference Include="../../src/Hosts/SimNetGateway.Plugin.Hla/SimNetGateway.Plugin.Hla.csproj" />
+    <ProjectReference Include="../../src/Hosts/SimNetGateway.Plugin.Hla.Rti.Fake/SimNetGateway.Plugin.Hla.Rti.Fake.csproj" />
   </ItemGroup>
 
 </Project>

@@ -27,6 +27,7 @@ public class DependencyRuleTests
             "SimNetGateway.Engine", "SimNetGateway.Engine.InMemory", "SimNetGateway.Engine.Monitoring", "SimNetGateway.Common",
             "SimNetGateway.Protocol.Ned", "SimNetGateway.Protocol.Rpr", "SimNetGateway.Protocol.Display", "SimNetGateway.Protocol.Dis7", "SimNetGateway.Protocol.Hrot",
             "SimNetGateway.Transport.FakeRti", "SimNetGateway.Transport.HlaRpr", "SimNetGateway.Transport.DisUdp", "SimNetGateway.Gateway.NedRpr", "SimNetGateway.Gateway.HrotDis", "SimNetGateway.Showcase", "SimNetGateway.Demo", "SimNetGateway.Viewer",
+            "SimNetGateway.HrotHost", "SimNetGateway.Plugin.Dis", "SimNetGateway.Plugin.Hla", "SimNetGateway.Plugin.Hla.Rti.Fake",
         ];
         var actual = SourceTree.SrcProjects.Select(p => p.Name).ToList();
         Assert.All(expected, name => Assert.Contains(name, actual));
@@ -60,7 +61,16 @@ public class DependencyRuleTests
     {
         var project = SourceTree.FindSrc(name)!;
         var layer = LayerRules.LayerOf(project)!.Value;
-        var assembly = Assembly.Load(new AssemblyName(project.Name));
+        Assembly assembly;
+        try
+        {
+            assembly = Assembly.Load(new AssemblyName(project.Name));
+        }
+        catch (FileNotFoundException) when (project.ExternalReferences is { Count: > 0 })
+        {
+            return;   // a host built against a product checkout that is not here: its declared references are checked above
+        }
+
         var references = assembly.GetReferencedAssemblies()
             .Select(a => a.Name!)
             .Where(n => n.StartsWith("SimNetGateway.", StringComparison.Ordinal))
@@ -84,7 +94,16 @@ public class DependencyRuleTests
 
         // The BCL is the shared framework the runtime itself was loaded from.
         var frameworkDir = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
-        var assembly = Assembly.Load(new AssemblyName(project.Name));
+        Assembly assembly;
+        try
+        {
+            assembly = Assembly.Load(new AssemblyName(project.Name));
+        }
+        catch (FileNotFoundException) when (project.ExternalReferences is { Count: > 0 })
+        {
+            return;   // a host built against a product checkout that is not here: its declared references are checked above
+        }
+
         var foreign = assembly.GetReferencedAssemblies()
             .Select(a => a.Name!)
             .Where(n => !File.Exists(Path.Join(frameworkDir, n + ".dll")))

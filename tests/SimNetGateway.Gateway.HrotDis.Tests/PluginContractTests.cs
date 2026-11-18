@@ -22,7 +22,7 @@ public class PluginContractTests
         IGatewayPlugin plugin = new MinimalPlugin();
         Assert.Null(plugin.CreateHostService(new object(), new PluginHostContext(_ => { })));
         Assert.False(plugin.WantsEventsInReplay(new object()));
-        Assert.Null(plugin.Check(new object()));
+        Assert.Null(plugin.Check(new object(), new PluginHostContext(_ => { })));
         Assert.Null(PluginBound.None.Lease);
         Assert.Null(PluginBound.None.Pump);
         Assert.Equal(1, PluginInterface.Version);

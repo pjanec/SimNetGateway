@@ -52,6 +52,17 @@ public class ConventionTests
     }
 
     [Fact]
+    public void Only_hosts_and_tests_reference_the_product_a_host_extends()
+    {
+        var wrong = SourceTree.SrcProjects
+            .Where(p => p.Folder != "Hosts" && p.ExternalReferences is { Count: > 0 })
+            .Select(p => p.RelativePath)
+            .ToList();
+
+        Assert.True(wrong.Count == 0, "references through " + SourceTree.ExternalRoot + " outside src/Hosts: " + string.Join(", ", wrong));
+    }
+
+    [Fact]
     public void Package_versions_live_only_in_Directory_Packages_props()
     {
         var wrong = new List<string>();

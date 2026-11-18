@@ -10,6 +10,7 @@ namespace SimNetGateway.Architecture.Tests;
 /// <param name="ProjectReferences">Names of the referenced projects.</param>
 /// <param name="PackageReferences">Ids of the referenced NuGet packages.</param>
 /// <param name="Properties">MSBuild properties that must follow the conventions when set explicitly.</param>
+/// <param name="ExternalReferences">Names of the projects referenced through <c>$(HrotRoot)</c>: the product a host extends, outside this repository (not layers).</param>
 public sealed record ProjectInfo(
     string Name,
     string RelativePath,
@@ -17,7 +18,8 @@ public sealed record ProjectInfo(
     string DirectoryName,
     IReadOnlyList<string> ProjectReferences,
     IReadOnlyList<string> PackageReferences,
-    IReadOnlyDictionary<string, string> Properties)
+    IReadOnlyDictionary<string, string> Properties,
+    IReadOnlyList<string>? ExternalReferences = null)
 {
     public override string ToString() => Name;
 }
@@ -26,6 +28,9 @@ public sealed record ProjectInfo(
 public static class SourceTree
 {
     public const string SolutionFile = "SimNetGateway.sln";
+
+    /// <summary>The MSBuild property that points at the product a host extends (a checkout outside this repository).</summary>
+    public const string ExternalRoot = "$(HrotRoot)";
 
     public static string Root { get; } = FindRoot();
 
@@ -69,9 +74,16 @@ public static class SourceTree
         var doc = XDocument.Load(path);
         var projectDir = Path.GetDirectoryName(path)!;
 
-        var projectRefs = doc.Descendants()
+        var allRefs = doc.Descendants()
             .Where(e => e.Name.LocalName == "ProjectReference")
             .Select(e => (string?)e.Attribute("Include") ?? "")
+            .ToList();
+        var externalRefs = allRefs
+            .Where(include => include.StartsWith(ExternalRoot, StringComparison.Ordinal))
+            .Select(include => Path.GetFileNameWithoutExtension(include.Replace('\\', '/')))
+            .ToList();
+        var projectRefs = allRefs
+            .Where(include => !include.StartsWith(ExternalRoot, StringComparison.Ordinal))
             // MSBuild accepts both separators; normalise so the name is found on every OS (R-012).
             .Select(include => include.Replace('\\', '/'))
             .Select(include => Path.GetFileNameWithoutExtension(Path.GetFullPath(Path.Join(projectDir, include))))
@@ -103,6 +115,7 @@ public static class SourceTree
             DirectoryName: Path.GetFileName(projectDir),
             ProjectReferences: projectRefs,
             PackageReferences: packageRefs,
-            Properties: properties);
+            Properties: properties,
+            ExternalReferences: externalRefs);
     }
 }

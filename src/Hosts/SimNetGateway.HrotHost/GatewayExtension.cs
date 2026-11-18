@@ -25,6 +25,12 @@ public sealed class GatewayExtension : INodeExtension
     {
     }
 
+    /// <summary>The configuration file as HROT resolves it, with plugins given in code (tests, hosts that bring their own).</summary>
+    public GatewayExtension(PluginSet plugins)
+        : this(GatewayConfigurationFile.ResolvePath, plugins)
+    {
+    }
+
     public GatewayExtension(Func<string> configPath, PluginSet plugins)
         : this(configPath, () => plugins ?? throw new ArgumentNullException(nameof(plugins)))
     {
@@ -64,7 +70,7 @@ public sealed class GatewayExtension : INodeExtension
         var config = loaded.Configuration!;
         foreach (var found in plugins.Plugins)
         {
-            if (config.SettingsOf(found.Plugin.Side.Key) is { } settings && found.Plugin.Check(settings) is { } reason)
+            if (config.SettingsOf(found.Plugin.Side.Key) is { } settings && found.Plugin.Check(settings, new PluginHostContext(Console.Error.WriteLine, string.IsNullOrEmpty(found.Folder) ? null : found.Folder)) is { } reason)
             {
                 Refuse($"configuration '{path}': {reason}, the gateway is not instantiated.");
                 return null;

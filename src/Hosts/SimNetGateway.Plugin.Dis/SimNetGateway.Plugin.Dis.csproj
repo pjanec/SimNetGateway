@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The DIS side as a plugin of the HROT host: the side of the gateway project plus its UDP transport. It references no host. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Gateways/SimNetGateway.Gateway.HrotDis/SimNetGateway.Gateway.HrotDis.csproj" />
+    <ProjectReference Include="../../Transports/SimNetGateway.Transport.DisUdp/SimNetGateway.Transport.DisUdp.csproj" />
+  </ItemGroup>
+
+  <!-- publish keeps only our own assemblies (scripts/package-extension.sh then drops what the host or the parent plugin already holds) -->
+  <Target Name="KeepOnlyOwnAssemblies" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <_ForeignPublishFile Include="@(ResolvedFileToPublish)" Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('%(ResolvedFileToPublish.Filename)', '^SimNetGateway\.'))" />
+      <ResolvedFileToPublish Remove="@(_ForeignPublishFile)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

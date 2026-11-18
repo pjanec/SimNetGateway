@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- World-level tests of the host against an EntityRepository and the HROT services it needs (DD-016). The host and the plugins are referenced here (the
+       tests are the host); loading them BY PATH from the packaged folder is SimNetGateway.HrotHost.Staged.Tests. HrotRoot is the HROT checkout (see the host project). -->
+  <PropertyGroup>
+    <HrotRoot Condition="'$(HrotRoot)' == ''">$(HROT_ROOT)</HrotRoot>
+    <HrotRoot Condition="'$(HrotRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', '..', '..', 'hrot'))</HrotRoot>
+    <HrotRoot>$([MSBuild]::NormalizeDirectory('$(HrotRoot)'))</HrotRoot>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Hosts/SimNetGateway.HrotHost/SimNetGateway.HrotHost.csproj" />
+    <ProjectReference Include="../../src/Hosts/SimNetGateway.Plugin.Dis/SimNetGateway.Plugin.Dis.csproj" />
+    <ProjectReference Include="../../src/Hosts/SimNetGateway.Plugin.Hla/SimNetGateway.Plugin.Hla.csproj" />
+    <ProjectReference Include="../../src/Hosts/SimNetGateway.Plugin.Hla.Rti.Fake/SimNetGateway.Plugin.Hla.Rti.Fake.csproj" />
+    <ProjectReference Include="../../src/Engine/SimNetGateway.Engine.InMemory/SimNetGateway.Engine.InMemory.csproj" />
+    <ProjectReference Include="$(HrotRoot)Hrot/Engine/Hrot.Common/Hrot.Common.csproj" />
+    <ProjectReference Include="$(HrotRoot)Hrot/Engine/Hrot.Core/Hrot.Core.csproj" />
+    <ProjectReference Include="$(HrotRoot)FDP/Engine/Fdp.Core/Fdp.Core.csproj" />
+    <ProjectReference Include="$(HrotRoot)FDP/Engine/Fdp.ModuleHost/Fdp.ModuleHost.csproj" />
+    <ProjectReference Include="$(HrotRoot)FDP/Toolkits/Fdp.Toolkits/Fdp.Toolkits.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- the DIS peer builders of the gateway tests, shared by source link (test-side helpers of that project) -->
+    <Compile Include="../SimNetGateway.Gateway.HrotDis.Tests/DisPdus.cs" Link="Shared/DisPdus.cs" />
+    <Compile Include="../SimNetGateway.Gateway.HrotDis.Tests/TestFrame.cs" Link="Shared/TestFrame.cs" />
+  </ItemGroup>
+  <!-- the packaged folder lands in <bin>/staged/extensions/simnetgateway/, made by the very script an installation uses -->
+  <Target Name="StageGatewayExtension" AfterTargets="Build">
+    <Exec Command="bash &quot;$(MSBuildThisFileDirectory)../../scripts/package-extension.sh&quot; &quot;$(OutDir)staged/extensions/simnetgateway&quot;" />
+  </Target>
+</Project>

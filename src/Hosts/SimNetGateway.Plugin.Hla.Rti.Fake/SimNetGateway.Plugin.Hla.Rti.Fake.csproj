@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The fake in-memory RTI as a binding of the HLA plugin (hla.rti = "fake"). -->
+  <ItemGroup>
+    <ProjectReference Include="../../Transports/SimNetGateway.Transport.HlaRpr/SimNetGateway.Transport.HlaRpr.csproj" />
+    <ProjectReference Include="../../Transports/SimNetGateway.Transport.FakeRti/SimNetGateway.Transport.FakeRti.csproj" />
+  </ItemGroup>
+
+  <!-- publish keeps only our own assemblies (scripts/package-extension.sh then drops what the host or the parent plugin already holds) -->
+  <Target Name="KeepOnlyOwnAssemblies" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <_ForeignPublishFile Include="@(ResolvedFileToPublish)" Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('%(ResolvedFileToPublish.Filename)', '^SimNetGateway\.'))" />
+      <ResolvedFileToPublish Remove="@(_ForeignPublishFile)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

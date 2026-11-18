@@ -58,3 +58,4 @@ progress and done.
 | **T-030** | done | HROT entity ids are 32-bit (HROT CE-4200, `coordinator` 481e8a9a4): `Protocol.Hrot` entity ids, the `hrot.entity` map and its allocator port, and `hrot.replicaOwnerNodeId` `long` -> `int`; 0 = invalid | DD-006, DD-007 | user 2026-11-02 "Yes please"; before T-027 |
 | **T-031** | done | `GeoFrame` = HROT's UTM frame, geo reference v2 (`HrotOrigin` v2 fields, `Common.Geo.Utm` / `UtmFrame`, position-aware orientation / vectors, refusals) | DD-014 | R-084, R-131 |
 | **T-032** | done | `ConfigSection.StringMap`: a side can read an object of strings (a side's model tables) | DD-011 | generic helper for protocol sides of other projects |
+| **T-033** | done | HROT node extension host (`SimNetGateway.HrotHost`) and every protocol side as a plugin: plugin contract and discovery in `Gateway.HrotDis`, DIS and HLA plugins, RTI bindings as plugins of the HLA plugin (the fake RTI is one), package script | DD-016 | |

@@ -33,8 +33,8 @@ public interface IGatewayPlugin
     /// <summary>Opens the side's transports for one gateway runtime: binds the ports the side declared, returns what ends them (at the world boundary) and an optional per-frame pump.</summary>
     PluginBound Bind(SideBinding binding);
 
-    /// <summary>A reason this configuration cannot be run (one line, naming the key), or null; checked by the host before it composes anything.</summary>
-    string? Check(object settings) => null;
+    /// <summary>A reason this configuration cannot be run (one line, naming the key), or null; checked by the host before it composes anything. The context carries the plugin folder, where add-ons are looked up.</summary>
+    string? Check(object settings, PluginHostContext context) => null;
 
     /// <summary>True when the side shows events while HROT replays a recording (the host then gathers them even when the shared flag is off).</summary>
     bool WantsEventsInReplay(object settings) => false;
