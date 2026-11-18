@@ -59,4 +59,4 @@ progress and done.
 | **T-031** | done | `GeoFrame` = HROT's UTM frame, geo reference v2 (`HrotOrigin` v2 fields, `Common.Geo.Utm` / `UtmFrame`, position-aware orientation / vectors, refusals) | DD-014 | R-084, R-131 |
 | **T-032** | done | `ConfigSection.StringMap`: a side can read an object of strings (a side's model tables) | DD-011 | generic helper for protocol sides of other projects |
 | **T-033** | done | HROT node extension host (`SimNetGateway.HrotHost`) and every protocol side as a plugin: plugin contract and discovery in `Gateway.HrotDis`, DIS and HLA plugins, RTI bindings as plugins of the HLA plugin (the fake RTI is one), package script | DD-016 | |
-| **T-034** | review | DPS (DDS Player Station): public DDS types, the `dps` plugin on the HROT host acting as the player station, reference client; round 1 = what HROT provides today | DD-017 | |
+| **T-034** | todo | DPS (DDS Player Station): public DDS types, the `dps` plugin on the HROT host acting as the player station, reference client; round 1 = what HROT provides today | DD-017 | |
