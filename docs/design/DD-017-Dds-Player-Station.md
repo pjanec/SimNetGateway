@@ -425,3 +425,19 @@ Consequences for the plan:
 - Step 2 (cluster player node): reuse `GameplayClientPack` / `DeployFlowSystem` as they are (`Request`, `Observe`, `Offers`, `State`); the
   plugin only calls them.
 - No HROT change is required for round 1; composing the deploy server on the editor node would add roles in the editor and is a HROT-side option.
+
+### Types (Task 2)
+
+`src/Protocols/SimNetGateway.Protocol.DdsPlayer` (`DpsTypes.cs` enums, `DpsTopics.cs` topics, `DpsProtocol.cs` version 1.0 and the `DPS_` topic names).
+The architecture rules allow this one BCL-only project the `CycloneDDS.NET` package (`LayerRules.AllowedPackages`): the types carry the binding's attributes
+and the IDL and serializers are generated from them (`DpsTopics.idl`, `DpsTypes.idl` in the build output).
+
+- Strings are `string<N>` (names 64, kinds and layers 32), sequences are bounded (appearance slots 16, equipment 16, vehicle parts 32, openings 16,
+  offers 128, ammo 16, gizmo layers 64, gizmo primitives 4096, points per primitive 64). Colours are `uint` 0xRRGGBBAA (no hex strings).
+- QoS: state topics Reliable + TransientLocal + KeepLast 1; event topics Reliable + Volatile + KeepLast 16; player topics Reliable + Volatile + KeepLast 1
+  with automatic liveliness, lease `DpsProtocol.DefaultLeaseMs` (2000). There is no `Heartbeat` topic. `PlayerSlot` and `OwnUnit` are state topics
+  written by the gateway (one per station partition).
+- IDL enumerators share one scope per module (two enums with a `None` collide, and a module attribute does not help: references resolve by namespace),
+  so **every enumerator is prefixed with its enum name** (`StanceCrouched`, `GestureWaving`); value 0 is the unknown / none value.
+- `JoinKind` keeps Observe / Unit / Role in the contract; Role is answered in a later step. `Session.WorldEpoch` changes on a world boundary.
+- Round-trip, 500-instance late join, dispose and generated-IDL tests: `tests/SimNetGateway.Protocol.DdsPlayer.Tests/DpsTopicTests.cs`.

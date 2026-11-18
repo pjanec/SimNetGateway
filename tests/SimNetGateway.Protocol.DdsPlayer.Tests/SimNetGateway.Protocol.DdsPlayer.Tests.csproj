@@ -5,6 +5,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../src/Protocols/SimNetGateway.Protocol.DdsPlayer/SimNetGateway.Protocol.DdsPlayer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Direct reference: switches on the CycloneDDS.NET code generator for the spike topic types. -->
     <PackageReference Include="CycloneDDS.NET" />
   </ItemGroup>

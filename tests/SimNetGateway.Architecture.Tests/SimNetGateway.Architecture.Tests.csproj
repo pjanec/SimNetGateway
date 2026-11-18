@@ -22,6 +22,7 @@
     <ProjectReference Include="../../src/Protocols/SimNetGateway.Protocol.Display/SimNetGateway.Protocol.Display.csproj" />
     <ProjectReference Include="../../src/Protocols/SimNetGateway.Protocol.Dis7/SimNetGateway.Protocol.Dis7.csproj" />
     <ProjectReference Include="../../src/Protocols/SimNetGateway.Protocol.Hrot/SimNetGateway.Protocol.Hrot.csproj" />
+    <ProjectReference Include="../../src/Protocols/SimNetGateway.Protocol.DdsPlayer/SimNetGateway.Protocol.DdsPlayer.csproj" />
     <ProjectReference Include="../../src/Transports/SimNetGateway.Transport.FakeRti/SimNetGateway.Transport.FakeRti.csproj" />
     <ProjectReference Include="../../src/Transports/SimNetGateway.Transport.HlaRpr/SimNetGateway.Transport.HlaRpr.csproj" />
     <ProjectReference Include="../../src/Transports/SimNetGateway.Transport.DisUdp/SimNetGateway.Transport.DisUdp.csproj" />

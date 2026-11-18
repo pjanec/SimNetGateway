@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- the CycloneDDS.NET code generator writes unsafe serializers into the project -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The DPS wire model is written with the attributes of the DDS binding (DD-017 3.2c); the IDL is generated from it. -->
+    <PackageReference Include="CycloneDDS.NET" />
+  </ItemGroup>
+
+</Project>

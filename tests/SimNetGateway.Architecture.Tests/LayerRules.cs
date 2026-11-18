@@ -74,6 +74,15 @@ public static class LayerRules
     /// <summary>Layers whose projects may not use any NuGet package (rules 1 and 2: BCL only).</summary>
     public static bool IsBclOnly(Layer layer) => layer is Layer.Engine or Layer.Protocol;
 
+    /// <summary>
+    /// Packages a BCL-only project may still use: the DDS wire model is written with the attributes of the DDS binding
+    /// (DD-017), which generates the IDL and the serializers from those types.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string[]> AllowedPackages = new Dictionary<string, string[]>
+    {
+        ["SimNetGateway.Protocol.DdsPlayer"] = ["CycloneDDS.NET"],
+    };
+
     /// <summary>The layer of a project, from its folder under <c>src/</c>; null for unknown folders.</summary>
     public static Layer? LayerOf(ProjectInfo project) => LayerOf(project.Folder, project.Name);
 
@@ -134,7 +143,7 @@ public static class LayerRules
 
         if (IsBclOnly(layer))
         {
-            foreach (var package in packages)
+            foreach (var package in packages.Where(p => !(AllowedPackages.TryGetValue(project, out var ok) && ok.Contains(p))))
             {
                 violations.Add($"{project} ({layer}) references package {package} - {RuleText[layer]}");
             }

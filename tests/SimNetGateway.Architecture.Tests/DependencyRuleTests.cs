@@ -107,6 +107,7 @@ public class DependencyRuleTests
         var foreign = assembly.GetReferencedAssemblies()
             .Select(a => a.Name!)
             .Where(n => !File.Exists(Path.Join(frameworkDir, n + ".dll")))
+            .Where(n => !(LayerRules.AllowedPackages.ContainsKey(project.Name) && n.StartsWith("CycloneDDS.", StringComparison.Ordinal)))
             .ToList();
 
         Assert.True(foreign.Count == 0, $"{project.Name} references non-BCL assemblies: {string.Join(", ", foreign)}");
