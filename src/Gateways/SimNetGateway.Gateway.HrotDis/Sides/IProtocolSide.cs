@@ -57,8 +57,8 @@ public sealed class SideDeclaration
     /// <summary>True when the side publishes HROT entities under the shared entity numbers (the one <c>dis.entity</c> map and pool of DIS and HLA, DD-009).</summary>
     public bool UsesEntityNumbers { get; set; }
 
-    /// <summary>True for the HLA side: its origin is <see cref="HrotDisSources.Rpr"/> and the <c>rpr.handle</c> map exists (built-in sides only).</summary>
-    internal bool IsRprSide { get; set; }
+    /// <summary>True for a side that speaks the RPR object model: its origin is <see cref="HrotDisSources.Rpr"/> and the <c>rpr.handle</c> map exists (one such side per gateway).</summary>
+    public bool IsRprSide { get; set; }
 
     internal IReadOnlyList<Action<IdentityRegistry>> MapRequests => _maps;
 
@@ -132,6 +132,9 @@ public sealed class SideRegistry
     private readonly IProtocolSide[] _sides;
 
     private SideRegistry(IProtocolSide[] sides) => _sides = sides;
+
+    /// <summary>A registry with no side: a host adds the sides of its plugins with <see cref="With"/>.</summary>
+    public static SideRegistry Empty { get; } = new([]);
 
     /// <summary>The built-in sides: DIS, then HLA.</summary>
     public static SideRegistry Builtin { get; } = new([new DisSide(), new HlaSide()]);
