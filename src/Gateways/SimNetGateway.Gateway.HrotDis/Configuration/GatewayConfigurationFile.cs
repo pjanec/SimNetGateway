@@ -142,6 +142,7 @@ public static class GatewayConfigurationFile
             w.WriteNumber("moderate", config.Shared.DamageThresholds.Moderate);
             w.WriteEndObject();
             w.WriteNumber("defaultTkbForUnknown", config.Shared.DefaultTkbForUnknown);
+            w.WriteNumber("defaultDisCountry", config.Shared.DefaultDisCountry);
             w.WriteBoolean("forwardUnitEntities", config.Shared.ForwardUnitEntities);
             w.WriteBoolean("sendEventsInReplay", config.Shared.SendEventsInReplay);
             w.WriteEndObject();
@@ -217,6 +218,7 @@ public static class GatewayConfigurationFile
             EntityMaxHealth = s.Number("entityMaxHealth", d.EntityMaxHealth, min: 0, minExclusive: true),
             DamageThresholds = thresholds,
             DefaultTkbForUnknown = s.Integer("defaultTkbForUnknown", d.DefaultTkbForUnknown, 0, long.MaxValue),
+            DefaultDisCountry = (int)s.Integer("defaultDisCountry", d.DefaultDisCountry, 0, 65535),
             ForwardUnitEntities = s.Boolean("forwardUnitEntities", d.ForwardUnitEntities),
             SendEventsInReplay = s.Boolean("sendEventsInReplay", d.SendEventsInReplay),
         };

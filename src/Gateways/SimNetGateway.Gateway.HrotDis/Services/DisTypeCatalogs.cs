@@ -7,6 +7,9 @@ namespace SimNetGateway.Gateway.HrotDis;
 /// </summary>
 public readonly record struct DisTypeCode(byte Kind, byte Domain, ushort Country, byte Category, byte Subcategory, byte Specific, byte Extra)
 {
+    /// <summary>Kind, domain and category are set (the country may be 0: HROT templates leave it out; the gateway fills in its default country).</summary>
+    public bool IsUsable => Kind != 0 && Domain != 0 && Category != 0;
+
     /// <summary>Kind, domain, country and category are all set (the HROT-provided type is then used as it is, R-088).</summary>
     public bool IsComplete => Kind != 0 && Domain != 0 && Country != 0 && Category != 0;
 
@@ -22,6 +25,9 @@ public readonly record struct DisTypeCode(byte Kind, byte Domain, ushort Country
 
     /// <summary>True when the packed value names a complete type.</summary>
     public static bool IsCompletePacked(long packed) => Unpack(packed).IsComplete;
+
+    /// <summary>True when the packed value has kind, domain and category (see <see cref="IsUsable"/>).</summary>
+    public static bool IsUsablePacked(long packed) => Unpack(packed).IsUsable;
 
     /// <summary>
     /// How many leading fields (kind, domain, country, category, subcategory, specific, extra) two types share, 0 .. 7; a
@@ -63,15 +69,19 @@ public sealed class EntityTypeCatalog
     private readonly HashSet<long> _warnedTkb = new();
     private readonly HashSet<long> _warnedDis = new();
 
-    public EntityTypeCatalog(long defaultTkbForUnknown = 0)
+    public EntityTypeCatalog(long defaultTkbForUnknown = 0, int defaultDisCountry = 0)
     {
         DefaultTkb = defaultTkbForUnknown;
+        DefaultDisCountry = (ushort)defaultDisCountry;
         foreach (var (tkb, dis) in Entries)
         {
             _toDis.Add(tkb, dis.Pack());
             _all.Add((tkb, dis));
         }
     }
+
+    /// <summary>The country given to a HROT-provided DIS type that has none (<c>shared.defaultDisCountry</c>; 0 = DIS "other").</summary>
+    public ushort DefaultDisCountry { get; }
 
     /// <summary>What a replica gets when its DIS type has no TKB counterpart (<c>shared.defaultTkbForUnknown</c>).</summary>
     public long DefaultTkb { get; }
@@ -113,6 +123,13 @@ public sealed class EntityTypeCatalog
         if (DisTypeCode.IsCompletePacked(hrotProvided))
         {
             packed = hrotProvided;
+            return true;
+        }
+
+        // a template type with kind, domain and category but no country is usable: it gets the default country
+        if (DisTypeCode.IsUsablePacked(hrotProvided))
+        {
+            packed = (DisTypeCode.Unpack(hrotProvided) with { Country = DefaultDisCountry }).Pack();
             return true;
         }
 

@@ -29,6 +29,9 @@ public sealed record SharedConfiguration
     /// <summary>The TKB type of a replica whose DIS type has no TKB counterpart.</summary>
     public long DefaultTkbForUnknown { get; init; }
 
+    /// <summary>The DIS country of a HROT type whose DIS type has none (kind, domain and category set, country 0): 0 = "other".</summary>
+    public int DefaultDisCountry { get; init; }
+
     public bool ForwardUnitEntities { get; init; }
 
     public bool SendEventsInReplay { get; init; }

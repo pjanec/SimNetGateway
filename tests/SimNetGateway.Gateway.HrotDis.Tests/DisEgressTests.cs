@@ -426,6 +426,18 @@ public class DisEgressTests
         SentCount(h, 3);
     }
 
+
+    [Fact]
+    public void An_entity_of_a_template_type_without_a_country_is_published_with_the_default_country()
+    {
+        var config = GatewayConfiguration.CreateDefault() with { Shared = new SharedConfiguration { DefaultDisCountry = 225 } };
+        var h = new HrotDisHarness(config, installChecker: false) { CheckDis = false };
+        h.GoLive();
+        // TKB 2002 of a HROT node: a soldier, DIS 3.1.0.1.0.0.0
+        h.HrotStep(HrotDisHarness.State(1, tkb: 2002, disType: new DisTypeCode(3, 1, 0, 1, 0, 0, 0).Pack(), marking: "SOLDIER"));
+        var pdu = h.DisOut!.OfType<EntityStatePdu>().Single();
+        Assert.Equal((3, 1, 225, 1), (pdu.EntityType.EntityKind, pdu.EntityType.Domain, pdu.EntityType.Country, pdu.EntityType.Category));
+    }
     [Fact]
     public void A_disabled_contributor_leaves_its_group_out_of_every_pdu()
     {

@@ -285,7 +285,7 @@ public class HrotIngressTests
         long provided = new DisTypeCode(1, 2, 3, 4, 5, 6, 7).Pack();
         h.HrotStep(HrotDisHarness.State(1, tkb: 100, disType: provided));
         Assert.Equal(provided, h.EntityOfHrot(1)!.Get(h.Schema.EntityType).AsInt());
-        h.HrotStep(HrotDisHarness.State(2, tkb: 100, disType: new DisTypeCode(1, 2, 0, 4, 0, 0, 0).Pack()));
+        h.HrotStep(HrotDisHarness.State(2, tkb: 100, disType: new DisTypeCode(1, 2, 0, 0, 0, 0, 0).Pack())); // no category: not usable
         Assert.Equal(Tank.Pack(), h.EntityOfHrot(2)!.Get(h.Schema.EntityType).AsInt());
 
         for (int i = 0; i < 3; i++)

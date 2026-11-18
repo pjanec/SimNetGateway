@@ -303,6 +303,23 @@ public class ServiceTests
         Assert.False(DisTypeCode.IsCompletePacked(0));
     }
 
+
+    [Fact]
+    public void A_template_type_without_a_country_is_usable_and_gets_the_default_country()
+    {
+        long soldier = new DisTypeCode(3, 1, 0, 1, 0, 0, 0).Pack(); // kind, domain, category; no country
+        Assert.False(DisTypeCode.IsCompletePacked(soldier));
+        Assert.True(DisTypeCode.IsUsablePacked(soldier));
+
+        Assert.True(new EntityTypeCatalog().TryResolveDisType(2002, soldier, out long packed));
+        Assert.Equal(soldier, packed); // default country 0: "other"
+
+        Assert.True(new EntityTypeCatalog(defaultDisCountry: 225).TryResolveDisType(2002, soldier, out packed));
+        Assert.Equal(new DisTypeCode(3, 1, 225, 1, 0, 0, 0).Pack(), packed);
+
+        // no kind, no domain or no category: still not usable (the table decides)
+        Assert.False(new EntityTypeCatalog().TryResolveDisType(99999, new DisTypeCode(5, 0, 0, 0, 0, 0, 0).Pack(), out _));
+    }
     [Fact]
     public void The_type_the_hrot_pack_provides_comes_before_the_catalogue()
     {

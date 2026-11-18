@@ -113,7 +113,7 @@ public sealed class HrotDisServices
         ArgumentNullException.ThrowIfNull(config);
         Config = config;
         Geo = new GeoFrame(config.Hrot.AllowZeroOrigin);
-        EntityTypes = new EntityTypeCatalog(config.Shared.DefaultTkbForUnknown);
+        EntityTypes = new EntityTypeCatalog(config.Shared.DefaultTkbForUnknown, config.Shared.DefaultDisCountry);
         Munitions = new MunitionCatalog();
         Damage = new DamageMapping(config.Shared);
         EventIds = new DisEventIds((ushort)config.Shared.Site, (ushort)config.Shared.Application);

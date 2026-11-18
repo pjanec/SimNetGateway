@@ -12,7 +12,7 @@ public class ConfigurationTests
         {
           "shared": { "site": 1, "application": 3001, "entityMaxHealth": 100,
                       "damageThresholds": { "slight": 0.5, "moderate": 0.0 },
-                      "defaultTkbForUnknown": 0, "forwardUnitEntities": false, "sendEventsInReplay": false },
+                      "defaultTkbForUnknown": 0, "defaultDisCountry": 0, "forwardUnitEntities": false, "sendEventsInReplay": false },
           "hrot":   { "sampleRateHz": 20, "replicaOwnerNodeId": 65000, "allowZeroOrigin": false },
           "dis":    { "enabled": true, "exerciseId": 1, "port": 3000, "address": "255.255.255.255",
                       "positionThresholdM": 1.0, "orientationThresholdDeg": 3.0, "heartbeatS": 5, "timeoutS": 12,
@@ -272,7 +272,7 @@ public class ConfigurationTests
         var random = new Random(20261029);
         var leaves = new List<string>();
         Collect(JsonNode.Parse(Example)!, "", leaves);
-        Assert.Equal(32, leaves.Count); // every key of the example (32 since T-024: hla.positionThresholdM, hla.orientationThresholdDeg)
+        Assert.Equal(33, leaves.Count); // every key of the example (32 since T-024: hla.positionThresholdM, hla.orientationThresholdDeg; 33 with shared.defaultDisCountry)
 
         int corrupted = 0;
         foreach (var path in leaves)
@@ -309,7 +309,7 @@ public class ConfigurationTests
             corrupted++;
         }
 
-        Assert.Equal(32 + 6 + 2, corrupted); // every key, every object, both required keys
+        Assert.Equal(33 + 6 + 2, corrupted); // every key, every object, both required keys
     }
 
     /// <summary>A value of a JSON kind that the key at hand does not accept.</summary>
