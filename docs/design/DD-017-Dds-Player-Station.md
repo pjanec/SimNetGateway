@@ -234,20 +234,28 @@ same effects. The host does not copy HROT's own effect objects. `Session.Mode = 
 the client; the player topics are refused in replay (`PlayerSlot` =
 Observing).
 
-### 3.10 HROT's look library (P-9, HROT CE-4671 / R-4296, approved 2026-11-18)
+### 3.10 HROT's look library (P-9, HROT CE-4671 / CE-4670 / R-4296)
 
-HROT is building one assembly, **`Hrot.Look`** (no presentation dependency; pure, deterministic functions of components, events, the TKB
-and an entity-seeded random), used by HROT's own map and by gateways alike. The host (which compiles against HROT) calls it and the plugin
-publishes the results; DPS copies no HROT rule:
+HROT's assembly **`Hrot.Look`** (no presentation dependency; pure, deterministic functions of components, events, the TKB and an
+entity-seeded random) is used by HROT's own map and by gateways alike. The host (which compiles against HROT) calls it and the plugin
+publishes the results; DPS copies no HROT rule. In HROT's `coordinator` since 2026-11-18 (LK-S1, LK-S2, VA-S1 and the opening / light
+readers); the host builds against a HROT checkout that has it.
 
-| HROT reader (slice) | DPS topic | fields |
+| HROT reader | DPS topic | fields |
 |---|---|---|
-| `EffectRules.For(event, view, tkb) -> EffectSpec[]` (LK-S1) | `Effect` | `Kind`, `SizeClass` (Small, Medium, Large, Huge), `Surface` (Ground, Water, Building, Vehicle, Air), `MunitionDis` (the munition's DIS entity type), `EffectType` (TKB id of a per-ammo override, 0 = none), anchor (entity or point), lifetime, size |
-| `PersonLook.Of(view, entity, tkb) -> PersonAppearance` (LK-S2) | `Appearance` | the outfit slots, colours as RGBA, the face, the extras |
-| `VehicleLook` (VA-S1 onward) | `VehicleLook` (new state topic, keyed by EntityId) | per-part visible state, kill kind, opening progress (hatches, doors, ramps), effective lights, rotor speed, smoking / flaming |
+| `EffectRules.ForFrame(world, tkb, list)` -> `EffectSpec` (LK-S1) | `Effect` | `Kind`, `SizeClass`, `Surface` (Ground, Water, Building, Vehicle, Person, Air), `MunitionDis` (the munition's DIS entity type), `EffectType` (TKB effect type), position and rotation or the anchor (the shooter's weapon), lifetime, size |
+| `PersonLook.Of(world, entity, tkb)` -> `PersonAppearance(Outfit, Seed, Side)` (LK-S2) | `Appearance` | the outfit's colours per slot (RGBA), the garment kinds (top, legwear, head, over, extra), camouflage, hair, the face, flags (soldier, child, woman, police) |
+| `VehicleLook` (VA-S1 and the opening / light readers) | `VehicleLook` (state topic, keyed by EntityId) | per-part state (Intact, Damaged, Destroyed), kill kind, turret thrown, burning, smoking, opening progress by TKB opening id, effective light mask |
 
-Each topic is filled when its HROT slice is in the HROT checkout the host builds against; until then it stays unpublished (round 1 rule,
-P-2d). The wreck's flames are simulation state in HROT (thermal `FireState`, CE-4660); "smoke after the fire" comes from the look library.
+Where the reader and DPS differ:
+- A part's `Burning` needs the part's centre, which only the renderer knows: DPS sends the damage state and `Burning` for the vehicle;
+  the client puts the fire on its own parts.
+- Brake lights are not stored in HROT: the host keeps one `BrakeLights` per vehicle and sends the effective mask.
+- A burst on water still reads Ground (HROT's open point); rotor speed and smoke launchers (VA-S4, VA-S5) are not in the library yet and
+  are sent as their None value.
+- Equipment as separate items with TKB ids (helmet, vest, weapon) is not in `Outfit`; those `Appearance` fields stay empty (3.8).
+
+The wreck's flames are simulation state in HROT (thermal `FireState`, CE-4660); "smoke after the fire" comes from the look library.
 
 ## 4. Topic summary
 
