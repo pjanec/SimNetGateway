@@ -92,11 +92,23 @@ public static class PluginDiscovery
             }
             catch (Exception ex)
             {
-                warnings.Add($"plugin folder '{dir}' could not be loaded: {ex.GetType().Name}: {ex.Message}");
+                warnings.Add($"plugin folder '{dir}' could not be loaded: {Describe(ex)}");
             }
         }
 
         return result;
+    }
+
+    /// <summary>The exception and its inner ones (a constructor failure arrives wrapped in a <see cref="TargetInvocationException"/>).</summary>
+    internal static string Describe(Exception ex)
+    {
+        var parts = new List<string>();
+        for (Exception? e = ex; e is not null; e = e.InnerException)
+        {
+            parts.Add($"{e.GetType().Name}: {e.Message}");
+        }
+
+        return string.Join(" <- ", parts);
     }
 
     private static IEnumerable<Type> TypesOf(Assembly assembly, List<string> warnings, string dir)
@@ -143,9 +155,19 @@ public static class PluginDiscovery
                 }
             }
 
+            // The host's own libraries that the host process has not loaded yet: the default context serves them only when its own resolver knows the
+            // folder, which a hosting application need not do for plugin requests. Loaded into the default context, so their types stay the host's.
+            string hostPath = Path.Combine(HostFolder, assemblyName.Name + ".dll");
+            if (File.Exists(hostPath))
+            {
+                return AssemblyLoadContext.Default.LoadFromAssemblyPath(hostPath);
+            }
+
             string path = Path.Combine(_folder, assemblyName.Name + ".dll");
             return File.Exists(path) ? LoadFromAssemblyPath(path) : null;
         }
+
+        private static string HostFolder { get; } = Path.GetDirectoryName(typeof(PluginLoadContext).Assembly.Location) ?? AppContext.BaseDirectory;
 
         protected override IntPtr LoadUnmanagedDll(string unmanagedDllName)
         {
