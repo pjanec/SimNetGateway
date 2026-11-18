@@ -234,6 +234,21 @@ same effects. The host does not copy HROT's own effect objects. `Session.Mode = 
 the client; the player topics are refused in replay (`PlayerSlot` =
 Observing).
 
+### 3.10 HROT's look library (P-9, HROT CE-4671 / R-4296, approved 2026-11-18)
+
+HROT is building one assembly, **`Hrot.Look`** (no presentation dependency; pure, deterministic functions of components, events, the TKB
+and an entity-seeded random), used by HROT's own map and by gateways alike. The host (which compiles against HROT) calls it and the plugin
+publishes the results; DPS copies no HROT rule:
+
+| HROT reader (slice) | DPS topic | fields |
+|---|---|---|
+| `EffectRules.For(event, view, tkb) -> EffectSpec[]` (LK-S1) | `Effect` | `Kind`, `SizeClass` (Small, Medium, Large, Huge), `Surface` (Ground, Water, Building, Vehicle, Air), `MunitionDis` (the munition's DIS entity type), `EffectType` (TKB id of a per-ammo override, 0 = none), anchor (entity or point), lifetime, size |
+| `PersonLook.Of(view, entity, tkb) -> PersonAppearance` (LK-S2) | `Appearance` | the outfit slots, colours as RGBA, the face, the extras |
+| `VehicleLook` (VA-S1 onward) | `VehicleLook` (new state topic, keyed by EntityId) | per-part visible state, kill kind, opening progress (hatches, doors, ramps), effective lights, rotor speed, smoking / flaming |
+
+Each topic is filled when its HROT slice is in the HROT checkout the host builds against; until then it stays unpublished (round 1 rule,
+P-2d). The wreck's flames are simulation state in HROT (thermal `FireState`, CE-4660); "smoke after the fire" comes from the look library.
+
 ## 4. Topic summary
 
 | Topic | Key | QoS | Direction |
@@ -245,6 +260,7 @@ Observing).
 | `PersonState` | EntityId | state | gateway to client |
 | `Appearance` | EntityId | state | gateway to client |
 | `Fire`, `Detonation`, `Effect` | none | event | gateway to client |
+| `VehicleLook` | EntityId | state | gateway to client |
 | `PlayerSlot`, `OwnUnit` | none (one per station partition) | state | gateway to client |
 | `JoinRequest`, `ControlFrame`, `Leave` | none | player (liveliness) | client to gateway |
 | `GizmoFrame` | Producer, Layer | state | gateway to client |
