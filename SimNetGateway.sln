@@ -80,6 +80,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimNetGateway.Transport.Dis
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimNetGateway.Transport.DisUdp.Tests", "tests\SimNetGateway.Transport.DisUdp.Tests\SimNetGateway.Transport.DisUdp.Tests.csproj", "{D2B0C674-9FEB-4B13-AEBA-608974C84811}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimNetGateway.HrotHost", "src\Hosts\SimNetGateway.HrotHost\SimNetGateway.HrotHost.csproj", "{03178487-B46C-44AA-AFA6-1DAB41FE723A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -209,6 +211,10 @@ Global
 		{D2B0C674-9FEB-4B13-AEBA-608974C84811}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D2B0C674-9FEB-4B13-AEBA-608974C84811}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D2B0C674-9FEB-4B13-AEBA-608974C84811}.Release|Any CPU.Build.0 = Release|Any CPU
+		{03178487-B46C-44AA-AFA6-1DAB41FE723A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{03178487-B46C-44AA-AFA6-1DAB41FE723A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{03178487-B46C-44AA-AFA6-1DAB41FE723A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{03178487-B46C-44AA-AFA6-1DAB41FE723A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{DCE382F5-2909-4DF2-BD70-F3B5E64103CD} = {EE970E5A-D607-4A18-BBE0-DD84B4A4ABCE}
@@ -248,5 +254,6 @@ Global
 		{A7D915E6-403B-45F5-8E4F-AF634A9022F8} = {75B601E7-044C-480F-8C7F-D0C9AC1F6F05}
 		{6001100F-84B6-4BB6-9990-212982CBAFC1} = {5A1F0C7E-3B9D-4E62-8C41-7D0A9B2E6F13}
 		{D2B0C674-9FEB-4B13-AEBA-608974C84811} = {75B601E7-044C-480F-8C7F-D0C9AC1F6F05}
+		{03178487-B46C-44AA-AFA6-1DAB41FE723A} = {17D2CF27-6F2C-40D9-A387-44F5FBFDA57C}
 	EndGlobalSection
 EndGlobal

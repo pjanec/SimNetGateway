@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The gateway as a HROT node extension (DD-016). Built the way a foreign product builds one: compile-only references to HROT (Private=false,
+       ExcludeAssets=runtime), the build stamp from Hrot.NodeExtension.targets, nothing of HROT copied to the output. Every protocol side is a plugin found in
+       plugins/ (a host may not reference a plugin or another host, DD-003 rule 6). HrotRoot is the HROT checkout to build against: set it with the environment
+       variable HROT_ROOT or -p:HrotRoot=...; the default is the checkout next to this repository as a submodule sibling. -->
+  <PropertyGroup>
+    <HrotRoot Condition="'$(HrotRoot)' == ''">$(HROT_ROOT)</HrotRoot>
+    <HrotRoot Condition="'$(HrotRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', '..', '..', 'hrot'))</HrotRoot>
+    <HrotRoot>$([MSBuild]::NormalizeDirectory('$(HrotRoot)'))</HrotRoot>
+    <IsPackable>false</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <Target Name="CheckHrotRoot" BeforeTargets="ResolveProjectReferences;BeforeBuild">
+    <Error Condition="!Exists('$(HrotRoot)Hrot/Engine/Hrot.Common/Hrot.Common.csproj')" Text="HrotRoot '$(HrotRoot)' is not a HROT checkout: set the HROT_ROOT environment variable or pass -p:HrotRoot=&lt;path&gt;." />
+  </Target>
+  <ItemGroup>
+    <ProjectReference Include="$(HrotRoot)Hrot/Engine/Hrot.Common/Hrot.Common.csproj"><Private>false</Private><ExcludeAssets>runtime</ExcludeAssets></ProjectReference>
+    <ProjectReference Include="$(HrotRoot)Hrot/Engine/Hrot.Core/Hrot.Core.csproj"><Private>false</Private><ExcludeAssets>runtime</ExcludeAssets></ProjectReference>
+    <ProjectReference Include="$(HrotRoot)FDP/Engine/Fdp.ModuleHost/Fdp.ModuleHost.csproj"><Private>false</Private><ExcludeAssets>runtime</ExcludeAssets></ProjectReference>
+    <ProjectReference Include="$(HrotRoot)FDP/Engine/Fdp.Core/Fdp.Core.csproj"><Private>false</Private><ExcludeAssets>runtime</ExcludeAssets></ProjectReference>
+    <ProjectReference Include="$(HrotRoot)FDP/Toolkits/Fdp.Toolkits/Fdp.Toolkits.csproj"><Private>false</Private><ExcludeAssets>runtime</ExcludeAssets></ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Gateways/SimNetGateway.Gateway.HrotDis/SimNetGateway.Gateway.HrotDis.csproj" />
+    <ProjectReference Include="../../Engine/SimNetGateway.Engine.InMemory/SimNetGateway.Engine.InMemory.csproj" />
+  </ItemGroup>
+  <Import Project="$(HrotRoot)Hrot/Engine/Hrot.Common/Hrot.NodeExtension.targets" />
+
+  <!-- The publish folder is extensions/simnetgateway/: ONLY our own assemblies. HROT's projects arrive transitively and are the host's (a second copy would
+       be a second type identity). An allow-list: a new HROT dependency can never leak in. scripts/package-extension.sh checks the result again. -->
+  <Target Name="KeepOnlyOwnAssemblies" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <_ForeignPublishFile Include="@(ResolvedFileToPublish)" Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('%(ResolvedFileToPublish.Filename)', '^SimNetGateway\.'))" />
+      <ResolvedFileToPublish Remove="@(_ForeignPublishFile)" />
+    </ItemGroup>
+  </Target>
+</Project>
