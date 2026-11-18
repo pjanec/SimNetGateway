@@ -148,8 +148,10 @@ The simulation states what the body does; the client chooses clips, blends, IK. 
 - look target (world point) and head yaw;
 - gesture (HandsUp, FistRaised, HoldSign, Waving, Throwing, Warning, IdleSmoking, IdleShiftWeight, IdleStretch, IdleLookAbout, None);
 - injury (Ok, Wounded, Incapacitated, Dead);
-- **action** (Reload, Throw, OpenDoor, Mount, Dismount, UseItem, ..., None) with start time, expected duration and target - see 3.8, HROT
-  does not expose it yet;
+- **action**: kind (Embark, Disembark, OpenDoor, CloseDoor, LockDoor, UnlockDoor, BreachDoor, PickUpCasualty, PutDownCasualty,
+  PickUpRound, Eject, None), target (entity or door), state (Running, Success, Failure) and the sim time it started running. Round 1
+  reads HROT's interaction channel (`InteractionChannel` + status), which is built and used; the expected duration is unknown until HROT
+  states it, and reload is not modelled by HROT (3.8);
 - seat (vehicle entity id, seat role Driver / Gunner / Commander / Passenger / Station) or carry mode (Carried, Dragged, Stretcher).
 
 `Appearance` (keyed by entity, sent once and on change) carries the resolved look: per slot (Skin, Top, Legs, Over, Head, Hair, Beard,
@@ -193,9 +195,14 @@ weapons and ammo, doors; DPS can publish those at once. Missing for the acceptan
 1. **Resolved appearance as data.** A person's look is resolved from the type's wardrobe and the entity's seed inside the 3-D map
    (`Map3D/Outfits.cs`); no component holds it. Move the resolver into a shared library (no presentation dependency) so the map and any
    external renderer dress a person the same way.
-2. **Action state.** Reloading, throwing, opening a door, mounting / dismounting and using an item are not stated; a renderer would have to
-   infer them. A small component `{ Kind, StartedAt, Duration, Target }` written by the muscle when an action starts.
-3. **Equipment items** (helmet, vest, backpack, pouches) and **weapon attachments** as data, not only garment kinds.
+2. **Action timing and reload.** The interaction channel states door, embark / disembark, casualty and round pick-up actions with a status,
+   but not their duration, and doors switch Closed / Open instantly. Reload is not modelled (no magazines; only an ammo-type switch
+   timer). The animation montage channels exist but are not used at runtime (HROT tracker CE-3010). Wanted: an expected duration per
+   action, an opening / closing phase for doors, and reload as an action.
+3. **Equipment items.** Weapons and munitions have type ids; phone and binoculars are type flags; helmet, riot helmet and chest rig are
+   garment kinds; there is no list of carried items and no backpack, radio, medkit, magazine or weapon attachment. Pick-up works for
+   thrown rounds (stones, grenades, canisters) only. Wanted: items as TKB types with ids, a per-person list of carried / worn items, and
+   pick-up / drop of items generally.
 4. **Vehicles:** lights, hatches / doors, rotor state, partial damage.
 5. Smoke screens, swimming, parachute canopy state.
 
