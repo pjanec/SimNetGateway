@@ -77,6 +77,12 @@ public sealed class PluginHostTests
         new(plugins: [probe], configure: c => c.WithSide(ProbeSide.SideKey, new ProbeSettings(replay)));
 
     [Fact]
+    public void The_default_plugin_folder_is_beside_the_host_assembly()
+    {
+        Assert.Equal(Path.Combine(Path.GetDirectoryName(typeof(GatewayExtension).Assembly.Location)!, "plugins"), PluginSet.DefaultFolder);
+    }
+
+    [Fact]
     public void A_service_is_pumped_every_frame_and_disposed_after_the_runtime_and_its_lease_end()
     {
         var probe = new ProbePlugin();

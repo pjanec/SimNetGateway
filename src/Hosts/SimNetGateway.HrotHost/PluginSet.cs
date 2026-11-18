@@ -53,8 +53,8 @@ public sealed class PluginSet
     /// <summary>Plugins given in code (tests): no folder, so no add-ons are looked up for them.</summary>
     public static PluginSet Of(params IGatewayPlugin[] plugins) => new(plugins.Select(p => new DiscoveredPlugin(p, string.Empty)));
 
-    /// <summary>The <c>plugins</c> folder beside the host assembly.</summary>
-    public static string DefaultFolder => Path.Combine(AppContext.BaseDirectory, "plugins");
+    /// <summary>The <c>plugins</c> folder beside the host assembly (not beside the process: the extension lives in a folder of its own under the host).</summary>
+    public static string DefaultFolder { get; } = Path.Combine(Path.GetDirectoryName(typeof(PluginSet).Assembly.Location) ?? AppContext.BaseDirectory, "plugins");
 }
 
 /// <summary>The host services of the running plugins: created once per capability, pumped every frame, disposed in reverse order after every gateway runtime is closed.</summary>
