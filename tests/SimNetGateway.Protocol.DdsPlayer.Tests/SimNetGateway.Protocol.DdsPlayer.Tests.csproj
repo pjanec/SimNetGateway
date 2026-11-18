@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Direct reference: switches on the CycloneDDS.NET code generator for the spike topic types. -->
+    <PackageReference Include="CycloneDDS.NET" />
+  </ItemGroup>
+
+</Project>

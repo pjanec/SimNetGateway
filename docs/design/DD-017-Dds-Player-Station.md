@@ -322,3 +322,106 @@ client code, test names.
 
 - Which client-side extrapolation the reference client uses (a sample implementation helps other clients).
 - Whether `OwnUnit` carries anything a HUD needs beyond ammo, health and the use verdict (e.g. hit feedback direction).
+
+## 10. As-built
+
+### Spike (Task 1: DDS features and HROT entry points)
+
+Measured on CycloneDDS.NET 1.2.20 by `tests/SimNetGateway.Protocol.DdsPlayer.Tests/SpikeTests.cs` (kept as regression tests) and read from
+HROT `coordinator` 72913ee87 (`external/hrot`, read-only). File:line are in that checkout.
+
+#### DDS features (all three are exposed, no fallback needed)
+
+| Question | Answer | Test |
+|---|---|---|
+| (a) Partition | Supported, but on the **participant or the reader / writer**, not on publisher / subscriber QoS objects: `new DdsParticipant(domainId, defaultPartition: "stationA")` is inherited by every reader and writer made from it; `new DdsReader<T>(participant, topicName, partition: "x")` (and the writer likewise) overrides it per entity. A reader in another partition receives nothing. `domainId` is `uint`. The topic-name fallback `DPS_<partition>_<Topic>` is **not used**. | `Partition_isolates_two_stations` |
+| (b) Liveliness | Supported. `[DdsQos(LivelinessKind = ..., LivelinessLeaseDurationMs = n)]` on the type (or `DdsWriterOptions.LivelinessLeaseDuration`); the reader raises `LivelinessChanged` (`AliveCountChange`, `NotAliveCountChange`) and exposes `LivelinessChangedStatus.AliveCount` (a `uint`). The heartbeat fallback is **not used**. | `Lost_writer_is_reported`, `Silent_writer_lease_expires_while_the_writer_still_exists` |
+| (c) Dispose | A disposed instance reaches a TransientLocal late joiner as a sample with `IsValid == false` and `InstanceState` NOT_ALIVE_DISPOSED, key fields filled; the live instances arrive as valid samples. | `Disposed_instance_is_not_delivered_to_late_joiner` |
+
+Details the plugin must respect:
+
+- **A vanished client** (participant disposed or process gone, no goodbye) is reported by the gateway-side reader as `AliveCountChange < 0`
+  (with the default automatic liveliness the writer is simply gone). `NotAliveCountChange > 0` is the other signal: it fires when a writer
+  that still exists lets its lease run out (manual liveliness kinds). The plugin treats **either** as "player lost"; a matched writer
+  appearing raises `AliveCountChange > 0` (join).
+- With `ManualByTopic` the lease is refreshed only by a write or an explicit `AssertLiveliness()`; with `Automatic` the participant keeps it
+  alive. DPS player topics use `Automatic` (a client that is up keeps the player; a client that is gone loses it within the lease).
+- A late joiner on a TransientLocal topic also gets a not-alive sample for every instance that was disposed and is still in the writer's
+  cache. A client must treat such a sample as "entity gone", never as an error; the plugin may stop sending it by unregistering (purging) an
+  instance after disposing it.
+- `DdsReader.Take` loans are scoped (`using var loan`); `sample.Data` is a managed copy that is safe for not-valid samples too.
+- A project that references `CycloneDDS.NET` **directly** runs the code generator (it needs `AllowUnsafeBlocks`); a transitive reference does
+  not. The version is in `Directory.Packages.props`: `CycloneDDS.NET` 1.2.20, the version HROT pins (one version per process).
+- Spike topic types use the domain `150 + (pid % 50)` and distinct partitions, so the tests can run beside a real DDS node.
+
+#### HROT: the gizmo pipeline (Step 3a)
+
+How a node extension runs the projectors into **its own** draw builder with **its own** visibility policy, leaving the editor's own map alone.
+Namespace `Fdp.Toolkit.Diagnostics.Gizmos` in `FDP/Toolkits/Fdp.Toolkits/Diagnostics/Gizmos/` unless stated.
+
+| Piece | Where | Role for the host |
+|---|---|---|
+| `IStatelessGizmo.Draw(ISimulationView, Entity, IDebugDrawBuilder)` | `IStatelessGizmo.cs:11`; optional `Inputs` (component types, view dependence, version) for change gating | One projector per component set, run per matching entity. |
+| `IGlobalStatelessGizmo.Draw(view, drawBuilder)` | `IGlobalStatelessGizmo.cs:10` | Entity-less (roads, routes, grids); once per frame. |
+| `[GizmoProjector]` | `GizmoProjectorAttribute.cs:13` | Declares required components, the family (`AiOverlayFlags`), zoom limits (`MaxMetresPerPixel`, `MinMetresPerPixel`) and `DrawsOffScreen`. |
+| `StatelessGizmoRegistry` | `StatelessGizmoRegistry.cs:44` (`Register` :67, `RegisterGlobal` :112) | Plain object, one per host: holds the projectors and one `IGizmoVisibilityPolicy` per projector. Must be filled **before** the system is constructed (the system sizes its visibility cache from the rule count). |
+| `GizmoReflectionRegistrar.RegisterAll(...)` | `GizmoReflectionRegistrar.cs:70` | Discovers every `[GizmoProjector]` in loaded assemblies (uniform membership). Takes a `GizmoSettingsRegistry`, a `Func<Type, IGizmoVisibilityPolicy?>` resolver and a `services` callback for projector constructors; projectors whose services the host lacks are reported and skipped. |
+| `IGizmoVisibilityPolicy` | `IGizmoVisibilityPolicy.cs:10` (`IsGloballyEnabled(view)`, `IsEntityVisible(view, entity)`) | The host's own implementation decides layers / selected / pinned. |
+| `DebugPrimitiveBuffer : IDebugDrawBuilder` | `FDP/Diagnostics/Fdp.Diagnostics.Contracts/DebugPrimitiveBuffer.cs:16` (`IDebugDrawBuilder` is `IDebugDrawBuilder.cs:13`) | The draw builder. `SetActiveLayers(in LayerMask256)` :52 drops primitives of hidden layers at append time; `EndFrame(dt)` :285 resets it; `GetFrame()` :160 / `ReaderFrame()` :152 return `ReadOnlySpan<DebugPrimitive>` (shape, colour, `DebugLayer`, world coordinates, thickness, text hash). `GizmoFrame` is built from this. |
+| `StatelessGizmoSystem` | `Systems/StatelessGizmoSystem.cs:199` ctor `(registry, IDebugDrawBuilder, isSelectedPredicate?)`, `Execute(view, dt)` :265 | Runs global rules, then entity rules. `view` must be an `EntityRepository` (it throws on a read-only view). `ViewFilter` (:254) null = everything is in view. |
+| `IGizmoViewFilter` / `IActiveViewProvider` | `IGizmoViewFilter.cs:11`, `IActiveViewProvider.cs:12` | The map writes its camera into a view snapshot so that off-screen entities are skipped. The host sets no filter (the client decides what it shows). |
+| `GizmoExecutionController` | `GizmoExecutionController.cs:13` | Reference-counted on / off of the **editor's** gizmo group (`AddListener` :33). The host does not use it and must not switch the editor's group on or off. |
+| Layers | `DebugTraceLayers.cs:7` (byte ids: FireTraces 3, Doors 4, Paths 5, Blast 6, Hearing 7, Roads 8, Cover 9, Navmesh 10, Labels 11, Sectors 14, Rounds 16, SquadCommand 17, Actions 18, Utility 19, Eqs 20, Routes 21, ... Contacts 25) | `GizmoView.Layers` carries these byte ids (or names mapped from them). |
+
+How the editor's map wires the same pieces: `Hrot/Engine/Hrot.Presentation/ScenarioEditor/Map/MapInteractionPack.cs` `Build` (:117) makes a
+`DebugPrimitiveBuffer` and a `StatelessGizmoRegistry`, calls `RegisterAll` (:153) with `DefaultVisibilityPolicy` (:66), then constructs
+`StatelessGizmoSystem(statelessRegistry, buffer)` (:193) and puts it in the `GizmoExecution` group.
+
+**The recipe for the host (a second, private gizmo host on the editor node):**
+
+1. Own objects, never the map's: a new `GizmoSettingsRegistry`, a new `StatelessGizmoRegistry`, a new `DebugPrimitiveBuffer` and a new
+   `StatelessGizmoSystem` over them. Nothing of the editor's buffer, settings or group is touched, so the editor's map draws as before.
+2. Fill the registry with `GizmoReflectionRegistrar.RegisterAll(null, registry, ownSettings, resolver, services: ..., reportUnserviceable: log)`
+   before constructing the system. The resolver returns the host's own policy per projector.
+3. The host's own policy implements `IGizmoVisibilityPolicy` from the last `GizmoView` (layers on, selected ids, pinned ids and families). Do
+   **not** reuse HROT's `GizmoFamilyVisibilityPolicy`: it reads **component state on the shared entities** (`SelectionState`, `DebugState`
+   on the unit) and the family scope from the settings registry, so the editor's selection and pins would decide what the client sees. The
+   host policy keeps its own sets of network ids and maps entity to network id through the node's `NetworkEntityMap`; a part (a sensor
+   child) follows its unit (`GizmoFamilyVisibilityPolicy.UnitOf` follows `PartMetadata.ParentEntity`).
+4. Layers: `buffer.SetActiveLayers(mask)` from `GizmoView.Layers` (a hidden layer is then never even stored).
+5. Run it from the host's own tick on the thread that owns the `EntityRepository` the editor node simulates (the system walks entity
+   slots). It is a post-simulation read: call `buffer.EndFrame(dt)`, then `system.Execute(repo, dt)`, then read `GetFrame()` and map it to
+   `GizmoFrame` samples per (`Producer`, `Layer`). Skip all of it when no `GizmoView` writer is matched (3.7).
+6. The editor's threaded presentation world (a pull of the sim world) is a separate repository; the host reads the simulation repository it
+   already reads for DIS, not the presentation one.
+
+Risks: a projector that needs a service the node does not provide is skipped by the registrar (logged, not drawn); primitives with
+`LifetimeSeconds > 0` are re-injected by the buffer itself in `EndFrame`, so a host that never calls `EndFrame` accumulates them; the host sets
+no view filter, so it gets the set the 2-D map draws by default.
+
+#### HROT: player mode in the editor (Step 3)
+
+**Finding that changes 3.2b:** the editor node composes **neither** the gameplay deploy **server** nor the deploy **client**. Possession and
+the control frame **do** run in the editor. Deploy through topics cannot run in an offline node either (no participant: the wire is lazy and
+a null participant makes every reader and writer null). So in step 1 the host takes **possession directly** and does the "choose" part of
+Deploy itself.
+
+| Question | Answer (file:line in `external/hrot`) |
+|---|---|
+| Does the deploy server run in the editor? | **No.** `GameplayServerPack` (`Hrot/Engine/Hrot.Gameplay/GameplayServerPack.cs:11`; feature `gameplay.deploy-server`, `GameplayFeatures.cs:13`, ON by default) is composed only on the Brain node in `Hrot/Subsystems/Hrot.CGF/CgfNodeBootstrapper.cs:187` (role table input `GameplayServer`, `Hrot/Subsystems/Hrot.SimHost/RoleCapabilityTable.cs:30`, :107, allowed for a Brain only). `EditorNodeBootstrapper.cs:279` builds the same role table with no `GameplayServer` ("serves no players"). `DeployProcessorSystem` (`DeployProcessorSystem.cs:29`) carries `[NodeFeature("gameplay.deploy-server")]`. HROT's own rail (`GameplayPacksAreComposedOnTheRightHostsTests`) pins that the Brain node serves, the Player node is a client, and the simulation host and the editor are neither. |
+| Deploy client request | `DeployFlowSystem` (`Hrot/Engine/Hrot.Gameplay/DeployFlowSystem.cs:45`): states Waiting / Observing / Choosing / Requesting / TakingControl / Playing / Dead (:11); `Request(ForceId side, int unitNetId, byte kit = 0, int areaNetId = 0)` :145 (only from Choosing), `Observe(side)` :152, `StopObserving()` :160; readouts `State`, `Offers` (:133; `DeployOffer` :14: unit net id, side, slot name, holder, kind Placed / Role / Area, count / max, kits), `LastRefusal`, `RequestedKit`. It writes a `DeployRequestTopic` (`GameplayTopics.cs:25`) and reads `DeployStatusTopic` (:47), `DeployOfferTopic` (:81) and `PlayerSlotTopic` (:63). A role request is answered with the **spawned man's** unit id (`DeployFlowSystem.cs:294`), which is then possessed. It is composed per node by `GameplayClientPack` (`GameplayClientPack.cs:13`, `Compose` :31, `PopulateSystems` :44; found through `DeployFlowSystem.Of(world)` :57) on the Player node only (`Hrot/Subsystems/Hrot.Player/PlayerNodeBootstrapper.cs:252`). On a threaded node the verbs are posted as jobs (`DeployFlowView.cs:102`). HTTP `GET` / `POST /deploy` (`Hrot/Subsystems/Hrot.Editor/DebugApi/DebugApiService.Diagnostics.cs:231`) answers 404 where no flow exists, as in the editor. |
+| Placed `Playable` unit (step 1) | `Playable { Side, SlotName }` (`FDP/Toolkits/Fdp.Toolkits/Gameplay/Playable.cs:12`) is authored on the unit; the host lists the units that carry it as its offers and takes possession directly (next rows). `Possessability.Refusal` (`Possessability.cs:12`) and `StationClaims.ForPossess` (`StationClaims.cs:29`) apply on that path. |
+| Role (step 1) | Not available offline: a role's man is spawned by the server (`GameplayServerPack.SpawnerOf`, `GameplayServerPack.cs:65`: allocate a network id, publish an `EntityCreationRequest` with `PreAllocatedNetworkId`). The host can reuse that recipe, or HROT can compose `GameplayServerPack` on the editor node, if roles are wanted in the editor; the first editor round offers placed units only. Cluster player nodes (step 2) get the real server and the real `DeployFlowSystem` and need none of this. |
+| Possession | `EntityOrders.Possess(int unit)` / `Possess(unit, PossessionMode)` (`Hrot/Engine/Hrot.Common/Orders/EntityOrders.cs:192`, :199): returns `OrderResult` (`Accepted`, `Refusal`, `Detail`); refuses `NotPossessable`, `Possessed` (held by another station) and the wrong side. The station is `EntityOrders.Station` (:186; `new EntityOrders(world, entityMap, geoTransform) { Station = nodeId }`, as `GameplayClientPack.cs:52` builds it), else the unit's `NetworkAuthority.LocalNodeId`. It publishes `PossessRequestEvent` (`FDP/Toolkits/Fdp.Toolkits/Behavior/Possession/Possession.cs:39`) on the bus; `PossessionSystem` (`Possession.cs:185`, Input phase, composed by `CgfLogicPack.cs:225`, therefore **running in the editor**) writes `PossessedBy` (:129) and starts `OperatorControl` at origin Possession, which pauses the unit's task. Possession takes effect on a later sim tick, so the host polls `PossessionSystem.HolderOf` (:356) until it equals the station (`DeployFlowSystem.AwaitPossession` :322 does this with a 10 s timeout and retries a local refusal every 500 ms). |
+| Control frame | `EntityOrders.Control(int unit, OperatorControlFrameEvent frame)` (`EntityOrders.cs:251`) fills `Unit`, `StationNodeId`, `IsRemote = false` and publishes it; the frame type is `OperatorControlFrameEvent` (`Possession.cs:70`) with every field listed in 3.6 (Forward, Lateral, Steer, Yaw, Vertical, Gait, Trigger, Mount, AimPoint, Stance as StanceId + 1, ShotSeq / CancelSeq / AmmoSeq counters, ShotTarget, UseSeq / UseVerb / UseTarget, Lean, Binoculars, LookFrom, LookDir, FirePref). `PossessionSystem` keeps the frame with the newest `Seq` (:243; the host numbers frames increasing) and drops frames from a station that does not hold the unit (:241). `ShotSeq`, `CancelSeq`, `AmmoSeq` and `UseSeq` are press counters: a press is a **change** of the value, so the host copies the client's counters through unchanged. HROT's own caller is `PossessionStation.Send` (`Hrot/Engine/Hrot.Presentation/Map3D/PossessionStation.cs:442`); the debug route `POST /entities/{id}/control` (`DebugApiService.Orders.cs:172`) builds the same frame. |
+| Release | `EntityOrders.Unpossess(int unit)` (`EntityOrders.cs:240`; only for a unit this station holds): publishes `ReleasePossessionEvent` (`Possession.cs:54`); `PossessionSystem` applies it (:258), removes `PossessedBy` and `OperatorInput` and publishes `ClearBehaviorEvent` at origin Possession, so the paused task resumes (:348). The same path runs for a killed unit (:272) and for the holder's node leaving (`NodeDeparted`, :287); `LetGoOfManual` (:313) stops the body. HTTP `DELETE /entities/{id}/possess` (`DebugApiService.Orders.cs:166`). This is what the host calls on liveliness lost or `Leave`; the node is not departing, so HROT never releases by itself. |
+| Where slot state is read | `PlayerSlotTopic` (`GameplayTopics.cs:63`: `StationNodeId`, `Name`, `Side`, `State` = `PlayerSlotState` :6 Choosing / TakingControl / Playing / Dead, `UnitNetId`, `ReservedUntilSim`, `RespawnAtSim`). On a player node: `PlayerSlotReaderSystem.TryGetSlot(station, out slot)` (`Hrot/Engine/Hrot.Gameplay/PlayerSlotReaderSystem.cs:31`) and `DeployFlowSystem.Slots` (:88; `ReadOwnSlot` :257 drives Playing to Dead / Choosing); the slot also fills `StationReservations.Of(repo)` (`PlayerSlotReaderSystem.cs:47`), which `StationClaims` reads. On the server: `DeployProcessorSystem.TryGetSlot` (`DeployProcessorSystem.cs:107`). `PossessedBy` (`Possession.cs:129`: `StationNodeId`, `Mode` Fps / Riding, `Epoch`) is read with `PossessionSystem.HolderOf(repo, entity)` (:356) or `EntityOrders.HolderOf(netId)` (`EntityOrders.cs:262`); it is replicated, so a station sees a lost unit as another id in it. In the editor there is no slot topic: the host derives `PlayerSlot.State` itself (Choosing with no unit, TakingControl while a possess is pending, Playing when `HolderOf` is the station, Dead when `PossessionSystem.Alive` (:369) is false, with `RespawnAtSim` 0 = never in the first round). |
+
+Consequences for the plan:
+
+- Step 1 (editor): the host offers the `Playable` units and derives a Choosing / TakingControl / Playing / Dead state as above; role offers and
+  respawn belong to step 2. Section 3.2b reads "Deploy ... works in the networkless editor": it is possession, the control frame and
+  release that work there, Deploy does not.
+- Step 2 (cluster player node): reuse `GameplayClientPack` / `DeployFlowSystem` as they are (`Request`, `Observe`, `Offers`, `State`); the
+  plugin only calls them.
+- No HROT change is required for round 1; composing the deploy server on the editor node would add roles in the editor and is a HROT-side option.
