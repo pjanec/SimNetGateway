@@ -205,7 +205,9 @@ Rejected: keyed per-gizmo instances with lifetimes (HROT's gizmos are redrawn ev
 Today HROT simulates and records stance, weapon posture and held item, look, gesture, health and injury, seats and carrying, turret pose,
 weapons and ammo, doors; DPS can publish those at once. Missing for the acceptance goal (to be requested from HROT, phrased generically):
 
-1. **Resolved appearance as data.** A person's look is resolved from the type's wardrobe and the entity's seed inside the 3-D map
+1. **Shared presentation-derivation library: dress and effects.** Effects as for the dress below: the rules that derive muzzle flashes,
+   explosions, ground marks and wreck flames / smoke from events and states, moved out of the 3-D map (round 1 needs this one).
+   **Resolved appearance as data.** A person's look is resolved from the type's wardrobe and the entity's seed inside the 3-D map
    (`Map3D/Outfits.cs`); no component holds it. Move the resolver into a shared library (no presentation dependency) so the map and any
    external renderer dress a person the same way.
 2. **Reload and door phases.** The interaction channel states door, embark / disembark, casualty and round pick-up actions with a
@@ -224,8 +226,11 @@ Until they exist, the corresponding DPS fields stay at their "unknown" value; th
 ### 3.9 Replay (P-8)
 
 State topics follow the replayed world (the host already reads recorded state in replay). Fire and detonation come from the recorded state
-in replay as for the other sides. `Effect` carries HROT's effect objects that are not fire or detonation events (wreck flames and
-smoke, muzzle flashes, explosion marks: `VisualEffectState` / `EffectAnchor`, recorded, so replay has them). `Session.Mode = Replay` tells
+in replay as for the other sides. `Effect` carries the effects that are not fire or detonation events themselves (muzzle flash, explosion and
+ground mark, wreck flames and smoke). Effects are presentation, derived from events and states; the owner: they are derived with a
+shared library, in the same manner as the dress (3.8 item 1). HROT's effect rules (`EffectSpawnSystem`, `WreckSpawnSystem`, their kinds
+and timings) move into a shared library with no presentation dependency; HROT's map and the host both use it, so every renderer shows the
+same effects. The host does not copy HROT's own effect objects. `Session.Mode = Replay` tells
 the client; the player topics are refused in replay (`PlayerSlot` =
 Observing).
 
