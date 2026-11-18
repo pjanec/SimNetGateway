@@ -270,3 +270,84 @@ public readonly record struct ExternalState(
     int Force,
     double HealthCurrent,
     double HealthMax) : IGatewayToHrotMessage;
+
+/// <summary>What a person holds in his hand (<see cref="HrotHeldItem.None"/> = his own weapon is not singled out, or not a life form).</summary>
+public enum HrotHeldItem : byte
+{
+    None = 0,
+    Weapon = 1,
+    Throwable = 2,
+    Phone = 3,
+    Binoculars = 4,
+}
+
+/// <summary>A person's gesture; the values are HROT's gesture kinds (0 = none).</summary>
+public enum HrotGesture : byte
+{
+    None = 0,
+    HandsUp = 1,
+    FistRaised = 2,
+    HoldSign = 3,
+    Waving = 4,
+    Throwing = 5,
+    Warning = 6,
+    IdleSmoking = 7,
+    IdleShiftWeight = 8,
+    IdleStretch = 9,
+    IdleLookAbout = 10,
+}
+
+/// <summary>The interaction a person is performing (HROT's interaction channel); <see cref="None"/> = no action.</summary>
+public enum HrotAction : byte
+{
+    None = 0,
+    Embark = 1,
+    Disembark = 2,
+    OpenDoor = 3,
+    CloseDoor = 4,
+    LockDoor = 5,
+    UnlockDoor = 6,
+    BreachDoor = 7,
+    PickUpCasualty = 8,
+    PutDownCasualty = 9,
+    PickUpRound = 10,
+    Eject = 11,
+}
+
+public enum HrotActionState : byte
+{
+    None = 0,
+    Running = 1,
+    Success = 2,
+    Failure = 3,
+}
+
+public enum HrotSeatRole : byte
+{
+    None = 0,
+    Driver = 1,
+    Gunner = 2,
+    Commander = 3,
+    Passenger = 4,
+    Station = 5,
+}
+
+/// <summary>How a person is held aboard: seated in a vehicle, or carried / dragged / on a stretcher by a person.</summary>
+public enum HrotCarryMode : byte
+{
+    None = 0,
+    Seated = 1,
+    Carried = 2,
+    Dragged = 3,
+    Stretcher = 4,
+}
+
+/// <summary>
+/// The semantic state of a person's body beyond <see cref="HrotEntityState"/> (DD-017 3.5), sent for life forms when any field changes. Ids are HROT network
+/// ids (0 = none). <see cref="LookTarget"/> is a local ENU point, <see cref="HeadYaw"/> radians, + to his left. <see cref="StanceProgress"/> is 0..1 (1 when
+/// the stance is settled). <see cref="ActionStartedAt"/> is the simulation time the gateway first saw the action running (0 = no action).
+/// </summary>
+public readonly record struct HrotPersonDetail(
+    int Id, HrotStance TargetStance, float StanceProgress, HrotHeldItem HeldItem, byte ActiveMount, HrotVec3 LookTarget, bool HasLookTarget, float HeadYaw,
+    HrotGesture Gesture, HrotAction Action, int ActionTarget, HrotActionState ActionState, double ActionStartedAt, int SeatVehicle, HrotSeatRole SeatRole,
+    HrotCarryMode Carry) : IHrotToGatewayMessage;

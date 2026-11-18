@@ -50,6 +50,7 @@ public sealed class EcsHrotAdapter
     private readonly GatewayConfiguration _config;
     private readonly Dictionary<int, DisReplica> _replicas = new();
     private readonly Dictionary<int, Sent> _sent = new();
+    private readonly PersonDetailGather _details = new();
     private readonly List<int> _scratch = new();
     private readonly List<(int Parent, int Part)> _scratchPoses = new();
     private EntityQuery? _hrotQuery;
@@ -93,6 +94,7 @@ public sealed class EcsHrotAdapter
         Ensure<StanceIntent>(world);
         Ensure<WeaponPosture>(world);
         Ensure<InjuryThresholds>(world);
+        PersonDetailGather.EnsureRegistered(world);
         Ensure<Fdp.Toolkit.Terrain.BuildingDamage>(world);
         Ensure<Fdp.Toolkit.Terrain.GroundDamage>(world);
         if (!world.Bus.IsRegistered<WeaponFireNotification>())
@@ -139,24 +141,34 @@ public sealed class EcsHrotAdapter
             }
 
             var state = StateOf(world, e, id, tkb, simTime);
+            bool sendState;
             if (_sent.TryGetValue(id, out var previous))
             {
                 previous.Seen = true;
-                if (now - previous.At < ResendS && !Changed(in previous.State, in state))
+                sendState = now - previous.At >= ResendS || Changed(in previous.State, in state);
+                if (sendState)
                 {
-                    continue;
+                    previous.State = state;
+                    previous.At = now;
                 }
-
-                previous.State = state;
-                previous.At = now;
             }
             else
             {
                 _sent[id] = new Sent { State = state, At = now, Seen = true };
+                sendState = true;
             }
 
-            inbound.Enqueue(in state);
-            Counters.StatesSent++;
+            if (sendState)
+            {
+                inbound.Enqueue(in state);
+                Counters.StatesSent++;
+            }
+
+            // after the state, so the gateway knows the entity; a person is sent again only when something about him changed
+            if (state.DisType != 0 && DisTypeCode.Unpack(state.DisType).Kind == LifeFormKind && _details.TryGather(world, e, id, simTime, out var detail))
+            {
+                inbound.Enqueue(in detail);
+            }
         }
 
         _scratch.Clear();
@@ -171,6 +183,7 @@ public sealed class EcsHrotAdapter
         foreach (int id in _scratch)
         {
             _sent.Remove(id);
+            _details.Forget(id);
             inbound.Enqueue(new HrotEntityRemoved(id));
             Counters.RemovalsSent++;
         }
@@ -714,6 +727,7 @@ public sealed class EcsHrotAdapter
     {
         _replicas.Clear();
         _sent.Clear();
+        _details.Clear();
         ForgetReplayEffects();
         SweepRoutedEntities(world);
         _queryWorld = null;

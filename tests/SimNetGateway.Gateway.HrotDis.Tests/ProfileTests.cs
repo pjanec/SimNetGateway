@@ -106,6 +106,8 @@ public class ProfileTests
             new HrotSession(ClusterPhase.Live, true, 1, 0),
             HrotDisHarness.State(1),
             new HrotTurretPose(1, 1, 0, 0),
+            new HrotPersonDetail(1, HrotStance.Standing, 1f, HrotHeldItem.None, 0, HrotVec3.Zero, false, 0f, HrotGesture.None, HrotAction.None, 0, HrotActionState.None, 0, 0,
+                HrotSeatRole.None, HrotCarryMode.None),
             new HrotFire(1, 0, 501, 0, default, default, 1),
             new HrotDetonation(1, 0, 501, 0, default, default),
             new HrotEntityRemoved(1),
@@ -119,6 +121,7 @@ public class ProfileTests
                 case HrotSession m: h.HrotStep(m); break;
                 case HrotEntityState m: h.HrotStep(m); break;
                 case HrotTurretPose m: h.HrotStep(m); break;
+                case HrotPersonDetail m: h.HrotStep(m); break;
                 case HrotFire m: h.HrotStep(m); break;
                 case HrotDetonation m: h.HrotStep(m); break;
                 case HrotEntityRemoved m: h.HrotStep(m); break;
