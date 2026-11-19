@@ -402,6 +402,8 @@ public partial struct GizmoView
     [DdsBound(256)] public List<int> PinnedIds;
     [DdsBound(32)] public List<NameItem> PinnedFamilies;
     public float RateHz;
+    /// <summary>The client's identity (see <see cref="JoinRequest.ClientId"/>): the view of the player is followed; with no player, the first client that writes one.</summary>
+    public ulong ClientId;
 }
 
 #endregion

@@ -63,9 +63,10 @@ public sealed class DpsTransport : IDisposable
     private readonly List<IDisposable> _channels = new();
     private readonly DpsInbound? _inbound;
     private readonly DpsPlayerSlot? _slot;
+    private readonly DpsGizmos? _gizmos;
     private int _offersSeen = -1;
 
-    public DpsTransport(DpsSettings settings, string partition, IPlayerStation? station, int epoch, Action<string>? log = null)
+    public DpsTransport(DpsSettings settings, string partition, IPlayerStation? station, int epoch, Action<string>? log = null, IGizmoSource? gizmoSource = null)
     {
         Partition = partition;
         _station = station;
@@ -106,6 +107,8 @@ public sealed class DpsTransport : IDisposable
             OwnUnit = Add(new DpsChannel<OwnUnit>(_participant));
             _inbound = new DpsInbound(_participant, settings, station, log ?? (_ => { }));
             _slot = new DpsPlayerSlot(station, PlayerSlot, OwnUnit);
+            GizmoFrame = Add(new DpsChannel<GizmoFrame>(_participant));
+            _gizmos = new DpsGizmos(_participant, settings, partition, gizmoSource, _inbound, GizmoFrame, log ?? (_ => { }));
         }
         catch
         {
@@ -141,10 +144,13 @@ public sealed class DpsTransport : IDisposable
 
     internal DpsChannel<OwnUnit> OwnUnit { get; } = null!;
 
+    internal DpsChannel<GizmoFrame> GizmoFrame { get; } = null!;
+
     /// <summary>Once per frame: an entity whose playable flag changed with the station's offers is written again.</summary>
     public void Pump()
     {
         _inbound?.Pump();
+        _gizmos?.Pump();
         _slot?.Pump();
         if (_station is null)
         {
@@ -200,6 +206,7 @@ public sealed class DpsTransport : IDisposable
 
     public void Dispose()
     {
+        _gizmos?.Dispose();
         _inbound?.Dispose();
         foreach (var channel in _channels)
         {

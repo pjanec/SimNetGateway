@@ -58,6 +58,9 @@ internal sealed class DpsInbound : IDisposable
         where T : struct =>
         reader.LivelinessChanged += (_, st) => _liveliness.Enqueue(new Liveliness(topic, st.LastPublicationHandle, st.AliveCountChange, st.NotAliveCountChange, st.AliveCount));
 
+    /// <summary>The client id of the player the station accepted (0 = nobody plays).</summary>
+    internal ulong Owner => _owner;
+
     public void Pump()
     {
         if (_station is null)

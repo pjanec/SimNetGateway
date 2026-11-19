@@ -27,7 +27,7 @@ public sealed class DdsPlayerPlugin : IGatewayPlugin
             ? settings.Partition
             : $"station-{binding.Config.Shared.Site}-{binding.Config.Shared.Application}";
         int epoch = binding.Service is DpsHostService service ? service.NextEpoch() : 1;
-        var transport = new DpsTransport(settings, partition, binding.PlayerStation, epoch, binding.Log);
+        var transport = new DpsTransport(settings, partition, binding.PlayerStation, epoch, binding.Log, binding.GizmoSource);
         try
         {
             DpsPorts.Bind(binding.Builder, transport);

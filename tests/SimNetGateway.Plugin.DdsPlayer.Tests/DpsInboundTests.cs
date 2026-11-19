@@ -10,7 +10,7 @@ namespace SimNetGateway.Plugin.DdsPlayer.Tests;
 /// <summary>The player topics driving the player-station seam: join, control frames, leave, lost client, one player at a time, the slot and the unit published on change.</summary>
 public class DpsInboundTests
 {
-    private sealed class RecordingStation : IPlayerStation
+    internal sealed class RecordingStation : IPlayerStation
     {
         public List<PlayerJoin> Joins { get; } = new();
 
@@ -40,12 +40,13 @@ public class DpsInboundTests
     }
 
     /// <summary>A client: a participant in the station's partition with the three player writers.</summary>
-    private sealed class Client : IDisposable
+    internal sealed class Client : IDisposable
     {
         private readonly DdsParticipant _participant;
         private readonly DdsWriter<D.JoinRequest> _join;
         private readonly DdsWriter<D.ControlFrame> _control;
         private readonly DdsWriter<D.Leave> _leave;
+        private readonly DdsWriter<D.GizmoView> _view;
 
         private readonly ulong _id;
 
@@ -56,6 +57,7 @@ public class DpsInboundTests
             _join = new DdsWriter<D.JoinRequest>(_participant);
             _control = new DdsWriter<D.ControlFrame>(_participant);
             _leave = new DdsWriter<D.Leave>(_participant);
+            _view = new DdsWriter<D.GizmoView>(_participant);
         }
 
         public void Join(uint seq, int unit, D.JoinKind kind = D.JoinKind.JoinKindUnit, string role = "") =>
@@ -67,6 +69,17 @@ public class DpsInboundTests
             _control.Write(frame);
         }
 
+        public void View(string[] layers, int[]? selected = null, int[]? pinned = null, string[]? families = null, float rateHz = 10f) =>
+            _view.Write(new D.GizmoView
+            {
+                Layers = [.. layers.Select(l => new D.NameItem { Name = l })],
+                SelectedIds = [.. selected ?? []],
+                PinnedIds = [.. pinned ?? []],
+                PinnedFamilies = [.. (families ?? []).Select(f => new D.NameItem { Name = f })],
+                RateHz = rateHz,
+                ClientId = _id,
+            });
+
         public void Leave(uint seq) => _leave.Write(new D.Leave { Seq = seq, ClientId = _id });
 
         public void Dispose()
@@ -74,18 +87,19 @@ public class DpsInboundTests
             _join.Dispose();
             _control.Dispose();
             _leave.Dispose();
+            _view.Dispose();
             _participant.Dispose();
         }
     }
 
     /// <summary>Pumps the plugin (each step is one host frame) until the condition holds.</summary>
-    private static bool Until(Rig rig, Func<bool> condition, int timeoutMs = 6000) => Watch.WaitFor(() =>
+    internal static bool Until(Rig rig, Func<bool> condition, int timeoutMs = 6000) => Watch.WaitFor(() =>
     {
         rig.Step();
         return condition();
     }, timeoutMs);
 
-    private static void Frames(Rig rig, int n = 15)
+    internal static void Frames(Rig rig, int n = 15)
     {
         for (int i = 0; i < n; i++)
         {

@@ -7,6 +7,7 @@ using Hrot.Common;
 using Hrot.Common.Orders;
 using SimNetGateway.Gateway.HrotDis;
 using SimNetGateway.Protocol.Hrot;
+using IGizmoSource = SimNetGateway.Gateway.HrotDis.IGizmoSource;
 
 namespace SimNetGateway.HrotHost;
 
@@ -39,8 +40,9 @@ internal interface IPlayerFlow
 /// The host's <see cref="IPlayerStation"/> over HROT's player mode (DD-017 3.6, step 1: the editor node is the station). The flow is
 /// <see cref="PossessionFlow"/>; control frames go through HROT's own <c>EntityOrders.Control</c>.
 /// </summary>
-public sealed class HrotPlayerStation : IPlayerStation
+public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
 {
+    private readonly HrotGizmoHost _gizmos = new();
     private readonly HrotServices _services;
     private readonly PossessionFlow _flow;
     private EntityRepository? _world;
@@ -82,6 +84,7 @@ public sealed class HrotPlayerStation : IPlayerStation
         }
 
         _flow.Frame(world, live, replaying);
+        _gizmos.Frame(world, System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency);
         _unit = _flow.State == PlayerSlotState.Playing ? ReadUnit(world) : PlayerUnitStatus.None;
         Refresh();
     }
@@ -93,6 +96,14 @@ public sealed class HrotPlayerStation : IPlayerStation
         _unit = PlayerUnitStatus.None;
         Refresh();
     }
+
+    /// <inheritdoc />
+    public void SetView(GizmoViewRequest? view) => _gizmos.SetView(view);
+
+    /// <inheritdoc />
+    public IReadOnlyList<GizmoLayerFrame> Take() => _gizmos.Take();
+
+    internal HrotGizmoHost Gizmos => _gizmos;
 
     public bool Join(PlayerJoin request)
     {

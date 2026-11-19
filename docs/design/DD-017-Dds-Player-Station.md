@@ -448,3 +448,16 @@ and the IDL and serializers are generated from them (`DpsTopics.idl`, `DpsTypes.
 sample it writes**. The player of a station is the client whose `JoinRequest` the host accepted; a `ControlFrame` or `Leave` of another client, and a `JoinRequest` of another
 client while a player holds the station, are dropped (one warning per foreign client id). The player's `Leave`, or losing the liveliness of any writer that carried its id,
 frees the station for the next client. A sample with `ClientId` 0 is ignored. The reference client sets it.
+
+### Gizmos (Task 6b)
+
+`IGizmoSource` (sibling of `IPlayerStation`, `SideBinding.GizmoSource`, optional): `SetView(GizmoViewRequest?)` and `Take()` (one frame per requested layer; an empty frame clears a layer). The host side is
+`HrotGizmoHost` (the node's `HrotPlayerStation` hands it out): it follows the recipe above - its own settings registry, projector registry (`GizmoReflectionRegistrar.RegisterAll` over the
+loaded assemblies, so the projectors of the editor process are found at run time), draw buffer and gizmo system, a visibility policy that keeps the client's selected / pinned network ids
+(a family projector draws for a selected unit, or one pinned for its family or for every family; a part follows its unit) and layers through `SetActiveLayers`. Nothing is built or run while
+there is no view; the view's rate (default 10 Hz, at most 60) caps the runs; it runs in the gateway system's Input phase on the main thread (a read of the world as the gathers do).
+Layer names are the names of HROT's `DebugTraceLayers` constants (`Contacts`, `Paths`, `Eqs`, ...); `GizmoFrame.Producer` is the station's partition. Primitives: line to `LineStrip` (two
+points), arrow to `Arrow`, sphere to `Circle` (one point, `Width` = radius), filled triangle to `Polygon`, box to `Box` (centre, then extent x, extent y, angle in degrees), text to `Text` (the
+text is resolved from the buffer's intern map, or inline); meta primitives are not sent. The view follows the player rule of the client id: the player's `GizmoView` (`GizmoView.ClientId`)
+while a player holds the station, else the first client that wrote one; another client's view is dropped with one warning; losing the viewer, or a player taking the station, ends the view and
+disposes every layer instance. `GizmoFrame.SimTime` is 0 (the source does not report it).
