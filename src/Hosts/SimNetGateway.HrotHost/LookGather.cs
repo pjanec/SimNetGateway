@@ -53,7 +53,7 @@ internal sealed class AppearanceGather
         public ForceId Side;
         public uint Colour;
         public bool HasColour;
-        public HrotPersonAppearance Sent;
+        public PersonAppearance Last;
         public bool HasSent;
     }
 
@@ -91,14 +91,14 @@ internal sealed class AppearanceGather
             return false;
         }
 
-        message = Map(id, in look);
-        if (book.HasSent && book.Sent.Equals(message))
+        if (book.HasSent && book.Last.Equals(look))
         {
-            return false;
+            return false;   // HROT's outfit is the same: nothing to name, nothing to send
         }
 
-        book.Sent = message;
+        book.Last = look;
         book.HasSent = true;
+        message = Map(id, in look);
         return true;
     }
 

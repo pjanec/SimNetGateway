@@ -133,6 +133,23 @@ public class LookGatherTests
         Assert.True(first.Soldier);
         Assert.Equal(0xFFu, first.Skin & 0xFFu);   // an opaque colour
 
+        // the kind names are the names of HROT's own outfit enumerations for this person, never numbers
+        var outfit = Hrot.Look.People.PersonLook.Of(h.World, e, h.TestTkb)!.Value.Outfit;
+        Assert.Equal((outfit.HairStyle.ToString(), outfit.Legwear.ToString(), outfit.Camo.ToString(), outfit.TopKind.ToString(), outfit.HeadKind.ToString(),
+            outfit.OverKind.ToString(), outfit.ExtraKind.ToString(), outfit.Face.Beard.ToString()),
+            (first.HairStyle, first.Legwear, first.Camo, first.TopKind, first.HeadKind, first.OverKind, first.ExtraKind, first.Beard));
+        Assert.Equal(outfit.Camo.ToString(), first.Camo);
+        Assert.True(Enum.IsDefined(typeof(Hrot.UI.Common.Map3D.CamoPattern), first.Camo));
+        Assert.True(Enum.IsDefined(typeof(Hrot.UI.Common.Map3D.HairStyle), first.HairStyle));
+        Assert.True(Enum.IsDefined(typeof(Hrot.UI.Common.Map3D.Legwear), first.Legwear));
+        Assert.True(Enum.IsDefined(typeof(Hrot.Core.Tkb.OutfitTop), first.TopKind));
+        Assert.True(Enum.IsDefined(typeof(Hrot.Core.Tkb.OutfitHead), first.HeadKind));
+        Assert.True(Enum.IsDefined(typeof(Hrot.Core.Tkb.OutfitOver), first.OverKind));
+        Assert.True(Enum.IsDefined(typeof(Hrot.Core.Tkb.OutfitExtra), first.ExtraKind));
+        Assert.True(Enum.IsDefined(typeof(Hrot.UI.Common.Map3D.BeardKind), first.Beard));
+        Assert.All(new[] { first.HairStyle, first.Legwear, first.Camo, first.TopKind, first.HeadKind, first.OverKind, first.ExtraKind, first.Beard },
+            name => Assert.False(int.TryParse(name, out _)));
+
         Assert.Empty(h.Gather(2.0).Of<HrotPersonAppearance>());
         Assert.Empty(h.Gather(3.0).Of<HrotPersonAppearance>());
 
