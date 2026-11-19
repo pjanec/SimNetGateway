@@ -474,3 +474,6 @@ Run: `dotnet run --project src/Hosts/SimNetGateway.DpsClient -- --domain N --par
 free unit offer (roles are not requested), WASD move, mouse aims, left button fires, C cycles the stance, Esc leaves (Esc again quits), right button picks a unit, G toggles
 the `Paths` and `Contacts` gizmo layers for the picked unit, wheel zooms, arrows pan while not playing. Control frames go out at 30 Hz while the slot is Playing.
 `--headless --seconds N` runs without a window and prints `entities=.. slot=.. gizmo_layers=..` once at the end (exit code 0).
+For automated checks the headless mode can play: `--join` (first Unit offer once the slot is Choosing, retried each second), `--forward F --drive-seconds N` (control frames at 30 Hz,
+Forward = F for N seconds, then 0), `--fire-after S` (one press: ShotSeq plus Trigger for one frame), `--leave-after S` (Leave after S seconds of Playing; without it the process just
+exits at `--seconds`, the lost-client case). It prints one status line per second and a final `summary` line with the samples received per topic.

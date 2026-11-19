@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using CycloneDDS.Runtime;
+using SimNetGateway.Protocol.DdsPlayer;
 using D = SimNetGateway.Protocol.DdsPlayer;
 
 namespace SimNetGateway.DpsClient;
@@ -52,6 +53,7 @@ public sealed class DpsWorld : IDisposable
     private readonly DdsWriter<D.Leave> _leave;
     private readonly DdsWriter<D.GizmoView> _view;
     private readonly Dictionary<(string Producer, string Layer), D.GizmoFrame> _gizmos = new();
+    private readonly List<IDisposable> _counters = new();
     private D.ControlFrame _frame;
     private uint _joinSeq;
     private uint _leaveSeq;
@@ -73,6 +75,30 @@ public sealed class DpsWorld : IDisposable
         _control = new DdsWriter<D.ControlFrame>(_participant);
         _leave = new DdsWriter<D.Leave>(_participant);
         _view = new DdsWriter<D.GizmoView>(_participant);
+        Count<D.PersonState>(DpsProtocol.PersonState);
+        Count<D.Appearance>(DpsProtocol.Appearance);
+        Count<D.VehicleLook>(DpsProtocol.VehicleLook);
+        Count<D.Fire>(DpsProtocol.Fire);
+        Count<D.Detonation>(DpsProtocol.Detonation);
+        Count<D.Effect>(DpsProtocol.Effect);
+        Count<D.Articulation>(DpsProtocol.Articulation);
+    }
+
+    /// <summary>Samples received per topic since start (live samples only), for the topics the client does not otherwise keep.</summary>
+    public Dictionary<string, int> Received { get; } = new()
+    {
+        [DpsProtocol.Entity] = 0, [DpsProtocol.EntityState] = 0,
+    };
+
+    private readonly List<Action> _countPumps = new();
+
+    private void Count<T>(string topic)
+        where T : struct
+    {
+        Received[topic] = 0;
+        var reader = new DdsReader<T>(_participant);
+        _counters.Add(reader);
+        _countPumps.Add(() => Drain(reader, _ => Received[topic]++, _ => { }));
     }
 
     public string Partition { get; }
@@ -116,15 +142,25 @@ public sealed class DpsWorld : IDisposable
         {
             Session = s;
         }, _ => Session = null);
-        Drain(_entity, e => EntityFor(e.EntityId).Info = e, e => Entities.Remove(e.EntityId));
+        Drain(_entity, e =>
+        {
+            Received[DpsProtocol.Entity]++;
+            EntityFor(e.EntityId).Info = e;
+        }, e => Entities.Remove(e.EntityId));
         Drain(_state, s =>
         {
+            Received[DpsProtocol.EntityState]++;
             var entity = EntityFor(s.EntityId);
             entity.State = s;
             entity.ReceivedAt = now;
         }, s => Entities.Remove(s.EntityId));
         Drain(_slot, s => Slot = s, _ => Slot = null);
         Drain(_own, o => Own = o, _ => Own = null);
+        foreach (var pump in _countPumps)
+        {
+            pump();
+        }
+
         Drain(_gizmo, g => _gizmos[(g.Producer, g.Layer)] = g, g => _gizmos.Remove((g.Producer, g.Layer)));
     }
 
@@ -261,6 +297,11 @@ public sealed class DpsWorld : IDisposable
         _control.Dispose();
         _leave.Dispose();
         _view.Dispose();
+        foreach (var c in _counters)
+        {
+            c.Dispose();
+        }
+
         _participant.Dispose();
     }
 }

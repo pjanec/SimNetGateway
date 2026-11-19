@@ -227,6 +227,52 @@ public class DpsWorldTests
     }
 
     [Fact]
+    public void Headless_play_options_parse_and_print_lines_and_summary()
+    {
+        uint domain = NewDomain();
+        using var gw = new FakeGateway(domain, "p5");
+        gw.Entities.Write(Ent(1));
+        gw.Slot.Write(new D.PlayerSlot
+        {
+            State = D.SlotState.SlotStateChoosing,
+            Offers = [new D.Offer { Kind = D.OfferKind.OfferKindUnit, Id = 1201, Name = "R", Free = true }],
+        });
+
+        var output = new StringWriter();
+        var error = new StringWriter();
+        int code = DpsClientProgram.Run(
+            ["--domain", domain.ToString(), "--partition", "p5", "--headless", "--seconds", "2.5", "--join", "--forward", "1", "--drive-seconds", "1", "--fire-after", "0.5", "--leave-after", "2"],
+            output, error);
+
+        Assert.Equal(0, code);
+        Assert.Equal(string.Empty, error.ToString());
+        string text = output.ToString();
+        Assert.Contains("t=1 sim=", text);
+        Assert.Contains("slot=SlotStateChoosing/0", text);
+        Assert.Contains("summary Entity=1 EntityState=0 PersonState=0 Appearance=0 VehicleLook=0 Fire=0 Detonation=0 Effect=0 Articulation=0", text);
+
+        // the join went to the gateway (retried each second while Choosing)
+        for (int i = 0; i < 50 && gw.JoinsSeen.Count == 0; i++)
+        {
+            gw.Pump();
+            Thread.Sleep(20);
+        }
+
+        Assert.NotEmpty(gw.JoinsSeen);
+        Assert.Equal(1201, gw.JoinsSeen[0].UnitId);
+    }
+
+    [Theory]
+    [InlineData("--forward", "x")]
+    [InlineData("--drive-seconds", "-1")]
+    [InlineData("--leave-after")]
+    public void Headless_play_options_reject_bad_values(params string[] args)
+    {
+        var error = new StringWriter();
+        Assert.Equal(2, DpsClientProgram.Run(args, new StringWriter(), error));
+    }
+
+    [Fact]
     public void Command_line_rejects_unknown_arguments()
     {
         var error = new StringWriter();

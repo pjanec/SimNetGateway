@@ -5,3 +5,5 @@ obj/
 TestResults/
 .claude/worktrees/
 docs/reference/
+
+cyclonedds.log
