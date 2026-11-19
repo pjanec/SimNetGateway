@@ -330,12 +330,7 @@ public sealed class DpsOutbound : IGatewayModule
         var look = new D.VehicleLook
         {
             EntityId = m.Id,
-            KillKind = m.Destruction switch
-            {
-                0 => D.KillKind.KillKindNone,
-                3 => D.KillKind.KillKindCatastrophic,
-                _ => D.KillKind.KillKindOther,
-            },
+            KillKind = LookNames.KillKindOf(m.Destruction),
             TurretThrown = m.TurretThrown,
             Burning = m.Burning,
             Smoking = m.Smoking,
@@ -376,32 +371,17 @@ public sealed class DpsOutbound : IGatewayModule
 
     private void OnEffect(in HrotEffect m, IngressContext ctx)
     {
-        // HROT's effect kinds: 0 muzzle flash, 1 explosion, 2 decal, 3 tracer, 4 fire, 5 smoke, 6 flare, 7 chaff; DPS shows the first, second, third, fifth and sixth
-        var kind = m.Kind switch
+        if (!LookNames.TryEffectKindOf(m.Kind, out var kind))
         {
-            0 => D.EffectKind.EffectKindMuzzleFlash,
-            1 => D.EffectKind.EffectKindExplosion,
-            2 => D.EffectKind.EffectKindGroundMark,
-            4 => D.EffectKind.EffectKindWreckFlame,
-            5 => D.EffectKind.EffectKindWreckSmoke,
-            _ => D.EffectKind.EffectKindNone,
-        };
-        if (kind == D.EffectKind.EffectKindNone)
-        {
-            return;
+            return;   // a kind DPS deliberately does not carry
         }
 
         _ports.Effect.Send(new DpsItem<D.Effect>(new D.Effect
         {
             SimTime = _simTime,
             Kind = kind,
-            SizeClass = m.SizeClass switch
-            {
-                0 => D.EffectSize.EffectSizeSmall,
-                1 => D.EffectSize.EffectSizeMedium,
-                _ => D.EffectSize.EffectSizeLarge,
-            },
-            Surface = (D.EffectSurface)Math.Min(m.Surface, (byte)5),
+            SizeClass = LookNames.EffectSizeOf(m.SizeClass),
+            Surface = LookNames.EffectSurfaceOf(m.Surface),
             MunitionDis = ToDis(DisTypeCode.Unpack(unchecked((long)m.MunitionDis))),
             EffectType = unchecked((int)m.EffectType),
             Position = V3d(m.At),

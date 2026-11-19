@@ -357,8 +357,8 @@ public class DpsOutboundTests
 
         Assert.True(watch.Until(w =>
         {
-            rig.Send(new HrotEffect(1, 2, 2, dis, 1234, new HrotVec3(5, 6, 7), new HrotQuat(0, 0, 0.5, 0.5), 2001, 1, 2.5f, 4f));
-            rig.Send(new HrotEffect(3, 0, 0, 0, 1, HrotVec3.Zero, HrotQuat.Identity, 0, 0, 1f, 1f));   // a tracer: DPS carries no tracers
+            rig.Send(new HrotEffect("Explosion", "Huge", "Building", dis, 1234, new HrotVec3(5, 6, 7), new HrotQuat(0, 0, 0.5, 0.5), 2001, 1, 2.5f, 4f));
+            rig.Send(new HrotEffect("Tracer", "Small", "Ground", 0, 1, HrotVec3.Zero, HrotQuat.Identity, 0, 0, 1f, 1f));   // a tracer: DPS carries no tracers
             return w.Events.Count > 0;
         }));
 
@@ -421,7 +421,7 @@ public class DpsOutboundTests
         using var rig = new Rig(domain);
         rig.Send(State(2001));
 
-        rig.Send(new HrotVehicleLook(2001, 3, true, true, false, 0b111u, [(1, 2), (4, 1)], [(2, 0.5f), (3, 1f)]));
+        rig.Send(new HrotVehicleLook(2001, "Catastrophic", true, true, false, 0b111u, [(1, 2), (4, 1)], [(2, 0.5f), (3, 1f)]));
 
         Assert.True(watch.Until(w => w.Alive.ContainsKey("2001")));
         var v = watch.Alive["2001"];
@@ -552,5 +552,26 @@ public class DpsOutboundTests
         Assert.True(side.Runs(settings));
         Assert.True(new DdsPlayerPlugin().WantsEventsInReplay(settings));
         Assert.Equal("dps", new DdsPlayerPlugin().Name);
+    }
+
+    [Fact]
+    public void Look_names_map_to_the_contract_and_an_unknown_name_to_its_unknown_value()
+    {
+        Assert.Equal(D.KillKind.KillKindNone, LookNames.KillKindOf("None"));
+        Assert.Equal(D.KillKind.KillKindKnockedOut, LookNames.KillKindOf("KnockedOut"));
+        Assert.Equal(D.KillKind.KillKindBurntOut, LookNames.KillKindOf("BurntOut"));
+        Assert.Equal(D.KillKind.KillKindCatastrophic, LookNames.KillKindOf("Catastrophic"));
+        Assert.Equal(D.KillKind.KillKindUnknown, LookNames.KillKindOf("Vaporised"));
+
+        Assert.Equal(D.EffectSize.EffectSizeLarge, LookNames.EffectSizeOf("Huge"));
+        Assert.Equal(D.EffectSize.EffectSizeUnknown, LookNames.EffectSizeOf("Gigantic"));
+        Assert.Equal(D.EffectSurface.EffectSurfaceWater, LookNames.EffectSurfaceOf("Water"));
+        Assert.Equal(D.EffectSurface.EffectSurfaceUnknown, LookNames.EffectSurfaceOf("Ice"));
+
+        Assert.True(LookNames.TryEffectKindOf("Decal", out var decal));
+        Assert.Equal(D.EffectKind.EffectKindGroundMark, decal);
+        Assert.False(LookNames.TryEffectKindOf("Tracer", out _));   // deliberately not carried
+        Assert.True(LookNames.TryEffectKindOf("Sparks", out var unknown));   // a kind HROT appends later: sent, as None
+        Assert.Equal(D.EffectKind.EffectKindNone, unknown);
     }
 }

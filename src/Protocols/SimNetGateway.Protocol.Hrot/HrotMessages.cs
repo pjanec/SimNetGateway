@@ -353,14 +353,15 @@ public readonly record struct HrotPersonDetail(
     HrotCarryMode Carry) : IHrotToGatewayMessage;
 
 /// <summary>
-/// One visual effect derived by HROT's look rules (muzzle flash, explosion, ground mark, backblast, ...). The byte enums carry HROT's numeric values:
-/// <paramref name="Kind"/> is HROT's effect kind, <paramref name="SizeClass"/> its calibre class (0 small, 1 medium, 2 large, 3 huge), <paramref name="Surface"/> 0 ground,
-/// 1 water, 2 building, 3 vehicle, 4 person, 5 air. <paramref name="MunitionDis"/> is the munition's packed DIS entity type (0 = none), <paramref name="EffectType"/> the
+/// One visual effect derived by HROT's look rules (muzzle flash, explosion, ground mark, backblast, ...). <paramref name="Kind"/>, <paramref name="SizeClass"/> and
+/// <paramref name="Surface"/> are the NAMES of HROT's own enumerations (effect kind, calibre class, effect surface), written by the host from the enumeration, so a
+/// side never decodes HROT's numbers (a value HROT appends or reorders cannot be silently mislabelled; a side maps the names it knows and treats any other as unknown).
+/// <paramref name="MunitionDis"/> is the munition's packed DIS entity type (0 = none), <paramref name="EffectType"/> the
 /// effect's template type. <paramref name="AnchorEntity"/> is the network id of the entity the effect hangs on (the shooter for a muzzle flash; 0 = placed at
 /// <paramref name="At"/>), <paramref name="AnchorMount"/> the weapon mount that fired. Local ENU metres, seconds.
 /// </summary>
 public readonly record struct HrotEffect(
-    byte Kind, byte SizeClass, byte Surface, ulong MunitionDis, long EffectType, HrotVec3 At, HrotQuat Rotation, int AnchorEntity, byte AnchorMount, float Lifetime,
+    string Kind, string SizeClass, string Surface, ulong MunitionDis, long EffectType, HrotVec3 At, HrotQuat Rotation, int AnchorEntity, byte AnchorMount, float Lifetime,
     float Size) : IHrotToGatewayMessage;
 
 /// <summary>
@@ -376,11 +377,12 @@ public readonly record struct HrotPersonAppearance(
     float EyeSpacing, float MouthHalfWidth, float BrowHalfHeight, uint EyeColour, uint Lips) : IHrotToGatewayMessage;
 
 /// <summary>
-/// How a vehicle looks (HROT's vehicle look), sent when it changes. <paramref name="Destruction"/> is HROT's kill kind (0 = alive); <paramref name="Parts"/> lists the
+/// How a vehicle looks (HROT's vehicle look), sent when it changes. <paramref name="Destruction"/> is the NAME of HROT's destruction kind (its "none" value while
+/// the vehicle is not destroyed), written by the host from the enumeration; <paramref name="Parts"/> lists the
 /// parts that are not intact (part id, 1 damaged / 2 destroyed; an absent part is intact); <paramref name="Openings"/> every opening of the vehicle's type (opening id,
 /// progress 0 closed .. 1 open, in steps of 1/50); <paramref name="Lights"/> the effective light mask (brake lights included). A part's burning needs the part's
 /// centre, which only a renderer knows, so burning is the vehicle's.
 /// </summary>
 public readonly record struct HrotVehicleLook(
-    int Id, byte Destruction, bool TurretThrown, bool Burning, bool Smoking, uint Lights, IReadOnlyList<(byte Part, byte State)> Parts,
+    int Id, string Destruction, bool TurretThrown, bool Burning, bool Smoking, uint Lights, IReadOnlyList<(byte Part, byte State)> Parts,
     IReadOnlyList<(byte Opening, float Progress)> Openings) : IHrotToGatewayMessage;

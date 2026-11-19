@@ -49,13 +49,15 @@ public enum GizmoShape : byte { GizmoShapeLineStrip = 0, GizmoShapeArrow, GizmoS
 /// <summary>The condition of a vehicle part (HROT's look library).</summary>
 public enum PartCondition : byte { PartConditionIntact = 0, PartConditionDamaged, PartConditionDestroyed }
 
-public enum KillKind : byte { KillKindNone = 0, KillKindMobility, KillKindFirepower, KillKindCatastrophic, KillKindOther }
+/// <summary>How a vehicle was destroyed (HROT's destruction kinds): None = not destroyed; Unknown = destroyed in a way this contract does not name.</summary>
+public enum KillKind : byte { KillKindNone = 0, KillKindKnockedOut, KillKindBurntOut, KillKindCatastrophic, KillKindUnknown }
 
+/// <summary>The effect's category; None = a kind this contract does not name (the effect's TKB <c>EffectType</c> still identifies it).</summary>
 public enum EffectKind : byte { EffectKindNone = 0, EffectKindMuzzleFlash, EffectKindExplosion, EffectKindGroundMark, EffectKindWreckFlame, EffectKindWreckSmoke }
 
 public enum EffectSize : byte { EffectSizeUnknown = 0, EffectSizeSmall, EffectSizeMedium, EffectSizeLarge }
 
-public enum EffectSurface : byte { EffectSurfaceGround = 0, EffectSurfaceWater, EffectSurfaceBuilding, EffectSurfaceVehicle, EffectSurfacePerson, EffectSurfaceAir }
+public enum EffectSurface : byte { EffectSurfaceUnknown = 0, EffectSurfaceGround, EffectSurfaceWater, EffectSurfaceBuilding, EffectSurfaceVehicle, EffectSurfacePerson, EffectSurfaceAir }
 
 public enum Sex : byte { SexUnknown = 0, SexMale, SexFemale }
 

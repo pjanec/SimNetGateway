@@ -88,8 +88,8 @@ public class LookGatherTests
 
         Assert.NotEmpty(effects);
         var boom = effects[0];
-        Assert.Equal((byte)Hrot.Look.Effects.EffectSurface.Ground, boom.Surface);
-        Assert.Equal((byte)Hrot.Core.Tkb.EffectTkbCatalog.CalibreClass.Large, boom.SizeClass);
+        Assert.Equal(nameof(Hrot.Look.Effects.EffectSurface.Ground), boom.Surface);   // HROT's enumerations go by name
+        Assert.Equal(nameof(Hrot.Core.Tkb.EffectTkbCatalog.CalibreClass.Large), boom.SizeClass);
         Assert.Equal((ulong)munition.DisType.Value, boom.MunitionDis);
         Assert.Equal(new HrotVec3(50, 20, 0.4f), boom.At);
         Assert.Equal(0, boom.AnchorEntity);
@@ -106,10 +106,10 @@ public class LookGatherTests
 
         var effects = h.GatherEvents().Of<HrotEffect>();
 
-        var flash = Assert.Single(effects, e => e.Kind == (byte)Fdp.Toolkit.Tkb.Domain.EffectKind.MuzzleFlash);
+        var flash = Assert.Single(effects, e => e.Kind == nameof(Fdp.Toolkit.Tkb.Domain.EffectKind.MuzzleFlash));
         Assert.Equal(2001, flash.AnchorEntity);
         Assert.Equal((byte)0, flash.AnchorMount);
-        Assert.Equal((byte)Hrot.Look.Effects.EffectSurface.Air, flash.Surface);
+        Assert.Equal(nameof(Hrot.Look.Effects.EffectSurface.Air), flash.Surface);
         Assert.True(flash.Lifetime > 0f);
     }
 
@@ -186,7 +186,7 @@ public class LookGatherTests
 
         var first = Assert.Single(h.Gather(10.75).Of<HrotVehicleLook>());
         Assert.Contains(((byte)VehiclePart.RunningGearL, (byte)2), first.Parts);
-        Assert.Equal(0, first.Destruction);
+        Assert.Equal(nameof(DestructionKind.None), first.Destruction);
         Assert.False(first.Burning);
         Assert.Contains(((byte)2, 0.5f), first.Openings);
 
@@ -211,7 +211,7 @@ public class LookGatherTests
 
         var look = Assert.Single(h.Gather(130.0).Of<HrotVehicleLook>());
 
-        Assert.Equal((byte)DestructionKind.Catastrophic, look.Destruction);
+        Assert.Equal(nameof(DestructionKind.Catastrophic), look.Destruction);
         Assert.True(look.TurretThrown);
         Assert.True(look.Burning);
     }
@@ -253,5 +253,18 @@ public class LookGatherTests
         var again = h.Gather(4.0);
         Assert.Single(again.Of<HrotPersonAppearance>());
         Assert.Single(again.Of<HrotVehicleLook>());
+    }
+
+    /// <summary>
+    /// The look enumerations go to the plugins by name, and the dps plugin maps the names it knows (its <c>LookNames</c>); a name it does not know is sent as the
+    /// contract's unknown value. This list is HROT's today: when HROT appends or renames a value this test fails, as the reminder to map the new name in the plugin.
+    /// </summary>
+    [Fact]
+    public void The_look_enumerations_the_plugins_map_by_name_are_unchanged()
+    {
+        Assert.Equal(["MuzzleFlash", "Explosion", "Decal", "Tracer", "Fire", "Smoke", "Flare", "Chaff"], Enum.GetNames<Fdp.Toolkit.Tkb.Domain.EffectKind>());
+        Assert.Equal(["Small", "Medium", "Large", "Huge"], Enum.GetNames<Hrot.Core.Tkb.EffectTkbCatalog.CalibreClass>());
+        Assert.Equal(["Ground", "Water", "Building", "Vehicle", "Person", "Air"], Enum.GetNames<Hrot.Look.Effects.EffectSurface>());
+        Assert.Equal(["None", "KnockedOut", "BurntOut", "Catastrophic"], Enum.GetNames<DestructionKind>());
     }
 }

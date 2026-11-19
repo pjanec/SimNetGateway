@@ -35,7 +35,8 @@ internal sealed class EffectGather
                 mount = (byte)a.WeaponIndex;
             }
 
-            var msg = new HrotEffect((byte)s.Kind, (byte)s.SizeClass, (byte)s.Surface, (ulong)s.MunitionDis.Value, s.EffectType, new HrotVec3(s.At.X, s.At.Y, s.At.Z),
+            // HROT's enumerations go as their names (the plugins never decode HROT's numbers)
+            var msg = new HrotEffect(s.Kind.ToString(), s.SizeClass.ToString(), s.Surface.ToString(), (ulong)s.MunitionDis.Value, s.EffectType, new HrotVec3(s.At.X, s.At.Y, s.At.Z),
                 new HrotQuat(s.Rotation.X, s.Rotation.Y, s.Rotation.Z, s.Rotation.W), anchor, mount, s.Lifetime, s.Size);
             inbound.Enqueue(in msg);
         }
@@ -154,10 +155,10 @@ internal sealed class VehicleLookGather
             }
         }
 
-        byte destruction = (byte)VehicleLook.Destruction(world, e);
+        string destruction = VehicleLook.Destruction(world, e).ToString();   // HROT's destruction kind by name
         bool turret = VehicleLook.TurretThrown(world, e), burning = VehicleLook.Burning(world, e, now), smoking = VehicleLook.Smoking(world, e, now);
         uint lights = VehicleLook.Lights(world, e, now, _brakes);
-        if (_sent.TryGetValue(id, out var previous) && previous.Destruction == destruction && previous.TurretThrown == turret && previous.Burning == burning
+        if (_sent.TryGetValue(id, out var previous) && string.Equals(previous.Destruction, destruction, StringComparison.Ordinal) && previous.TurretThrown == turret && previous.Burning == burning
             && previous.Smoking == smoking && previous.Lights == lights && previous.Parts.SequenceEqual(_parts) && previous.Openings.SequenceEqual(_openings))
         {
             message = default;

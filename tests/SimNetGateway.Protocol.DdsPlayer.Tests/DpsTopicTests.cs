@@ -135,11 +135,11 @@ public class DpsTopicTests
 
         var look = RoundTrip(new VehicleLook
         {
-            EntityId = 11, KillKind = KillKind.KillKindMobility, TurretThrown = true, Burning = true, Smoking = true, LightMask = 0x5, RotorSpeed = 0f, SmokeLaunchers = 0,
+            EntityId = 11, KillKind = KillKind.KillKindBurntOut, TurretThrown = true, Burning = true, Smoking = true, LightMask = 0x5, RotorSpeed = 0f, SmokeLaunchers = 0,
             Parts = [new PartLook { PartId = 1, State = PartCondition.PartConditionDestroyed }, new PartLook { PartId = 2, State = PartCondition.PartConditionDamaged }],
             Openings = [new OpeningLook { OpeningId = 9, Progress = 0.5f }],
         }, "t-vlook");
-        Assert.Equal(KillKind.KillKindMobility, look.KillKind);
+        Assert.Equal(KillKind.KillKindBurntOut, look.KillKind);
         Assert.True(look.TurretThrown);
         Assert.Equal(PartCondition.PartConditionDestroyed, look.Parts[0].State);
         Assert.Equal(9, look.Openings[0].OpeningId);
