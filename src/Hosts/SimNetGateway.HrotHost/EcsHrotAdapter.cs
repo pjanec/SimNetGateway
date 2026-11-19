@@ -30,6 +30,7 @@ public sealed class EcsHrotAdapter
 {
     private const double AimEpsilonM = 0.5;
     private const int LifeFormKind = 3;   // DIS entity kind "life form"
+    private const int PlatformKind = 1;   // DIS entity kind "platform" (vehicles)
     private const double PositionEpsilonM = 0.01, OrientationEpsilonDeg = 0.5, VelocityEpsilon = 0.05, ResendS = 1.0;
     private const float DefaultReplicaHealth = 100f;
 
@@ -51,6 +52,9 @@ public sealed class EcsHrotAdapter
     private readonly Dictionary<int, DisReplica> _replicas = new();
     private readonly Dictionary<int, Sent> _sent = new();
     private readonly PersonDetailGather _details = new();
+    private readonly EffectGather _effects = new();
+    private readonly AppearanceGather _appearances = new();
+    private readonly VehicleLookGather _vehicleLooks = new();
     private readonly List<int> _scratch = new();
     private readonly List<(int Parent, int Part)> _scratchPoses = new();
     private EntityQuery? _hrotQuery;
@@ -165,9 +169,21 @@ public sealed class EcsHrotAdapter
             }
 
             // after the state, so the gateway knows the entity; a person is sent again only when something about him changed
-            if (state.DisType != 0 && DisTypeCode.Unpack(state.DisType).Kind == LifeFormKind && _details.TryGather(world, e, id, simTime, out var detail))
+            if (state.DisType != 0 && DisTypeCode.Unpack(state.DisType).Kind == LifeFormKind)
             {
-                inbound.Enqueue(in detail);
+                if (_details.TryGather(world, e, id, simTime, out var detail))
+                {
+                    inbound.Enqueue(in detail);
+                }
+
+                if (_appearances.TryGather(world, tkb, e, id, out var appearance))
+                {
+                    inbound.Enqueue(in appearance);
+                }
+            }
+            else if (state.DisType != 0 && DisTypeCode.Unpack(state.DisType).Kind == PlatformKind && _vehicleLooks.TryGather(world, tkb, e, id, simTime, out var look))
+            {
+                inbound.Enqueue(in look);
             }
         }
 
@@ -184,6 +200,8 @@ public sealed class EcsHrotAdapter
         {
             _sent.Remove(id);
             _details.Forget(id);
+            _appearances.Forget(id);
+            _vehicleLooks.Forget(id);
             inbound.Enqueue(new HrotEntityRemoved(id));
             Counters.RemovalsSent++;
         }
@@ -263,6 +281,7 @@ public sealed class EcsHrotAdapter
     public void GatherEvents(EntityRepository world, InMemoryInbound inbound)
     {
         var tkb = _services.Tkb();
+        _effects.Gather(world, tkb, inbound);   // HROT's look rules over the same events: flashes, explosions, marks
         var fires = world.ReadEvents<WeaponFireNotification>();
         for (int i = 0; i < fires.Length; i++)
         {
@@ -728,6 +747,8 @@ public sealed class EcsHrotAdapter
         _replicas.Clear();
         _sent.Clear();
         _details.Clear();
+        _appearances.Clear();
+        _vehicleLooks.Clear();
         ForgetReplayEffects();
         SweepRoutedEntities(world);
         _queryWorld = null;
