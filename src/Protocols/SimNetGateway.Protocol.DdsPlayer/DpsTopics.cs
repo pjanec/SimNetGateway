@@ -345,6 +345,8 @@ public partial struct JoinRequest
     public byte Side;
     public byte Kit;
     public int AreaId;
+    /// <summary>The client's identity: a random nonzero id it picks at start and puts on every player sample it writes (JoinRequest, ControlFrame, Leave). One player owns a station at a time.</summary>
+    public ulong ClientId;
 }
 
 /// <summary>One per client frame; the fields of HROT's operator control frame.</summary>
@@ -374,6 +376,8 @@ public partial struct ControlFrame
     public Vec3f LookDir;
     /// <summary>0 default, 1 sight, 2 lock.</summary>
     public byte FirePref;
+    /// <summary>The client's identity (see <see cref="JoinRequest.ClientId"/>); a frame of another client than the player's is dropped.</summary>
+    public ulong ClientId;
 }
 
 [DdsTopic(DpsProtocol.Leave)]
@@ -382,6 +386,8 @@ public partial struct ControlFrame
 public partial struct Leave
 {
     public uint Seq;
+    /// <summary>The client's identity (see <see cref="JoinRequest.ClientId"/>); a Leave of another client than the player's is dropped.</summary>
+    public ulong ClientId;
 }
 
 /// <summary>What the client wants of the gateway's gizmo projectors; none sent = no projectors run.</summary>

@@ -441,3 +441,10 @@ and the IDL and serializers are generated from them (`DpsTopics.idl`, `DpsTypes.
   so **every enumerator is prefixed with its enum name** (`StanceCrouched`, `GestureWaving`); value 0 is the unknown / none value.
 - `JoinKind` keeps Observe / Unit / Role in the contract; Role is answered in a later step. `Session.WorldEpoch` changes on a world boundary.
 - Round-trip, 500-instance late join, dispose and generated-IDL tests: `tests/SimNetGateway.Protocol.DdsPlayer.Tests/DpsTopicTests.cs`.
+
+### One player per station: the client id (Task 6 fix)
+
+`JoinRequest`, `ControlFrame` and `Leave` carry a `ClientId` (`ulong`, appended as the last field): **a client picks a random nonzero id at start and sets it on every player
+sample it writes**. The player of a station is the client whose `JoinRequest` the host accepted; a `ControlFrame` or `Leave` of another client, and a `JoinRequest` of another
+client while a player holds the station, are dropped (one warning per foreign client id). The player's `Leave`, or losing the liveliness of any writer that carried its id,
+frees the station for the next client. A sample with `ClientId` 0 is ignored. The reference client sets it.

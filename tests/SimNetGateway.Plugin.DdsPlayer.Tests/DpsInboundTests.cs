@@ -47,8 +47,11 @@ public class DpsInboundTests
         private readonly DdsWriter<D.ControlFrame> _control;
         private readonly DdsWriter<D.Leave> _leave;
 
-        public Client(uint domain, string partition = "station-1")
+        private readonly ulong _id;
+
+        public Client(uint domain, ulong id = 1, string partition = "station-1")
         {
+            _id = id;
             _participant = new DdsParticipant(domain, defaultPartition: partition);
             _join = new DdsWriter<D.JoinRequest>(_participant);
             _control = new DdsWriter<D.ControlFrame>(_participant);
@@ -56,11 +59,15 @@ public class DpsInboundTests
         }
 
         public void Join(uint seq, int unit, D.JoinKind kind = D.JoinKind.JoinKindUnit, string role = "") =>
-            _join.Write(new D.JoinRequest { RequestSeq = seq, Kind = kind, UnitId = unit, Role = role });
+            _join.Write(new D.JoinRequest { RequestSeq = seq, Kind = kind, UnitId = unit, Role = role, ClientId = _id });
 
-        public void Control(D.ControlFrame frame) => _control.Write(frame);
+        public void Control(D.ControlFrame frame)
+        {
+            frame.ClientId = _id;
+            _control.Write(frame);
+        }
 
-        public void Leave(uint seq) => _leave.Write(new D.Leave { Seq = seq });
+        public void Leave(uint seq) => _leave.Write(new D.Leave { Seq = seq, ClientId = _id });
 
         public void Dispose()
         {
@@ -150,6 +157,8 @@ public class DpsInboundTests
         var station = new RecordingStation();
         using var rig = new Rig(domain, station: station);
         using var client = new Client(domain);
+        client.Join(1, 1201);
+        Assert.True(Until(rig, () => station.Joins.Count == 1));
 
         client.Leave(1);
 
@@ -175,7 +184,7 @@ public class DpsInboundTests
         Frames(rig, 30);
         Assert.Equal(1, station.Leaves);   // exactly once
 
-        using var second = new Client(domain);
+        using var second = new Client(domain, id: 2);
         second.Join(1, 1202);
         Assert.True(Until(rig, () => station.Joins.Count == 2), "the next client can join");
         Assert.Equal(1202, station.Joins[1].UnitId);
@@ -192,18 +201,54 @@ public class DpsInboundTests
         first.Join(1, 1201);
         Assert.True(Until(rig, () => station.Joins.Count == 1));
 
-        using var second = new Client(domain);
+        using var second = new Client(domain, id: 2);
         second.Join(1, 1202);
         Frames(rig, 20);
         second.Join(2, 1203);
         Frames(rig, 20);
 
         Assert.Equal([1201], station.Joins.Select(j => j.UnitId).ToArray());
-        Assert.Equal(1, log.Count(l => l.Contains("second player writer")));
+        Assert.Equal(1, log.Count(l => l.Contains("second player")));
 
         first.Join(2, 1204);   // the first keeps playing
         Assert.True(Until(rig, () => station.Joins.Count == 2));
         Assert.Equal(1204, station.Joins[1].UnitId);
+    }
+
+    [Fact]
+    public void Second_client_cannot_steer_or_release_the_first()
+    {
+        uint domain = Watch.NewDomain();
+        var station = new RecordingStation();
+        var log = new List<string>();
+        using var rig = new Rig(domain, station: station, log: log.Add);
+        using var a = new Client(domain, id: 1);
+        a.Join(1, 1201);
+        Assert.True(Until(rig, () => station.Joins.Count == 1));
+
+        // B writes a control frame and a leave before A's first frame
+        using var b = new Client(domain, id: 2);
+        b.Control(new D.ControlFrame { Seq = 1, Forward = -1f });
+        b.Leave(1);
+        Frames(rig, 20);
+        Assert.Empty(station.Controls);
+        Assert.Equal(0, station.Leaves);
+
+        a.Control(new D.ControlFrame { Seq = 1, Forward = 1f });
+        Assert.True(Until(rig, () => station.Controls.Count == 1));
+        b.Control(new D.ControlFrame { Seq = 9, Forward = -1f });
+        b.Join(1, 1202);
+        Frames(rig, 20);
+
+        Assert.Equal([1f], station.Controls.Select(c => c.Forward).ToArray());
+        Assert.Equal(0, station.Leaves);
+        Assert.Equal([1201], station.Joins.Select(j => j.UnitId).ToArray());
+        Assert.Equal(1, log.Count(l => l.Contains("client id 2")));   // one warning for the foreign client, whatever it wrote
+
+        a.Leave(1);   // the player can still leave; then the station is free for B
+        Assert.True(Until(rig, () => station.Leaves == 1));
+        b.Join(2, 1202);
+        Assert.True(Until(rig, () => station.Joins.Count == 2));
     }
 
     [Fact]

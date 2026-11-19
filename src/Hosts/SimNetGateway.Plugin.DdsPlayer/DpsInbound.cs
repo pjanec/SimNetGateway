@@ -9,8 +9,9 @@ namespace SimNetGateway.Plugin.DdsPlayer;
 /// <summary>
 /// The player topics (client to gateway) driving the player-station seam (DD-017 3.2, 3.6): <c>JoinRequest</c>, <c>ControlFrame</c> and <c>Leave</c>, read in the
 /// station's partition. Liveliness is the presence signal: when the owning client's writer is lost (<c>AliveCountChange &lt; 0</c> or <c>NotAliveCountChange &gt; 0</c>)
-/// the unit is released once and the slot is free for the next join. One player at a time: the first writer seen on a topic owns it, samples of any other writer are
-/// dropped with one warning per writer. Thread rule: the DDS listener callbacks only record into queues; every call into the seam happens in <see cref="Pump"/>, on the
+/// the unit is released once and the slot is free for the next join. One player at a time, across all three topics: the player is the client (its <c>ClientId</c>) whose
+/// <c>JoinRequest</c> the seam accepted; samples of another client on any topic are dropped with one warning per foreign client. The publication handles that carried the
+/// player's client id are remembered, and losing any of them is losing the client. Thread rule: the DDS listener callbacks only record into queues; every call into the seam happens in <see cref="Pump"/>, on the
 /// host's main thread.
 /// </summary>
 internal sealed class DpsInbound : IDisposable
@@ -21,7 +22,6 @@ internal sealed class DpsInbound : IDisposable
         where T : struct
     {
         public readonly DdsReader<T> Reader;
-        public long Owner;
 
         public Topic(DdsReader<T> reader) => Reader = reader;
     }
@@ -34,9 +34,11 @@ internal sealed class DpsInbound : IDisposable
     private readonly Topic<D.ControlFrame> _control;
     private readonly Topic<D.Leave> _leave;
     private readonly ConcurrentQueue<Liveliness> _liveliness = new();
-    private readonly HashSet<long> _warned = new();
-    private bool _hasJoinSeq, _hasControlSeq, _hasLeaveSeq;
-    private uint _joinSeq, _controlSeq, _leaveSeq;
+    private readonly HashSet<ulong> _warned = new();
+    private readonly HashSet<(int Topic, long Handle)> _ownerHandles = new();
+    private ulong _owner;
+    private bool _hasJoinSeq, _hasControlSeq;
+    private uint _joinSeq, _controlSeq;
 
     public DpsInbound(DdsParticipant participant, DpsSettings settings, IPlayerStation? station, Action<string> log)
     {
@@ -89,19 +91,18 @@ internal sealed class DpsInbound : IDisposable
         }
     }
 
-    /// <summary>The owner of a topic going away means the client is gone: release the unit once and free every topic for the next client.</summary>
+    /// <summary>The player's client going away (any writer that carried its client id): release the unit once and free the station for the next client.</summary>
     private void HandleLiveliness()
     {
         bool lost = false;
         while (_liveliness.TryDequeue(out var e))
         {
-            if (e.AliveChange >= 0 && e.NotAliveChange <= 0)
+            if (e.AliveChange >= 0 && e.NotAliveChange <= 0 || _owner == 0)
             {
                 continue;
             }
 
-            long owner = e.Topic switch { JoinTopic => _join.Owner, ControlTopic => _control.Owner, _ => _leave.Owner };
-            if (owner != 0 && (e.Handle == owner || e.AliveCount == 0))
+            if (_ownerHandles.Contains((e.Topic, e.Handle)) || (e.AliveCount == 0 && _ownerHandles.Any(h => h.Topic == e.Topic)))
             {
                 lost = true;
             }
@@ -113,8 +114,14 @@ internal sealed class DpsInbound : IDisposable
         }
 
         _station!.Leave();
-        _join.Owner = _control.Owner = _leave.Owner = 0;
-        _hasJoinSeq = _hasControlSeq = _hasLeaveSeq = false;
+        ClearOwner();
+    }
+
+    private void ClearOwner()
+    {
+        _owner = 0;
+        _ownerHandles.Clear();
+        _hasJoinSeq = _hasControlSeq = false;
     }
 
     private void ReadJoin()
@@ -122,26 +129,46 @@ internal sealed class DpsInbound : IDisposable
         using var loan = _join.Reader.Take(16);
         foreach (var sample in loan)
         {
-            if (!sample.IsValid || !Accept(_join, sample.Info.PublicationHandle, "JoinRequest"))
+            if (!sample.IsValid)
             {
                 continue;
             }
 
             var request = sample.Data;
-            if (_hasJoinSeq && !Newer(request.RequestSeq, _joinSeq))
+            if (!IsKnownClient(request.ClientId, "JoinRequest") || (_owner != 0 && !FromOwner(request.ClientId, "JoinRequest")))
             {
                 continue;
             }
 
-            _hasJoinSeq = true;
-            _joinSeq = request.RequestSeq;
+            if (_owner == request.ClientId && _hasJoinSeq && !Newer(request.RequestSeq, _joinSeq))
+            {
+                continue;
+            }
+
             var kind = request.Kind switch
             {
                 D.JoinKind.JoinKindUnit => PlayerJoinKind.Unit,
                 D.JoinKind.JoinKindRole => PlayerJoinKind.Role,
                 _ => PlayerJoinKind.Observe,
             };
-            _station!.Join(new PlayerJoin(kind, request.UnitId, string.IsNullOrEmpty(request.Role) ? null : request.Role));
+            bool accepted = _station!.Join(new PlayerJoin(kind, request.UnitId, string.IsNullOrEmpty(request.Role) ? null : request.Role));
+            if (_owner == request.ClientId)
+            {
+                _hasJoinSeq = true;
+                _joinSeq = request.RequestSeq;
+            }
+            else if (accepted)
+            {
+                // the seam took this client's join: it is the player of the station until it leaves or is lost
+                _owner = request.ClientId;
+                _hasJoinSeq = true;
+                _joinSeq = request.RequestSeq;
+            }
+
+            if (_owner == request.ClientId)
+            {
+                _ownerHandles.Add((JoinTopic, sample.Info.PublicationHandle));
+            }
         }
     }
 
@@ -154,12 +181,18 @@ internal sealed class DpsInbound : IDisposable
         {
             foreach (var sample in loan)
             {
-                if (!sample.IsValid || !Accept(_control, sample.Info.PublicationHandle, "ControlFrame"))
+                if (!sample.IsValid)
                 {
                     continue;
                 }
 
                 var frame = sample.Data;
+                if (!IsPlayer(frame.ClientId, "ControlFrame"))
+                {
+                    continue;
+                }
+
+                _ownerHandles.Add((ControlTopic, sample.Info.PublicationHandle));
                 if (_hasControlSeq && !Newer(frame.Seq, _controlSeq))
                 {
                     continue;
@@ -188,40 +221,47 @@ internal sealed class DpsInbound : IDisposable
         using var loan = _leave.Reader.Take(16);
         foreach (var sample in loan)
         {
-            if (!sample.IsValid || !Accept(_leave, sample.Info.PublicationHandle, "Leave"))
+            if (!sample.IsValid || !IsPlayer(sample.Data.ClientId, "Leave"))
             {
                 continue;
             }
 
-            if (_hasLeaveSeq && !Newer(sample.Data.Seq, _leaveSeq))
-            {
-                continue;
-            }
-
-            _hasLeaveSeq = true;
-            _leaveSeq = sample.Data.Seq;
+            _ownerHandles.Add((LeaveTopic, sample.Info.PublicationHandle));
             _station!.Leave();
+            ClearOwner();   // the player left: the station is free for the next client
         }
     }
 
-    /// <summary>The first writer seen on a topic owns it; another writer's samples are dropped, with one warning per writer.</summary>
-    private bool Accept<T>(Topic<T> topic, long handle, string name)
-        where T : struct
+    /// <summary>A control frame or a leave counts only from the player; with no player (nobody joined yet) it is ignored quietly, from another client with one warning.</summary>
+    private bool IsPlayer(ulong clientId, string name) =>
+        IsKnownClient(clientId, name) && _owner != 0 && FromOwner(clientId, name);
+
+    private bool IsKnownClient(ulong clientId, string name)
     {
-        if (topic.Owner == 0)
-        {
-            topic.Owner = handle;
-            return true;
-        }
-
-        if (topic.Owner == handle)
+        if (clientId != 0)
         {
             return true;
         }
 
-        if (_warned.Add(handle))
+        if (_warned.Add(0))
         {
-            _log($"dps: a second player writer on {name} is ignored while another client is the player of this station");
+            _log($"dps: a {name} without a client id is ignored (a client puts a nonzero ClientId on every player sample)");
+        }
+
+        return false;
+    }
+
+    /// <summary>True for the player's own client id; another client's sample is dropped with one warning per foreign client.</summary>
+    private bool FromOwner(ulong clientId, string name)
+    {
+        if (clientId == _owner)
+        {
+            return true;
+        }
+
+        if (_warned.Add(clientId))
+        {
+            _log($"dps: a second player (client id {clientId}) is ignored on {name} while another client is the player of this station");
         }
 
         return false;

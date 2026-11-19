@@ -164,25 +164,28 @@ public class DpsTopicTests
         Assert.Equal(90, own.Ammo[0].Reserve);
         Assert.Equal("Open door", own.UseLabel);
 
-        var join = RoundTrip(new JoinRequest { RequestSeq = 3, Kind = JoinKind.JoinKindRole, UnitId = 0, Role = "Rifleman", Side = 1, Kit = 2, AreaId = 4 }, "t-join");
+        var join = RoundTrip(new JoinRequest { RequestSeq = 3, Kind = JoinKind.JoinKindRole, UnitId = 0, Role = "Rifleman", Side = 1, Kit = 2, AreaId = 4, ClientId = 0xFEDCBA9876543210UL }, "t-join");
         Assert.Equal(JoinKind.JoinKindRole, join.Kind);
         Assert.Equal("Rifleman", join.Role);
         Assert.Equal(2, join.Kit);
+        Assert.Equal(0xFEDCBA9876543210UL, join.ClientId);
 
         var frame = RoundTrip(new ControlFrame
         {
             Seq = 100, Forward = 1f, Lateral = -1f, Steer = 0.5f, Yaw = 0.25f, Vertical = 0.1f, Gait = 2, Trigger = 1, Mount = 1,
             AimPoint = new Vec3d { X = 1, Y = 2, Z = 3 }, Stance = 3, ShotSeq = 4, CancelSeq = 5, AmmoSeq = 6, ShotTarget = 11, UseSeq = 7, UseVerb = 1,
-            UseTarget = 55, Lean = 2, Binoculars = 1, LookFrom = new Vec3d { Z = 1.7 }, LookDir = new Vec3f { X = 1 }, FirePref = 2,
+            UseTarget = 55, Lean = 2, Binoculars = 1, LookFrom = new Vec3d { Z = 1.7 }, LookDir = new Vec3f { X = 1 }, FirePref = 2, ClientId = 42UL,
         }, "t-ctrl");
         Assert.Equal(100u, frame.Seq);
         Assert.Equal(3, frame.Stance);
         Assert.Equal(6, frame.AmmoSeq);
         Assert.Equal(1.7, frame.LookFrom.Z);
         Assert.Equal(2, frame.FirePref);
+        Assert.Equal(42UL, frame.ClientId);
 
-        var leave = RoundTrip(new Leave { Seq = 9 }, "t-leave");
+        var leave = RoundTrip(new Leave { Seq = 9, ClientId = ulong.MaxValue }, "t-leave");
         Assert.Equal(9u, leave.Seq);
+        Assert.Equal(ulong.MaxValue, leave.ClientId);
 
         var view = RoundTrip(new GizmoView
         {
