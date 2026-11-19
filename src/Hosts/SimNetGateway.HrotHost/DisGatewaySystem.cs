@@ -19,7 +19,7 @@ namespace SimNetGateway.HrotHost;
 public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayRestoreGated, IDisposable
 {
     private readonly HrotServices _services;
-    private readonly Func<GatewayRuntime> _factory;
+    private readonly Func<Gateway.HrotDis.IPlayerStation, GatewayRuntime> _factory;
     private readonly EcsHrotAdapter _adapter;
     private readonly ReplicaPoser _poser;
     private readonly bool _allowZeroOrigin;
@@ -43,9 +43,17 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
     private double _lastGather = double.NegativeInfinity;
 
     public DisGatewaySystem(HrotServices services, Gateway.HrotDis.GatewayConfiguration config, Func<GatewayRuntime> factory, Action<string>? error = null, Action? beforeFrame = null)
+        : this(services, config, factory is null ? throw new ArgumentNullException(nameof(factory)) : _ => factory(), error, beforeFrame)
+    {
+    }
+
+    /// <summary>The factory gets the node's player station, to hand to the plugins that play (<see cref="GatewayRuntime.Create"/>).</summary>
+    public DisGatewaySystem(HrotServices services, Gateway.HrotDis.GatewayConfiguration config, Func<Gateway.HrotDis.IPlayerStation, GatewayRuntime> factory, Action<string>? error = null,
+        Action? beforeFrame = null)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+        PlayerStation = new HrotPlayerStation(services);
         _adapter = new EcsHrotAdapter(services, config);
         _allowZeroOrigin = config.Hrot.AllowZeroOrigin;
         _poser = new ReplicaPoser(_allowZeroOrigin);
@@ -56,6 +64,9 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
 
     /// <inheritdoc />
     public Func<bool>? IsReplayRestoring { get; set; }
+
+    /// <summary>The node's player station (DD-017 3.6): the slot, the offers and the control path of the player mode.</summary>
+    public HrotPlayerStation PlayerStation { get; }
 
     /// <summary>The adapter (the replica book and the counters).</summary>
     public EcsHrotAdapter Adapter => _adapter;
@@ -127,6 +138,7 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
         }
 
         _wasReplaying = replaying;
+        PlayerStation.Frame(world, phase != ClusterPhase.Idle, replaying);
 
         if (_runtime is null)
         {
@@ -211,7 +223,7 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
     {
         try
         {
-            _runtime = _factory();
+            _runtime = _factory(PlayerStation);
             Builds++;
             _failed = false;
             _failedPhase = null;
@@ -235,6 +247,7 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
     private void Boundary(EntityRepository world)
     {
         _adapter.Reset(world);
+        PlayerStation.Boundary();
         StopRuntime(farewell: false);
         _failed = false;
         _failedPhase = null;

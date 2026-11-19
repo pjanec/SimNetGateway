@@ -56,7 +56,7 @@ public interface IHostService : IDisposable
 public sealed class SideBinding
 {
     public SideBinding(GatewayBuilder builder, GatewayConfiguration config, object settings, IClock clock, IHostService? service, Func<long, string?> munitionName,
-        Action<string> log, string? pluginFolder = null)
+        Action<string> log, string? pluginFolder = null, IPlayerStation? playerStation = null)
     {
         Builder = builder;
         Config = config;
@@ -66,6 +66,7 @@ public sealed class SideBinding
         MunitionName = munitionName;
         Log = log;
         PluginFolder = pluginFolder;
+        PlayerStation = playerStation;
     }
 
     /// <summary>The gateway being built: bind the ports the side declared (<c>BindInbound</c>, <c>BindOutbound</c>).</summary>
@@ -88,6 +89,9 @@ public sealed class SideBinding
 
     /// <summary>The folder the plugin was loaded from (null in tests).</summary>
     public string? PluginFolder { get; }
+
+    /// <summary>The host's player station (DD-017 3.6) for a side that plays a unit; null when the host has none. Additive: the contract version stays.</summary>
+    public IPlayerStation? PlayerStation { get; }
 }
 
 /// <summary>What <see cref="IGatewayPlugin.Bind"/> hands back: the lease (disposed at the world boundary or the end of the node) and a pump called once per frame before the tick.</summary>

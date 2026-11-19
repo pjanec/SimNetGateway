@@ -89,7 +89,7 @@ public class PackHarness : IDisposable
         };
         var allocator = new NodeIdAllocator(() => _nextId++);
         HostServices = new HostServices(Plugins, Config, line => Log.Add(line));
-        System = new DisGatewaySystem(services, Config, () => GatewayRuntime.Create(Config, allocator, Plugins, HostServices, GatewayClock, munitionName, line => Log.Add(line)),
+        System = new DisGatewaySystem(services, Config, station => GatewayRuntime.Create(Config, allocator, Plugins, HostServices, GatewayClock, munitionName, line => Log.Add(line), station),
             line => Errors.Add(line), () => HostServices.Pump(line => Log.Add(line)));
     }
 

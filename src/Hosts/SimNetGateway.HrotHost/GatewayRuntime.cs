@@ -55,7 +55,7 @@ public sealed class GatewayRuntime : IDisposable
     public bool EventsInReplay { get; private set; }
 
     public static GatewayRuntime Create(GatewayConfiguration config, IIdAllocator<int>? hrotIds, PluginSet plugins, HostServices services, IClock? clock = null,
-        Func<long, string?>? munitionName = null, Action<string>? log = null)
+        Func<long, string?>? munitionName = null, Action<string>? log = null, IPlayerStation? playerStation = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(plugins);
@@ -88,7 +88,7 @@ public sealed class GatewayRuntime : IDisposable
                 }
 
                 var bound = found.Plugin.Bind(new SideBinding(builder, config, settings, clock, services.Of(key), munitionName, log,
-                    string.IsNullOrEmpty(found.Folder) ? null : found.Folder));
+                    string.IsNullOrEmpty(found.Folder) ? null : found.Folder, playerStation));
                 if (bound.Lease is not null)
                 {
                     runtime._owned.Add(bound.Lease);
