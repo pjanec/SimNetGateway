@@ -108,7 +108,8 @@ internal sealed class AppearanceGather
         byte side = a.Side switch { ForceId.Friend => 1, ForceId.Hostile => 2, _ => 3 };
         return new HrotPersonAppearance(id, a.Seed, side,
             Pack(o.Top), Pack(o.Sleeve), Pack(o.Bottom), Pack(o.Shin), Pack(o.Skin), Pack(o.Hair), Pack(o.Tie), Pack(o.HeadCloth), Pack(o.OverColour), Pack(o.ExtraColour),
-            (byte)o.HairStyle, (byte)o.Legwear, (byte)o.Camo, (byte)o.TopKind, (byte)o.HeadKind, (byte)o.OverKind, (byte)o.ExtraKind, (byte)o.Face.Beard,
+            o.HairStyle.ToString(), o.Legwear.ToString(), o.Camo.ToString(), o.TopKind.ToString(), o.HeadKind.ToString(), o.OverKind.ToString(), o.ExtraKind.ToString(),
+            o.Face.Beard.ToString(),
             o.Suit, o.Child, o.Soldier, o.Police, o.Riot, o.Woman, o.Dressed, o.FacePaint,
             o.Face.EyeSpacing, o.Face.MouthHalfWidth, o.Face.BrowHalfHeight, Pack(o.Face.EyeColour), Pack(o.Face.Lips));
     }

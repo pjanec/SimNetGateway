@@ -381,7 +381,7 @@ public class DpsOutboundTests
 
         rig.Send(new HrotPersonAppearance(1201, 1201, 2,
             Top: 0x336699FF, Sleeve: 0x336698FF, Bottom: 0x112233FF, Shin: 0x112234FF, Skin: 0xCC9966FF, Hair: 0x221100FF, Tie: 0xFF0000FF, HeadCloth: 0x445566FF, OverColour: 0x778899FF,
-            ExtraColour: 0xAABBCCFF, HairStyle: 1, Legwear: 2, Camo: 1, TopKind: 5, HeadKind: 4, OverKind: 1, ExtraKind: 4, Beard: 2,
+            ExtraColour: 0xAABBCCFF, HairStyle: "Long", Legwear: "Skirt", Camo: "Woodland", TopKind: "Uniform", HeadKind: "Helmet", OverKind: "ChestRig", ExtraKind: "Waistcoat", Beard: "Beard",
             Suit: true, Child: false, Soldier: true, Police: false, Riot: false, Woman: true, Dressed: true, FacePaint: false,
             EyeSpacing: 0.5f, MouthHalfWidth: 0.25f, BrowHalfHeight: 0.125f, EyeColour: 0x010203FF, Lips: 0x040506FF));
 

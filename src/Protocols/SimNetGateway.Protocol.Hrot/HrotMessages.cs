@@ -364,14 +364,14 @@ public readonly record struct HrotEffect(
     float Size) : IHrotToGatewayMessage;
 
 /// <summary>
-/// A person's resolved outfit from HROT's look library, sent once per person and again when it changes. Colours are 0xRRGGBBAA; the kinds carry HROT's numeric enum
-/// values (hair style, legwear, camouflage, top, head, over, extra, beard). <paramref name="Side"/> is the DIS force (1 friendly, 2 opposing, 3 neutral);
+/// A person's resolved outfit from HROT's look library, sent once per person and again when it changes. Colours are 0xRRGGBBAA; the kinds are the names of HROT's own outfit
+/// enumerations (hair style, legwear, camouflage, top, head, over, extra, beard), written by the host from the enumeration, so the gateway copies no vocabulary. <paramref name="Side"/> is the DIS force (1 friendly, 2 opposing, 3 neutral);
 /// <paramref name="Seed"/> is the value the outfit was drawn from (the network id).
 /// </summary>
 public readonly record struct HrotPersonAppearance(
     int Id, long Seed, byte Side,
     uint Top, uint Sleeve, uint Bottom, uint Shin, uint Skin, uint Hair, uint Tie, uint HeadCloth, uint OverColour, uint ExtraColour,
-    byte HairStyle, byte Legwear, byte Camo, byte TopKind, byte HeadKind, byte OverKind, byte ExtraKind, byte Beard,
+    string HairStyle, string Legwear, string Camo, string TopKind, string HeadKind, string OverKind, string ExtraKind, string Beard,
     bool Suit, bool Child, bool Soldier, bool Police, bool Riot, bool Woman, bool Dressed, bool FacePaint,
     float EyeSpacing, float MouthHalfWidth, float BrowHalfHeight, uint EyeColour, uint Lips) : IHrotToGatewayMessage;
 
