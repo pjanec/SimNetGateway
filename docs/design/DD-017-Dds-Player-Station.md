@@ -101,9 +101,10 @@ domain per station (domains are a deployment resource; partitions are free and c
 
 ### 3.2b Delivery in two steps (P-2b, my call, reversible)
 
-- **Step 1 - editor:** the offline node is the station (one player); the host already runs there (DD-016). HROT's player mode works in
-  the networkless editor (HROT Player Join S4c): Deploy, possession, release on demand (the player's own release, as Esc does) and a
-  later join again without the node leaving.
+- **Step 1 - editor:** the offline node is the station (one player); the host already runs there (DD-016). In the networkless editor
+  HROT runs possession, the control frame and release (the player's own release, as Esc does), and a later join again without the node
+  leaving; it composes no Deploy server or client (section 10, spike). So step 1 offers the placed `Playable` units and the host derives
+  the slot state itself; roles (a spawned avatar) and respawn come with step 2.
 - **Step 2 - cluster player nodes:** the host running in `-m player` nodes (DD-016 kept it to the offline node); on a player node the
   configuration enables only the `dps` plugin, so DIS / HLA are not republished by every station.
 
@@ -477,3 +478,36 @@ the `Paths` and `Contacts` gizmo layers for the picked unit, wheel zooms, arrows
 For automated checks the headless mode can play: `--join` (first Unit offer once the slot is Choosing, retried each second), `--forward F --drive-seconds N` (control frames at 30 Hz,
 Forward = F for N seconds, then 0), `--fire-after S` (one press: ShotSeq plus Trigger for one frame), `--leave-after S` (Leave after S seconds of Playing; without it the process just
 exits at `--seconds`, the lost-client case). It prints one status line per second and a final `summary` line with the samples received per topic.
+
+### Live check (Task 8) - 2026-11-19, HROT editor (hidden window), only the `dps` section configured
+
+Scenario: an infantry street fight with vehicles and aircraft (45 units) on a test terrain, two riflemen authored `Playable`; partition
+`station-1`, domain 0; the reference client started mid-run from one fixed path.
+
+| Check | Result |
+|---|---|
+| Late join | within 1 s: 3898 `Entity`, every `EntityState`, `PersonState`, 25 `Appearance`, 8 `VehicleLook`, `Articulation`, and the running `Fire` / `Detonation` / `Effect` stream (about 50 / 30 / 140 in 8 s) |
+| Join | `JoinRequest` Unit -> slot Playing on the offered rifleman in under 1 s |
+| Drive | Forward 1 for 6 s moved him about 19 m, then he stopped |
+| Fire | one press = one round (the unit's ammo 121 -> 120) and one `Fire` with him as shooter; a frame with no aim point never fires (HROT aims at the crosshair point), so a client always sends `LookFrom` / `LookDir` / `AimPoint` |
+| Leave | slot back to Choosing; the unit's AI resumes |
+| Lost client | the client process ends without `Leave`: the unit is released once, its AI resumes (`GET /entities/{id}/brain`: a superior's task again); the next client joins the same unit |
+| Replay | slot Observing, `JoinRequest` refused without a HROT call; `Entity` / `EntityState` / `PersonState` / `Fire` / `Detonation` flow |
+
+Gaps found (follow-ups, not fixed in this round):
+
+- **No `Effect` in replay.** `EffectRules.ForFrame` reads the events of the simulation world; in replay HROT raises none there, so the
+  effects stop while fire and detonation still flow. A client can derive effects from `Fire` / `Detonation` meanwhile; the fix belongs in
+  how the host feeds the look library in replay (or in HROT's replay).
+- **Doors as entities.** 3852 of the 3898 entities are doors (networked, with a door state in HROT); DPS sends them as `Entity` /
+  `EntityState` with no door state, so they cost heartbeat traffic and give the client nothing it can use. Either a door-state topic
+  (open / closed / progress, keyed by entity) or leaving static networked props out of `Entity`.
+- **Gizmos not checked live:** the projectors that draw paths live in a presentation assembly the host tests do not load; the live run
+  did not exercise `GizmoView` (the headless client sends none). Next live run: the window client, G on a unit.
+- **Possession needs running time:** a join while the editor is paused stays TakingControl and falls back to Choosing after 10 s.
+- Client lease: a client whose writers offer a liveliness lease longer than `dps.leaseSeconds` is not matched by the gateway (DDS rule).
+- Deferred minor points from the task reviews: `Fire.WeaponSlot`, `Detonation.Result`, `Entity.ParentId`, `PersonState.CarryOtherId` are 0
+  (the pivot does not carry them); `GizmoFrame.SimTime` is 0; the default partition (no `partition` configured) is
+  `station-<site>-<application>`; person detail is change-detected exactly (the plugin applies the thresholds); colours are
+  0xRRGGBBAA numbers (3.5 says #RRGGBB strings: the types win); enumerators carry their enum's name as a prefix (IDL scope).
+
