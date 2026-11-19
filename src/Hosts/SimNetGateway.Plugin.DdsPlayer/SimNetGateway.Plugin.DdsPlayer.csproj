@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The DDS Player Station side as a plugin of the HROT host (DD-017): the "dps" side of the gateway plus its DDS transport. It references no host.
+       CycloneDDS.NET arrives through Protocol.DdsPlayer for compiling only: the packaged folder never ships it (the host process provides HROT's copy). -->
+  <ItemGroup>
+    <ProjectReference Include="../../Gateways/SimNetGateway.Gateway.HrotDis/SimNetGateway.Gateway.HrotDis.csproj" />
+    <ProjectReference Include="../../Common/SimNetGateway.Common/SimNetGateway.Common.csproj" />
+    <ProjectReference Include="../../Protocols/SimNetGateway.Protocol.DdsPlayer/SimNetGateway.Protocol.DdsPlayer.csproj" />
+  </ItemGroup>
+
+  <!-- publish keeps only our own assemblies (scripts/package-extension.sh then drops what the host or the parent plugin already holds) -->
+  <Target Name="KeepOnlyOwnAssemblies" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <_ForeignPublishFile Include="@(ResolvedFileToPublish)" Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('%(ResolvedFileToPublish.Filename)', '^SimNetGateway\.'))" />
+      <ResolvedFileToPublish Remove="@(_ForeignPublishFile)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

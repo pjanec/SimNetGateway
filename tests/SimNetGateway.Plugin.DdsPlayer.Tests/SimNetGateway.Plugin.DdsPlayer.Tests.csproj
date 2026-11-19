@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Hosts/SimNetGateway.Plugin.DdsPlayer/SimNetGateway.Plugin.DdsPlayer.csproj" />
+    <ProjectReference Include="../../src/Engine/SimNetGateway.Engine.InMemory/SimNetGateway.Engine.InMemory.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Direct reference: the tests are the DDS readers of the station's topics (real CycloneDDS, in process). -->
+    <PackageReference Include="CycloneDDS.NET" />
+  </ItemGroup>
+
+</Project>

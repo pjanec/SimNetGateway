@@ -1,0 +1,551 @@
+using System.Diagnostics;
+using CycloneDDS.Runtime;
+using SimNetGateway.Engine;
+using SimNetGateway.Engine.InMemory;
+using SimNetGateway.Gateway.HrotDis;
+using SimNetGateway.Protocol.Hrot;
+using D = SimNetGateway.Protocol.DdsPlayer;
+using GatewayConfiguration = SimNetGateway.Gateway.HrotDis.GatewayConfiguration;
+
+namespace SimNetGateway.Plugin.DdsPlayer.Tests;
+
+/// <summary>The dps plugin outbound: HROT's pivot messages to DPS topics, read back by real CycloneDDS readers in the station's partition (in process).</summary>
+public class DpsOutboundTests
+{
+    private static int _domainCounter = Environment.ProcessId % 50;
+
+    private static uint NewDomain() => (uint)(40 + Interlocked.Increment(ref _domainCounter) % 80);
+
+    private static bool WaitFor(Func<bool> condition, int timeoutMs = 6000)
+    {
+        var sw = Stopwatch.StartNew();
+        while (sw.ElapsedMilliseconds < timeoutMs)
+        {
+            if (condition())
+            {
+                return true;
+            }
+
+            Thread.Sleep(20);
+        }
+
+        return condition();
+    }
+
+    private sealed class FakeStation : IPlayerStation
+    {
+        public List<PlayerOffer> OfferList { get; } = new();
+
+        public PlayerSlotSnapshot Slot => default;
+
+        public IReadOnlyList<PlayerOffer> Offers => OfferList;
+
+        public PlayerUnitStatus Unit => PlayerUnitStatus.None;
+
+        public bool Join(PlayerJoin request) => false;
+
+        public void Control(in PlayerControl frame)
+        {
+        }
+
+        public void Leave()
+        {
+        }
+    }
+
+    /// <summary>A reader of one topic in a partition: the live samples by key, and the keys that went not-alive.</summary>
+    private sealed class Watch<T> : IDisposable
+        where T : struct
+    {
+        private readonly DdsParticipant _participant;
+        private readonly DdsReader<T> _reader;
+        private readonly Func<T, string> _key;
+
+        public Watch(uint domain, string partition, Func<T, string> key)
+        {
+            _key = key;
+            _participant = new DdsParticipant(domain, defaultPartition: partition);
+            _reader = new DdsReader<T>(_participant);
+        }
+
+        public Dictionary<string, T> Alive { get; } = new();
+
+        public List<T> Events { get; } = new();
+
+        public void Pump()
+        {
+            using var loan = _reader.Take(256);
+            foreach (var sample in loan)
+            {
+                var data = sample.Data;
+                if (sample.IsValid)
+                {
+                    Alive[_key(data)] = data;
+                    Events.Add(data);
+                }
+                else
+                {
+                    Alive.Remove(_key(data));
+                }
+            }
+        }
+
+        public bool Until(Func<Watch<T>, bool> condition, int timeoutMs = 6000) => WaitFor(() =>
+        {
+            Pump();
+            return condition(this);
+        }, timeoutMs);
+
+        public void Dispose()
+        {
+            _reader.Dispose();
+            _participant.Dispose();
+        }
+    }
+
+    private sealed class Rig : IDisposable
+    {
+        private readonly PluginBound _bound;
+
+        public Rig(uint domain, string partition = "station-1", FakeStation? station = null, DdsPlayerPlugin? plugin = null, IHostService? service = null,
+            Action<DpsSettings, List<DpsSettings>>? unused = null)
+        {
+            Domain = domain;
+            Plugin = plugin ?? new DdsPlayerPlugin();
+            Settings = new DpsSettings { Domain = (int)domain, Partition = partition };
+            Config = (GatewayConfiguration.CreateDefault() with { Dis = null }).WithSide(DpsSide.SideKey, Settings);
+            var sides = SideRegistry.Empty.With(Plugin.Side);
+            Clock = new ManualClock();
+            var builder = HrotDisConfigurations.For(Config, "test", null, null, sides).CreateBuilder(Clock);
+            var hrot = builder.RequireInbound("hrot");
+            HrotIn = new InMemoryInbound(hrot.Source, "hrot");
+            builder.BindInbound("hrot", HrotIn);
+            builder.BindOutbound<IGatewayToHrotMessage>("hrot", new InMemoryOutbound<IGatewayToHrotMessage>());
+            Service = service ?? Plugin.CreateHostService(Settings, new PluginHostContext(_ => { }));
+            _bound = Plugin.Bind(new SideBinding(builder, Config, Settings, Clock, Service, _ => null, _ => { }, null, station));
+            Transport = (DpsTransport)_bound.Lease!;
+            Engine = builder.Build().Engine;
+        }
+
+        public uint Domain { get; }
+
+        public DdsPlayerPlugin Plugin { get; }
+
+        public DpsSettings Settings { get; }
+
+        public GatewayConfiguration Config { get; }
+
+        public ManualClock Clock { get; }
+
+        public InMemoryInbound HrotIn { get; }
+
+        public IHostService? Service { get; }
+
+        public DpsTransport Transport { get; }
+
+        public GatewayEngine Engine { get; }
+
+        public void Send<T>(in T message)
+        {
+            HrotIn.Enqueue(in message);
+            Step();
+        }
+
+        public void Step()
+        {
+            _bound.Pump?.Invoke();
+            Engine.Tick();
+        }
+
+        public void Dispose()
+        {
+            _bound.Lease?.Dispose();
+        }
+    }
+
+    private static HrotEntityState State(int id, double simTime = 1.0, HrotVec3? at = null, HrotVec3? velocity = null, long? dis = null, string marking = "T-72", int force = 2,
+        double health = 100, HrotStance stance = HrotStance.Unknown, HrotWeaponPosture weapon = HrotWeaponPosture.None, HrotVec3? aim = null, HrotInjury injury = HrotInjury.Ok) =>
+        new(id, 103, dis ?? TankDis, marking, force, 0, at ?? new HrotVec3(10, 20, 3), HrotQuat.Identity, velocity ?? HrotVec3.Zero, HrotVec3.Zero, health, 100, simTime, stance, weapon,
+            aim ?? HrotVec3.Zero, injury);
+
+    private static readonly long TankDis = new DisTypeCode(1, 1, 225, 1, 1, 3, 0).Pack();
+    private static readonly long PersonDis = new DisTypeCode(3, 1, 225, 1, 1, 0, 0).Pack();
+
+    private static string Id(int id) => id.ToString();
+
+    [Fact]
+    public void Entity_appears_with_type_domain_side_and_name()
+    {
+        uint domain = NewDomain();
+        using var watch = new Watch<D.Entity>(domain, "station-1", e => Id(e.EntityId));
+        using var rig = new Rig(domain);
+
+        rig.Send(State(2001));
+        rig.Send(State(1201, dis: PersonDis, marking: "Rifleman 1", force: 1));
+
+        Assert.True(watch.Until(w => w.Alive.Count == 2));
+        var tank = watch.Alive["2001"];
+        Assert.Equal(103, tank.TypeId);
+        Assert.Equal(D.Domain.DomainGround, tank.Domain);
+        Assert.Equal((byte)2, tank.Side);
+        Assert.Equal("T-72", tank.Name);
+        Assert.Equal((byte)1, tank.Dis.Kind);
+        Assert.Equal((ushort)225, tank.Dis.Country);
+        Assert.Equal((byte)3, tank.Dis.Specific);
+        var man = watch.Alive["1201"];
+        Assert.Equal(D.Domain.DomainPerson, man.Domain);
+        Assert.Equal((byte)1, man.Side);
+        Assert.False(man.Playable);
+    }
+
+    [Fact]
+    public void Playable_follows_the_player_station_offers()
+    {
+        uint domain = NewDomain();
+        var station = new FakeStation();
+        station.OfferList.Add(new PlayerOffer(1201, "Rifleman", 1));
+        using var watch = new Watch<D.Entity>(domain, "station-1", e => Id(e.EntityId));
+        using var rig = new Rig(domain, station: station);
+
+        rig.Send(State(1201, dis: PersonDis));
+        rig.Send(State(1202, dis: PersonDis));
+        Assert.True(watch.Until(w => w.Alive.Count == 2));
+        Assert.True(watch.Alive["1201"].Playable);
+        Assert.False(watch.Alive["1202"].Playable);
+
+        station.OfferList.Clear();
+        station.OfferList.Add(new PlayerOffer(1202, "Sniper", 1));
+        rig.Step();
+
+        Assert.True(watch.Until(w => !w.Alive["1201"].Playable && w.Alive["1202"].Playable));
+    }
+
+    [Fact]
+    public void Pose_is_sent_on_threshold_and_heartbeat_not_on_noise()
+    {
+        uint domain = NewDomain();
+        using var watch = new Watch<D.EntityState>(domain, "station-1", e => Id(e.EntityId));
+        using var rig = new Rig(domain);
+        var written = rig.Transport.EntityState;
+
+        rig.Send(State(2001, simTime: 1.0));
+        Assert.Equal(1, written.Written);
+
+        rig.Send(State(2001, simTime: 1.1, at: new HrotVec3(10.01, 20, 3)));   // noise: 1 cm
+        rig.Send(State(2001, simTime: 1.2, velocity: new HrotVec3(0.02, 0, 0)));   // noise: 2 cm/s
+        Assert.Equal(1, written.Written);
+
+        rig.Send(State(2001, simTime: 1.3, at: new HrotVec3(10.5, 20, 3)));   // moved 50 cm
+        Assert.Equal(2, written.Written);
+
+        rig.Send(State(2001, simTime: 3.0, at: new HrotVec3(10.5, 20, 3)));   // quiet
+        Assert.Equal(2, written.Written);
+        rig.Send(State(2001, simTime: 6.4, at: new HrotVec3(10.5, 20, 3)));   // 5.1 s since the last sample: the heartbeat
+        Assert.Equal(3, written.Written);
+
+        rig.Send(State(2001, simTime: 6.5, at: new HrotVec3(10.5, 20, 3), health: 40));   // damage is a change
+        Assert.Equal(4, written.Written);
+
+        Assert.True(watch.Until(w => w.Alive.TryGetValue("2001", out var s) && s.SimTime == 6.5));
+        Assert.Equal(D.PartCondition.PartConditionDamaged, watch.Alive["2001"].Damage);
+        Assert.Equal(10.5, watch.Alive["2001"].Position.X);
+    }
+
+    [Fact]
+    public void Person_detail_maps_to_person_state()
+    {
+        uint domain = NewDomain();
+        using var watch = new Watch<D.PersonState>(domain, "station-1", e => Id(e.EntityId));
+        using var rig = new Rig(domain);
+        rig.Send(State(1201, simTime: 4.0, dis: PersonDis, stance: HrotStance.Crouched, weapon: HrotWeaponPosture.Aimed, aim: new HrotVec3(30, 40, 1), injury: HrotInjury.Wounded));
+
+        rig.Send(new HrotPersonDetail(1201, HrotStance.Prone, 0.5f, HrotHeldItem.Binoculars, 2, new HrotVec3(7, 8, 9), true, 0.25f, HrotGesture.Waving, HrotAction.OpenDoor, 3001,
+            HrotActionState.Running, 3.5, 2100, HrotSeatRole.Gunner, HrotCarryMode.Dragged));
+
+        Assert.True(watch.Until(w => w.Alive.ContainsKey("1201")));
+        var p = watch.Alive["1201"];
+        Assert.Equal(D.Stance.StanceCrouched, p.Stance);
+        Assert.Equal(D.Stance.StanceProne, p.TargetStance);
+        Assert.Equal(0.5f, p.StanceProgress);
+        Assert.Equal(D.WeaponPosture.WeaponPostureAimed, p.Posture);
+        Assert.Equal(new HrotVec3(30, 40, 1), new HrotVec3(p.AimPoint.X, p.AimPoint.Y, p.AimPoint.Z));
+        Assert.Equal((byte)2, p.ActiveSlot);
+        Assert.Equal(D.HeldItem.HeldItemBinoculars, p.Held);
+        Assert.True(p.HasLookTarget);
+        Assert.Equal(8.0, p.LookTarget.Y);
+        Assert.Equal(0.25f, p.HeadYaw);
+        Assert.Equal(D.Gesture.GestureWaving, p.Gesture);
+        Assert.Equal(D.Injury.InjuryWounded, p.Injury);
+        Assert.Equal(D.ActionKind.ActionKindOpenDoor, p.Action);
+        Assert.Equal(3001, p.ActionTargetId);
+        Assert.Equal(D.ActionState.ActionStateRunning, p.ActionState);
+        Assert.Equal(3.5, p.ActionStartSimTime);
+        Assert.Equal(2100, p.SeatVehicleId);
+        Assert.Equal(D.SeatRole.SeatRoleGunner, p.SeatRole);
+        Assert.Equal(D.CarryMode.CarryModeDragged, p.CarryMode);
+    }
+
+    [Fact]
+    public void Turret_pose_maps_to_articulation_part()
+    {
+        uint domain = NewDomain();
+        using var watch = new Watch<D.Articulation>(domain, "station-1", a => $"{a.EntityId}/{a.PartId}");
+        using var rig = new Rig(domain);
+        rig.Send(State(2001));
+
+        rig.Send(new HrotTurretPose(2001, 2000, 0.5, 0.125));
+        rig.Send(new HrotTurretPose(2001, 2001, -0.25, 0.0));
+        rig.Send(new HrotTurretPose(9999, 2000, 1.0, 1.0));   // unknown entity: ignored
+
+        Assert.True(watch.Until(w => w.Alive.Count == 2));
+        var turret = watch.Alive["2001/2000"];
+        Assert.Equal("Turret", turret.Kind);
+        Assert.Equal(0.5f, turret.Azimuth);
+        Assert.Equal(0.125f, turret.Elevation);
+        Assert.Equal(-0.25f, watch.Alive["2001/2001"].Azimuth);
+    }
+
+    [Fact]
+    public void Fire_and_detonation_are_events()
+    {
+        uint domain = NewDomain();
+        using var fires = new Watch<D.Fire>(domain, "station-1", f => "fire");
+        using var hits = new Watch<D.Detonation>(domain, "station-1", f => "hit");
+        using var rig = new Rig(domain);
+        rig.Send(HrotOrigin.Utm(50, 14, 300, 1));
+        rig.Send(new HrotSession(ClusterPhase.Live, true, 1.0, 12.5));
+        rig.Send(State(2001, simTime: 12.5));   // the shooter and the target are known entities, as HROT always sends them before an event
+        rig.Send(State(2002, simTime: 12.5));
+
+        // events are volatile: send until the readers have matched, then once more is fine (a client counts none of them as state)
+        Assert.True(fires.Until(w =>
+        {
+            rig.Send(new HrotFire(2001, 2002, 501, TankDis, new HrotVec3(1, 2, 3), new HrotVec3(800, 0, 0), 1));
+            return w.Events.Count > 0;
+        }));
+        Assert.True(hits.Until(w =>
+        {
+            rig.Send(new HrotDetonation(2001, 0, 501, TankDis, new HrotVec3(50, 20, 0.4), new HrotVec3(0, 0, -5)));
+            return w.Events.Count > 0;
+        }));
+
+        var f = fires.Events[0];
+        Assert.Equal(2001, f.ShooterId);
+        Assert.Equal(2002, f.TargetId);
+        Assert.Equal(501, f.MunitionTypeId);
+        Assert.Equal((byte)1, f.MunitionDis.Kind);
+        Assert.Equal(12.5, f.SimTime);
+        Assert.Equal(3.0, f.Origin.Z);
+        Assert.Equal(800f, f.Velocity.X);
+        var h = hits.Events[0];
+        Assert.Equal(0.4, h.Position.Z);
+        Assert.Equal(-5f, h.Velocity.Z);
+    }
+
+    [Fact]
+    public void Effect_maps_every_field()
+    {
+        uint domain = NewDomain();
+        using var watch = new Watch<D.Effect>(domain, "station-1", e => "effect");
+        using var rig = new Rig(domain);
+        ulong dis = unchecked((ulong)TankDis);
+
+        Assert.True(watch.Until(w =>
+        {
+            rig.Send(new HrotEffect(1, 2, 2, dis, 1234, new HrotVec3(5, 6, 7), new HrotQuat(0, 0, 0.5, 0.5), 2001, 1, 2.5f, 4f));
+            rig.Send(new HrotEffect(3, 0, 0, 0, 1, HrotVec3.Zero, HrotQuat.Identity, 0, 0, 1f, 1f));   // a tracer: DPS carries no tracers
+            return w.Events.Count > 0;
+        }));
+
+        Assert.All(watch.Events, e => Assert.Equal(D.EffectKind.EffectKindExplosion, e.Kind));
+        var e = watch.Events[0];
+        Assert.Equal(D.EffectSize.EffectSizeLarge, e.SizeClass);
+        Assert.Equal(D.EffectSurface.EffectSurfaceBuilding, e.Surface);
+        Assert.Equal((byte)1, e.MunitionDis.Kind);
+        Assert.Equal(1234, e.EffectType);
+        Assert.Equal(new D.Vec3d { X = 5, Y = 6, Z = 7 }, e.Position);
+        Assert.Equal(0.5f, e.Rotation.W);
+        Assert.Equal(2001, e.AnchorId);
+        Assert.Equal((byte)1, e.AnchorWeaponSlot);
+        Assert.Equal(2.5f, e.LifetimeSeconds);
+        Assert.Equal(4f, e.Size);
+    }
+
+    [Fact]
+    public void Appearance_maps_outfit_colours_and_kinds()
+    {
+        uint domain = NewDomain();
+        using var watch = new Watch<D.Appearance>(domain, "station-1", e => Id(e.EntityId));
+        using var rig = new Rig(domain);
+        rig.Send(State(1201, dis: PersonDis));
+
+        rig.Send(new HrotPersonAppearance(1201, 1201, 2,
+            Top: 0x336699FF, Sleeve: 0x336698FF, Bottom: 0x112233FF, Shin: 0x112234FF, Skin: 0xCC9966FF, Hair: 0x221100FF, Tie: 0xFF0000FF, HeadCloth: 0x445566FF, OverColour: 0x778899FF,
+            ExtraColour: 0xAABBCCFF, HairStyle: 1, Legwear: 2, Camo: 1, TopKind: 5, HeadKind: 4, OverKind: 1, ExtraKind: 4, Beard: 2,
+            Suit: true, Child: false, Soldier: true, Police: false, Riot: false, Woman: true, Dressed: true, FacePaint: false,
+            EyeSpacing: 0.5f, MouthHalfWidth: 0.25f, BrowHalfHeight: 0.125f, EyeColour: 0x010203FF, Lips: 0x040506FF));
+
+        Assert.True(watch.Until(w => w.Alive.ContainsKey("1201")));
+        var a = watch.Alive["1201"];
+        Assert.Equal(1201u, a.Seed);
+        Assert.Equal((byte)2, a.Side);
+        Assert.Equal("Woodland", a.Camouflage);
+        Assert.Equal("Long", a.Hair);
+        Assert.Equal(D.Sex.SexFemale, a.Sex);
+        Assert.Equal(D.AgeClass.AgeClassAdult, a.AgeClass);
+        Assert.True(a.IsSoldier);
+        Assert.True(a.IsWoman);
+        Assert.Empty(a.Equipment);
+        var slots = a.Slots.ToDictionary(s => s.Slot);
+        Assert.Equal(("Uniform", 0x336699FFu), (slots["Top"].Kind, slots["Top"].ColourRgba));
+        Assert.Equal(("Skirt", 0x112233FFu), (slots["Legs"].Kind, slots["Legs"].ColourRgba));
+        Assert.Equal(("Helmet", 0x445566FFu), (slots["Head"].Kind, slots["Head"].ColourRgba));
+        Assert.Equal(("ChestRig", 0x778899FFu), (slots["Over"].Kind, slots["Over"].ColourRgba));
+        Assert.Equal(("Waistcoat", 0xAABBCCFFu), (slots["Extra"].Kind, slots["Extra"].ColourRgba));
+        Assert.Equal(("Beard", 0x221100FFu), (slots["Beard"].Kind, slots["Beard"].ColourRgba));
+        Assert.Equal(0xCC9966FFu, slots["Skin"].ColourRgba);
+        Assert.Equal(0xFF0000FFu, slots["Tie"].ColourRgba);
+        Assert.Contains("eyeSpacing=0.5", a.FaceTraits);
+    }
+
+    [Fact]
+    public void Vehicle_look_maps_parts_openings_lights()
+    {
+        uint domain = NewDomain();
+        using var watch = new Watch<D.VehicleLook>(domain, "station-1", e => Id(e.EntityId));
+        using var rig = new Rig(domain);
+        rig.Send(State(2001));
+
+        rig.Send(new HrotVehicleLook(2001, 3, true, true, false, 0b111u, [(1, 2), (4, 1)], [(2, 0.5f), (3, 1f)]));
+
+        Assert.True(watch.Until(w => w.Alive.ContainsKey("2001")));
+        var v = watch.Alive["2001"];
+        Assert.Equal(D.KillKind.KillKindCatastrophic, v.KillKind);
+        Assert.True(v.TurretThrown);
+        Assert.True(v.Burning);
+        Assert.False(v.Smoking);
+        Assert.Equal(0b111u, v.LightMask);
+        Assert.Equal(0f, v.RotorSpeed);
+        Assert.Equal((byte)0, v.SmokeLaunchers);
+        Assert.Equal([(1, D.PartCondition.PartConditionDestroyed), (4, D.PartCondition.PartConditionDamaged)], v.Parts.Select(p => (p.PartId, p.State)).ToArray());
+        Assert.Equal([(2, 0.5f), (3, 1f)], v.Openings.Select(o => (o.OpeningId, o.Progress)).ToArray());
+    }
+
+    [Fact]
+    public void Removed_entity_is_disposed()
+    {
+        uint domain = NewDomain();
+        using var rig = new Rig(domain);
+        rig.Send(State(2001));
+        rig.Send(State(1201, dis: PersonDis));
+        rig.Send(new HrotPersonDetail(1201, HrotStance.Standing, 1f, HrotHeldItem.None, 0, HrotVec3.Zero, false, 0f, HrotGesture.None, HrotAction.None, 0, HrotActionState.None, 0, 0,
+            HrotSeatRole.None, HrotCarryMode.None));
+        rig.Send(new HrotTurretPose(2001, 2000, 0.1, 0.1));
+
+        rig.Send(new HrotEntityRemoved(2001));
+
+        // a client that joins now sees the person but nothing of the tank
+        using var entities = new Watch<D.Entity>(domain, "station-1", e => Id(e.EntityId));
+        using var states = new Watch<D.EntityState>(domain, "station-1", e => Id(e.EntityId));
+        using var parts = new Watch<D.Articulation>(domain, "station-1", a => $"{a.EntityId}/{a.PartId}");
+        Assert.True(entities.Until(w => w.Alive.ContainsKey("1201")));
+        Assert.True(states.Until(w => w.Alive.ContainsKey("1201")));
+        Thread.Sleep(300);
+        entities.Pump();
+        states.Pump();
+        parts.Pump();
+        Assert.DoesNotContain("2001", entities.Alive.Keys);
+        Assert.DoesNotContain("2001", states.Alive.Keys);
+        Assert.Empty(parts.Alive);
+    }
+
+    [Fact]
+    public void Session_carries_protocol_version_geo_and_mode()
+    {
+        uint domain = NewDomain();
+        using var watch = new Watch<D.Session>(domain, "station-1", s => "session");
+        using var rig = new Rig(domain, partition: "station-1");
+
+        rig.Send(HrotOrigin.Utm(50, 14, 300, 1));
+        rig.Send(new HrotSession(ClusterPhase.Live, true, 2.0, 12.5));
+        Assert.True(watch.Until(w => w.Alive.TryGetValue("session", out var s) && s.SimTime == 12.5));
+        var live = watch.Alive["session"];
+        Assert.Equal((D.DpsProtocol.Major, D.DpsProtocol.Minor), (live.ProtocolMajor, live.ProtocolMinor));
+        Assert.Equal(D.SessionMode.SessionModeLive, live.Mode);
+        Assert.Equal(2.0, live.TimeScale);
+        Assert.Equal(33, live.UtmZone);
+        Assert.True(live.UtmNorthern);
+        Assert.InRange(live.OriginEasting, 400_000, 600_000);
+        Assert.InRange(live.OriginNorthing, 5_400_000, 5_700_000);
+        Assert.Equal("station-1", live.StationName);
+        Assert.Equal(1u, live.WorldEpoch);
+
+        rig.Send(new HrotSession(ClusterPhase.Live, false, 1.0, 13.0));
+        Assert.True(watch.Until(w => w.Alive["session"].Mode == D.SessionMode.SessionModePaused));
+
+        rig.Send(new HrotSession(ClusterPhase.Replay, true, 1.0, 14.0));
+        Assert.True(watch.Until(w => w.Alive["session"].Mode == D.SessionMode.SessionModeReplay));
+    }
+
+    [Fact]
+    public void World_boundary_disposes_every_instance()
+    {
+        uint domain = NewDomain();
+        var plugin = new DdsPlayerPlugin();
+        var service = plugin.CreateHostService(new DpsSettings(), new PluginHostContext(_ => { }));
+        using var entities = new Watch<D.Entity>(domain, "station-1", e => Id(e.EntityId));
+        using var sessions = new Watch<D.Session>(domain, "station-1", s => "session");
+        var first = new Rig(domain, plugin: plugin, service: service);
+        first.Send(new HrotSession(ClusterPhase.Live, true, 1.0, 1.0));
+        for (int id = 2001; id <= 2003; id++)
+        {
+            first.Send(State(id));
+        }
+
+        Assert.True(entities.Until(w => w.Alive.Count == 3));
+        Assert.True(sessions.Until(w => w.Alive.TryGetValue("session", out var s) && s.WorldEpoch == 1));
+
+        first.Dispose();   // the runtime ends at the world boundary: the lease is disposed
+
+        Assert.True(entities.Until(w => w.Alive.Count == 0), "every entity instance is disposed with the world");
+        Assert.True(sessions.Until(w => w.Alive.Count == 0));
+
+        // the next world: a new epoch, and none of the old entities
+        using var second = new Rig(domain, plugin: plugin, service: service);
+        second.Send(new HrotSession(ClusterPhase.Live, true, 1.0, 1.0));
+        Assert.True(sessions.Until(w => w.Alive.TryGetValue("session", out var s) && s.WorldEpoch == 2));
+        Assert.Empty(entities.Alive);
+    }
+
+    [Fact]
+    public void Other_partition_sees_nothing()
+    {
+        uint domain = NewDomain();
+        using var other = new Watch<D.Entity>(domain, "station-2", e => Id(e.EntityId));
+        using var own = new Watch<D.Entity>(domain, "station-1", e => Id(e.EntityId));
+        using var rig = new Rig(domain, partition: "station-1");
+
+        rig.Send(State(2001));
+
+        Assert.True(own.Until(w => w.Alive.Count == 1));
+        Thread.Sleep(300);
+        other.Pump();
+        Assert.Empty(other.Alive);
+    }
+
+    [Fact]
+    public void The_side_reads_and_writes_its_section()
+    {
+        var side = new DpsSide();
+        var result = GatewayConfigurationFile.Parse(
+            """{ "dps": { "domain": 7, "partition": "p", "leaseSeconds": 3, "heartbeatSeconds": 4, "positionThresholdM": 0.1, "angleThresholdDeg": 2, "velocityThreshold": 0.2 } }""",
+            "test", SideRegistry.Empty.With(side));
+
+        Assert.Empty(result.Errors);
+        var settings = (DpsSettings)result.Configuration!.SettingsOf("dps")!;
+        Assert.Equal(new DpsSettings { Domain = 7, Partition = "p", LeaseSeconds = 3, HeartbeatSeconds = 4, PositionThresholdM = 0.1, AngleThresholdDeg = 2, VelocityThreshold = 0.2 }, settings);
+        Assert.True(side.Runs(settings));
+        Assert.True(new DdsPlayerPlugin().WantsEventsInReplay(settings));
+        Assert.Equal("dps", new DdsPlayerPlugin().Name);
+    }
+}

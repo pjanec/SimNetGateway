@@ -34,6 +34,7 @@
     <ProjectReference Include="../../src/Hosts/SimNetGateway.Plugin.Dis/SimNetGateway.Plugin.Dis.csproj" />
     <ProjectReference Include="../../src/Hosts/SimNetGateway.Plugin.Hla/SimNetGateway.Plugin.Hla.csproj" />
     <ProjectReference Include="../../src/Hosts/SimNetGateway.Plugin.Hla.Rti.Fake/SimNetGateway.Plugin.Hla.Rti.Fake.csproj" />
+    <ProjectReference Include="../../src/Hosts/SimNetGateway.Plugin.DdsPlayer/SimNetGateway.Plugin.DdsPlayer.csproj" />
   </ItemGroup>
 
 </Project>

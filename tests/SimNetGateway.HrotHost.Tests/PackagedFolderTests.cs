@@ -36,7 +36,7 @@ public sealed class PackagedFolderTests
     {
         var found = PluginDiscovery.Scan(Path.Combine(Folder, "plugins"));
         Assert.Empty(found.Warnings);
-        Assert.Equal(["dis", "hla"], found.Plugins.Select(p => p.Plugin.Name).Order().ToArray());
+        Assert.Equal(["dis", "dps", "hla"], found.Plugins.Select(p => p.Plugin.Name).Order().ToArray());
         var hla = found.Plugins.Single(p => p.Plugin.Name == "hla");
         var bindings = (System.Collections.IEnumerable)hla.Plugin.GetType().GetMethod("Bindings")!.Invoke(hla.Plugin, [hla.Folder, null])!;
         Assert.Contains(bindings.Cast<object>(), b => (string)b.GetType().GetProperty("Name")!.GetValue(b)! == "fake");

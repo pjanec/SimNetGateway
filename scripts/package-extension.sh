@@ -48,6 +48,7 @@ add_plugin() {
 
 add_plugin "$here/src/Hosts/SimNetGateway.Plugin.Dis/SimNetGateway.Plugin.Dis.csproj" plugins/dis SimNetGateway.Plugin.Dis.dll "" "$@"
 add_plugin "$here/src/Hosts/SimNetGateway.Plugin.Hla/SimNetGateway.Plugin.Hla.csproj" plugins/hla SimNetGateway.Plugin.Hla.dll "" "$@"
+add_plugin "$here/src/Hosts/SimNetGateway.Plugin.DdsPlayer/SimNetGateway.Plugin.DdsPlayer.csproj" plugins/dps SimNetGateway.Plugin.DdsPlayer.dll "" "$@"
 add_plugin "$here/src/Hosts/SimNetGateway.Plugin.Hla.Rti.Fake/SimNetGateway.Plugin.Hla.Rti.Fake.csproj" plugins/hla/rti/fake SimNetGateway.Plugin.Hla.Rti.Fake.dll plugins/hla "$@"
 
 if [ -n "${SIMNETGATEWAY_EXTRA_PLUGINS:-}" ]; then
