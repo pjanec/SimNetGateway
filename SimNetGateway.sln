@@ -98,10 +98,22 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimNetGateway.Plugin.DdsPla
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimNetGateway.Plugin.DdsPlayer.Tests", "tests\SimNetGateway.Plugin.DdsPlayer.Tests\SimNetGateway.Plugin.DdsPlayer.Tests.csproj", "{A4D2F7B1-6E38-4C95-8B0A-5F1C3E7D9A62}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimNetGateway.DpsClient", "src\Hosts\SimNetGateway.DpsClient\SimNetGateway.DpsClient.csproj", "{B928C49D-7091-4173-AE5B-15A58345BAF5}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimNetGateway.DpsClient.Tests", "tests\SimNetGateway.DpsClient.Tests\SimNetGateway.DpsClient.Tests.csproj", "{B53EFEE3-081A-4CA3-85AD-BCDB42F1F7E9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
+		{B928C49D-7091-4173-AE5B-15A58345BAF5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B928C49D-7091-4173-AE5B-15A58345BAF5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B928C49D-7091-4173-AE5B-15A58345BAF5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B928C49D-7091-4173-AE5B-15A58345BAF5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B53EFEE3-081A-4CA3-85AD-BCDB42F1F7E9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B53EFEE3-081A-4CA3-85AD-BCDB42F1F7E9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B53EFEE3-081A-4CA3-85AD-BCDB42F1F7E9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B53EFEE3-081A-4CA3-85AD-BCDB42F1F7E9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -307,5 +319,7 @@ Global
 		{D8D26D5A-62F6-41B6-9A4E-A327B2426669} = {17D2CF27-6F2C-40D9-A387-44F5FBFDA57C}
 		{2F7F67E2-292A-450C-9F51-C7612B1A9CBC} = {17D2CF27-6F2C-40D9-A387-44F5FBFDA57C}
 		{09F0F635-C18A-47D6-B9DD-F3CEECF4F7D3} = {75B601E7-044C-480F-8C7F-D0C9AC1F6F05}
+		{B928C49D-7091-4173-AE5B-15A58345BAF5} = {17D2CF27-6F2C-40D9-A387-44F5FBFDA57C}
+		{B53EFEE3-081A-4CA3-85AD-BCDB42F1F7E9} = {75B601E7-044C-480F-8C7F-D0C9AC1F6F05}
 	EndGlobalSection
 EndGlobal

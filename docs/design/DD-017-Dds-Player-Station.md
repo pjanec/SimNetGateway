@@ -461,3 +461,16 @@ points), arrow to `Arrow`, sphere to `Circle` (one point, `Width` = radius), fil
 text is resolved from the buffer's intern map, or inline); meta primitives are not sent. The view follows the player rule of the client id: the player's `GizmoView` (`GizmoView.ClientId`)
 while a player holds the station, else the first client that wrote one; another client's view is dropped with one warning; losing the viewer, or a player taking the station, ends the view and
 disposes every layer instance. `GizmoFrame.SimTime` is 0 (the source does not report it).
+
+### Reference client
+
+Deviation: DD-017 named `SimNetGateway.Viewer`, but that viewer is the engine's in-process monitor, so the reference client is its own small host,
+`src/Hosts/SimNetGateway.DpsClient` (tests: `tests/SimNetGateway.DpsClient.Tests`). It is a standalone process with its own `ddsc` (CycloneDDS.NET from NuGet) and
+references only the DPS protocol project. `DpsWorld` (no raylib) subscribes to the state topics, keeps the latest state per entity, dead-reckons positions from the
+velocity between samples, treats a not-alive sample as "entity gone", and writes the player topics with a random nonzero `ClientId`; `DpsClientWindow` (raylib) only draws
+and reads input.
+
+Run: `dotnet run --project src/Hosts/SimNetGateway.DpsClient -- --domain N --partition NAME` (the domain and partition of the station's DPS settings). Keys: J joins the first
+free unit offer (roles are not requested), WASD move, mouse aims, left button fires, C cycles the stance, Esc leaves (Esc again quits), right button picks a unit, G toggles
+the `Paths` and `Contacts` gizmo layers for the picked unit, wheel zooms, arrows pan while not playing. Control frames go out at 30 Hz while the slot is Playing.
+`--headless --seconds N` runs without a window and prints `entities=.. slot=.. gizmo_layers=..` once at the end (exit code 0).

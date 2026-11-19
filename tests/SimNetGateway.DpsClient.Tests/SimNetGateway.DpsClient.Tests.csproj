@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Hosts/SimNetGateway.DpsClient/SimNetGateway.DpsClient.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Direct reference: the tests play the gateway (real CycloneDDS, in process). -->
+    <PackageReference Include="CycloneDDS.NET" />
+  </ItemGroup>
+
+</Project>

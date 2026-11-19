@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The DPS reference client (DD-017 section 10): a standalone process with its own ddsc that subscribes to the DPS topics, draws a top-down map
+       and can join and play one unit. It needs only the protocol project; DpsWorld is raylib-free so it can be tested without a window. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- the CycloneDDS.NET code generator writes unsafe serializers into the project -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CycloneDDS.NET" />
+    <PackageReference Include="Raylib-cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Protocols/SimNetGateway.Protocol.DdsPlayer/SimNetGateway.Protocol.DdsPlayer.csproj" />
+  </ItemGroup>
+
+</Project>

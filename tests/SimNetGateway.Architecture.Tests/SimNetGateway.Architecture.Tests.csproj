@@ -31,6 +31,7 @@
     <ProjectReference Include="../../src/Showcase/SimNetGateway.Showcase/SimNetGateway.Showcase.csproj" />
     <ProjectReference Include="../../src/Hosts/SimNetGateway.Demo/SimNetGateway.Demo.csproj" />
     <ProjectReference Include="../../src/Hosts/SimNetGateway.Viewer/SimNetGateway.Viewer.csproj" />
+    <ProjectReference Include="../../src/Hosts/SimNetGateway.DpsClient/SimNetGateway.DpsClient.csproj" />
     <ProjectReference Include="../../src/Hosts/SimNetGateway.Plugin.Dis/SimNetGateway.Plugin.Dis.csproj" />
     <ProjectReference Include="../../src/Hosts/SimNetGateway.Plugin.Hla/SimNetGateway.Plugin.Hla.csproj" />
     <ProjectReference Include="../../src/Hosts/SimNetGateway.Plugin.Hla.Rti.Fake/SimNetGateway.Plugin.Hla.Rti.Fake.csproj" />
