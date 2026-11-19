@@ -186,5 +186,19 @@ internal sealed class DpsGizmos : IDisposable
         })],
     };
 
-    public void Dispose() => _reader.Dispose();
+    /// <summary>
+    /// The view ends with its transport (a world boundary or the node's teardown): the source stops its projectors. <c>GizmoView</c> is volatile, so the next runtime's
+    /// reader does not receive the old view; a client re-sends it when <c>Session.WorldEpoch</c> changes (DD-017 3.11).
+    /// </summary>
+    public void Dispose()
+    {
+        try
+        {
+            _source?.SetView(null);
+        }
+        finally
+        {
+            _reader.Dispose();
+        }
+    }
 }

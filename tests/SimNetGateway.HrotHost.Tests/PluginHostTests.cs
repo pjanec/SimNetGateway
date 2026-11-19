@@ -40,6 +40,9 @@ public sealed class ProbePlugin : IGatewayPlugin
 {
     public List<string> Events { get; } = new();
 
+    /// <summary>Runs in the plugin's pump with its binding (a test plays a plugin that calls the player station from its pump).</summary>
+    public Action<SideBinding>? OnPump { get; set; }
+
     public string Name => "probe";
 
     public int InterfaceVersion => PluginInterface.Version;
@@ -52,7 +55,11 @@ public sealed class ProbePlugin : IGatewayPlugin
     {
         Events.Add("bind");
         Assert.NotNull(binding.Service);
-        return new PluginBound(new Lease(Events), () => Events.Add("pump"));
+        return new PluginBound(new Lease(Events), () =>
+        {
+            Events.Add("pump");
+            OnPump?.Invoke(binding);
+        });
     }
 
     public bool WantsEventsInReplay(object settings) => ((ProbeSettings)settings).Replay;

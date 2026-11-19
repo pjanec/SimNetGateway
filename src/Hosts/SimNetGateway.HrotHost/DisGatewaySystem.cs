@@ -307,6 +307,9 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
         _disposed = true;
         // the process-teardown path never reads or writes the world: it dies with the process, and on a threaded node this runs on the main thread after the simulation
         // thread stopped (the world guard flags such a read). Replicas are swept where the system runs on the simulation thread: at a world boundary and when a replay begins.
+        // The farewell tick still runs the plugins' pumps, and a player plugin calls the station from its pump (a pending control frame, a join, a leave): the station is
+        // detached first, so none of those calls reaches the world.
+        PlayerStation.Detach();
         StopRuntime(farewell: true);
     }
 }

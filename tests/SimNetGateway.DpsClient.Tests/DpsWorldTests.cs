@@ -36,6 +36,9 @@ public class DpsWorldTests
         public readonly DdsWriter<D.EntityState> States;
         public readonly DdsWriter<D.PlayerSlot> Slot;
         public readonly DdsWriter<D.GizmoFrame> Gizmos;
+        public readonly DdsWriter<D.Session> Session;
+        public readonly DdsReader<D.GizmoView> Views;
+        public readonly List<D.GizmoView> ViewsSeen = new();
         public readonly DdsReader<D.JoinRequest> Joins;
         public readonly DdsReader<D.ControlFrame> Controls;
         public readonly List<D.JoinRequest> JoinsSeen = new();
@@ -48,6 +51,8 @@ public class DpsWorldTests
             States = new DdsWriter<D.EntityState>(_participant);
             Slot = new DdsWriter<D.PlayerSlot>(_participant);
             Gizmos = new DdsWriter<D.GizmoFrame>(_participant);
+            Session = new DdsWriter<D.Session>(_participant);
+            Views = new DdsReader<D.GizmoView>(_participant);
             Joins = new DdsReader<D.JoinRequest>(_participant);
             Controls = new DdsReader<D.ControlFrame>(_participant);
         }
@@ -61,6 +66,17 @@ public class DpsWorldTests
                     if (s.IsValid)
                     {
                         JoinsSeen.Add(s.Data);
+                    }
+                }
+            }
+
+            using (var loan = Views.Take(16))
+            {
+                foreach (var s in loan)
+                {
+                    if (s.IsValid)
+                    {
+                        ViewsSeen.Add(s.Data);
                     }
                 }
             }
@@ -83,6 +99,8 @@ public class DpsWorldTests
             States.Dispose();
             Slot.Dispose();
             Gizmos.Dispose();
+            Session.Dispose();
+            Views.Dispose();
             Joins.Dispose();
             Controls.Dispose();
             _participant.Dispose();
@@ -354,6 +372,28 @@ public class DpsWorldTests
 
         // an explicit join is allowed again
         Assert.True(world.JoinFirstUnit());
+    }
+
+    [Fact]
+    public void A_new_world_epoch_resends_the_gizmo_view_and_restarts_sim_time()
+    {
+        uint domain = NewDomain();
+        using var gw = new FakeGateway(domain, "p8");
+        using var world = new DpsWorld(domain, "p8");
+
+        gw.Session.Write(new D.Session { WorldEpoch = 1, Terrain = "", StationName = "" });
+        gw.Entities.Write(Ent(1));
+        gw.States.Write(new D.EntityState { EntityId = 1, SimTime = 42.5 });
+        Assert.True(Until(world, gw, () => world.WorldEpoch == 1 && world.LatestSimTime > 0));
+        world.SetGizmoView(["Paths"], [1]);
+        Assert.True(Until(world, gw, () => gw.ViewsSeen.Count == 1));
+
+        gw.Session.Write(new D.Session { WorldEpoch = 2, Terrain = "", StationName = "" });   // a world boundary: the gateway's readers are new
+
+        Assert.True(Until(world, gw, () => world.WorldEpoch == 2 && gw.ViewsSeen.Count == 2), "the view is sent again for the new world");
+        Assert.Equal("Paths", gw.ViewsSeen[1].Layers[0].Name);
+        Assert.Equal(world.ClientId, gw.ViewsSeen[1].ClientId);
+        Assert.Equal(0.0, world.LatestSimTime);
     }
 
     [Fact]

@@ -177,4 +177,20 @@ public class DpsGizmoTests
         frames.Pump();
         Assert.Empty(frames.Alive);
     }
+
+    /// <summary>A world boundary (or the node's teardown) disposes the transport: the source's projectors stop with it instead of running for a reader that is gone.</summary>
+    [Fact]
+    public void Disposing_the_transport_ends_the_view_at_the_source()
+    {
+        uint domain = Watch.NewDomain();
+        var source = new FakeGizmos();
+        var rig = new Rig(domain, gizmoSource: source);
+        using var client = new Client(domain);
+        client.View(["Contacts"]);
+        Assert.True(DpsInboundTests.Until(rig, () => source.Views.Count == 1 && source.Views[0] is not null));
+
+        rig.Dispose();
+
+        Assert.Null(source.Views[^1]);
+    }
 }

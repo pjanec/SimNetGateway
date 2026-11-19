@@ -2,7 +2,9 @@ using System.Numerics;
 using Fdp.Core;
 using Fdp.Toolkit.Behavior.Possession;
 using Fdp.Toolkit.Combat.Components;
+using DISnet;
 using Fdp.Toolkit.Orchestration;
+using Fdp.Toolkit.Replication.Services;
 using Hrot.Common;
 using SimNetGateway.Gateway.HrotDis;
 using SimNetGateway.Protocol.Hrot;
@@ -18,8 +20,8 @@ public class PlayerStationTests
     {
         private long _ms = 1_000;
 
-        public Stage()
-            : base(dis: true)
+        public Stage(ProbePlugin? probe = null)
+            : base(dis: true, plugins: probe is null ? null : [probe], configure: probe is null ? null : c => c.WithSide(ProbeSide.SideKey, new ProbeSettings(false)))
         {
             RegisterTemplate(300, 3);
             Station.NowMs = () => _ms;
@@ -68,6 +70,13 @@ public class PlayerStationTests
             where T : unmanaged
         {
             World.Bus.SwapBuffers();
+            return Read<T>();
+        }
+
+        /// <summary>The events readable now (published in the last step), without swapping the bus.</summary>
+        public List<T> Read<T>()
+            where T : unmanaged
+        {
             var list = new List<T>();
             if (World.Bus.IsRegistered<T>())
             {
@@ -363,5 +372,110 @@ public class PlayerStationTests
         using var h = new Stage();
         Assert.NotNull(h.System.Runtime);
         Assert.IsAssignableFrom<IPlayerStation>(h.Station);
+    }
+
+    /// <summary>
+    /// An in-place restore (checkpoint, keyframe, end of a dry run) brings back HROT's PossessedBy from the snapshot: a playable unit held by this node with nobody playing
+    /// is released on the next live frames, and the sweep stops once none is held.
+    /// </summary>
+    [Fact]
+    public void After_an_in_place_restore_a_unit_still_held_by_this_node_is_released()
+    {
+        using var h = new Stage();
+        var e = h.Play();
+        h.Events<ReleasePossessionEvent>();
+
+        WorldEpoch.Restored(h.World);   // same world, new epoch: the restored world still says this node holds the unit
+        h.Step();
+
+        Assert.Equal(PlayerSlotState.Choosing, h.Station.Slot.State);
+        var release = Assert.Single(h.Read<ReleasePossessionEvent>());
+        Assert.Equal(e, release.Unit);
+        Assert.Equal(PackHarness.LocalNodeId, (int)release.StationNodeId);
+
+        h.Step();
+        Assert.Empty(h.Read<ReleasePossessionEvent>());   // asked at most once a second while HROT has not applied it
+
+        h.AdvanceMs(1_000);
+        h.Step();
+        Assert.Single(h.Read<ReleasePossessionEvent>());   // still held (time did not run): asked again
+
+        h.Release(e);   // HROT applied it
+        h.AdvanceMs(1_000);
+        h.Steps(3);
+        Assert.Empty(h.Read<ReleasePossessionEvent>());
+
+        // the sweep is over: a later possession of the unit by a player is left alone
+        Assert.True(h.Station.Join(new PlayerJoin(PlayerJoinKind.Unit, Unit, null)));
+        h.Hold(e);
+        h.AdvanceMs(5_000);
+        h.Steps(2);
+        Assert.Equal(PlayerSlotState.Playing, h.Station.Slot.State);
+        Assert.Empty(h.Read<ReleasePossessionEvent>());
+    }
+
+    [Fact]
+    public void A_unit_held_by_another_station_is_not_swept()
+    {
+        using var h = new Stage();
+        var e = h.AddPlayable();
+        h.Hold(e, station: 9);
+        h.Steps(2);
+
+        WorldEpoch.Restored(h.World);
+        h.Steps(3);
+
+        Assert.Empty(h.Read<ReleasePossessionEvent>());
+    }
+
+    /// <summary>A world boundary with a gizmo view set: the view ends with the runtime, the projectors stop (the client re-sends its view to the next runtime).</summary>
+    [Fact]
+    public void A_world_boundary_ends_the_gizmo_view()
+    {
+        using var h = new Stage();
+        h.Station.SetView(new GizmoViewRequest(["Contacts"], [], [], 60f));
+        h.Steps(2);
+        int runs = h.Station.Gizmos.Runs;
+        Assert.True(runs > 0);
+
+        WorldEpoch.Restored(h.World);
+        h.Steps(5);
+
+        Assert.Equal(runs, h.Station.Gizmos.Runs);
+    }
+
+    /// <summary>
+    /// The node's teardown runs one farewell tick, whose plugin pumps still call the station (a client's pending control frame, a join, a leave). The station is
+    /// detached first: nothing reaches HROT's world, and DIS's final Deactivated states still go out.
+    /// </summary>
+    [Fact]
+    public void Node_teardown_with_a_pending_control_frame_touches_no_world_and_dis_still_says_goodbye()
+    {
+        var probe = new ProbePlugin();
+        bool farewell = false;
+        probe.OnPump = b =>
+        {
+            if (farewell)
+            {
+                b.PlayerStation!.Control(Frame());
+                b.PlayerStation.Join(new PlayerJoin(PlayerJoinKind.Unit, Unit, null));
+                b.PlayerStation.Leave();
+            }
+        };
+        using var h = new Stage(probe);
+        h.Play();
+        h.Events<OperatorControlFrameEvent>();
+        h.DisSent.Clear();
+
+        farewell = true;
+        h.System.Dispose();
+
+        h.World.Bus.SwapBuffers();
+        Assert.Empty(h.Read<OperatorControlFrameEvent>());
+        Assert.Empty(h.Read<PossessRequestEvent>());
+        Assert.Empty(h.Read<ReleasePossessionEvent>());
+        Assert.Empty(h.Errors);
+        h.Drain();
+        Assert.Contains(h.Sent<EntityStatePdu>(), p => SimNetGateway.Protocol.Dis7.EntityAppearance.GetDeactivated(p.EntityAppearance));
     }
 }

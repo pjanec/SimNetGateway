@@ -50,6 +50,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
     private PlayerSlotSnapshot _slot = new(PlayerSlotState.Waiting, 0, 0.0, 0);
     private PlayerUnitStatus _unit = PlayerUnitStatus.None;
     private int _useTarget;
+    private bool _detached;
 
     public HrotPlayerStation(HrotServices services)
     {
@@ -89,16 +90,36 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         Refresh();
     }
 
+    /// <summary>The world boundary: the slot starts over and the gizmo view ends (its client re-sends it to the next runtime, DD-017 3.11).</summary>
     internal void Boundary()
     {
         _flow.Boundary();
+        _gizmos.SetView(null);
         _useTarget = 0;
         _unit = PlayerUnitStatus.None;
         Refresh();
     }
 
+    /// <summary>
+    /// The node's teardown: from now on the station never reads or writes the world (it may run after the simulation thread stopped). Join answers false, Control and
+    /// Leave do nothing, the gizmo view ends and no new one is taken. Called before the gateway's farewell tick, whose plugin pumps still call the seam.
+    /// </summary>
+    internal void Detach()
+    {
+        _detached = true;
+        _orders = null;
+        _world = null;
+        _gizmos.SetView(null);
+    }
+
     /// <inheritdoc />
-    public void SetView(GizmoViewRequest? view) => _gizmos.SetView(view);
+    public void SetView(GizmoViewRequest? view)
+    {
+        if (!_detached)
+        {
+            _gizmos.SetView(view);
+        }
+    }
 
     /// <inheritdoc />
     public IReadOnlyList<GizmoLayerFrame> Take() => _gizmos.Take();
@@ -107,6 +128,11 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
 
     public bool Join(PlayerJoin request)
     {
+        if (_detached)
+        {
+            return false;
+        }
+
         bool ok = _flow.Join(request);
         Refresh();
         return ok;
@@ -114,6 +140,11 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
 
     public void Leave()
     {
+        if (_detached)
+        {
+            return;
+        }
+
         _flow.Leave();
         _useTarget = 0;
         Refresh();
@@ -121,7 +152,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
 
     public void Control(in PlayerControl frame)
     {
-        if (_flow.State != PlayerSlotState.Playing || _orders is null)
+        if (_detached || _flow.State != PlayerSlotState.Playing || _orders is null)
         {
             return;
         }
@@ -237,6 +268,8 @@ internal sealed class PossessionFlow : IPlayerFlow
     private long _deadline;
     private int _releaseUnit;
     private long _releaseDeadline;
+    private bool _sweep;
+    private readonly Dictionary<int, long> _sweepAsked = new();
 
     public PossessionFlow(HrotServices services, Func<EntityOrders?> orders)
     {
@@ -263,6 +296,8 @@ internal sealed class PossessionFlow : IPlayerFlow
         _releaseUnit = 0;
         UnitId = 0;
         State = PlayerSlotState.Waiting;
+        _sweep = true;
+        _sweepAsked.Clear();
     }
 
     public void Frame(EntityRepository world, bool live, bool replaying)
@@ -308,6 +343,7 @@ internal sealed class PossessionFlow : IPlayerFlow
 
         _replayObserving = false;
         RefreshOffers(world);
+        Sweep(world);
         Follow(world);
         LetGoOfLateGrant(world);
     }
@@ -404,6 +440,49 @@ internal sealed class PossessionFlow : IPlayerFlow
                 }
 
                 break;
+        }
+    }
+
+    /// <summary>
+    /// After a world boundary nobody plays here, but an in-place restore (a checkpoint, a keyframe, the end of a dry run) puts back the world's <c>PossessedBy</c>, which
+    /// HROT keeps in its binary snapshots: a playable unit held by this node would stay possessed, its AI paused, with no player. So on the live frames after a boundary
+    /// every playable unit this node holds - other than the one a new player is taking - is released, asked again at most once a second (HROT applies a release only
+    /// while time runs), until none is held.
+    /// </summary>
+    private void Sweep(EntityRepository world)
+    {
+        if (!_sweep)
+        {
+            return;
+        }
+
+        bool held = false;
+        foreach (var e in _query!)
+        {
+            if (!world.IsAlive(e) || PossessionSystem.HolderOf(world, e) != _services.LocalNodeId)
+            {
+                continue;
+            }
+
+            int id = world.GetComponentRO<NetworkIdentity>(e).Value;
+            if (id == UnitId || id == _releaseUnit)
+            {
+                continue;   // the new player's unit, or one already being let go
+            }
+
+            held = true;
+            long now = NowMs();
+            if (!_sweepAsked.TryGetValue(id, out long asked) || now - asked >= 1000)
+            {
+                _sweepAsked[id] = now;
+                _orders()?.Unpossess(id);
+            }
+        }
+
+        if (!held)
+        {
+            _sweep = false;
+            _sweepAsked.Clear();
         }
     }
 

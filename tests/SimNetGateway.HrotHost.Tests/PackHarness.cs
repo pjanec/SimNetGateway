@@ -164,7 +164,8 @@ public class PackHarness : IDisposable
         }
     }
 
-    private void Drain()
+    /// <summary>Decodes what the DIS socket sent since the last step into <see cref="DisSent"/> (a step does it; a test calls it after a teardown).</summary>
+    public void Drain()
     {
         if (DisWire is null)
         {

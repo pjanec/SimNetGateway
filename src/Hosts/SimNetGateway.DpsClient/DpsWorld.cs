@@ -57,6 +57,7 @@ public sealed class DpsWorld : IDisposable
     private D.ControlFrame _frame;
     private uint _joinSeq;
     private uint _leaveSeq;
+    private D.GizmoView? _lastView;
 
     public DpsWorld(uint domain, string partition, ulong? clientId = null, Func<double>? clock = null)
     {
@@ -101,7 +102,30 @@ public sealed class DpsWorld : IDisposable
     /// <summary>Fire samples whose shooter is the own unit.</summary>
     public int OwnFire { get; private set; }
 
-    /// <summary>The newest simulation time seen on any EntityState (0 before the first).</summary>
+    /// <summary>The <c>Session.WorldEpoch</c> of the world the client shows (0 before the first Session).</summary>
+    public uint WorldEpoch { get; private set; }
+
+    /// <summary>
+    /// A new world (DD-017 3.11): the gateway's player and gizmo readers are new and remember nothing of this client, so the latest sim time starts over and the
+    /// gizmo view is sent again; a player joins again through the slot (the automatic join does it while the slot is Choosing).
+    /// </summary>
+    private void OnNewWorld(uint epoch)
+    {
+        bool change = WorldEpoch != 0;
+        WorldEpoch = epoch;
+        if (!change)
+        {
+            return;
+        }
+
+        LatestSimTime = 0;
+        if (_lastView is { } view)
+        {
+            _view.Write(view);
+        }
+    }
+
+    /// <summary>The newest simulation time seen on any EntityState of the current world (0 before the first).</summary>
     public double LatestSimTime { get; private set; }
 
     /// <summary>True after <see cref="Leave"/> until the next explicit <see cref="JoinFirstUnit"/>: an automatic join stays quiet.</summary>
@@ -160,6 +184,10 @@ public sealed class DpsWorld : IDisposable
         Drain(_session, s =>
         {
             Session = s;
+            if (s.WorldEpoch != WorldEpoch)
+            {
+                OnNewWorld(s.WorldEpoch);
+            }
         }, _ => Session = null);
         Drain(_entity, e =>
         {
@@ -341,7 +369,7 @@ public sealed class DpsWorld : IDisposable
     /// <summary>Tells the gateway which gizmo layers and selected units the client wants (an empty list stops the projectors).</summary>
     public void SetGizmoView(IEnumerable<string> layers, IEnumerable<int> selected, float rateHz = 10f)
     {
-        _view.Write(new D.GizmoView
+        var view = new D.GizmoView
         {
             Layers = [.. layers.Select(l => new D.NameItem { Name = l })],
             SelectedIds = [.. selected],
@@ -349,7 +377,9 @@ public sealed class DpsWorld : IDisposable
             PinnedFamilies = [],
             RateHz = rateHz,
             ClientId = ClientId,
-        });
+        };
+        _lastView = view;
+        _view.Write(view);
     }
 
     public void Dispose()
