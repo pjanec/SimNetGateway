@@ -14,9 +14,9 @@ public class DpsOutboundTests
 {
     private static int _domainCounter = Environment.ProcessId % 50;
 
-    private static uint NewDomain() => (uint)(40 + Interlocked.Increment(ref _domainCounter) % 80);
+    internal static uint NewDomain() => (uint)(40 + Interlocked.Increment(ref _domainCounter) % 80);
 
-    private static bool WaitFor(Func<bool> condition, int timeoutMs = 6000)
+    internal static bool WaitFor(Func<bool> condition, int timeoutMs = 6000)
     {
         var sw = Stopwatch.StartNew();
         while (sw.ElapsedMilliseconds < timeoutMs)
@@ -32,7 +32,7 @@ public class DpsOutboundTests
         return condition();
     }
 
-    private sealed class FakeStation : IPlayerStation
+    internal sealed class FakeStation : IPlayerStation
     {
         public List<PlayerOffer> OfferList { get; } = new();
 
@@ -54,7 +54,7 @@ public class DpsOutboundTests
     }
 
     /// <summary>A reader of one topic in a partition: the live samples by key, and the keys that went not-alive.</summary>
-    private sealed class Watch<T> : IDisposable
+    internal sealed class Watch<T> : IDisposable
         where T : struct
     {
         private readonly DdsParticipant _participant;
@@ -103,16 +103,16 @@ public class DpsOutboundTests
         }
     }
 
-    private sealed class Rig : IDisposable
+    internal sealed class Rig : IDisposable
     {
         private readonly PluginBound _bound;
 
-        public Rig(uint domain, string partition = "station-1", FakeStation? station = null, DdsPlayerPlugin? plugin = null, IHostService? service = null,
-            Action<DpsSettings, List<DpsSettings>>? unused = null)
+        public Rig(uint domain, string partition = "station-1", IPlayerStation? station = null, DdsPlayerPlugin? plugin = null, IHostService? service = null,
+            Action<string>? log = null, double leaseSeconds = 2.0)
         {
             Domain = domain;
             Plugin = plugin ?? new DdsPlayerPlugin();
-            Settings = new DpsSettings { Domain = (int)domain, Partition = partition };
+            Settings = new DpsSettings { Domain = (int)domain, Partition = partition, LeaseSeconds = leaseSeconds };
             Config = (GatewayConfiguration.CreateDefault() with { Dis = null }).WithSide(DpsSide.SideKey, Settings);
             var sides = SideRegistry.Empty.With(Plugin.Side);
             Clock = new ManualClock();
@@ -122,7 +122,7 @@ public class DpsOutboundTests
             builder.BindInbound("hrot", HrotIn);
             builder.BindOutbound<IGatewayToHrotMessage>("hrot", new InMemoryOutbound<IGatewayToHrotMessage>());
             Service = service ?? Plugin.CreateHostService(Settings, new PluginHostContext(_ => { }));
-            _bound = Plugin.Bind(new SideBinding(builder, Config, Settings, Clock, Service, _ => null, _ => { }, null, station));
+            _bound = Plugin.Bind(new SideBinding(builder, Config, Settings, Clock, Service, _ => null, log ?? (_ => { }), null, station));
             Transport = (DpsTransport)_bound.Lease!;
             Engine = builder.Build().Engine;
         }

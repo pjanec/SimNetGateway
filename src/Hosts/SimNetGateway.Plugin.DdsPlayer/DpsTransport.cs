@@ -41,7 +41,11 @@ internal sealed class DpsChannel<T> : IOutboundChannel<DpsItem<T>>, IDisposable
         Written++;
     }
 
-    public void Write(T value) => _writer.Write(value);
+    public void Write(T value)
+    {
+        _writer.Write(value);
+        Written++;
+    }
 
     public void Dispose() => _writer.Dispose();
 }
@@ -57,9 +61,11 @@ public sealed class DpsTransport : IDisposable
     private readonly int _epoch;
     private readonly Dictionary<int, Entity> _entities = new();
     private readonly List<IDisposable> _channels = new();
+    private readonly DpsInbound? _inbound;
+    private readonly DpsPlayerSlot? _slot;
     private int _offersSeen = -1;
 
-    public DpsTransport(DpsSettings settings, string partition, IPlayerStation? station, int epoch)
+    public DpsTransport(DpsSettings settings, string partition, IPlayerStation? station, int epoch, Action<string>? log = null)
     {
         Partition = partition;
         _station = station;
@@ -96,6 +102,10 @@ public sealed class DpsTransport : IDisposable
             Detonation = Add(new DpsChannel<Detonation>(_participant));
             Effect = Add(new DpsChannel<Effect>(_participant));
             VehicleLook = Add(new DpsChannel<VehicleLook>(_participant));
+            PlayerSlot = Add(new DpsChannel<PlayerSlot>(_participant));
+            OwnUnit = Add(new DpsChannel<OwnUnit>(_participant));
+            _inbound = new DpsInbound(_participant, settings, station, log ?? (_ => { }));
+            _slot = new DpsPlayerSlot(station, PlayerSlot, OwnUnit);
         }
         catch
         {
@@ -127,9 +137,15 @@ public sealed class DpsTransport : IDisposable
 
     internal DpsChannel<VehicleLook> VehicleLook { get; } = null!;
 
+    internal DpsChannel<PlayerSlot> PlayerSlot { get; } = null!;
+
+    internal DpsChannel<OwnUnit> OwnUnit { get; } = null!;
+
     /// <summary>Once per frame: an entity whose playable flag changed with the station's offers is written again.</summary>
     public void Pump()
     {
+        _inbound?.Pump();
+        _slot?.Pump();
         if (_station is null)
         {
             return;
@@ -184,6 +200,7 @@ public sealed class DpsTransport : IDisposable
 
     public void Dispose()
     {
+        _inbound?.Dispose();
         foreach (var channel in _channels)
         {
             channel.Dispose();
