@@ -1,4 +1,5 @@
 using SimNetGateway.Gateway.HrotDis;
+using D = SimNetGateway.Protocol.DdsPlayer;
 
 namespace SimNetGateway.Plugin.DdsPlayer;
 
@@ -39,6 +40,13 @@ public sealed class DdsPlayerPlugin : IGatewayPlugin
         }
 
         binding.Log($"dps: station partition '{partition}' on DDS domain {settings.Domain}, world epoch {epoch}");
+        if (settings.LeaseSeconds * 1000.0 < D.DpsProtocol.DefaultLeaseMs)
+        {
+            // a reader's lease shorter than the writer's fails the DDS match silently: a client with the contract's default lease would never be heard
+            binding.Log($"dps: warning: leaseSeconds {settings.LeaseSeconds} is shorter than the contract's default player lease ({D.DpsProtocol.DefaultLeaseMs / 1000.0} s); "
+                + "a client whose player writers offer the default lease is not matched (DD-017 3.11)");
+        }
+
         return new PluginBound(transport, transport.Pump);
     }
 }

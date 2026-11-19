@@ -120,6 +120,9 @@ public sealed class DpsTransport : IDisposable
     /// <summary>The DDS partition every topic of this station is written in.</summary>
     public string Partition { get; }
 
+    /// <summary>The client id of the station's player (0 = nobody plays; tests and diagnostics).</summary>
+    internal ulong InboundOwner => _inbound?.Owner ?? 0;
+
     internal DpsChannel<Session> Session { get; } = null!;
 
     internal DpsChannel<Entity> EntityTopic { get; } = null!;

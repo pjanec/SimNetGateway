@@ -356,4 +356,84 @@ public class DpsInboundTests
         Assert.Empty(slots.Alive["slot"].Offers);
         Assert.Equal(1, rig.Transport.PlayerSlot.Written);
     }
+
+    /// <summary>The player topics are keyed by ClientId: KEEP_LAST 1 holds one sample per client, so another client's burst between two host frames displaces nothing of the player's.</summary>
+    [Fact]
+    public void Another_clients_samples_do_not_displace_the_players_frame_or_leave()
+    {
+        uint domain = Watch.NewDomain();
+        var station = new RecordingStation();
+        using var rig = new Rig(domain, station: station);
+        using var a = new Client(domain, id: 1);
+        using var b = new Client(domain, id: 2);
+        a.Join(1, 1201);
+        Assert.True(Until(rig, () => station.Joins.Count == 1));
+        Frames(rig, 20);   // B's writers are matched too
+
+        // no host frame in between: A's frame first, then B's burst (on an unkeyed topic B's last sample would be the only one left)
+        a.Control(new D.ControlFrame { Seq = 1, Forward = 1f });
+        Thread.Sleep(200);
+        for (uint i = 1; i <= 5; i++)
+        {
+            b.Control(new D.ControlFrame { Seq = 100 + i, Forward = -1f });
+        }
+
+        Thread.Sleep(200);
+        Assert.True(Until(rig, () => station.Controls.Count == 1));
+        Frames(rig);
+        Assert.Equal([1f], station.Controls.Select(c => c.Forward).ToArray());
+
+        a.Leave(1);
+        Thread.Sleep(200);
+        b.Leave(7);
+        b.Join(3, 1202);
+        Thread.Sleep(200);
+        Assert.True(Until(rig, () => station.Leaves == 1), "A's leave is not displaced by B's");
+        Frames(rig);
+        Assert.Equal(1, station.Leaves);
+    }
+
+    /// <summary>A client writes a join and vanishes within one host frame: its join must not make a dead client the player (nobody would ever release the unit).</summary>
+    [Fact]
+    public void A_join_of_a_client_that_already_vanished_is_not_accepted()
+    {
+        uint domain = Watch.NewDomain();
+        var station = new RecordingStation();
+        using var rig = new Rig(domain, station: station);
+        var ghost = new Client(domain, id: 7);
+        Frames(rig, 20);   // matched
+
+        ghost.Join(1, 1201);
+        Thread.Sleep(200);
+        ghost.Dispose();   // gone before the host's next frame: the sample and the loss arrive together
+        Thread.Sleep(300);
+        Frames(rig, 30);
+
+        Assert.Equal(station.Joins.Count, station.Leaves);   // never accepted, or accepted and released at once
+        Assert.Equal(0UL, rig.Transport.InboundOwner);
+
+        using var next = new Client(domain, id: 8);
+        next.Join(1, 1202);
+        Assert.True(Until(rig, () => station.Joins.Any(j => j.UnitId == 1202)), "the station is free for the next client");
+        Assert.True(Until(rig, () => rig.Transport.InboundOwner == 8));
+    }
+
+    [Fact]
+    public void A_lease_shorter_than_the_contract_default_is_warned_about()
+    {
+        uint domain = Watch.NewDomain();
+        var log = new List<string>();
+        using (new Rig(domain, log: log.Add, leaseSeconds: 1.0))
+        {
+        }
+
+        Assert.Single(log, l => l.Contains("warning: leaseSeconds"));
+
+        log.Clear();
+        using (new Rig(domain, log: log.Add, leaseSeconds: 2.0))
+        {
+        }
+
+        Assert.DoesNotContain(log, l => l.Contains("warning"));
+    }
 }

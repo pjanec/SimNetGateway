@@ -11,7 +11,9 @@ namespace SimNetGateway.Plugin.DdsPlayer;
 /// station's partition. Liveliness is the presence signal: when the owning client's writer is lost (<c>AliveCountChange &lt; 0</c> or <c>NotAliveCountChange &gt; 0</c>)
 /// the unit is released once and the slot is free for the next join. One player at a time, across all three topics: the player is the client (its <c>ClientId</c>) whose
 /// <c>JoinRequest</c> the seam accepted; samples of another client on any topic are dropped with one warning per foreign client. The publication handles that carried the
-/// player's client id are remembered, and losing any of them is losing the client. Thread rule: the DDS listener callbacks only record into queues; every call into the seam happens in <see cref="Pump"/>, on the
+/// player's client id are remembered, and losing any of them is losing the client. A join whose writer is already gone (its instance is not alive, or its writer's liveliness
+/// was lost) is never accepted, so a client that wrote a join and vanished in the same host frame cannot become a player nobody can release. The topics are keyed by
+/// <c>ClientId</c>, so one client's samples never displace another's. Thread rule: the DDS listener callbacks only record into queues; every call into the seam happens in <see cref="Pump"/>, on the
 /// host's main thread.
 /// </summary>
 internal sealed class DpsInbound : IDisposable
@@ -36,6 +38,7 @@ internal sealed class DpsInbound : IDisposable
     private readonly ConcurrentQueue<Liveliness> _liveliness = new();
     private readonly HashSet<ulong> _warned = new();
     private readonly HashSet<(int Topic, long Handle)> _ownerHandles = new();
+    private readonly HashSet<long> _lostHandles = new();
     private ulong _owner;
     private bool _hasJoinSeq, _hasControlSeq;
     private uint _joinSeq, _controlSeq;
@@ -94,13 +97,27 @@ internal sealed class DpsInbound : IDisposable
         }
     }
 
-    /// <summary>The player's client going away (any writer that carried its client id): release the unit once and free the station for the next client.</summary>
+    /// <summary>
+    /// The player's client going away (any writer that carried its client id): release the unit once and free the station for the next client. Every lost writer is
+    /// remembered, also while nobody plays, so a join sample it left behind is not accepted later (<see cref="ReadJoin"/>).
+    /// </summary>
     private void HandleLiveliness()
     {
         bool lost = false;
         while (_liveliness.TryDequeue(out var e))
         {
-            if (e.AliveChange >= 0 && e.NotAliveChange <= 0 || _owner == 0)
+            if (e.AliveChange >= 0 && e.NotAliveChange <= 0)
+            {
+                if (e.AliveChange > 0)
+                {
+                    _lostHandles.Remove(e.Handle);   // the writer is alive again
+                }
+
+                continue;
+            }
+
+            _lostHandles.Add(e.Handle);
+            if (_owner == 0)
             {
                 continue;
             }
@@ -132,7 +149,8 @@ internal sealed class DpsInbound : IDisposable
         using var loan = _join.Reader.Take(16);
         foreach (var sample in loan)
         {
-            if (!sample.IsValid)
+            // a join of a client that is already gone (its writer deleted or its liveliness lost) is never accepted: nobody would be left to release the unit
+            if (!sample.IsValid || sample.Info.InstanceState != DdsInstanceState.Alive || _lostHandles.Contains(sample.Info.PublicationHandle))
             {
                 continue;
             }

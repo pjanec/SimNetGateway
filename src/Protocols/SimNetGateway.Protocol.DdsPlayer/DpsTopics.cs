@@ -48,9 +48,10 @@ public partial struct Session
 {
     public int ProtocolMajor, ProtocolMinor;
     public SessionMode Mode;
+    /// <summary>The simulation time at the last change of the session (mode, running, origin), not a clock: a client takes the time from <c>EntityState.SimTime</c>.</summary>
     public double SimTime;
     public double TimeScale;
-    /// <summary>Changes on a world boundary (scenario reload) so a client drops its caches.</summary>
+    /// <summary>Changes on a world boundary (a reload or an in-place restore): a client drops its caches, joins again and re-sends its <c>GizmoView</c> (DD-017 3.11).</summary>
     public uint WorldEpoch;
     [MaxLength(64)] public string Terrain;
     [MaxLength(64)] public string StationName;
@@ -345,8 +346,12 @@ public partial struct JoinRequest
     public byte Side;
     public byte Kit;
     public int AreaId;
-    /// <summary>The client's identity: a random nonzero id it picks at start and puts on every player sample it writes (JoinRequest, ControlFrame, Leave). One player owns a station at a time.</summary>
-    public ulong ClientId;
+    /// <summary>
+    /// The client's identity and the key of every player topic: a random nonzero id it picks at start and puts on every player sample it writes (JoinRequest,
+    /// ControlFrame, Leave, GizmoView). One instance per client, so KEEP_LAST 1 holds the newest sample of each client and one client never displaces another's.
+    /// One player owns a station at a time.
+    /// </summary>
+    [DdsKey] public ulong ClientId;
 }
 
 /// <summary>One per client frame; the fields of HROT's operator control frame.</summary>
@@ -376,8 +381,8 @@ public partial struct ControlFrame
     public Vec3f LookDir;
     /// <summary>0 default, 1 sight, 2 lock.</summary>
     public byte FirePref;
-    /// <summary>The client's identity (see <see cref="JoinRequest.ClientId"/>); a frame of another client than the player's is dropped.</summary>
-    public ulong ClientId;
+    /// <summary>The client's identity and the key (see <see cref="JoinRequest.ClientId"/>); a frame of another client than the player's is dropped.</summary>
+    [DdsKey] public ulong ClientId;
 }
 
 [DdsTopic(DpsProtocol.Leave)]
@@ -386,8 +391,8 @@ public partial struct ControlFrame
 public partial struct Leave
 {
     public uint Seq;
-    /// <summary>The client's identity (see <see cref="JoinRequest.ClientId"/>); a Leave of another client than the player's is dropped.</summary>
-    public ulong ClientId;
+    /// <summary>The client's identity and the key (see <see cref="JoinRequest.ClientId"/>); a Leave of another client than the player's is dropped.</summary>
+    [DdsKey] public ulong ClientId;
 }
 
 /// <summary>What the client wants of the gateway's gizmo projectors; none sent = no projectors run.</summary>
@@ -402,8 +407,8 @@ public partial struct GizmoView
     [DdsBound(256)] public List<int> PinnedIds;
     [DdsBound(32)] public List<NameItem> PinnedFamilies;
     public float RateHz;
-    /// <summary>The client's identity (see <see cref="JoinRequest.ClientId"/>): the view of the player is followed; with no player, the first client that writes one.</summary>
-    public ulong ClientId;
+    /// <summary>The client's identity and the key (see <see cref="JoinRequest.ClientId"/>): the view of the player is followed; with no player, the first client that writes one.</summary>
+    [DdsKey] public ulong ClientId;
 }
 
 #endregion
