@@ -82,19 +82,22 @@ Rejected: one gateway serving many players (HROT's station identity is the node;
   current state of every instance from the writer's cache. An entity that leaves is **disposed**.
 - **Event topics** (fire, detonation, effect) are `VOLATILE`, `RELIABLE`, `KEEP_LAST` small depth: a client not connected misses them, by
   design.
-- **Player topics** (client to gateway) carry `LIVELINESS AUTOMATIC` with a lease (default 2 s, configurable). The gateway reacts to the
-  liveliness of the matched writer: lost = the player left (section 3.6).
+- **Player topics** (client to gateway) are keyed by the client's `ClientId` (one instance per client, `KEEP_LAST 1` per instance) and carry
+  `LIVELINESS AUTOMATIC` with a lease (default 2 s, configurable). The gateway reacts to the liveliness of the matched writer: lost = the
+  player left (section 3.6).
 - The gateway publishes whether or not any client is matched. The simulation is never told about clients.
 
 Rejected: a hello/ack session protocol (DDS discovery and durability already give it); per-client state replay by the gateway.
 
 ### 3.2a One partition per station (P-2a)
 
-Every DPS topic of a station is written and read in one **DDS partition named after the station** (configuration `dps.partition`,
-default the node's station name). A client is configured with the partition of the node it pairs with, and sees only that gateway: its
-own world view (one id space), its own `PlayerSlot`, and only its `ControlFrame`s reach that gateway. A view-only client (big screen,
-instructor) uses the partition of any node. A second client that writes player topics into a partition whose player is already matched is
-ignored (the first matched writer wins, the gateway logs one warning).
+Every DPS topic of a station is written and read in one **DDS partition named after the station** (configuration `dps.partition`;
+when it is empty the plugin names it `station-<site>-<application>` from the gateway's shared settings, because the plugin does not know
+the node's station name). A client is configured with the partition of the node it pairs with, and sees only that gateway: its own world
+view (one id space), its own `PlayerSlot`, and only its `ControlFrame`s reach that gateway. A view-only client (big screen, instructor)
+uses the partition of any node and writes no player topics. One player per station: the player is the client (its `ClientId`) whose
+`JoinRequest` the gateway accepted; the player topics of any other client in the partition are dropped (one warning per foreign client id)
+until the player leaves or is lost.
 
 Rejected: a station id in every key (each gateway still has its own id space, so world topics from N gateways would collide); one DDS
 domain per station (domains are a deployment resource; partitions are free and configured per participant).
@@ -192,7 +195,8 @@ that every map host gets the full set of gizmos ("component presence defines app
 the gateway one more gizmo host:
 
 - The host runs HROT's projectors into its own draw builder, with a visibility policy set by the client.
-- **Client to gateway:** `GizmoView` (one per station): the layers the client wants, the selected entity ids, the pinned entity ids and
+- **Client to gateway:** `GizmoView` (keyed by `ClientId`; the gateway follows one view per station, the player's or else the first
+  client's): the layers the client wants, the selected entity ids, the pinned entity ids and
   families, a rate (default 10 Hz).
 - **Gateway to client:** `GizmoFrame`, keyed by (`Producer`, `Layer`), `RELIABLE`, `TRANSIENT_LOCAL`, `KEEP_LAST 1`: the complete list of
   primitives of that layer for the latest gizmo frame (line strip, arrow, circle, polygon, box, text, icon; world coordinates; colour;
@@ -248,6 +252,12 @@ readers); the host builds against a HROT checkout that has it.
 | `PersonLook.Of(world, entity, tkb)` -> `PersonAppearance(Outfit, Seed, Side)` (LK-S2) | `Appearance` | the outfit's colours per slot (RGBA), the garment kinds (top, legwear, head, over, extra), camouflage, hair, the face, flags (soldier, child, woman, police) |
 | `VehicleLook` (VA-S1 and the opening / light readers) | `VehicleLook` (state topic, keyed by EntityId) | per-part state (Intact, Damaged, Destroyed), kill kind, turret thrown, burning, smoking, opening progress by TKB opening id, effective light mask |
 
+HROT's enumerations reach the plugin by **name**: the host writes the effect kind, calibre class, surface and destruction kind with the
+enumeration's own name (as for the outfit kinds), and the plugin maps the names it knows to the contract's enumerations (`LookNames`); an
+unknown name becomes the contract's unknown value (`EffectKindNone`, `EffectSizeUnknown`, `EffectSurfaceUnknown`, `KillKindUnknown`),
+never a different kind. Tracer, flare and chaff are not carried. `KillKind` follows HROT's destruction kinds (None, KnockedOut,
+BurntOut, Catastrophic). A HrotHost test lists HROT's names, so a value HROT appends fails it until the plugin maps it.
+
 Where the reader and DPS differ:
 - A part's `Burning` needs the part's centre, which only the renderer knows: DPS sends the damage state and `Burning` for the vehicle;
   the client puts the fire on its own parts.
@@ -257,6 +267,56 @@ Where the reader and DPS differ:
 - Equipment as separate items with TKB ids (helmet, vest, weapon) is not in `Outfit`; those `Appearance` fields stay empty (3.8).
 
 The wreck's flames are simulation state in HROT (thermal `FireState`, CE-4660); "smoke after the fire" comes from the look library.
+
+### 3.11 What a client must do
+
+Everything a client (any engine, any DDS implementation) needs besides the generated IDL (`DpsTopics.idl`, `DpsTypes.idl`).
+
+**Connect.** Join the station's DDS domain with one participant whose publisher and subscriber use the station's partition (3.2a).
+Read `Session` first and refuse another `ProtocolMajor`.
+
+**QoS per topic.** The IDL does not carry it, and a mismatch fails the DDS match silently:
+
+| Category | Topics | Reliability | Durability | History | Liveliness |
+|---|---|---|---|---|---|
+| state | `Session`, `Entity`, `EntityState`, `Articulation`, `PersonState`, `Appearance`, `VehicleLook`, `PlayerSlot`, `OwnUnit`, `GizmoFrame` | RELIABLE | TRANSIENT_LOCAL | KEEP_LAST 1 per instance | default |
+| event | `Fire`, `Detonation`, `Effect` | RELIABLE | VOLATILE | KEEP_LAST 16 | default |
+| player | `JoinRequest`, `ControlFrame`, `Leave`, `GizmoView` | RELIABLE | VOLATILE | KEEP_LAST 1 per instance | AUTOMATIC, lease no longer than the station's `dps.leaseSeconds` |
+
+A reader of a state topic asks for TRANSIENT_LOCAL to get the current picture when it joins late. A player writer must offer AUTOMATIC
+liveliness with a lease no longer than the station's lease (default 2 s, the contract's `DefaultLeaseMs`): a default DDS writer offers an
+infinite lease and is never matched by the gateway. The gateway logs a warning when its own lease is configured below the contract's
+default, because a client that uses the default would then not be matched.
+
+**Identity.** Pick a random nonzero 64-bit `ClientId` at start and put it on every player sample (`JoinRequest`, `ControlFrame`, `Leave`,
+`GizmoView`). It is the key of those topics, so each client has its own instance and no client displaces another's samples. A sample with
+`ClientId` 0 is ignored.
+
+**Writer lifetime.** Create the player writers once and keep them for the whole session. Deleting a writer (for example one writer per
+request) or losing its liveliness is "client lost": the gateway releases the unit and frees the station. To leave on purpose, write
+`Leave`; the writers may go after it.
+
+**Joining and playing.** Read `PlayerSlot`: its `Offers` list the units to choose (roles come in a later step). Write `JoinRequest` with
+Kind Unit and the offer's id, `RequestSeq` growing per request; the slot goes TakingControl, then Playing with the unit id. `JoinKind` 0 is
+Observe, and an accepted Observe makes that client the station's player as well, so a client that only watches writes no player topic at
+all. While Playing, write one `ControlFrame` per client frame with a growing `Seq` (the newest wins, older ones are dropped).
+`Forward` / `Lateral` are body-relative (-1..1: forward, lateral right). `AimPoint`, `LookFrom` and `LookDir` are required on every
+frame: the simulation fires at the aim point along the look ray, and a frame without them never fires. The press counters (`ShotSeq`,
+`CancelSeq`, `AmmoSeq`, `UseSeq`) count presses and wrap; a change is a press. In replay the slot is Observing and joins are refused. A
+join while the simulation is paused stays TakingControl and returns to Choosing after 10 s (possession needs running time).
+
+**Instances that go away.** Treat a sample whose instance state is not ALIVE as "gone", whether NOT_ALIVE_DISPOSED (an entity removed,
+a gizmo layer turned off) or NOT_ALIVE_NO_WRITERS (the gateway's writers ended, as at every world boundary).
+
+**World boundary.** `Session.WorldEpoch` changes on a reload or an in-place restore: the gateway starts over with new readers and writers
+and remembers nothing of the client. Drop every cache of the old world, join again through `PlayerSlot`, and send the `GizmoView` again
+(it is VOLATILE, so the new reader never sees the old sample). The same holds when the `PlayerSlot` instance goes not-alive.
+
+**Time.** Take the simulation time from `EntityState.SimTime` and the event samples. `Session.SimTime` is the time at the last session
+change (mode, running, origin), not a clock.
+
+**Gizmos.** Write a `GizmoView` only to see the gateway's gizmos; with no view no projector runs. Read `GizmoFrame` keyed by
+(`Producer`, `Layer`): each sample replaces the layer's whole picture.
 
 ## 4. Topic summary
 
@@ -271,9 +331,12 @@ The wreck's flames are simulation state in HROT (thermal `FireState`, CE-4660); 
 | `Fire`, `Detonation`, `Effect` | none | event | gateway to client |
 | `VehicleLook` | EntityId | state | gateway to client |
 | `PlayerSlot`, `OwnUnit` | none (one per station partition) | state | gateway to client |
-| `JoinRequest`, `ControlFrame`, `Leave` | none | player (liveliness) | client to gateway |
+| `JoinRequest`, `ControlFrame`, `Leave` | ClientId | player (liveliness) | client to gateway |
 | `GizmoFrame` | Producer, Layer | state | gateway to client |
-| `GizmoView` | none (one per station partition) | player | client to gateway |
+| `GizmoView` | ClientId | player | client to gateway |
+
+The QoS of each category is in 3.11 (the generated IDL carries the types and keys, not the QoS). Protocol version 1.0 is not frozen until
+the first external client is released: the `ClientId` key and the aligned look enumerations (3.10) changed it in place.
 
 ## 5. Sequence: a client joins a running exercise and plays
 
@@ -436,7 +499,7 @@ and the IDL and serializers are generated from them (`DpsTopics.idl`, `DpsTypes.
 - Strings are `string<N>` (names 64, kinds and layers 32), sequences are bounded (appearance slots 16, equipment 16, vehicle parts 32, openings 16,
   offers 128, ammo 16, gizmo layers 64, gizmo primitives 4096, points per primitive 64). Colours are `uint` 0xRRGGBBAA (no hex strings).
 - QoS: state topics Reliable + TransientLocal + KeepLast 1; event topics Reliable + Volatile + KeepLast 16; player topics Reliable + Volatile + KeepLast 1
-  with automatic liveliness, lease `DpsProtocol.DefaultLeaseMs` (2000). There is no `Heartbeat` topic. `PlayerSlot` and `OwnUnit` are state topics
+  per instance (keyed by `ClientId`, fix wave) with automatic liveliness, lease `DpsProtocol.DefaultLeaseMs` (2000). There is no `Heartbeat` topic. `PlayerSlot` and `OwnUnit` are state topics
   written by the gateway (one per station partition).
 - IDL enumerators share one scope per module (two enums with a `None` collide, and a module attribute does not help: references resolve by namespace),
   so **every enumerator is prefixed with its enum name** (`StanceCrouched`, `GestureWaving`); value 0 is the unknown / none value.
@@ -445,8 +508,8 @@ and the IDL and serializers are generated from them (`DpsTopics.idl`, `DpsTypes.
 
 ### One player per station: the client id (Task 6 fix)
 
-`JoinRequest`, `ControlFrame` and `Leave` carry a `ClientId` (`ulong`, appended as the last field): **a client picks a random nonzero id at start and sets it on every player
-sample it writes**. The player of a station is the client whose `JoinRequest` the host accepted; a `ControlFrame` or `Leave` of another client, and a `JoinRequest` of another
+`JoinRequest`, `ControlFrame`, `Leave` and `GizmoView` carry a `ClientId` (`ulong`, the last field, and since the fix wave the topics' key): **a client picks a random nonzero
+id at start and sets it on every player sample it writes**. The player of a station is the client whose `JoinRequest` the host accepted; a `ControlFrame` or `Leave` of another client, and a `JoinRequest` of another
 client while a player holds the station, are dropped (one warning per foreign client id). The player's `Leave`, or losing the liveliness of any writer that carried its id,
 frees the station for the next client. A sample with `ClientId` 0 is ignored. The reference client sets it.
 
@@ -505,9 +568,37 @@ Gaps found (follow-ups, not fixed in this round):
 - **Gizmos not checked live:** the projectors that draw paths live in a presentation assembly the host tests do not load; the live run
   did not exercise `GizmoView` (the headless client sends none). Next live run: the window client, G on a unit.
 - **Possession needs running time:** a join while the editor is paused stays TakingControl and falls back to Choosing after 10 s.
-- Client lease: a client whose writers offer a liveliness lease longer than `dps.leaseSeconds` is not matched by the gateway (DDS rule).
+- Client lease: a client whose writers offer a liveliness lease longer than `dps.leaseSeconds` is not matched by the gateway (DDS rule);
+  written into the client contract (3.11), and the plugin warns when `leaseSeconds` is below the contract's default (fix wave).
 - Deferred minor points from the task reviews: `Fire.WeaponSlot`, `Detonation.Result`, `Entity.ParentId`, `PersonState.CarryOtherId` are 0
   (the pivot does not carry them); `GizmoFrame.SimTime` is 0; the default partition (no `partition` configured) is
   `station-<site>-<application>`; person detail is change-detected exactly (the plugin applies the thresholds); colours are
   0xRRGGBBAA numbers (3.5 says #RRGGBB strings: the types win); enumerators carry their enum's name as a prefix (IDL scope).
 
+### Fix wave after the final review (2026-11-19)
+
+- **Keyed player topics.** `ClientId` is the key of `JoinRequest`, `ControlFrame`, `Leave` and `GizmoView`: `KEEP_LAST 1` now holds one
+  sample per client, so another client writing into the partition never displaces the player's frame, join or leave. The ownership rule
+  (the player is the client whose join was accepted) is unchanged. Protocol stays 1.0 (not released yet).
+- **A vanished client cannot become the player.** The inbound remembers every player writer whose liveliness was lost, also while
+  nobody plays, and accepts a `JoinRequest` only from an alive instance of a writer that was not lost. A client that writes a join and
+  exits in the same host frame is never accepted, so no unit stays possessed by a client that is gone.
+- **Teardown never reaches the world.** `DisGatewaySystem.Dispose` detaches the station (`HrotPlayerStation.Detach`) before the farewell
+  tick: from then on Join answers false, Control and Leave do nothing, and no gizmo view is taken. The farewell tick's plugin pumps run
+  as before, and DIS's final Deactivated states still go out.
+- **Gizmo view ends with its runtime.** Disposing the dps transport sets the source's view to none, and the station's boundary does it
+  too, so HROT's projectors stop at a world boundary and at teardown. `GizmoView` stays VOLATILE: a client re-sends it on a new
+  `Session.WorldEpoch` (3.11); the reference client does, and restarts its latest sim time there.
+- **Look enumerations by name.** See 3.10: the host sends HROT's effect kind, calibre class, surface and destruction kind as names; the
+  plugin's `LookNames` maps them with an unknown fallback. `KillKind` became None, KnockedOut, BurntOut, Catastrophic, Unknown;
+  `EffectSurface` gained `EffectSurfaceUnknown` as value 0.
+- **Possession after an in-place restore (checked in HROT).** `PossessedBy` is `DataPolicy.NoScenario` only, so it is in HROT's binary
+  checkpoints and recorder keyframes, and a restore (checkpoint, keyframe seek, the end of a dry run; all raise `WorldEpoch.Restored`)
+  puts it back as it was in the snapshot. Nothing in HROT re-validates it on a restore: `PossessionSystem` releases a holder only when it
+  is killed or its node departs, and the editor's own station adopts any unit the world says this node holds. So after every world
+  boundary the station's flow now sweeps: on the live frames that follow, every `Playable` unit this node holds - other than the one a new
+  player is taking - is released (`EntityOrders.Unpossess`), asked again at most once a second (a release applies only while time runs),
+  until none is held; then the sweep ends. Limit: in step 1 the station shares the node id with the editor's own operator, so a playable
+  unit the editor user holds at that moment is released as well.
+- **Lease warning.** The plugin logs a warning at bind when `dps.leaseSeconds` is below the contract's default lease.
+- **Contract for client authors.** Section 3.11; 3.2a now states the default partition and the one-player rule as built.
