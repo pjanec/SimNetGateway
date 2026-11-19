@@ -271,6 +271,10 @@ internal sealed class PossessionFlow : IPlayerFlow
     private bool _sweep;
     private readonly Dictionary<int, long> _sweepAsked = new();
 
+    // Units a player of this station has asked to possess; kept across world boundaries, so the sweep never releases a unit this node holds for another reason
+    // (the editor operator possessing a playable unit, or a host where no player plugin is installed).
+    private readonly HashSet<int> _joined = new();
+
     public PossessionFlow(HrotServices services, Func<EntityOrders?> orders)
     {
         _services = services;
@@ -446,8 +450,8 @@ internal sealed class PossessionFlow : IPlayerFlow
     /// <summary>
     /// After a world boundary nobody plays here, but an in-place restore (a checkpoint, a keyframe, the end of a dry run) puts back the world's <c>PossessedBy</c>, which
     /// HROT keeps in its binary snapshots: a playable unit held by this node would stay possessed, its AI paused, with no player. So on the live frames after a boundary
-    /// every playable unit this node holds - other than the one a new player is taking - is released, asked again at most once a second (HROT applies a release only
-    /// while time runs), until none is held.
+    /// every playable unit this node holds that a player of this station once joined - other than the one a new player is taking - is released, asked again at most
+    /// once a second (HROT applies a release only while time runs), until none is held. Units no player joined are not this station's to release.
     /// </summary>
     private void Sweep(EntityRepository world)
     {
@@ -465,6 +469,11 @@ internal sealed class PossessionFlow : IPlayerFlow
             }
 
             int id = world.GetComponentRO<NetworkIdentity>(e).Value;
+            if (!_joined.Contains(id))
+            {
+                continue;   // held by this node, but not through a player of this station
+            }
+
             if (id == UnitId || id == _releaseUnit)
             {
                 continue;   // the new player's unit, or one already being let go
@@ -535,6 +544,7 @@ internal sealed class PossessionFlow : IPlayerFlow
                     return false;
                 }
 
+                _joined.Add(request.UnitId);
                 UnitId = request.UnitId;
                 _deadline = NowMs() + TimeoutMs;
                 State = PlayerSlotState.TakingControl;

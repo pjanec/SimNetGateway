@@ -415,6 +415,26 @@ public class PlayerStationTests
     }
 
     [Fact]
+    public void A_unit_this_node_holds_without_a_player_is_not_swept()
+    {
+        // the editor operator possesses a playable unit (or no player plugin is installed): no player of this station joined it, so a boundary leaves it held
+        using var h = new Stage();
+        var e = h.AddPlayable();
+        h.Hold(e);
+        h.Steps(2);
+
+        h.Events<ReleasePossessionEvent>();
+
+        WorldEpoch.Restored(h.World);
+        h.Step();   // the first live frame after the boundary is where the sweep asks
+        Assert.Empty(h.Read<ReleasePossessionEvent>());
+
+        h.AdvanceMs(1_000);
+        h.Step();
+        Assert.Empty(h.Read<ReleasePossessionEvent>());
+    }
+
+    [Fact]
     public void A_unit_held_by_another_station_is_not_swept()
     {
         using var h = new Stage();

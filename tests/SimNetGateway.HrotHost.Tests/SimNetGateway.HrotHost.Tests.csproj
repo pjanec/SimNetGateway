@@ -19,6 +19,8 @@
     <ProjectReference Include="$(HrotRoot)FDP/Engine/Fdp.Core/Fdp.Core.csproj" />
     <ProjectReference Include="$(HrotRoot)FDP/Engine/Fdp.ModuleHost/Fdp.ModuleHost.csproj" />
     <ProjectReference Include="$(HrotRoot)FDP/Toolkits/Fdp.Toolkits/Fdp.Toolkits.csproj" />
+    <!-- the gizmo projectors are found by reflection over HROT's assemblies, some of which need CycloneDDS at load; in an editor HROT ships it -->
+    <PackageReference Include="CycloneDDS.NET" />
   </ItemGroup>
   <ItemGroup>
     <!-- the DIS peer builders of the gateway tests, shared by source link (test-side helpers of that project) -->

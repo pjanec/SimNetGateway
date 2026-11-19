@@ -596,9 +596,10 @@ Gaps found (follow-ups, not fixed in this round):
   checkpoints and recorder keyframes, and a restore (checkpoint, keyframe seek, the end of a dry run; all raise `WorldEpoch.Restored`)
   puts it back as it was in the snapshot. Nothing in HROT re-validates it on a restore: `PossessionSystem` releases a holder only when it
   is killed or its node departs, and the editor's own station adopts any unit the world says this node holds. So after every world
-  boundary the station's flow now sweeps: on the live frames that follow, every `Playable` unit this node holds - other than the one a new
-  player is taking - is released (`EntityOrders.Unpossess`), asked again at most once a second (a release applies only while time runs),
-  until none is held; then the sweep ends. Limit: in step 1 the station shares the node id with the editor's own operator, so a playable
-  unit the editor user holds at that moment is released as well.
+  boundary the station's flow now sweeps: on the live frames that follow, every `Playable` unit this node holds that a player of this
+  station once joined - other than the one a new player is taking - is released (`EntityOrders.Unpossess`), asked again at most once a
+  second (a release applies only while time runs), until none is held; then the sweep ends. A unit no player joined is left alone, so the
+  editor's own operator keeps a playable unit across boundaries, and a host without a player plugin never releases anything. Limit: in
+  step 1 the station shares the node id with the operator, so a unit the operator holds that a player joined earlier is released as well.
 - **Lease warning.** The plugin logs a warning at bind when `dps.leaseSeconds` is below the contract's default lease.
 - **Contract for client authors.** Section 3.11; 3.2a now states the default partition and the one-player rule as built.
