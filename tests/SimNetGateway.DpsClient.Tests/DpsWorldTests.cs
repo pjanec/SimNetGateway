@@ -8,7 +8,7 @@ namespace SimNetGateway.DpsClient.Tests;
 /// <summary>The reference client's world against a fake gateway: real CycloneDDS readers and writers in one process.</summary>
 public class DpsWorldTests
 {
-    private static int _domainCounter = (Environment.ProcessId + 17) % 50;
+    private static int _domainCounter = Random.Shared.Next(0, 80);
 
     private static uint NewDomain() => (uint)(130 + Interlocked.Increment(ref _domainCounter) % 80);
 
@@ -270,6 +270,90 @@ public class DpsWorldTests
     {
         var error = new StringWriter();
         Assert.Equal(2, DpsClientProgram.Run(args, new StringWriter(), error));
+    }
+
+    private static D.PlayerSlot Slot(D.SlotState state, int unit = 0) => new()
+    {
+        State = state,
+        UnitId = unit,
+        Offers = [new D.Offer { Kind = D.OfferKind.OfferKindUnit, Id = 1201, Name = "R", Free = true }],
+    };
+
+    [Fact]
+    public void Control_frames_aim_along_the_own_units_facing()
+    {
+        uint domain = NewDomain();
+        using var gw = new FakeGateway(domain, "p6");
+        using var world = new DpsWorld(domain, "p6", clock: () => 10.0);
+
+        // yaw 90 degrees: facing north
+        float h = (float)Math.Sqrt(0.5);
+        gw.Entities.Write(Ent(1201, D.Domain.DomainPerson, 1));
+        gw.States.Write(new D.EntityState { EntityId = 1201, Position = new D.Vec3d { X = 50, Y = 60, Z = 2 }, Orientation = new D.Quat { Z = h, W = h } });
+        gw.Slot.Write(Slot(D.SlotState.SlotStatePlaying, 1201));
+        Assert.True(Until(world, gw, () => world.IsPlaying && world.Entities.TryGetValue(1201, out var e) && e.State is not null));
+
+        Assert.True(Until(world, gw, () =>
+        {
+            world.SendControl();
+            return gw.ControlsSeen.Count > 0;
+        }));
+        var f = gw.ControlsSeen[^1];
+        Assert.Equal(50, f.LookFrom.X, 6);
+        Assert.Equal(60, f.LookFrom.Y, 6);
+        Assert.Equal(3.6, f.LookFrom.Z, 6);
+        Assert.Equal(0f, f.LookDir.X, 4);
+        Assert.Equal(1f, f.LookDir.Y, 4);
+        Assert.Equal(0f, f.LookDir.Z);
+        Assert.Equal(50, f.AimPoint.X, 4);
+        Assert.Equal(160, f.AimPoint.Y, 4);
+        Assert.Equal(3.6, f.AimPoint.Z, 6);
+
+        // a hand aim stays, the look ray is still filled
+        world.SetAim(7, 8, 0);
+        Assert.True(Until(world, gw, () =>
+        {
+            world.SendControl();
+            return gw.ControlsSeen[^1].AimPoint.X == 7;
+        }));
+        Assert.Equal(1f, gw.ControlsSeen[^1].LookDir.Y, 4);
+    }
+
+    [Fact]
+    public void No_automatic_join_after_leave_and_sim_time_follows_entity_state()
+    {
+        uint domain = NewDomain();
+        double now = 0;
+        using var gw = new FakeGateway(domain, "p7");
+        using var world = new DpsWorld(domain, "p7", clock: () => now);
+
+        gw.Slot.Write(Slot(D.SlotState.SlotStateChoosing));
+        gw.Entities.Write(Ent(1));
+        gw.States.Write(new D.EntityState { EntityId = 1, SimTime = 42.5 });
+        Assert.True(Until(world, gw, () => world.Slot is not null && world.LatestSimTime > 0));
+        Assert.Equal(42.5, world.LatestSimTime);
+
+        Assert.True(Until(world, gw, () =>
+        {
+            now += 1.1;
+            world.TryAutoJoin();
+            return gw.JoinsSeen.Count > 0;
+        }));
+        Until(world, gw, () => false, 300);
+        int joins = gw.JoinsSeen.Count;
+
+        world.Leave();
+        for (int i = 0; i < 10; i++)
+        {
+            now += 1.1;
+            Assert.False(world.TryAutoJoin());
+            Until(world, gw, () => false, 30);
+        }
+
+        Assert.Equal(joins, gw.JoinsSeen.Count);
+
+        // an explicit join is allowed again
+        Assert.True(world.JoinFirstUnit());
     }
 
     [Fact]

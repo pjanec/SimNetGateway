@@ -82,16 +82,14 @@ public static class DpsClientProgram
         var sw = Stopwatch.StartNew();
         double nextLine = 1.0, nextFrame = 0, playingSince = -1;
         bool fired = false, left = false, triggerFrame = false;
-        double lastJoin = -10;
         while (sw.Elapsed.TotalSeconds < seconds)
         {
             double t = sw.Elapsed.TotalSeconds;
             world.Pump();
 
-            if (join && !world.IsPlaying && t - lastJoin >= 1.0 && world.Slot is { State: SlotState.SlotStateChoosing })
+            if (join && !world.IsPlaying)
             {
-                world.JoinFirstUnit();
-                lastJoin = t;
+                world.TryAutoJoin();
             }
 
             if (world.IsPlaying)
@@ -147,7 +145,7 @@ public static class DpsClientProgram
         world.Pump();
         output.WriteLine(
             $"entities={world.Entities.Count} slot={(world.Slot is { } slot ? slot.State.ToString() : "none")} gizmo_layers={world.Gizmos.Count} client_id={world.ClientId}");
-        output.WriteLine("summary " + string.Join(' ', SummaryTopics.Select(topic => $"{topic.Replace("DPS_", string.Empty)}={world.Received.GetValueOrDefault(topic)}")));
+        output.WriteLine("summary " + string.Join(' ', SummaryTopics.Select(topic => $"{topic.Replace("DPS_", string.Empty)}={world.Received.GetValueOrDefault(topic)}")) + $" own_fire={world.OwnFire}");
         return 0;
     }
 
@@ -161,7 +159,7 @@ public static class DpsClientProgram
         }
 
         string health = w.Own is { } o ? FormattableString.Invariant($"{o.Health:0.#}/{o.MaxHealth:0.#}") : "n/a";
-        string sim = w.Session is { } se ? FormattableString.Invariant($"{se.SimTime:0.0}") : "n/a";
+        string sim = w.LatestSimTime > 0 ? FormattableString.Invariant($"{w.LatestSimTime:0.0}") : "n/a";
         return $"t={t:0} sim={sim} entities={w.Entities.Count} slot={state} pos={pos} health={health} gizmo_layers={w.Gizmos.Count}";
     }
 }

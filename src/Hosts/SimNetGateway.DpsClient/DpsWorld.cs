@@ -78,7 +78,13 @@ public sealed class DpsWorld : IDisposable
         Count<D.PersonState>(DpsProtocol.PersonState);
         Count<D.Appearance>(DpsProtocol.Appearance);
         Count<D.VehicleLook>(DpsProtocol.VehicleLook);
-        Count<D.Fire>(DpsProtocol.Fire);
+        Count<D.Fire>(DpsProtocol.Fire, f =>
+        {
+            if (Slot is { UnitId: > 0 } slot && f.ShooterId == slot.UnitId)
+            {
+                OwnFire++;
+            }
+        });
         Count<D.Detonation>(DpsProtocol.Detonation);
         Count<D.Effect>(DpsProtocol.Effect);
         Count<D.Articulation>(DpsProtocol.Articulation);
@@ -92,13 +98,26 @@ public sealed class DpsWorld : IDisposable
 
     private readonly List<Action> _countPumps = new();
 
-    private void Count<T>(string topic)
+    /// <summary>Fire samples whose shooter is the own unit.</summary>
+    public int OwnFire { get; private set; }
+
+    /// <summary>The newest simulation time seen on any EntityState (0 before the first).</summary>
+    public double LatestSimTime { get; private set; }
+
+    /// <summary>True after <see cref="Leave"/> until the next explicit <see cref="JoinFirstUnit"/>: an automatic join stays quiet.</summary>
+    public bool HasLeft { get; private set; }
+
+    private void Count<T>(string topic, Action<T>? each = null)
         where T : struct
     {
         Received[topic] = 0;
         var reader = new DdsReader<T>(_participant);
         _counters.Add(reader);
-        _countPumps.Add(() => Drain(reader, _ => Received[topic]++, _ => { }));
+        _countPumps.Add(() => Drain(reader, d =>
+        {
+            Received[topic]++;
+            each?.Invoke(d);
+        }, _ => { }));
     }
 
     public string Partition { get; }
@@ -150,6 +169,7 @@ public sealed class DpsWorld : IDisposable
         Drain(_state, s =>
         {
             Received[DpsProtocol.EntityState]++;
+            LatestSimTime = Math.Max(LatestSimTime, s.SimTime);
             var entity = EntityFor(s.EntityId);
             entity.State = s;
             entity.ReceivedAt = now;
@@ -209,6 +229,7 @@ public sealed class DpsWorld : IDisposable
     /// <summary>Asks for the first free unit among the slot's unit offers (roles are not requested). False when there is none.</summary>
     public bool JoinFirstUnit()
     {
+        HasLeft = false;
         if (Slot is not { } slot || slot.Offers is null)
         {
             return false;
@@ -226,8 +247,24 @@ public sealed class DpsWorld : IDisposable
         return false;
     }
 
+    private double _lastAutoJoin = double.NegativeInfinity;
+
+    /// <summary>Headless join: once a second while the slot is Choosing, never after the client has left.</summary>
+    public bool TryAutoJoin()
+    {
+        double now = _clock();
+        if (HasLeft || Slot is not { State: D.SlotState.SlotStateChoosing } || now - _lastAutoJoin < 1.0)
+        {
+            return false;
+        }
+
+        _lastAutoJoin = now;
+        return JoinFirstUnit();
+    }
+
     public void Leave()
     {
+        HasLeft = true;
         _leave.Write(new D.Leave { Seq = ++_leaveSeq, ClientId = ClientId });
     }
 
@@ -240,6 +277,7 @@ public sealed class DpsWorld : IDisposable
 
     public void SetAim(double x, double y, double z = 0.0)
     {
+        _aimManual = true;
         _frame.AimPoint = new D.Vec3d { X = x, Y = y, Z = z };
     }
 
@@ -263,9 +301,38 @@ public sealed class DpsWorld : IDisposable
 
     private int _stance;
 
+    private bool _aimManual;
+
+    private const double EyeHeight = 1.6, SightRange = 100.0;
+
+    /// <summary>
+    /// Fills LookFrom (own position + 1.6 m up) and LookDir (the unit's horizontal facing, body +x) from the own unit's state, and, unless the caller aims by hand,
+    /// AimPoint = LookFrom + 100 m along LookDir. Nothing changes while the own unit's state is unknown.
+    /// </summary>
+    public void UpdateLook()
+    {
+        if (Slot is not { UnitId: > 0 } slot || !Entities.TryGetValue(slot.UnitId, out var own) || own.State is not { } state)
+        {
+            return;
+        }
+
+        var q = state.Orientation;
+        double yaw = Math.Atan2(2.0 * (q.W * q.Z + q.X * q.Y), 1.0 - 2.0 * (q.Y * q.Y + q.Z * q.Z));
+        double dx = Math.Cos(yaw), dy = Math.Sin(yaw);
+        var p = own.PositionAt(_clock());
+        var from = new D.Vec3d { X = p.X, Y = p.Y, Z = p.Z + EyeHeight };
+        _frame.LookFrom = from;
+        _frame.LookDir = new D.Vec3f { X = (float)dx, Y = (float)dy, Z = 0f };
+        if (!_aimManual)
+        {
+            _frame.AimPoint = new D.Vec3d { X = from.X + dx * SightRange, Y = from.Y + dy * SightRange, Z = from.Z };
+        }
+    }
+
     /// <summary>Writes the current control frame with the next sequence number.</summary>
     public void SendControl()
     {
+        UpdateLook();
         _frame.Seq++;
         _frame.ClientId = ClientId;
         _control.Write(_frame);
