@@ -329,8 +329,8 @@ public class HrotIngressTests
         Assert.Equal((long)HrotStance.Crouched, e.Get(h.Schema.Stance).AsInt());
         Assert.Equal((long)HrotWeaponPosture.Aimed, e.Get(h.Schema.WeaponPosture).AsInt());
         Assert.Equal((long)HrotInjury.Wounded, e.Get(h.Schema.Injury).AsInt());
-        Assert.Equal(h.Frame.PointToEcef(new Vec3(10, 20, 1)).X, e.Get(h.Schema.AimPoint).AsVec3().X, 3); // the frame of the position
-        Assert.Equal(h.Frame.PointToEcef(new Vec3(10, 20, 1)).Y, e.Get(h.Schema.AimPoint).AsVec3().Y, 3);
+        Assert.Equal(h.Frame!.PointToEcef(new Vec3(10, 20, 1)).X, e.Get(h.Schema.AimPoint).AsVec3().X, 3); // the frame of the position
+        Assert.Equal(h.Frame!.PointToEcef(new Vec3(10, 20, 1)).Y, e.Get(h.Schema.AimPoint).AsVec3().Y, 3);
     }
 
     [Fact]

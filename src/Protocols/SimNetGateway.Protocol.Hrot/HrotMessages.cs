@@ -488,3 +488,17 @@ public readonly record struct HrotTypeRecord(long TypeId, string Name, string Ca
 /// </summary>
 public readonly record struct HrotAnimal(
     int Id, string Mode, byte FearBand, bool Bolting, bool Dangerous, bool Calling, int FlockCount, int FlockInitialCount, uint FlockSeed, string FlockMode) : IHrotToGatewayMessage;
+
+// ---- DPS round 2 (DD-018 3.6a): building damage -------------------------------------------------------------------------
+
+/// <summary>One wall breach. <paramref name="Panel"/> is the panel's index WITHIN its building, <paramref name="Kind"/> the NAME of HROT's breach kind (Hole, Passage).</summary>
+public readonly record struct HrotBreach(int Panel, float From, float To, float Bottom, float Top, string Kind);
+
+/// <summary>One hit window: <paramref name="Panel"/> within the building, hits 1..2 cracked (crack points as bytes 0..255), 3 broken.</summary>
+public readonly record struct HrotWindowDamage(int Panel, int Opening, byte Hits, byte U0, byte V0, byte U1, byte V1);
+
+/// <summary>
+/// The damage of one building, all of HROT's damage entities of it merged, sent when it changes. <paramref name="Building"/> is the terrain object label
+/// "terrain/building label". Not collapsed and no breaches and no windows = the building has no damage any more (a reload).
+/// </summary>
+public readonly record struct HrotBuildingDamage(string Building, bool Collapsed, IReadOnlyList<HrotBreach> Breaches, IReadOnlyList<HrotWindowDamage> Windows) : IHrotToGatewayMessage;

@@ -147,3 +147,6 @@ public enum AnimalMode : byte
 
 /// <summary>A flock's mode (HROT's <c>FlockMode</c>, by name); Unknown = not a flock or a mode this contract does not name.</summary>
 public enum FlockMode : byte { FlockModeUnknown = 0, FlockModeFlying, FlockModeLanded, FlockModePerched }
+
+/// <summary>What kind of hole a wall breach is (HROT's <c>BreachKind</c>, by name): a Hole is a gap to see or shoot through, a Passage is one to walk through; Unknown = a kind this contract does not name.</summary>
+public enum BreachKind : byte { BreachKindUnknown = 0, BreachKindHole, BreachKindPassage }

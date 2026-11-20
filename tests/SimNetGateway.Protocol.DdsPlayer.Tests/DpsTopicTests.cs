@@ -7,7 +7,8 @@ namespace SimNetGateway.Protocol.DdsPlayer.Tests;
 
 public class DpsTopicTests
 {
-    private static uint NewDomain() => (uint)(100 + (Environment.ProcessId % 40));
+    // DDS domains of the test assemblies are disjoint (Plugin 20..69, Protocol.DdsPlayer 80..139, DpsClient 150..229): the projects run in parallel and a shared domain lets their participants meet
+    private static uint NewDomain() => (uint)(80 + (Environment.ProcessId % 30));
 
     private static bool WaitFor(Func<bool> condition, int timeoutMs = 5000)
     {
@@ -445,6 +446,21 @@ public class DpsTopicTests
     }
 
     [Fact]
+    public void Building_damage_round_trips_and_is_a_late_join_state_keyed_by_the_building_label()
+    {
+        var damage = RoundTrip(new BuildingDamage
+        {
+            Building = "range/H2", Collapsed = true,
+            Breaches = Enumerable.Range(0, 64).Select(i => new Breach { Panel = i, From = 1f, To = 2f, Bottom = 0f, Top = 2.2f, Kind = BreachKind.BreachKindPassage }).ToList(),
+            Windows = Enumerable.Range(0, 256).Select(i => new WindowDamage { Panel = i, Opening = 3, Hits = 2, U0 = 10, V0 = 20, U1 = 30, V1 = 40 }).ToList(),
+        }, "t2-building");
+        Assert.Equal(("range/H2", true, 64, 256), (damage.Building, damage.Collapsed, damage.Breaches.Count, damage.Windows.Count));
+        Assert.Equal((63, 2.2f, BreachKind.BreachKindPassage), (damage.Breaches[63].Panel, damage.Breaches[63].Top, damage.Breaches[63].Kind));
+        Assert.Equal((255, 3, (byte)2, (byte)10, (byte)20, (byte)30, (byte)40), (damage.Windows[255].Panel, damage.Windows[255].Opening, damage.Windows[255].Hits, damage.Windows[255].U0, damage.Windows[255].V0, damage.Windows[255].U1, damage.Windows[255].V1));
+        Assert.Equal("range/H1", LateJoin(new BuildingDamage { Building = "range/H1", Breaches = [], Windows = [] }, "t2-late-building").Building);
+    }
+
+    [Fact]
     public void Late_joiner_gets_every_live_instance()
     {
         using var writerSide = new DdsParticipant(NewDomain(), defaultPartition: "late");
@@ -524,7 +540,13 @@ public class DpsTopicTests
             var type = topic["DPS_".Length..];
             Assert.Contains($"struct {type} ", idl);
         }
-        Assert.Equal(28, DpsProtocol.AllTopics.Count);
+        Assert.Equal(29, DpsProtocol.AllTopics.Count);
+        Assert.Contains("DPS_BuildingDamage", DpsProtocol.AllTopics);
+        foreach (var enumerator in new[] { "BreachKindPassage" })
+        {
+            Assert.Contains(enumerator, idl);
+        }
+
         Assert.Contains("DPS_Animal", DpsProtocol.AllTopics);
         Assert.Contains("DPS_TkbType", DpsProtocol.AllTopics);
         foreach (var enumerator in new[] { "DomainAnimal", "AnimalModeGuard", "FlockModePerched" })

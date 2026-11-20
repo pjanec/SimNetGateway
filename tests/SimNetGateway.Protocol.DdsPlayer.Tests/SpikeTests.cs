@@ -35,7 +35,8 @@ public partial struct SpikePlayer
 /// </summary>
 public class SpikeTests
 {
-    private static uint NewDomain() => (uint)(150 + (Environment.ProcessId % 50));
+    // DDS domains of the test assemblies are disjoint (Plugin 20..69, Protocol.DdsPlayer 80..139, DpsClient 150..229): the projects run in parallel and a shared domain lets their participants meet
+    private static uint NewDomain() => (uint)(110 + (Environment.ProcessId % 30));
 
     private static bool WaitFor(Func<bool> condition, int timeoutMs = 5000)
     {

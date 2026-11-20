@@ -34,6 +34,8 @@ internal sealed class HrotGizmoHost : IGizmoSource
     private HashSet<string> _layerNames = new(StringComparer.Ordinal);
     private EntityRepository? _builtFor;
     private DebugPrimitiveBuffer? _buffer;
+    /// <summary>HROT's ground height for the 2-D primitives (set from the world each captured frame).</summary>
+    internal Fdp.Toolkit.World.IWorldQuery? Ground { get; set; }
     private StatelessGizmoSystem? _system;
     private double _next = double.NegativeInfinity;
     private double _last = double.NaN;
@@ -165,6 +167,7 @@ internal sealed class HrotGizmoHost : IGizmoSource
             byLayer[name] = new List<GizmoPrimitiveData>();
         }
 
+        Ground = Fdp.Toolkit.World.WorldQuery.Of(_builtFor!);   // HROT's own ground height, for the 2-D primitives
         var frame = _buffer!.GetFrame();
         for (int i = 0; i < frame.Length; i++)
         {
@@ -187,7 +190,7 @@ internal sealed class HrotGizmoHost : IGizmoSource
         }
     }
 
-    private GizmoPrimitiveData? Convert(in DebugPrimitive p)
+    internal GizmoPrimitiveData? Convert(in DebugPrimitive p)
     {
         uint colour = ((uint)p.Color.R << 24) | ((uint)p.Color.G << 16) | ((uint)p.Color.B << 8) | p.Color.A;
         switch (p.Shape)
@@ -203,14 +206,17 @@ internal sealed class HrotGizmoHost : IGizmoSource
                     [new HrotVec3(p.TriA.X, p.TriA.Y, 0), new HrotVec3(p.TriB.X, p.TriB.Y, 0), new HrotVec3(p.TriC.X, p.TriC.Y, 0)], colour, 0f, string.Empty);
             case DebugPrimitiveShape.Box2D:
                 return new GizmoPrimitiveData(GizmoPrimitiveShape.Box,
-                    [new HrotVec3(p.BoxCenterX, p.BoxCenterY, 0), new HrotVec3(p.BoxExtentX, p.BoxExtentY, p.BoxAngleDeg)], colour, p.Thickness, string.Empty);
+                    [new HrotVec3(p.BoxCenterX, p.BoxCenterY, GroundAt(p.BoxCenterX, p.BoxCenterY)), new HrotVec3(p.BoxExtentX, p.BoxExtentY, p.BoxAngleDeg)], colour, p.Thickness, string.Empty);
             case DebugPrimitiveShape.Text:
                 string text = p.StringHash != 0 ? _buffer!.InternMap.TryResolve(p.StringHash) ?? string.Empty : p.TextContent.ToString();
-                return new GizmoPrimitiveData(GizmoPrimitiveShape.Text, [new HrotVec3(p.TextX, p.TextY, 0)], colour, 0f, text);
+                return new GizmoPrimitiveData(GizmoPrimitiveShape.Text, [new HrotVec3(p.TextX, p.TextY, GroundAt(p.TextX, p.TextY))], colour, 0f, text);
             default:
                 return null;   // meta primitives (bindings, masks) and shapes a client cannot draw from a point list
         }
     }
+
+    /// <summary>The ground height at a 2-D primitive's point (a box, a text): a client never sees z = 0 for them. 0 when the world holds no terrain.</summary>
+    private double GroundAt(float x, float y) => Ground?.GroundHeightAt(x, y) ?? 0f;
 
     private static HrotVec3 V(Vector3 v) => new(v.X, v.Y, v.Z);
 

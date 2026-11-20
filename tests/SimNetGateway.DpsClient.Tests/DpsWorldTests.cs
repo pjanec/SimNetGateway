@@ -10,7 +10,8 @@ public class DpsWorldTests
 {
     private static int _domainCounter = Random.Shared.Next(0, 80);
 
-    private static uint NewDomain() => (uint)(130 + Interlocked.Increment(ref _domainCounter) % 80);
+    // DDS domains of the test assemblies are disjoint (Plugin 20..69, Protocol.DdsPlayer 80..139, DpsClient 150..229): the projects run in parallel and a shared domain lets their participants meet
+    private static uint NewDomain() => (uint)(150 + Interlocked.Increment(ref _domainCounter) % 80);
 
     private static bool WaitFor(Func<bool> condition, int timeoutMs = 6000)
     {

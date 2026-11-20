@@ -14,7 +14,8 @@ public class DpsOutboundTests
 {
     private static int _domainCounter = Environment.ProcessId % 50;
 
-    internal static uint NewDomain() => (uint)(40 + Interlocked.Increment(ref _domainCounter) % 80);
+    // DDS domains of the test assemblies are disjoint (Plugin 20..69, Protocol.DdsPlayer 80..139, DpsClient 150..229): the projects run in parallel and a shared domain lets their participants meet
+    internal static uint NewDomain() => (uint)(20 + Interlocked.Increment(ref _domainCounter) % 50);
 
     internal static bool WaitFor(Func<bool> condition, int timeoutMs = 6000)
     {

@@ -61,6 +61,7 @@ public sealed class EcsHrotAdapter
     private readonly FireSpotGather _fireSpots = new();
     private readonly GroundMarkGather _groundMarks = new();
     private readonly HudGather _hud = new();
+    private readonly BuildingDamageGather _buildings = new();
     private readonly TkbGather _types = new();
     private readonly AnimalGather _animals = new();
     private readonly BankTracker _banks = new();
@@ -258,6 +259,7 @@ public sealed class EcsHrotAdapter
         _fireSpots.Gather(world, inbound, simTime);
         _groundMarks.Gather(world, inbound);
         _hud.GatherState(world, inbound);
+        _buildings.Gather(world, inbound);
         _types.Flush(tkb, inbound);
     }
 
@@ -849,6 +851,7 @@ public sealed class EcsHrotAdapter
         _fireSpots.Clear();
         _groundMarks.Clear();
         _hud.Clear();
+        _buildings.Clear();
         _types.Clear();
         _animals.Clear();
         _banks.Clear();

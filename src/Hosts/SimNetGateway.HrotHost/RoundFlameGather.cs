@@ -360,8 +360,7 @@ internal sealed class FireSpotGather
 }
 
 /// <summary>
-/// The heat marks of every terrain cell record (<c>GroundHeatMarks</c>). Sent when the set changes, an empty set when a cell holds none any more. The mark's z is 0:
-/// the host has no ground-height reader of HROT's (the height queries are internal to HROT's systems), so a client puts the mark on its own terrain. Main thread only.
+/// The heat marks of every terrain cell record (<c>GroundHeatMarks</c>). Sent when the set changes, an empty set when a cell holds none any more. The mark's z is the ground height under its centre (HROT's own world query, <c>WorldQuery.GroundHeightAt</c>), 0 when the world holds no terrain. Main thread only.
 /// </summary>
 internal sealed class GroundMarkGather
 {
@@ -382,6 +381,7 @@ internal sealed class GroundMarkGather
     public void Gather(EntityRepository world, InMemoryInbound inbound)
     {
         Bind(world);
+        Fdp.Toolkit.World.IWorldQuery? height = null;
         foreach (var b in _book.Values)
         {
             b.Seen = false;
@@ -397,7 +397,8 @@ internal sealed class GroundMarkGather
                     continue;
                 }
 
-                Read(world, e);
+                height ??= Fdp.Toolkit.World.WorldQuery.Of(world);
+                Read(world, e, height);
                 if (_marks.Count == 0)
                 {
                     continue;
@@ -455,7 +456,7 @@ internal sealed class GroundMarkGather
         return true;
     }
 
-    private void Read(EntityRepository world, Entity cell)
+    private void Read(EntityRepository world, Entity cell, Fdp.Toolkit.World.IWorldQuery? height)
     {
         _marks.Clear();
         ref readonly var marks = ref world.GetComponentRO<GroundHeatMarks>(cell);
@@ -468,7 +469,7 @@ internal sealed class GroundMarkGather
                 continue;
             }
 
-            _marks.Add(new HrotGroundMark(m.Kind.ToString(), new HrotVec3(m.At.X, m.At.Y, 0.0), m.Heading, m.Length, m.Width, m.HotEnd.ToString(), m.StandSince.Seconds, m.LeftAt.Seconds));
+            _marks.Add(new HrotGroundMark(m.Kind.ToString(), new HrotVec3(m.At.X, m.At.Y, height?.GroundHeightAt(m.At.X, m.At.Y) ?? 0f), m.Heading, m.Length, m.Width, m.HotEnd.ToString(), m.StandSince.Seconds, m.LeftAt.Seconds));
         }
     }
 

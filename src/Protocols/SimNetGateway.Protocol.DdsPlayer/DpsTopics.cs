@@ -380,6 +380,44 @@ public partial struct TkbType
     public string Json;
 }
 
+/// <summary>A hole in a wall (HROT's wall breach): metres along the panel from its A end, absolute heights.</summary>
+[DdsStruct]
+public partial struct Breach
+{
+    /// <summary>The panel's index within the building (the terrain export's own order of the building's wall panels).</summary>
+    public int Panel;
+    public float From, To, Bottom, Top;
+    public BreachKind Kind;
+}
+
+/// <summary>A hit window: <see cref="Hits"/> 1..2 = cracked with up to two crack points (bytes 0..255 across the pane), 3 = broken.</summary>
+[DdsStruct]
+public partial struct WindowDamage
+{
+    /// <summary>The panel's index within the building.</summary>
+    public int Panel;
+    /// <summary>The opening's index on the panel.</summary>
+    public int Opening;
+    public byte Hits;
+    public byte U0, V0, U1, V1;
+}
+
+/// <summary>
+/// The damage of one building as HROT replicates it (wall breaches, collapse and hit windows, all damage entities of the building merged), keyed by the building's terrain
+/// object label "terrain/building label" (the identity the terrain export keeps). A renderer of the terrain applies it to the same building. The instance exists while the
+/// building has damage.
+/// </summary>
+[DdsTopic(DpsProtocol.BuildingDamage)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+[DdsManaged]
+public partial struct BuildingDamage
+{
+    [DdsKey, MaxLength(256)] public string Building;
+    public bool Collapsed;
+    [DdsBound(64)] public List<Breach> Breaches;
+    [DdsBound(256)] public List<WindowDamage> Windows;
+}
+
 #endregion
 
 #region Events (gateway to client)
