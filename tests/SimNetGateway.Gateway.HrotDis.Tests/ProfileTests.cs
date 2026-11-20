@@ -176,6 +176,31 @@ public class ProfileTests
         Assert.Equal(0, h.Engine.Diagnostics.UnhandledMessages);
     }
 
+    /// <summary>A message the contract might grow: neither handled by a module of the profile nor on its ignore list.</summary>
+    private readonly record struct HrotFutureMessage(int Id) : IHrotToGatewayMessage;
+
+    [Fact]
+    public void Every_message_of_the_contract_is_handled_or_on_the_ignore_list_and_a_new_one_is_neither()
+    {
+        // the messages a module of the profile acts on; everything else of the contract must be on the one ignore list
+        Type[] handled =
+        [
+            typeof(HrotOrigin), typeof(HrotSession), typeof(HrotEntityState), typeof(HrotEntityRemoved), typeof(HrotTurretPose), typeof(HrotFire), typeof(HrotDetonation),
+        ];
+        var contract = typeof(IHrotToGatewayMessage).Assembly.GetExportedTypes()
+            .Where(t => !t.IsInterface && typeof(IHrotToGatewayMessage).IsAssignableFrom(t)).ToArray();
+        Assert.Equal(contract.Select(t => t.Name).Order(), handled.Concat(HrotIgnoredIngress.Types).Select(t => t.Name).Order());
+        Assert.Empty(handled.Intersect(HrotIgnoredIngress.Types));
+        Assert.Equal(HrotIgnoredIngress.Types.Count, HrotIgnoredIngress.Types.Distinct().Count());
+
+        // a message that is neither stays counted as unhandled
+        var h = new HrotDisHarness();
+        h.GoLive();
+        h.HrotStep(new HrotFutureMessage(1));
+        Assert.Equal(1, h.Engine.Diagnostics.UnhandledCount(typeof(HrotFutureMessage)));
+        Assert.Equal(1, h.Engine.Diagnostics.UnhandledMessages);
+    }
+
     [Fact]
     public void Each_message_kind_has_its_own_small_module()
     {

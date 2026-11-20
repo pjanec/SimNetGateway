@@ -1,0 +1,60 @@
+using SimNetGateway.Engine;
+using SimNetGateway.Protocol.Hrot;
+
+namespace SimNetGateway.Gateway.HrotDis;
+
+/// <summary>
+/// The HROT messages this profile deliberately ignores: data for sides that draw (the DDS player's look, HUD, type and traffic data; DD-017, DD-018), which the DIS and
+/// HLA sides have no use for. The engine counts a message nobody handles as unhandled (a diagnostic of a contract that outgrew the gateway), so every message of the
+/// contract is either handled by a module of this profile or declared HERE; <see cref="Types"/> is the one list. A new message of <see cref="IHrotToGatewayMessage"/> that
+/// is neither handled nor listed stays unhandled, and the profile tests fail until someone decides which it is.
+/// </summary>
+public sealed class HrotIgnoredIngress : IGatewayModule
+{
+    private static readonly (Type Type, Action<ModuleSetup> Register)[] Entries =
+    [
+        Ignored<HrotPersonDetail>(),
+        Ignored<HrotEffect>(),
+        Ignored<HrotPersonAppearance>(),
+        Ignored<HrotVehicleLook>(),
+        Ignored<HrotRound>(),
+        Ignored<HrotMunitionLook>(),
+        Ignored<HrotFlameJet>(),
+        Ignored<HrotFlameJetRemoved>(),
+        Ignored<HrotFireSpots>(),
+        Ignored<HrotGroundMarks>(),
+        Ignored<HrotManDowned>(),
+        Ignored<HrotPlayerMessage>(),
+        Ignored<HrotStatus>(),
+        Ignored<HrotStatusRemoved>(),
+        Ignored<HrotExercise>(),
+        Ignored<HrotTypeRecord>(),
+        Ignored<HrotAnimal>(),
+        Ignored<HrotBuildingDamage>(),
+        Ignored<HrotMover>(),
+        Ignored<HrotMoverRemoved>(),
+        Ignored<HrotMoverTracks>(),
+        Ignored<HrotTrafficLight>(),
+        Ignored<HrotTrafficLightRemoved>(),
+    ];
+
+    /// <summary>The message types this profile ignores on purpose.</summary>
+    public static IReadOnlyList<Type> Types { get; } = Entries.Select(e => e.Type).ToArray();
+
+    public string Name => nameof(HrotIgnoredIngress);
+
+    public void Register(ModuleSetup setup)
+    {
+        foreach (var entry in Entries)
+        {
+            entry.Register(setup);
+        }
+    }
+
+    private static (Type Type, Action<ModuleSetup> Register) Ignored<T>()
+        where T : IHrotToGatewayMessage => (typeof(T), setup => setup.OnMessage<T>(Ignore));
+
+    private static void Ignore<T>(in T message, IngressContext ctx)
+    {
+    }
+}

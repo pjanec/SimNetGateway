@@ -125,6 +125,68 @@ public class DpsRoundFlameTests
     }
 
     [Fact]
+    public void Person_state_carries_the_seat_and_the_carriage()
+    {
+        uint domain = Watch.NewDomain();
+        using var watch = new Watch.Watch<D.PersonState>(domain, "station-1", e => Id(e.EntityId));
+        using var rig = new Rig(domain);
+        rig.Send(State(1201, dis: PersonDis));
+
+        // a rider astride a seat of a vehicle
+        rig.Send(Detail(1201) with { SeatVehicle = 2100, SeatIndex = 2, SeatExposed = true, SeatPose = "Ride", CarryOther = 2100 });
+        Assert.True(watch.Until(w => w.Alive.TryGetValue("1201", out var s) && s.SeatPose == D.SeatPose.SeatPoseRide));
+        var rider = watch.Alive["1201"];
+        Assert.Equal(2, rider.SeatIndex);
+        Assert.True(rider.SeatExposed);
+        Assert.Equal(2100, rider.CarryOtherId);
+        Assert.Equal(D.CarryRole.CarryRoleNone, rider.CarryRole);
+
+        // a stretcher's rear man: the load and his partner
+        rig.Send(Detail(1201) with { CarryRole = HrotCarryRole.StretcherRear, CarryOther = 1202, Partner = 1203 });
+        Assert.True(watch.Until(w => w.Alive["1201"].CarryRole == D.CarryRole.CarryRoleStretcherRear));
+        var rear = watch.Alive["1201"];
+        Assert.Equal(1202, rear.CarryOtherId);
+        Assert.Equal(1203, rear.PartnerId);
+        Assert.Equal((byte)255, rear.SeatIndex);
+        Assert.False(rear.SeatExposed);
+        Assert.Equal(D.SeatPose.SeatPoseUnknown, rear.SeatPose);
+
+        // only a change of the partner is a change worth sending
+        rig.Send(Detail(1201) with { CarryRole = HrotCarryRole.StretcherRear, CarryOther = 1202, Partner = 1204 });
+        Assert.True(watch.Until(w => w.Alive["1201"].PartnerId == 1204));
+    }
+
+    [Fact]
+    public void The_roles_and_poses_map_by_name_and_value()
+    {
+        Assert.Equal(D.SeatPose.SeatPoseSit, LookNames.SeatPoseOf("Sit"));
+        Assert.Equal(D.SeatPose.SeatPoseSitLegsOut, LookNames.SeatPoseOf("SitLegsOut"));
+        Assert.Equal(D.SeatPose.SeatPoseStand, LookNames.SeatPoseOf("Stand"));
+        Assert.Equal(D.SeatPose.SeatPoseKneel, LookNames.SeatPoseOf("Kneel"));
+        Assert.Equal(D.SeatPose.SeatPoseRide, LookNames.SeatPoseOf("Ride"));
+        Assert.Equal(D.SeatPose.SeatPoseUnknown, LookNames.SeatPoseOf(""));
+        Assert.Equal(D.SeatPose.SeatPoseUnknown, LookNames.SeatPoseOf("Hover"));
+        // the contract's roles are the message's roles, by name and value
+        Assert.Equal(Enum.GetNames<HrotCarryRole>().Select(n => "CarryRole" + n), Enum.GetNames<D.CarryRole>());
+        Assert.Equal(Enum.GetValues<HrotCarryRole>().Select(v => (byte)v), Enum.GetValues<D.CarryRole>().Select(v => (byte)v));
+    }
+
+    [Fact]
+    public void Vehicle_look_carries_the_flail_flag()
+    {
+        uint domain = Watch.NewDomain();
+        using var watch = new Watch.Watch<D.VehicleLook>(domain, "station-1", e => Id(e.EntityId));
+        using var rig = new Rig(domain);
+        rig.Send(State(2001));
+
+        rig.Send(new HrotVehicleLook(2001, "None", false, false, false, 0, [], [], FlailActive: true));
+        Assert.True(watch.Until(w => w.Alive.TryGetValue("2001", out var v) && v.FlailActive));
+
+        rig.Send(new HrotVehicleLook(2001, "None", false, false, false, 0, [], [], FlailActive: false));
+        Assert.True(watch.Until(w => !w.Alive["2001"].FlailActive));
+    }
+
+    [Fact]
     public void A_round_munition_look_and_its_disposal_with_the_entity()
     {
         uint domain = Watch.NewDomain();

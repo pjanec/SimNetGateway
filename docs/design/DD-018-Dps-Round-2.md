@@ -191,6 +191,26 @@ derive it.
 - Rejected: baking the lean into `Orientation` (a different pose from the simulation's, which the client also uses for the seat eye
   and the player's camera); leaving it to every client (the owner).
 
+### 3.5c Carriage and the mine clearer (P-5c)
+
+A client that draws people needs to know who sits where and who carries whom, and a client that draws a mine clearer needs to know when its flail turns. HROT's
+3-D map answers both from simulation facts (`Carriage.Of`, `FlailActivity.IsOn`, Hrot.Presentation), which the host must not reference. The owner: the client
+should not have to derive it.
+
+- **`PersonState` appended** `SeatIndex` (byte, 255 = not seated), `SeatExposed`, `SeatPose` (new enum `SeatPose`: Unknown = 0, Sit, SitLegsOut, Stand, Kneel, Ride,
+  mirrored by name from HROT's `SeatPose` in `CarrierDefDto.cs`; HROT's own `Sit` is 0, the contract's 0 is unknown), `CarryRole` (new enum: None = 0, Carried, Dragged,
+  OnStretcher, Carrying, Dragging, StretcherFront, StretcherRear, TeamLoadFront, TeamLoadRear) and `PartnerId`. The existing `CarryOtherId` (0 since round 1) is filled.
+- **Meaning.** For a man held by someone (carried, dragged, on a stretcher, seated in a vehicle, an animal or at a weapon) `CarryOtherId` is his holder's entity id. For a
+  carrier it is what he carries: the casualty, or the weapon of a two-man weapon team. `PartnerId` is the other man of a pair carrying one load (a stretcher's two
+  carriers, the casualty on it, a two-man weapon's two men), 0 when there is none. A seated man has `CarryRole` None and the seat fields set.
+- **Source (HROT facts).** `IsEmbarkedTag` {VehicleEntity, Exposed, Seat, Mode} on the held man, the holder's `PassengerBuffer` (passengers, their modes, the assistant) and
+  `IsAssistingTag` on the second man, `PersonCarrier` on the holder to tell a person from a vehicle, the seat's pose from the TKB seat (`SeatDto`, the holder's `Gen.Carrier`).
+  The host ports `Carriage.Of` with the same order of questions and a comment naming it. It leaves out HROT's drawing-only kinds (downed, wounded, knocked down, manning:
+  the seat fields tell it) and it reports a man in an enclosed seat too (HROT draws nobody there, a renderer may still want the seat).
+- **`VehicleLook` appended `FlailActive`:** terrain's `MineClearing` is active with the flail tool (HROT `FlailActivity.IsOn`; a plough or a line charge never turns the
+  drum). It travels with the look, so a change of the flag sends the look again.
+- Rejected: one combined "held by" id for pairs (a stretcher needs both the load and the partner); carrying the rule in the client (the owner).
+
 ### 3.6 Gizmo heights (P-6)
 
 The host gives 2-D primitives (box, text) the ground height at their point from HROT's terrain height query, so a client never sees
@@ -287,6 +307,29 @@ two TRANSPORTS and two PLAYBACK modes.
 Fields are appended at the end of existing types; enumerations mirrored from HROT go by name with an unknown value 0 (DD-017 3.10);
 every enumerator is prefixed with its enum name; strings and sequences are bounded, except `TkbType.Json`. The protocol stays 1.0
 until the owner hands it to a client (R-133).
+
+### 3.8 Presentation data bypasses the pivot repository
+
+The `dps` plugin reads the `Protocol.Hrot` message stream directly. None of the presentation data (person detail, looks, rounds, flames, HUD, type records,
+building damage, movers) is stored in the pivot repository: `PivotSchema` and the engine's entity tables are unchanged since round 1.
+
+```mermaid
+flowchart LR
+    hrot[HROT world] --> gather[HrotHost gathers]
+    gather --> msgs[Protocol.Hrot messages]
+    msgs --> pivot[Pivot repository: DIS and HLA state]
+    msgs --> dps[dps plugin]
+    dps --> dds[DDS topics]
+    pivot --> disside[DIS and HLA sides]
+```
+
+- **Why.** Only DPS needs this data. Storing it would cost memory and a second change detection (the gathers already send on change, the plugin keeps the latest value
+  per entity for the heartbeat). DDS durability serves late joiners and HROT records the topics for replay. The price, accepted: repository queries, ownership rules and the
+  monitor views do not see presentation data.
+- **Owner, 2026-11-20:** we do not need to go via the intermediate model where it is not beneficial.
+- **Consequences.** `Protocol.Hrot` grew from 12 to 30 inbound message types, the DIS profile declares the ones it deliberately ignores in one list (`HrotIgnoredIngress.Types`),
+  and a new message must be either handled or listed (a profile test fails otherwise). `Protocol.Hrot` now carries a presentation contract beside the simulation one. A
+  neutral name and split of the presentation contract is deferred until a second simulator feeds DPS.
 
 ## 4. Class diagram
 
@@ -405,7 +448,7 @@ sequenceDiagram
 
 ## 8. Proposals
 
-P-1 .. P-6 are sections 3.1 .. 3.6, approved under R-133 (the owner delegated the contract details and reviews before the hand-over).
+P-1 .. P-6 are sections 3.1 .. 3.6 (3.5c and 3.8 followed the owner's requests of 2026-11-20), approved under R-133 (the owner delegated the contract details and reviews before the hand-over).
 
 ## 9. As-built
 
@@ -487,10 +530,26 @@ T-035 was built in six stages, each reviewed and committed on its own. The contr
 - **Test infrastructure:** DDS uses UDP port 7400 + 250 * domain, and Windows excludes or hands out the ports above 49152, so a domain of 167 or more fails to
   create a participant at random; the old DpsClient range (130 .. 209) did that. All test domains are now below 167 and disjoint per assembly.
 
+### Stage 7: the data path, the ignore list and carriage
+
+- **3.8 (documentation):** presentation data bypasses the pivot repository, as built since stage 1; the section records the why and the accepted cost.
+- **Ignore list:** the 23 no-op ingress modules of stages 1 to 6 (and round 1's `HrotPersonDetailIngress`) are gone. `HrotIgnoredIngress` is one module with one list
+  (`Types`), the profile registers it where they were. The engine has no declared-ignore mechanism (an unrouted message is counted as unhandled), so the module registers one
+  empty handler per listed type. The profile test now asserts that the contract's messages are exactly the handled ones (origin, session, entity state, entity removed, turret
+  pose, fire, detonation) plus the list, with no overlap, and that a message that is neither (a test-only type) is still counted as unhandled.
+- **3.5c, contract:** `PersonState` appended `SeatIndex`, `SeatExposed`, `SeatPose`, `CarryRole`, `PartnerId`, `CarryOtherId` filled; enums `SeatPose`, `CarryRole`;
+  `VehicleLook` appended `FlailActive`. `HrotPersonDetail` appended `SeatIndex` (255 default), `SeatExposed`, `SeatPose` (name), `CarryRole`, `CarryOther`, `Partner`;
+  `HrotVehicleLook` appended `FlailActive`; new enum `HrotCarryRole`.
+- **3.5c, host:** `PersonDetailGather.CarriageOf` (port of `Carriage.Of`) and `VehicleLookGather.FlailOn` (port of `FlailActivity.IsOn`); the person gather now takes the TKB
+  for the seat. The plugin maps the new fields (`LookNames.SeatPoseOf`) and resends a person when any of them changes.
+- **Deviations:** the stretcher's rear man and a two-man weapon's rear man name the load (the casualty or the weapon) in `CarryOtherId` and the front man in `PartnerId`; a
+  carrier with only a one-man weapon in his carry station has `CarryRole` None and `CarryOtherId` 0; a seated man's `CarryOtherId` is the vehicle (as `SeatVehicleId`), also
+  for an enclosed seat. The two-man weapon team has no test (no weapon-system fixture in the host tests): the stretcher pair covers the partner logic.
+
 ### Open items
 
 - The map-only presentation rules (gait, limb swing, rotors spinning, wheels, tracer streams, the lean of the riders) are not in HROT's look library; the client
   guide links them for porting (HROT's work).
 - Not in the contract: door states (DD-017 section 10 gap), felled trees (`TreeDamage`), ground patches (craters, road blockage), replay effects beyond
   today's, filled gizmo triangles with a ground height (z = 0), and an exercise result that goes away inside a run.
-- A flock's birds, a rider's seat pose and a dragon are described by the type data and the animal state; the client draws them by HROT's rules.
+- A flock's birds and a dragon are described by the type data and the animal state; the client draws them by HROT's rules.

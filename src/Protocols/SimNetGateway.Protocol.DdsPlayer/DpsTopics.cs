@@ -140,6 +140,16 @@ public partial struct PersonState
     /// <summary>Fear and anger in quarters, 0 calm .. 4 extreme.</summary>
     public byte Fear, Anger;
     public CivilianMode CivilianMode;
+    /// <summary>The vehicle seat slot of a man seated in a vehicle (255 = not seated).</summary>
+    public byte SeatIndex;
+    /// <summary>The seat is in the open (the man is seen and can be hit); false in an enclosed seat.</summary>
+    public bool SeatExposed;
+    /// <summary>How the man sits (HROT's seat pose, by name); Unknown = not named.</summary>
+    public SeatPose SeatPose;
+    /// <summary>How the man is held, or what he carries (HROT's carriage rule). With <see cref="CarryOtherId"/> = his holder (a held or seated man) or what he carries.</summary>
+    public CarryRole CarryRole;
+    /// <summary>The other man of a pair carrying one load (a stretcher, a two-man weapon); 0 = none.</summary>
+    public int PartnerId;
 }
 
 [DdsStruct]
@@ -223,6 +233,8 @@ public partial struct VehicleLook
     public float RotorSpeed;
     /// <summary>Smoke launchers fired, 0 until the simulation provides it.</summary>
     public byte SmokeLaunchers;
+    /// <summary>A mine clearer's flail is turning.</summary>
+    public bool FlailActive;
 }
 
 /// <summary>

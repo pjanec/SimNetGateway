@@ -96,6 +96,7 @@ public class DpsTopicTests
             LookTarget = new Vec3d { X = 7 }, HeadYaw = 0.3f, Gesture = Gesture.GestureWaving, Injury = Injury.InjuryWounded, Action = ActionKind.ActionKindOpenDoor,
             ActionTargetId = 55, ActionState = ActionState.ActionStateRunning, ActionStartSimTime = 8.5, SeatVehicleId = 11, SeatRole = SeatRole.SeatRoleGunner,
             CarryMode = CarryMode.CarryModeDragged, CarryOtherId = 13,
+            SeatIndex = 3, SeatExposed = true, SeatPose = SeatPose.SeatPoseRide, CarryRole = CarryRole.CarryRoleStretcherRear, PartnerId = 14,
         }, "t-person");
         Assert.Equal(Stance.StanceProne, person.TargetStance);
         Assert.Equal(Gesture.GestureWaving, person.Gesture);
@@ -103,6 +104,11 @@ public class DpsTopicTests
         Assert.Equal(8.5, person.ActionStartSimTime);
         Assert.Equal(SeatRole.SeatRoleGunner, person.SeatRole);
         Assert.Equal(13, person.CarryOtherId);
+        Assert.Equal((byte)3, person.SeatIndex);
+        Assert.True(person.SeatExposed);
+        Assert.Equal(SeatPose.SeatPoseRide, person.SeatPose);
+        Assert.Equal(CarryRole.CarryRoleStretcherRear, person.CarryRole);
+        Assert.Equal(14, person.PartnerId);
 
         var appearance = RoundTrip(new Appearance
         {
@@ -248,9 +254,10 @@ public class DpsTopicTests
         Assert.Equal((byte)4, person.Anger);
         Assert.Equal(CivilianMode.CivilianModeArmedHostile, person.CivilianMode);
 
-        var look = RoundTrip(new VehicleLook { EntityId = 11, RotorSpeed = 0.55f, Parts = [], Openings = [new OpeningLook { OpeningId = 9, Progress = 1f, CrewExposed = true }] }, "t2-vlook");
+        var look = RoundTrip(new VehicleLook { EntityId = 11, RotorSpeed = 0.55f, FlailActive = true, Parts = [], Openings = [new OpeningLook { OpeningId = 9, Progress = 1f, CrewExposed = true }] }, "t2-vlook");
         Assert.Equal(0.55f, look.RotorSpeed);
         Assert.True(look.Openings[0].CrewExposed);
+        Assert.True(look.FlailActive);
 
         var fire = RoundTrip(new Fire { ShooterId = 12, MunitionTypeId = 7_000_000_077L, WeaponCategory = WeaponCategory.WeaponCategoryMachineGun }, "t2-fire");
         Assert.Equal(7_000_000_077L, fire.MunitionTypeId);

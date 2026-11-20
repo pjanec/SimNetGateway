@@ -348,17 +348,50 @@ public enum HrotCarryMode : byte
     Stretcher = 4,
 }
 
+/// <summary>How a person is held or what he carries, by HROT's carriage rule (DD-018 3.5c). None = free, or seated (see the seat fields).</summary>
+public enum HrotCarryRole : byte
+{
+    None = 0,
+    /// <summary>On a carrier's shoulders.</summary>
+    Carried,
+    /// <summary>Dragged on his back behind a carrier.</summary>
+    Dragged,
+    /// <summary>On a stretcher two men carry.</summary>
+    OnStretcher,
+    /// <summary>Carrying a casualty on his shoulders.</summary>
+    Carrying,
+    /// <summary>Dragging a casualty.</summary>
+    Dragging,
+    /// <summary>At a stretcher's front handles.</summary>
+    StretcherFront,
+    /// <summary>At a stretcher's rear handles.</summary>
+    StretcherRear,
+    /// <summary>Carrying a two-man weapon at its front.</summary>
+    TeamLoadFront,
+    /// <summary>Carrying a two-man weapon at its rear.</summary>
+    TeamLoadRear,
+}
+
 /// <summary>
 /// The semantic state of a person's body beyond <see cref="HrotEntityState"/> (DD-017 3.5), sent for life forms when any field changes. Ids are HROT network
 /// ids (0 = none). <see cref="LookTarget"/> is a local ENU point, <see cref="HeadYaw"/> radians, + to his left. <see cref="StanceProgress"/> is 0..1 (1 when
 /// the stance is settled). <see cref="ActionStartedAt"/> is the simulation time the gateway first saw the action running (0 = no action).
 /// <see cref="Burning"/> is HROT's person-on-fire reading, <see cref="Fear"/> and <see cref="Anger"/> are quarters 0..4 and <see cref="CivilianMode"/> the NAME of HROT's
 /// civilian mode ("" or "None" = none), all from the person's demeanour (DD-018 3.4, 3.5).
+/// DD-018 3.5c: <see cref="SeatIndex"/> is the seat slot of a man seated in a vehicle (<see cref="NoSeat"/> = none), <see cref="SeatExposed"/> whether he rides in the open,
+/// <see cref="SeatPose"/> the NAME of HROT's seat pose from the TKB seat ("" = unknown). <see cref="CarryRole"/> classifies the man by HROT's carriage rule;
+/// <see cref="CarryOther"/> is the network id of his holder (a man held by a person or seated in a vehicle) or of what he carries (the casualty or the load; 0 = none);
+/// <see cref="Partner"/> the other man of a pair carrying one load (0 = none).
 /// </summary>
 public readonly record struct HrotPersonDetail(
     int Id, HrotStance TargetStance, float StanceProgress, HrotHeldItem HeldItem, byte ActiveMount, HrotVec3 LookTarget, bool HasLookTarget, float HeadYaw,
     HrotGesture Gesture, HrotAction Action, int ActionTarget, HrotActionState ActionState, double ActionStartedAt, int SeatVehicle, HrotSeatRole SeatRole,
-    HrotCarryMode Carry, bool Burning = false, byte Fear = 0, byte Anger = 0, string CivilianMode = "") : IHrotToGatewayMessage;
+    HrotCarryMode Carry, bool Burning = false, byte Fear = 0, byte Anger = 0, string CivilianMode = "", byte SeatIndex = HrotPersonDetail.NoSeat, bool SeatExposed = false,
+    string SeatPose = "", HrotCarryRole CarryRole = HrotCarryRole.None, int CarryOther = 0, int Partner = 0) : IHrotToGatewayMessage
+{
+    /// <summary><see cref="SeatIndex"/> of a person who is not in a vehicle seat.</summary>
+    public const byte NoSeat = 255;
+}
 
 /// <summary>
 /// One visual effect derived by HROT's look rules (muzzle flash, explosion, ground mark, backblast, ...). <paramref name="Kind"/>, <paramref name="SizeClass"/> and
@@ -391,11 +424,11 @@ public readonly record struct HrotPersonAppearance(
 /// progress 0 closed .. 1 open, in steps of 1/50); <paramref name="Lights"/> the effective light mask (brake lights included). A part's burning needs the part's
 /// centre, which only a renderer knows, so burning is the vehicle's.
 /// <paramref name="RotorSpeed"/> is HROT's rotor / engine level 0..1 (sent on a change of 0.05 and on reaching 0 or 1); <paramref name="CrewExposed"/> lists the ids of the
-/// openings a crewman's head is out of (null = none).
+/// openings a crewman's head is out of (null = none). <paramref name="FlailActive"/> is a mine clearer's flail turning (HROT's terrain mine-clearing state, DD-018 3.5c).
 /// </summary>
 public readonly record struct HrotVehicleLook(
     int Id, string Destruction, bool TurretThrown, bool Burning, bool Smoking, uint Lights, IReadOnlyList<(byte Part, byte State)> Parts,
-    IReadOnlyList<(byte Opening, float Progress)> Openings, float RotorSpeed = 0f, IReadOnlyList<byte>? CrewExposed = null) : IHrotToGatewayMessage;
+    IReadOnlyList<(byte Opening, float Progress)> Openings, float RotorSpeed = 0f, IReadOnlyList<byte>? CrewExposed = null, bool FlailActive = false) : IHrotToGatewayMessage;
 
 // ---- DPS round 2 (DD-018): rounds, munition looks, flames, fire spots, ground marks -----------------------------------
 

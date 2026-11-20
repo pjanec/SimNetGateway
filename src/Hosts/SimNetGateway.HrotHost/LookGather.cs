@@ -165,6 +165,7 @@ internal sealed class VehicleLookGather
         string destruction = VehicleLook.Destruction(world, e).ToString();   // HROT's destruction kind by name
         bool turret = VehicleLook.TurretThrown(world, e), burning = VehicleLook.Burning(world, e, now), smoking = VehicleLook.Smoking(world, e, now);
         uint lights = VehicleLook.Lights(world, e, now, _brakes);
+        bool flail = FlailOn(world, e);
 
         // the rotor / engine level changes continuously: a new value is sent on a change of RotorStep or more, and when it reaches 0 or 1
         float rotor = VehicleLook.RotorSpeed(world, e, now);
@@ -175,15 +176,30 @@ internal sealed class VehicleLookGather
         }
         if (known && string.Equals(previous.Destruction, destruction, StringComparison.Ordinal) && previous.TurretThrown == turret && previous.Burning == burning
             && previous.Smoking == smoking && previous.Lights == lights && previous.Parts.SequenceEqual(_parts) && previous.Openings.SequenceEqual(_openings)
-            && previous.RotorSpeed == rotor && (previous.CrewExposed ?? []).SequenceEqual(_crew))
+            && previous.RotorSpeed == rotor && (previous.CrewExposed ?? []).SequenceEqual(_crew) && previous.FlailActive == flail)
         {
             message = default;
             return false;   // the steady path allocates nothing
         }
 
-        message = new HrotVehicleLook(id, destruction, turret, burning, smoking, lights, _parts.ToArray(), _openings.ToArray(), rotor, _crew.Count == 0 ? null : _crew.ToArray());
+        message = new HrotVehicleLook(id, destruction, turret, burning, smoking, lights, _parts.ToArray(), _openings.ToArray(), rotor, _crew.Count == 0 ? null : _crew.ToArray(), flail);
         _sent[id] = message;
         return true;
+    }
+
+    /// <summary>
+    /// A mine clearer's flail is turning: a port of HROT's Hrot.UI.Common.Map3D.FlailActivity.IsOn (Hrot.Presentation, which the host must not reference): terrain's
+    /// MineClearing is active with the flail tool.
+    /// </summary>
+    internal static bool FlailOn(EntityRepository world, Entity e)
+    {
+        if (!world.IsComponentTypeRegistered<Fdp.Toolkit.Terrain.MineClearing>() || !world.HasComponent<Fdp.Toolkit.Terrain.MineClearing>(e))
+        {
+            return false;
+        }
+
+        ref readonly var c = ref world.GetComponentRO<Fdp.Toolkit.Terrain.MineClearing>(e);
+        return c.Active != 0 && c.Tool == Fdp.Toolkit.Terrain.MineClearingTool.Flail;
     }
 }
 

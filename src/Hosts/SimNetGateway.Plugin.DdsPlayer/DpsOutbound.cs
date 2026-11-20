@@ -284,7 +284,12 @@ public sealed class DpsOutbound : IGatewayModule
                 HrotCarryMode.Stretcher => D.CarryMode.CarryModeStretcher,
                 _ => D.CarryMode.CarryModeNone,
             },
-            CarryOtherId = 0,
+            CarryOtherId = d.CarryOther,
+            SeatIndex = d.SeatIndex,
+            SeatExposed = d.SeatExposed,
+            SeatPose = LookNames.SeatPoseOf(d.SeatPose),
+            CarryRole = (D.CarryRole)(byte)d.CarryRole,
+            PartnerId = d.Partner,
             Burning = d.Burning,
             Fear = d.Fear,
             Anger = d.Anger,
@@ -308,7 +313,8 @@ public sealed class DpsOutbound : IGatewayModule
             || p.Stance != o.Stance || p.TargetStance != o.TargetStance || p.Posture != o.Posture || p.ActiveSlot != o.ActiveSlot || p.Held != o.Held
             || p.HasLookTarget != o.HasLookTarget || p.Gesture != o.Gesture || p.Injury != o.Injury || p.Action != o.Action || p.ActionTargetId != o.ActionTargetId
             || p.ActionState != o.ActionState || p.ActionStartSimTime != o.ActionStartSimTime || p.SeatVehicleId != o.SeatVehicleId || p.SeatRole != o.SeatRole
-            || p.CarryMode != o.CarryMode || MathF.Abs(p.StanceProgress - o.StanceProgress) >= 0.02f
+            || p.CarryMode != o.CarryMode || p.CarryOtherId != o.CarryOtherId || p.CarryRole != o.CarryRole || p.PartnerId != o.PartnerId
+            || p.SeatIndex != o.SeatIndex || p.SeatExposed != o.SeatExposed || p.SeatPose != o.SeatPose || MathF.Abs(p.StanceProgress - o.StanceProgress) >= 0.02f
             || p.Burning != o.Burning || p.Fear != o.Fear || p.Anger != o.Anger || p.CivilianMode != o.CivilianMode
             || Dist(p.AimPoint, o.AimPoint) > _settings.PositionThresholdM
             || (p.HasLookTarget && Dist(p.LookTarget, o.LookTarget) > _settings.PositionThresholdM)
@@ -345,6 +351,7 @@ public sealed class DpsOutbound : IGatewayModule
             Burning = m.Burning,
             Smoking = m.Smoking,
             LightMask = m.Lights,
+            FlailActive = m.FlailActive,
             Parts = [.. m.Parts.Take(32).Select(p => new D.PartLook { PartId = p.Part, State = (D.PartCondition)Math.Min(p.State, (byte)2) })],
             RotorSpeed = float.IsFinite(m.RotorSpeed) ? Math.Clamp(m.RotorSpeed, 0f, 1f) : 0f,
             Openings = [.. m.Openings.Take(16).Select(o => new D.OpeningLook { OpeningId = o.Opening, Progress = o.Progress, CrewExposed = crew?.Contains(o.Opening) ?? false })],

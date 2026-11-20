@@ -134,6 +134,17 @@ internal static class LookNames
         _ => D.MunitionShape.MunitionShapeUnknown,
     };
 
+    /// <summary>HROT's seat pose; "" and an unknown name are the unknown value.</summary>
+    public static D.SeatPose SeatPoseOf(string? name) => name switch
+    {
+        "Sit" => D.SeatPose.SeatPoseSit,
+        "SitLegsOut" => D.SeatPose.SeatPoseSitLegsOut,
+        "Stand" => D.SeatPose.SeatPoseStand,
+        "Kneel" => D.SeatPose.SeatPoseKneel,
+        "Ride" => D.SeatPose.SeatPoseRide,
+        _ => D.SeatPose.SeatPoseUnknown,
+    };
+
     /// <summary>HROT's heat mark kind; "NoMark" and an unknown name are the unknown value.</summary>
     public static D.HeatMarkKind HeatMarkKindOf(string? name) => name switch
     {

@@ -37,6 +37,16 @@ public enum SeatRole : byte { SeatRoleNone = 0, SeatRoleDriver, SeatRoleGunner, 
 
 public enum CarryMode : byte { CarryModeNone = 0, CarryModeCarried, CarryModeDragged, CarryModeStretcher }
 
+/// <summary>How a man sits in a vehicle seat (HROT's <c>SeatPose</c>, by name); Unknown = not named or no seat.</summary>
+public enum SeatPose : byte { SeatPoseUnknown = 0, SeatPoseSit, SeatPoseSitLegsOut, SeatPoseStand, SeatPoseKneel, SeatPoseRide }
+
+/// <summary>How a man is held, or what he carries (HROT's carriage rule); None = free or seated.</summary>
+public enum CarryRole : byte
+{
+    CarryRoleNone = 0, CarryRoleCarried, CarryRoleDragged, CarryRoleOnStretcher, CarryRoleCarrying, CarryRoleDragging,
+    CarryRoleStretcherFront, CarryRoleStretcherRear, CarryRoleTeamLoadFront, CarryRoleTeamLoadRear,
+}
+
 public enum SlotState : byte { SlotStateWaiting = 0, SlotStateObserving, SlotStateChoosing, SlotStateRequesting, SlotStateSpawning, SlotStateTakingControl, SlotStatePlaying, SlotStateDead }
 
 /// <summary>What a <see cref="JoinRequest"/> asks for. Role is answered in a later delivery step (DD-017 3.2b).</summary>

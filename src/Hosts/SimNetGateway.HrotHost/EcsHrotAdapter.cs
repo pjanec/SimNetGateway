@@ -217,7 +217,7 @@ public sealed class EcsHrotAdapter
             }
             else if (state.DisType != 0 && DisTypeCode.Unpack(state.DisType).Kind == LifeFormKind)
             {
-                if (_details.TryGather(world, e, id, simTime, out var detail))
+                if (_details.TryGather(world, tkb, e, id, simTime, out var detail))
                 {
                     inbound.Enqueue(in detail);
                 }
