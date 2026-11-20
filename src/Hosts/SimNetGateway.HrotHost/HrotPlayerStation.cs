@@ -9,6 +9,7 @@ using Fdp.Toolkit.Tkb.Domain;
 using Fdp.Toolkit.Replication.Components;
 using Hrot.Common;
 using Hrot.Common.Orders;
+using Hrot.Look.Hud;
 using SimNetGateway.Gateway.HrotDis;
 using SimNetGateway.Protocol.Hrot;
 using IGizmoSource = SimNetGateway.Gateway.HrotDis.IGizmoSource;
@@ -242,8 +243,8 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
                 // the weapon line of HROT's HUD (Hud.WeaponLine), field by field
                 var dto = CombatTkb.MountOf(world, unit, i);
                 long loaded = a.LoadedOf(i) != 0 ? a.LoadedOf(i) : unchecked((long)(dto?.AmmoGuid ?? 0UL));
-                string kind = dto is { Hands: true } ? HudNames.HandsKind : HudNames.KindOf(dto?.Category ?? WeaponCategory.Unknown);
-                ammo.Add(new PlayerWeapon((byte)i, kind, HudNames.RoundName(world, loaded) ?? string.Empty, loaded, a.AmmoOf(i), a.MaxOf(i), a.MagazineOf(i), a.LoadedRoundsOf(i),
+                string kind = dto is { Hands: true } ? HudMounts.HandsKind : HudWords.KindOf(dto?.Category ?? WeaponCategory.Unknown);
+                ammo.Add(new PlayerWeapon((byte)i, kind, HudWords.RoundName(world, loaded) ?? string.Empty, loaded, a.AmmoOf(i), a.MaxOf(i), a.MagazineOf(i), a.LoadedRoundsOf(i),
                     a.IsBusy(i), a.IsHot(i), a.HeatPercentAt(i, now)));
             }
         }
@@ -262,7 +263,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
             if (action.Available)
             {
                 verb = (byte)action.Verb;
-                useLabel = HudNames.Label(world, action);
+                useLabel = HudWords.Label(world, action);
                 if (!action.Target.IsNull && world.IsAlive(action.Target) && world.HasComponent<NetworkIdentity>(action.Target))
                 {
                     useTarget = world.GetComponentRO<NetworkIdentity>(action.Target).Value;
@@ -273,7 +274,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         }
 
         // the selected weapon: a controlled weapon system's mount 0 for a slot of 32 or more, else the unit's own mount
-        var (holder, local) = HudNames.Resolve(world, unit, _mount);
+        var (holder, local) = HudMounts.Resolve(world, unit, _mount);
         string fireMode = nameof(OperatorFireMode.Sight);
         float spread = 0f;
         if (!holder.IsNull && world.IsAlive(holder))

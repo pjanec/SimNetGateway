@@ -553,3 +553,5 @@ T-035 was built in six stages, each reviewed and committed on its own. The contr
 - Not in the contract: door states (DD-017 section 10 gap), felled trees (`TreeDamage`), ground patches (craters, road blockage), replay effects beyond
   today's, filled gizmo triangles with a ground height (z = 0), and an exercise result that goes away inside a run.
 - A flock's birds and a dragon are described by the type data and the animal state; the client draws them by HROT's rules.
+
+**Round 5 note:** the ports named in this as-built (`HudNames`, `BankRule`, `PersonDetailGather.CarriageOf`, `FlailOn`, `RoundGather.BurnOf`) were replaced by calls to HROT's `Hrot.Look` functions once they existed; see DD-019 section 9, "Round 5: on HROT's look library".

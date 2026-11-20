@@ -6,8 +6,8 @@ namespace SimNetGateway.Plugin.DdsPlayer;
 
 /// <summary>
 /// Maps the suggested camera view and the impacts on the static world (DD-019 3.1, 3.2) to their topics, beside <see cref="DpsOutbound"/>. The view goes out on first sight, on a
-/// change (the pose beyond the entity thresholds, any other field) and on the heartbeat (simulation time of the sample); <c>CutSeq</c> grows when the source, the mode, the target or
-/// the shot changes, so a client blends within a cut and jumps on a new one. Impacts go out as they come. One instance per gateway runtime.
+/// change (the pose beyond the entity thresholds, any other field) and on the heartbeat (simulation time of the sample); <c>CutSeq</c> grows when the source, the mode, the target, the shot or HROT's cut counter
+/// changes, so a client blends within a cut and jumps on a new one. Impacts go out as they come. One instance per gateway runtime.
 /// </summary>
 public sealed class DpsViewOutbound : IGatewayModule
 {
@@ -18,6 +18,7 @@ public sealed class DpsViewOutbound : IGatewayModule
     private bool _hasSent;
     private double _sentAt = double.NegativeInfinity;
     private uint _cutSeq;
+    private int _sentCut;
 
     internal DpsViewOutbound(DpsSettings settings, DpsPorts ports)
     {
@@ -54,7 +55,8 @@ public sealed class DpsViewOutbound : IGatewayModule
             SimTime = m.SimTime,
         };
 
-        bool cut = !_hasSent || view.Source != _sent.Source || view.Mode != _sent.Mode || view.TargetId != _sent.TargetId || view.Shot != _sent.Shot;
+        bool cut = !_hasSent || view.Source != _sent.Source || view.Mode != _sent.Mode || view.TargetId != _sent.TargetId || view.Shot != _sent.Shot
+            || m.Cut != _sentCut;
         if (cut)
         {
             _cutSeq++;
@@ -68,6 +70,7 @@ public sealed class DpsViewOutbound : IGatewayModule
 
         _sent = view;
         _sentRotation = m.Orientation;
+        _sentCut = m.Cut;
         _hasSent = true;
         _sentAt = m.SimTime;
         _ports.View.Send(new DpsItem<D.View>(view));

@@ -10,9 +10,8 @@ using SimNetGateway.Protocol.Hrot;
 namespace SimNetGateway.HrotHost;
 
 /// <summary>
-/// Where the host reads what HROT suggests the camera shows (DD-019 3.1). HROT has no engine-level source of it yet: the film director, the follow camera and the
-/// operator's camera live in <c>Hrot.Presentation</c> (the map canvas's view telemetry is per canvas, published by a drawing layer), which the host must not reference
-/// (R-050). The seam exists so that a HROT engine-level singleton can be wired in with no change to the host; no implementation is shipped, so the host emits no view.
+/// Where the host reads what HROT suggests the camera shows (DD-019 3.1). The shipped source is <see cref="HrotCameraViewSource"/>, over HROT's own <c>CameraSuggestion</c> singleton;
+/// the seam stays so that a host (or a test) can put another source in its place.
 /// </summary>
 public interface ISuggestedViewSource
 {
@@ -45,7 +44,7 @@ internal sealed class ViewGather
 /// <summary>
 /// The surfaces rounds marked this frame (<see cref="RoundImpactNotification"/>): one <see cref="HrotImpact"/> per event. The surface class is the one HROT's
 /// <c>EffectRules.ForImpact</c> gives its puff and mark (Ground within a quarter metre of the terrain, else Building), read from the specs that function returns, so the
-/// rule stays HROT's; empty when HROT draws no effect for the round. HROT's event carries no material, so that is empty too. Main thread only.
+/// rule stays HROT's; empty when HROT draws no effect for the round. The material is the name of HROT's <c>ImpactMaterial</c> the event carries (empty = Unknown). Main thread only.
 /// </summary>
 internal sealed class ImpactGather
 {
@@ -67,9 +66,13 @@ internal sealed class ImpactGather
             string surface = _specs.Count > 0 ? _specs[0].Surface.ToString() : string.Empty;
             types.Reference(hit.Ammo);
             inbound.Enqueue(new HrotImpact(simTime, new HrotVec3(hit.X, hit.Y, hit.Z), new HrotVec3(hit.NormalX, hit.NormalY, hit.NormalZ), surface, ((ImpactKind)hit.Kind).ToString(),
-                hit.Ammo, LookIds.NetworkIdOf(world, hit.Shooter), string.Empty));
+                hit.Ammo, LookIds.NetworkIdOf(world, hit.Shooter), MaterialOf(hit.Material)));
         }
 
         return hits.Length;
     }
+
+    /// <summary>The name of HROT's impact material ("" for Unknown and for a value HROT does not define).</summary>
+    internal static string MaterialOf(byte material) =>
+        material != 0 && Enum.IsDefined(typeof(ImpactMaterial), material) ? ((ImpactMaterial)material).ToString() : string.Empty;
 }

@@ -89,11 +89,11 @@ public class RoundThreeGatherTests
             return sink;
         }
 
-        public Entity AddRound(int id, long munition, Vector3 at, Vector3 velocity, bool combat, uint spawnTick = 0)
+        public Entity AddRound(int id, long munition, Vector3 at, Vector3 velocity, bool combat, uint spawnTick = 0, double launchedAt = 0.0)
         {
             var e = AddHrotEntity(id, at, name: "round", tkb: munition);
             World.SetComponent(e, new SimVelocity { Linear = velocity });
-            World.AddComponent(e, default(LightweightRound));
+            World.AddComponent(e, new LightweightRound { LaunchedAt = (SimInstant)launchedAt });
             if (combat)
             {
                 World.AddComponent(e, new BallisticProjectile { Muzzle = new WorldPoint(at.X, at.Y, at.Z), Ammo = munition, SpawnTick = spawnTick });
@@ -107,7 +107,7 @@ public class RoundThreeGatherTests
         public long MunitionWithEffects() => (long)TestTkb.GetAll().First(t => t.DisType.Kind == 2 && (long)t.TkbType != MissileType && (long)t.TkbType != PlainRoundType).TkbType;
     }
 
-    // ---- the suggested view (3.1): a seam with no implementation ------------------------------------------------------------------------
+    // ---- the suggested view (3.1): a seam, HROT's own CameraSuggestion by default ------------------------------------------------------------
 
     private sealed class FakeSource : ISuggestedViewSource
     {
@@ -124,7 +124,7 @@ public class RoundThreeGatherTests
         new("Director", "Fixed", 0, 0f, 0f, new HrotVec3(1, 2, 3), HrotQuat.Identity, 50f, shot, 7.0);
 
     [Fact]
-    public void The_host_sends_no_view_while_no_source_is_wired()
+    public void The_host_sends_no_view_while_HROT_suggests_none_the_world_has_no_camera_suggestion()
     {
         using var h = new Stage();
         Assert.Empty(h.Gather(1.0).Of<HrotView>());
@@ -166,7 +166,7 @@ public class RoundThreeGatherTests
         long ammo = h.MunitionWithEffects();
         h.SetClock(12.5, 0.05f, 100);
         h.World.Bus.Publish(new RoundImpactNotification { Shooter = shooter, X = 5, Y = 6, Z = 0.1f, NormalZ = 1f, Ammo = ammo, Kind = (byte)ImpactKind.Stop });
-        h.World.Bus.Publish(new RoundImpactNotification { Shooter = shooter, X = 7, Y = 8, Z = 5f, NormalX = -1f, Ammo = ammo, Kind = (byte)ImpactKind.Entry });
+        h.World.Bus.Publish(new RoundImpactNotification { Shooter = shooter, X = 7, Y = 8, Z = 5f, NormalX = -1f, Ammo = ammo, Kind = (byte)ImpactKind.Entry, Material = (byte)ImpactMaterial.Concrete });
         h.World.Bus.Publish(new RoundImpactNotification { Shooter = Entity.Null, X = 9, Y = 8, Z = 5f, Ammo = ammo, Kind = (byte)ImpactKind.Exit });
         h.World.Bus.SwapBuffers();
 
@@ -174,7 +174,8 @@ public class RoundThreeGatherTests
 
         Assert.Equal(3, impacts.Count);
         Assert.Equal(("Stop", "Ground", 2001, ammo, new HrotVec3(5, 6, 0.1f), new HrotVec3(0, 0, 1), 12.5), (impacts[0].Kind, impacts[0].Surface, impacts[0].ShooterId, impacts[0].MunitionTkb, impacts[0].Position, impacts[0].Normal, impacts[0].SimTime));
-        Assert.Equal(("Entry", "Building", string.Empty), (impacts[1].Kind, impacts[1].Surface, impacts[1].Material));   // HROT's event carries no material
+        Assert.Equal(("Entry", "Building", "Concrete"), (impacts[1].Kind, impacts[1].Surface, impacts[1].Material));   // the name of the ImpactMaterial HROT stamped on the event
+        Assert.Equal(string.Empty, impacts[0].Material);   // Unknown (0) is no name
         Assert.Equal(("Exit", 0, new HrotVec3(0, 0, 0)), (impacts[2].Kind, impacts[2].ShooterId, impacts[2].Normal));   // no shooter, no normal: unknown
         h.World.Bus.SwapBuffers();
         Assert.Empty(h.GatherEvents().Of<HrotImpact>());   // the next frame has none
@@ -195,20 +196,20 @@ public class RoundThreeGatherTests
     // ---- a round's launch time and motor (3.4) ----------------------------------------------------------------------------------------
 
     [Fact]
-    public void A_round_carries_its_launch_time_from_the_spawn_frame_and_its_motor_burn_from_the_tkb()
+    public void A_round_carries_the_launch_time_HROT_stamped_on_it_and_its_motor_burn_from_the_tkb()
     {
         using var h = new Stage();
         h.SetClock(100.0, 0.05f, 50);
-        h.AddRound(3001, MissileType, new Vector3(1, 1, 1), new Vector3(300, 0, 0), combat: true, spawnTick: 47);   // spawned three frames ago
+        h.AddRound(3001, MissileType, new Vector3(1, 1, 1), new Vector3(300, 0, 0), combat: true, spawnTick: 47, launchedAt: 99.7);   // the spawn tick says 99.85: HROT's stamp wins
 
         var round = Assert.Single(h.Gather(100.0).Of<HrotRound>());
-
         Assert.Equal(5f, round.BurnSeconds);
-        Assert.Equal(100.0 - 3 * 0.05, round.LaunchedAt, 6);
+        Assert.Equal(99.7, round.LaunchedAt, 6);
+        Assert.Equal(99.7, round.LaunchedAt, 6);
     }
 
     [Fact]
-    public void A_round_with_no_motor_data_has_no_burn_and_a_launch_in_the_same_frame_is_the_gather_time()
+    public void A_round_with_no_motor_data_has_no_burn_and_one_with_no_stamped_launch_is_launched_when_first_seen()
     {
         using var h = new Stage();
         h.SetClock(100.0, 0.05f, 50);
@@ -220,19 +221,19 @@ public class RoundThreeGatherTests
     }
 
     [Fact]
-    public void A_replicated_round_with_no_ballistic_record_is_launched_when_first_seen_and_a_later_change_keeps_it()
+    public void A_replicated_round_with_no_ballistic_record_keeps_its_stamped_launch_and_a_later_change_keeps_it()
     {
         using var h = new Stage();
         h.SetClock(100.0, 0.05f, 50);
-        var round = h.AddRound(3003, MissileType, new Vector3(1, 1, 1), new Vector3(300, 0, 0), combat: false);
+        var round = h.AddRound(3003, MissileType, new Vector3(1, 1, 1), new Vector3(300, 0, 0), combat: false, launchedAt: 98.25);
 
         var first = Assert.Single(h.Gather(100.0).Of<HrotRound>());
-        Assert.Equal(100.0, first.LaunchedAt);
+        Assert.Equal(98.25, first.LaunchedAt);
 
         h.World.SetComponent(round, new SimVelocity { Linear = Vector3.Zero });   // it lies now: a new sample, the same launch time
         var later = Assert.Single(h.Gather(107.0).Of<HrotRound>());
         Assert.True(later.Lying);
-        Assert.Equal((100.0, 5f), (later.LaunchedAt, later.BurnSeconds));
+        Assert.Equal((98.25, 5f), (later.LaunchedAt, later.BurnSeconds));
     }
 
     // ---- effects in replay (3.7) ------------------------------------------------------------------------------------------------------
@@ -272,5 +273,95 @@ public class RoundThreeGatherTests
         RecentDetonations.Add(h.World, new Vector3(50, 20, 0.4f), 1.05, tank, h.MunitionWithEffects());
 
         Assert.Empty(h.GatherReplay(40.0).All);   // a jump of more than 2 s: what lies behind it is only taken as already sent
+    }
+
+    // ---- round 5 (DD-019 section 9, Round 5): HROT's own suggested camera, effect cause, airborne ---------------------------------------------
+
+    private static CameraSuggestion Suggestion(Entity bound, int boundNetId) => new()
+    {
+        Source = CameraSource.Director,
+        Mode = CameraMode.FixedKey,
+        ShoulderSide = -1,
+        Bound = bound,
+        BoundNetId = boundNetId,
+        Distance = 2.2f,
+        Position = new Vector3(10, 20, 30),
+        LookAt = new Vector3(0, 0, 0),
+        Orientation = new Quaternion(0.1f, 0.2f, 0.3f, 0.9f),
+        FovyDegrees = 55f,
+        Cut = 4,
+        Take = new FixedString64("Take 3"),
+    };
+
+    [Fact]
+    public void The_view_is_HROTs_CameraSuggestion_singleton_with_its_names_target_pose_fov_cut_and_take()
+    {
+        using var h = new Stage();
+        var unit = h.AddHrotEntity(2001, Vector3.Zero, tkb: ShooterTkb);
+        h.SetClock(33.5, 0.05f, 10);
+        h.World.SetSingleton(Suggestion(unit, 0));
+
+        var view = Assert.Single(h.Gather(33.5).Of<HrotView>());
+
+        Assert.Equal(("Director", "Fixed", 2001, 2.2f, -1f, 55f, "Take 3", 4, 33.5), (view.Source, view.Mode, view.TargetId, view.Distance, view.Side, view.FovDeg, view.Shot, view.Cut, view.SimTime));
+        Assert.Equal(new HrotVec3(10, 20, 30), view.Position);
+        Assert.Equal(new HrotQuat(0.1f, 0.2f, 0.3f, 0.9f), view.Orientation);
+    }
+
+    [Fact]
+    public void The_directors_follow_unit_is_named_by_its_network_id_before_the_bound_entity()
+    {
+        var source = new HrotCameraViewSource();
+        using var world = new EntityRepository();
+        Assert.False(source.TryRead(world, out _));   // a node with no map has no suggestion
+
+        world.SetSingleton(Suggestion(Entity.Null, 77) with { Source = CameraSource.Follow, Mode = CameraMode.Shoulder });
+        Assert.True(source.TryRead(world, out var view));
+        Assert.Equal(("Follow", "Shoulder", 77), (view.Source, view.Mode, view.TargetId));
+    }
+
+
+    [Fact]
+    public void A_replayed_burst_that_hit_a_unit_is_a_unit_burst_by_its_recorded_effect_cause()
+    {
+        using var h = new Stage();
+        h.World.RegisterComponent<EffectCause>();
+        var tank = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: ShooterTkb);
+        var target = h.AddHrotEntity(2002, new Vector3(50, 20, 0.4f), tkb: ShooterTkb);
+        long ammo = h.MunitionWithEffects();
+        h.GatherReplay(1.0);
+
+        // HROT's spawner recorded the effect of this burst with what it struck
+        var effect = h.World.CreateEntity();
+        h.World.AddComponent(effect, new SimTransform { Position = new Vector3(50.2f, 20f, 0.4f), Rotation = Quaternion.Identity });
+        h.World.AddComponent(effect, new EffectCause { Surface = (byte)Hrot.Look.Effects.EffectSurface.Vehicle, Target = target, Damage = 80f, Ammo = ammo });
+        RecentDetonations.Add(h.World, new Vector3(50, 20, 0.4f), 1.05, tank, ammo);
+        var boom = h.GatherReplay(1.1).Of<HrotEffect>().Where(e => e.Kind == nameof(Fdp.Toolkit.Tkb.Domain.EffectKind.Explosion)).ToList();
+
+        Assert.NotEmpty(boom);
+        Assert.Equal(nameof(Hrot.Look.Effects.EffectSurface.Vehicle), boom[0].Surface);   // not the ground mark a burst with no known target gets
+        Assert.DoesNotContain(boom, e => e.Surface == nameof(Hrot.Look.Effects.EffectSurface.Ground));
+    }
+
+    [Fact]
+    public void A_replayed_burst_with_an_effect_cause_of_another_round_or_place_stays_a_ground_burst()
+    {
+        using var h = new Stage();
+        h.World.RegisterComponent<EffectCause>();
+        var tank = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: ShooterTkb);
+        var target = h.AddHrotEntity(2002, new Vector3(50, 20, 0.4f), tkb: ShooterTkb);
+        long ammo = h.MunitionWithEffects();
+        h.GatherReplay(1.0);
+
+        var far = h.World.CreateEntity();   // the right round, 40 m away
+        h.World.AddComponent(far, new SimTransform { Position = new Vector3(90, 20, 0.4f), Rotation = Quaternion.Identity });
+        h.World.AddComponent(far, new EffectCause { Target = target, Damage = 80f, Ammo = ammo });
+        var other = h.World.CreateEntity();   // the right place, another round
+        h.World.AddComponent(other, new SimTransform { Position = new Vector3(50, 20, 0.4f), Rotation = Quaternion.Identity });
+        h.World.AddComponent(other, new EffectCause { Target = target, Damage = 80f, Ammo = ammo + 1 });
+        RecentDetonations.Add(h.World, new Vector3(50, 20, 0.4f), 1.05, tank, ammo);
+        var boom = h.GatherReplay(1.1).Of<HrotEffect>().Where(e => e.Kind == nameof(Fdp.Toolkit.Tkb.Domain.EffectKind.Explosion)).ToList();
+
+        Assert.Equal(nameof(Hrot.Look.Effects.EffectSurface.Ground), boom[0].Surface);
     }
 }

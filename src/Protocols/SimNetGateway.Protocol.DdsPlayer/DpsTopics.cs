@@ -607,7 +607,7 @@ public partial struct Impact
     public long MunitionTypeId;
     /// <summary>The entity that fired the round (0 = unknown).</summary>
     public int ShooterId;
-    /// <summary>The terrain material, a name from the producer's vocabulary; empty when the simulation does not say.</summary>
+    /// <summary>The impact material (a class such as Concrete or Soil), a name from the producer's vocabulary; empty when the simulation does not say.</summary>
     [MaxLength(32)] public string Material;
 }
 

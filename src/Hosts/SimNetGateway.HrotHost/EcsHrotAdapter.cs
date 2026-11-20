@@ -788,9 +788,16 @@ public sealed class EcsHrotAdapter
                 TryHrotId(world, burst.Shooter, out int shooter);
                 inbound.Enqueue(new HrotDetonation(shooter, 0, burst.Ammo, MunitionDis(tkb, burst.Ammo), V(burst.At), HrotVec3.Zero));
                 Counters.DetonationsSent++;
-                // HROT's own per-event rule over the recorded burst: the memory keeps no target and no damage, so the surface is Ground or Air and the size class follows the munition's explosive
-                _effects.GatherDetonation(new DetonationNotification { Shooter = burst.Shooter, Ammo = burst.Ammo, HitX = burst.At.X, HitY = burst.At.Y, HitZ = burst.At.Z, IsRemote = true },
-                    world, tkb, inbound);
+                // HROT's own per-event rule over the recorded burst. The memory keeps no target and no damage; the recorded effect entity of the same burst does (EffectCause), so a
+                // burst that struck a unit is replayed as one. With no such entity (not recorded yet, or none made) it is judged as on the ground or in the air.
+                var replayed = new DetonationNotification { Shooter = burst.Shooter, Ammo = burst.Ammo, HitX = burst.At.X, HitY = burst.At.Y, HitZ = burst.At.Z, IsRemote = true };
+                if (TryCauseOf(world, burst.Ammo, burst.At, out var cause))
+                {
+                    replayed.Target = cause.Target;
+                    replayed.Damage = cause.Damage;
+                }
+
+                _effects.GatherDetonation(replayed, world, tkb, inbound);
             }
 
             _lastSerial = newest;
@@ -824,6 +831,47 @@ public sealed class EcsHrotAdapter
         }
 
         _flashesSeen.IntersectWith(_flashesNow);
+    }
+
+    private const float CauseRadiusM = 1.5f;
+    private EntityQuery? _causeQuery;
+    private EntityRepository? _causeWorld;
+
+    /// <summary>
+    /// The cause HROT stamped on the effect entities it made from the burst (<c>EffectCause</c>: what it struck, the damage): the one of the same munition within a
+    /// metre or two of the burst; a hit on a unit is preferred over the ground mark beside it. False when the world has no such component or entity.
+    /// </summary>
+    private bool TryCauseOf(EntityRepository world, long ammo, Vector3 at, out EffectCause cause)
+    {
+        cause = default;
+        if (!world.IsComponentTypeRegistered<EffectCause>() || !world.IsComponentTypeRegistered<SimTransform>())
+        {
+            return false;
+        }
+
+        if (!ReferenceEquals(_causeWorld, world))
+        {
+            _causeWorld = world;
+            _causeQuery = world.Query().With<EffectCause>().With<SimTransform>().Build();
+        }
+
+        bool found = false;
+        foreach (var e in _causeQuery!)
+        {
+            var c = world.GetComponentRO<EffectCause>(e);
+            if (c.Ammo != ammo || Vector3.Distance((Vector3)world.GetComponentRO<SimTransform>(e).Position, at) > CauseRadiusM)
+            {
+                continue;
+            }
+
+            if (!found || (cause.Target.IsNull && !c.Target.IsNull))
+            {
+                cause = c;
+                found = true;
+            }
+        }
+
+        return found;
     }
 
     /// <summary>Leaving a replay (or the world moving): the next replay starts from a fresh baseline.</summary>

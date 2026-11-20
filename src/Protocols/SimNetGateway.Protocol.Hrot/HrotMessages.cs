@@ -581,15 +581,15 @@ public readonly record struct HrotTrafficLightRemoved(int SignalId) : IHrotToGat
 /// What the simulation suggests the camera shows now (DD-019 3.1). <paramref name="Source"/> and <paramref name="Mode"/> are names ("None", "Director", "Follow",
 /// "Operator"; "Free", "Orbit", "Eyes", "Shoulder", "Chase", "Fixed"); <paramref name="TargetId"/> 0 = none; <paramref name="Distance"/> metres (0 = eyes, negative =
 /// ahead), <paramref name="Side"/> +1 right / -1 left; the pose is in local ENU metres with the camera's quaternion; <paramref name="FovDeg"/> 0 = not stated;
-/// <paramref name="Shot"/> is the take name. A source that stops suggesting sends one sample with Source "None".
+/// <paramref name="Shot"/> is the take name; <paramref name="Cut"/> is the source's own hard-cut counter (grows at every cut the director makes; 0 = the source keeps none). A source that stops suggesting sends one sample with Source "None".
 /// </summary>
 public readonly record struct HrotView(
-    string Source, string Mode, int TargetId, float Distance, float Side, HrotVec3 Position, HrotQuat Orientation, float FovDeg, string Shot, double SimTime) : IHrotToGatewayMessage;
+    string Source, string Mode, int TargetId, float Distance, float Side, HrotVec3 Position, HrotQuat Orientation, float FovDeg, string Shot, double SimTime, int Cut = 0) : IHrotToGatewayMessage;
 
 /// <summary>
 /// A round marked a surface of the static world (HROT's round-impact event). <paramref name="Kind"/> is the NAME of HROT's impact kind (Entry, Exit, Stop);
 /// <paramref name="Surface"/> is the NAME of HROT's effect surface by its own impact rule ("" when HROT draws no effect for the round); <paramref name="Normal"/> all 0
-/// = unknown; <paramref name="Material"/> is "" (HROT's event carries none). Ids are HROT network ids (0 = unknown).
+/// = unknown; <paramref name="Material"/> is the name of HROT's impact material ("" = Unknown). Ids are HROT network ids (0 = unknown).
 /// </summary>
 public readonly record struct HrotImpact(
     double SimTime, HrotVec3 Position, HrotVec3 Normal, string Surface, string Kind, long MunitionTkb, int ShooterId, string Material) : IHrotToGatewayMessage;

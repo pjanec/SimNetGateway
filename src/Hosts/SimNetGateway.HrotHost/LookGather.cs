@@ -192,7 +192,7 @@ internal sealed class VehicleLookGather
         string destruction = VehicleLook.Destruction(world, e).ToString();   // HROT's destruction kind by name
         bool turret = VehicleLook.TurretThrown(world, e), burning = VehicleLook.Burning(world, e, now), smoking = VehicleLook.Smoking(world, e, now);
         uint lights = VehicleLook.Lights(world, e, now, _brakes);
-        bool flail = FlailOn(world, e);
+        bool flail = Hrot.UI.Common.Map3D.FlailActivity.IsOn(world, e);   // HROT's own reader (the drum and the loop ask the same place)
 
         // the rotor / engine level spools at a constant rate: HROT's spool is sent as data (target, level at the change, when, seconds per full scale) and only a change of it
         // sends a message; a spool the rule does not describe this way would stay continuous (every HROT spool is this rule: HeatSource state + Since + spin seconds)
@@ -290,20 +290,6 @@ internal sealed class VehicleLookGather
         var plant = Fdp.Toolkit.Perception.Signatures.ThermalDefaults.Of(template);
         float seconds = target >= from ? plant?.SpinUpSeconds ?? 0f : plant?.SpinDownSeconds ?? 0f;
         return (target, from, since, from == target ? 0f : seconds);
-    }
-    /// <summary>
-    /// A mine clearer's flail is turning: a port of HROT's Hrot.UI.Common.Map3D.FlailActivity.IsOn (Hrot.Presentation, which the host must not reference): terrain's
-    /// MineClearing is active with the flail tool.
-    /// </summary>
-    internal static bool FlailOn(EntityRepository world, Entity e)
-    {
-        if (!world.IsComponentTypeRegistered<Fdp.Toolkit.Terrain.MineClearing>() || !world.HasComponent<Fdp.Toolkit.Terrain.MineClearing>(e))
-        {
-            return false;
-        }
-
-        ref readonly var c = ref world.GetComponentRO<Fdp.Toolkit.Terrain.MineClearing>(e);
-        return c.Active != 0 && c.Tool == Fdp.Toolkit.Terrain.MineClearingTool.Flail;
     }
 }
 

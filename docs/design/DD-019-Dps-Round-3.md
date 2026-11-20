@@ -185,9 +185,43 @@ T-036 was built in one round (protocol still 1.0). What waits for HROT is listed
 - Replay effects: `RecentBurst` has no target and no damage, so a replayed burst is judged as on the ground or in the air with the size from the munition's explosive, and a strike on a unit draws a ground mark that a live run does not. A replay still has no `Impact` (the event is not recorded) and no `View`. If HROT raised events in a replay world, an effect could be sent twice (the live path and the replay path); HROT raises none today.
 - The reference client (`DpsClient`) does not subscribe to `View` or `Impact` yet.
 
-**What waits for HROT (T-036 stays in-progress)**
+**What waited for HROT (resolved in Round 5 below, except the gaps listed there; T-036 is done)**
 
 1. An engine-level suggested view: a singleton or reader in Hrot.Core or Fdp (source, mode, target network id, distance, side, pose, fov, shot) filled by the film director, the follow camera and the operator camera; the host then implements `ISuggestedViewSource` over it.
 2. A surface class and a terrain material name on `RoundImpactNotification` (or a callable `EffectRules` function for the impact surface), and recording of the event for replay.
 3. A target and the damage in `RecentBurst` (or recording of `DetonationNotification`), so replayed effects match live ones.
 4. A flying state for single bodies (a lone bird, the dragon later).
+
+### Round 5: on HROT's look library
+
+HROT's coordinator at `a7a0cb4fe` (76+ commits after `0b6cf8d96`; CycloneDDS.NET unchanged at 1.2.20) moved its map-only rules into `Hrot.Look` (`DESIGN_Look_Rules_For_Renderers.md`, RR-1 .. RR-11) and added the suggested camera, the impact material, the effect cause and the round launch time. The solution built against it with no source change; everything below is a deliberate switch or fill. The DPS contract and the committed IDL are unchanged (protocol 1.0); `HrotView` (a pivot message, not on the wire) gained an appended `Cut`.
+
+**Switched to HROT's functions (the host's copies are deleted):**
+
+| Was (host copy) | Now (HROT) |
+| --- | --- |
+| `BankRule` (`Target`, `Ease`) | `Hrot.Look.Vehicles.MotionRules.BankTarget` / `EaseBank`; `BankTracker` stays, as the caller-owned easing state HROT's design assigns to each consumer |
+| `PersonDetailGather.CarriageOf` (a port of `Carriage.Of`) | `Hrot.UI.Common.Map3D.Carriage.Of` (Hrot.Look) and `Carriage.SeatOf`; the host maps its kinds to the contract's roles |
+| `LookGather.FlailOn` | `Hrot.UI.Common.Map3D.FlailActivity.IsOn` (Hrot.Look) |
+| `HudNames` (`KindOf`, `RoundName`, `TypeName`, `Label`) | `Hrot.Look.Hud.HudWords`; the file is now `HudMounts` (`HandsKind`, `Resolve`: HROT keeps those two in `PossessionStation`, not in Hrot.Look) |
+| `RoundGather.BurnOf` | `Hrot.Look.Effects.RoundLook.BurnOf` |
+
+Behavior differences, all HROT's own rules: `Carriage.Of` tests "down" (incapacitated or knocked down) before the carrier and assisting cases, so a downed man reports no carry role (the old port reported it); its carrier kinds name no casualty, so the host takes the first man in the carrier's passenger list (a weapon system there is the load, HROT's own test); an enclosed seat is still reported from the embarked tag although HROT draws nobody there.
+
+**Filled:**
+
+- **View:** `HrotCameraViewSource` (default of `HrotServices.SuggestedView`, over `CameraAdvice.TryGet`, i.e. HROT's `CameraSuggestion` singleton). Source and mode by name (`FixedKey` is the contract's `Fixed`), target = `BoundNetId` else the bound entity's network id, `Distance`, `Side` = `ShoulderSide`, pose, `FovDeg` = `FovyDegrees`, `Shot` = `Take`, sim time from the sim clock. HROT's `Cut` counter is carried in the appended `HrotView.Cut`, and the plugin grows `CutSeq` when it changes (a cut to a camera with the same source, mode, target and shot). A node without a map has no singleton, so no `View`.
+- **Impact.Material:** the name of `RoundImpactNotification.Material` (`ImpactMaterial`; Unknown = empty).
+- **Replay effects (3.7):** a replayed burst takes its target and damage from the `EffectCause` on the recorded effect entity of the same munition within 1.5 m (a hit on a unit is preferred over the ground mark beside it), so `EffectRules.ForDetonation` gives a unit burst, as live. No matching entity: the old judgment (ground or air).
+- **Round.LaunchedAt:** `LightweightRound.LaunchedAt` (0 = unknown, then the first-seen time). The `SpawnTick` times `dt` approximation is deleted.
+- **Animal.Airborne:** `Hrot.Look.Airborne.Of` for every animal, so a lone bird (`AnimalFlags.InFlight`) is airborne too.
+
+**Still a gap:**
+
+- `StanceChangedAt`: HROT still stores no stance transition start (`StanceIntent` has a blend time and a version, `StanceStatus` a phase and a progress), so it stays the first-seen time (DD-020).
+- No `Impact` in replay: HROT does not record `RoundImpactNotification`. The recorded effect entities now carry the surface and material of an impact (`EffectCause`), so a later round could derive it; not built.
+- No `View` in replay: `CameraSuggestion` is node-local and never recorded (a replay node with a map has it live).
+- Replayed bursts depend on the effect entity being in the world in the same gather as the burst's memory entry; one that arrives later is judged as ground or air.
+- A recording made before `LightweightRound.LaunchedAt` existed replays the old marker size; `LaunchedAt` is then first-seen.
+
+**Proof:** each switched or filled behavior has a test that fails when the behavior is broken (mutation checked: the camera source, the material name, the replay cause, the launch stamp, the lone bird, the bank, the carriage mapping, the HUD word, the flail, the burn, the cut counter).

@@ -7,6 +7,7 @@ using Fdp.Toolkit.Combat.Components;
 using Fdp.Toolkit.Combat.Contracts;
 using Fdp.Toolkit.Combat.Events;
 using Fdp.Toolkit.Tkb.Domain;
+using Hrot.Look.Vehicles;
 using SimNetGateway.Engine;
 using SimNetGateway.Engine.InMemory;
 using SimNetGateway.Protocol.Hrot;
@@ -178,6 +179,21 @@ public class TypeAnimalBankTests
     // ---- animals --------------------------------------------------------------------------------------------------------------
 
     [Fact]
+    public void A_lone_bird_in_flight_is_airborne_by_HROTs_own_reader_and_a_walker_is_not()
+    {
+        using var h = new Stage();
+        var bird = h.AddHrotEntity(3101, new Vector3(5, 5, 20), tkb: SparrowType);
+        h.World.AddComponent(bird, new AnimalState { Flags = AnimalFlags.InFlight });
+        var walker = h.AddHrotEntity(3102, new Vector3(6, 5, 0), tkb: CowType);
+        h.World.AddComponent(walker, new AnimalState());
+
+        var animals = h.Gather(1.0).Of<HrotAnimal>();
+
+        Assert.True(Assert.Single(animals, a => a.Id == 3101).Airborne);   // Hrot.Look.Airborne.Of: AnimalFlags.InFlight, no flock needed
+        Assert.False(Assert.Single(animals, a => a.Id == 3102).Airborne);
+    }
+
+    [Fact]
     public void An_animal_is_published_with_its_state_and_a_flock_with_its_birds_and_no_person_detail()
     {
         using var h = new Stage();
@@ -195,7 +211,7 @@ public class TypeAnimalBankTests
         var f = Assert.Single(first.Of<HrotAnimal>(), x => x.Id == 3002);
         Assert.Equal(("Flee", (byte)3, true, true, false, 12, 20, 777u, "Flying"), (f.Mode, f.FearBand, f.Bolting, f.Dangerous, f.Calling, f.FlockCount, f.FlockInitialCount, f.FlockSeed, f.FlockMode));
         Assert.True(f.Airborne);   // HROT's flock mode Flying is its flying state
-        Assert.False(a.Airborne);   // a single body keeps no such state: false, never a height guess
+        Assert.False(a.Airborne);   // a cow is on the ground: HROT's Airborne.Of says no
         Assert.Equal(2, first.Of<HrotAnimal>().Count);   // the man is no animal
         Assert.Equal([1201], first.Of<HrotPersonDetail>().Select(d => d.Id).ToArray());   // and the animals are no persons
         Assert.Equal([1201], first.Of<HrotPersonAppearance>().Select(d => d.Id).ToArray());
@@ -252,24 +268,24 @@ public class TypeAnimalBankTests
     // ---- bank -----------------------------------------------------------------------------------------------------------------
 
     [Fact]
-    public void The_lean_rule_is_hrots_atan_of_speed_times_yaw_rate_over_g_clamped_and_eased()
+    public void The_lean_is_hrots_own_MotionRules_call_atan_of_speed_times_yaw_rate_over_g_clamped_and_eased()
     {
-        // HROT's MotionTracker: target = clamp(-atan(v * rate / 9.81), +-0.61), eased with 0.15 s; a left turn (counter-clockwise, rate > 0) is negative
-        Assert.Equal(-MathF.Atan(10f * 0.5f / 9.81f), BankRule.Target(10f, 0.5f), 6);
-        Assert.Equal(-0.4710f, BankRule.Target(10f, 0.5f), 3);
-        Assert.Equal(0.4710f, BankRule.Target(10f, -0.5f), 3);   // a right turn leans the top to the right: positive
-        Assert.Equal(0f, BankRule.Target(0f, 1f));
-        Assert.Equal(0f, BankRule.Target(10f, 0f));
-        Assert.Equal(-0.61f, BankRule.Target(30f, 1f));   // the clamp
-        Assert.Equal(0.61f, BankRule.Target(30f, -1f));
-        Assert.Equal(0.4710f, BankRule.Target(-10f, 0.5f), 3);   // reversing flips the lean
+        // HROT's Hrot.Look.Vehicles.MotionRules (the host calls it, no copy): target = clamp(-atan(v * rate / 9.81), +-0.61), eased with 0.15 s; a left turn (counter-clockwise, rate > 0) is negative
+        Assert.Equal(-MathF.Atan(10f * 0.5f / 9.81f), MotionRules.BankTarget(10f, 0.5f), 6);
+        Assert.Equal(-0.4710f, MotionRules.BankTarget(10f, 0.5f), 3);
+        Assert.Equal(0.4710f, MotionRules.BankTarget(10f, -0.5f), 3);   // a right turn leans the top to the right: positive
+        Assert.Equal(0f, MotionRules.BankTarget(0f, 1f));
+        Assert.Equal(0f, MotionRules.BankTarget(10f, 0f));
+        Assert.Equal(-0.61f, MotionRules.BankTarget(30f, 1f));   // the clamp
+        Assert.Equal(0.61f, MotionRules.BankTarget(30f, -1f));
+        Assert.Equal(0.4710f, MotionRules.BankTarget(-10f, 0.5f), 3);   // reversing flips the lean
 
         // one time constant covers 1 - 1/e of the way; no time keeps the value; a long time arrives
-        Assert.Equal(-0.4710f * (1f - MathF.Exp(-1f)), BankRule.Ease(0f, -0.4710f, 0.15), 5);
-        Assert.Equal(0.25f, BankRule.Ease(0.25f, -0.4f, 0.0));
-        Assert.Equal(-0.4f, BankRule.Ease(0.25f, -0.4f, 100.0), 4);
-        Assert.Equal(0.15f, BankRule.BankSeconds);
-        Assert.Equal(0.61f, BankRule.MaxBank);
+        Assert.Equal(-0.4710f * (1f - MathF.Exp(-1f)), MotionRules.EaseBank(0f, -0.4710f, 0.15f), 5);
+        Assert.Equal(0.25f, MotionRules.EaseBank(0.25f, -0.4f, 0.0f));
+        Assert.Equal(-0.4f, MotionRules.EaseBank(0.25f, -0.4f, 100.0f), 4);
+        Assert.Equal(0.15f, MotionRules.BankSeconds);
+        Assert.Equal(0.61f, MotionRules.MaxBank);
     }
 
     [Fact]

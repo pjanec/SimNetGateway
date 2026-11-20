@@ -12,6 +12,7 @@ using Fdp.Toolkit.Perception.Look;
 using Fdp.Toolkit.Replication.Components;
 using Fdp.Toolkit.Tkb.Domain;
 using Hrot.Look.People;
+using Hrot.UI.Common.Map3D;
 using Hrot.MuscleCharacter.Animation.Components;
 using SimNetGateway.Protocol.Hrot;
 
@@ -254,147 +255,73 @@ internal sealed class PersonDetailGather
     }
 
     /// <summary>
-    /// How a person is held or what he carries. A port of HROT's classifier Hrot.UI.Common.Map3D.Carriage.Of (Hrot.Presentation, which the host must not reference),
-    /// same order of questions: embarked on a person carrier (carried, dragged, stretcher), embarked elsewhere (a seat), the second man of a team carry, a carrier
-    /// with a casualty or a two-man weapon. Differences: the downed / wounded / knocked-down looks are not carriage, and a man seated in an enclosed seat is reported
-    /// too (the seat fields; HROT draws nobody there).
+    /// How a person is held or what he carries: HROT's own classifier <c>Hrot.UI.Common.Map3D.Carriage.Of</c> (Hrot.Look), its kinds mapped to the contract's roles and its
+    /// entities to network ids. HROT's answer names the holder of a carried, dragged, seated or manning person and the load or partner of a team carry, but not the casualty a
+    /// carrier holds: for the carrier's roles the casualty is the first man in his passenger list (a weapon system there is the load, HROT's own test). A man in an enclosed seat
+    /// is "Free" to HROT (it draws nobody there), but the seat fields are still reported from his embarked tag.
     /// </summary>
     internal static CarriageFacts CarriageOf(EntityRepository world, ITkbDatabase? tkb, Entity e)
     {
-        if (world.HasComponent<IsEmbarkedTag>(e))
+        var c = Carriage.Of(world, e, tkb);
+        switch (c.Kind)
         {
-            var tag = world.GetComponentRO<IsEmbarkedTag>(e);
-            var holder = tag.VehicleEntity;
-            if (!holder.IsNull && world.IsAlive(holder))
-            {
-                int holderId = NetworkIdOf(world, holder);
-                if (Embarkation.IsPersonCarrier(world, holder))
-                {
-                    return tag.Mode switch
-                    {
-                        CarryMode.Carried => CarriageFacts.Free with { Role = HrotCarryRole.Carried, Other = holderId },
-                        CarryMode.Dragged => CarriageFacts.Free with { Role = HrotCarryRole.Dragged, Other = holderId },
-                        CarryMode.Stretcher => CarriageFacts.Free with { Role = HrotCarryRole.OnStretcher, Other = holderId, Partner = NetworkIdOf(world, AssistantOf(world, holder)) },
-                        _ => CarriageFacts.Free with { Other = holderId },
-                    };
-                }
-
-                // a seat of a vehicle, an animal or a weapon system
-                var seat = SeatOf(world, holder, tag.Seat, tkb);
-                return new CarriageFacts(HrotCarryRole.None, holderId, 0, tag.Seat, tag.Exposed != 0, seat?.Pose.ToString() ?? string.Empty);
-            }
+            case CarriageKind.Carried:
+                return CarriageFacts.Free with { Role = HrotCarryRole.Carried, Other = NetworkIdOf(world, c.Holder) };
+            case CarriageKind.Dragged:
+                return CarriageFacts.Free with { Role = HrotCarryRole.Dragged, Other = NetworkIdOf(world, c.Holder) };
+            case CarriageKind.OnStretcher:
+                return CarriageFacts.Free with { Role = HrotCarryRole.OnStretcher, Other = NetworkIdOf(world, c.Holder), Partner = NetworkIdOf(world, c.Partner) };
+            case CarriageKind.Carrying:
+                return CarriageFacts.Free with { Role = HrotCarryRole.Carrying, Other = NetworkIdOf(world, CasualtyOf(world, e)) };
+            case CarriageKind.Dragging:
+                return CarriageFacts.Free with { Role = HrotCarryRole.Dragging, Other = NetworkIdOf(world, CasualtyOf(world, e)) };
+            case CarriageKind.StretcherFront:
+                return CarriageFacts.Free with { Role = HrotCarryRole.StretcherFront, Other = NetworkIdOf(world, CasualtyOf(world, e)), Partner = NetworkIdOf(world, c.Partner) };
+            case CarriageKind.StretcherRear:
+                return CarriageFacts.Free with { Role = HrotCarryRole.StretcherRear, Other = NetworkIdOf(world, CasualtyOf(world, c.Holder)), Partner = NetworkIdOf(world, c.Holder) };
+            case CarriageKind.TeamFront:
+                return CarriageFacts.Free with { Role = HrotCarryRole.TeamLoadFront, Other = NetworkIdOf(world, c.Load), Partner = NetworkIdOf(world, c.Partner) };
+            case CarriageKind.TeamRear:
+                return CarriageFacts.Free with { Role = HrotCarryRole.TeamLoadRear, Other = NetworkIdOf(world, c.Load), Partner = NetworkIdOf(world, c.Holder) };
+            case CarriageKind.Seated:
+            case CarriageKind.Manning:
+                return SeatFacts(world, tkb, e, c.Holder);
+            default:
+                // Free, Downed, and the seats HROT does not draw: an embarked man still reports where he sits
+                return world.HasComponent<IsEmbarkedTag>(e) && world.GetComponentRO<IsEmbarkedTag>(e).VehicleEntity is { IsNull: false } holder && world.IsAlive(holder)
+                    ? Embarkation.IsPersonCarrier(world, holder) ? CarriageFacts.Free with { Other = NetworkIdOf(world, holder) } : SeatFacts(world, tkb, e, holder)
+                    : CarriageFacts.Free;
         }
-
-        if (world.HasComponent<IsAssistingTag>(e))
-        {
-            var front = world.GetComponentRO<IsAssistingTag>(e).Carrier;
-            if (!front.IsNull && world.IsAlive(front) && world.HasComponent<PassengerBuffer>(front))
-            {
-                var (stretcher, load) = TeamLoadOf(world, front);
-                if (!load.IsNull)
-                {
-                    return CarriageFacts.Free with
-                    {
-                        Role = stretcher ? HrotCarryRole.StretcherRear : HrotCarryRole.TeamLoadRear, Other = NetworkIdOf(world, load), Partner = NetworkIdOf(world, front),
-                    };
-                }
-            }
-        }
-
-        if (world.HasComponent<PassengerBuffer>(e) && Embarkation.IsPersonCarrier(world, e))
-        {
-            // the casualty seat and the carry station are read apart: a weapon system in the list is the load he carries, only a man in it makes him a carrier
-            var list = world.GetComponentRO<PassengerBuffer>(e);
-            Entity load = default;
-            Entity casualty = default;
-            int casualtySeat = -1;
-            for (int i = 0; i < PassengerBuffer.Capacity; i++)
-            {
-                var p = list.Passengers[i];
-                if (p.IsNull || !world.IsAlive(p))
-                {
-                    continue;
-                }
-
-                if (WeaponSystems.IsWeaponSystem(world, p))
-                {
-                    if (load.IsNull)
-                    {
-                        load = p;
-                    }
-                }
-                else if (casualtySeat < 0)
-                {
-                    casualtySeat = i;
-                    casualty = p;
-                }
-            }
-
-            int assistant = NetworkIdOf(world, list.Assistant);
-            if (casualtySeat >= 0)
-            {
-                int other = NetworkIdOf(world, casualty);
-                return list.ModeOf(casualtySeat) switch
-                {
-                    CarryMode.Dragged => CarriageFacts.Free with { Role = HrotCarryRole.Dragging, Other = other },
-                    CarryMode.Stretcher => CarriageFacts.Free with { Role = HrotCarryRole.StretcherFront, Other = other, Partner = assistant },
-                    _ => CarriageFacts.Free with { Role = HrotCarryRole.Carrying, Other = other },
-                };
-            }
-
-            if (!load.IsNull && assistant != 0 && Embarkation.IsTwoManWeapon(world, load))
-            {
-                return CarriageFacts.Free with { Role = HrotCarryRole.TeamLoadFront, Other = NetworkIdOf(world, load), Partner = assistant };
-            }
-        }
-
-        return CarriageFacts.Free;
     }
 
-    private static Entity AssistantOf(EntityRepository world, Entity carrier) =>
-        world.HasComponent<PassengerBuffer>(carrier) ? world.GetComponentRO<PassengerBuffer>(carrier).Assistant : default;
-
-    // what a team carrier carries with his assistant: a stretcher (its casualty is the load), or the two-man weapon in his carry station
-    private static (bool Stretcher, Entity Load) TeamLoadOf(EntityRepository world, Entity carrier)
+    private static CarriageFacts SeatFacts(EntityRepository world, ITkbDatabase? tkb, Entity e, Entity holder)
     {
+        var tag = world.GetComponentRO<IsEmbarkedTag>(e);
+        var seat = Carriage.SeatOf(world, holder, tag.Seat, tkb);
+        return new CarriageFacts(HrotCarryRole.None, NetworkIdOf(world, holder), 0, tag.Seat, tag.Exposed != 0, seat?.Pose.ToString() ?? string.Empty);
+    }
+
+    // the casualty a carrier holds: the first man (not a weapon system) in his passenger list
+    private static Entity CasualtyOf(EntityRepository world, Entity carrier)
+    {
+        if (!world.HasComponent<PassengerBuffer>(carrier))
+        {
+            return default;
+        }
+
         var list = world.GetComponentRO<PassengerBuffer>(carrier);
-        Entity weapon = default;
         for (int i = 0; i < PassengerBuffer.Capacity; i++)
         {
             var p = list.Passengers[i];
-            if (p.IsNull || !world.IsAlive(p))
+            if (!p.IsNull && world.IsAlive(p) && !WeaponSystems.IsWeaponSystem(world, p))
             {
-                continue;
-            }
-
-            if (WeaponSystems.IsWeaponSystem(world, p))
-            {
-                if (weapon.IsNull && Embarkation.IsTwoManWeapon(world, p))
-                {
-                    weapon = p;
-                }
-            }
-            else if (list.ModeOf(i) == CarryMode.Stretcher)
-            {
-                return (true, p);
+                return p;
             }
         }
 
-        return (false, weapon);
+        return default;
     }
 
-    // seat <seat> of the holder's type (its Gen.Carrier descriptor), or null (HROT: Carriage.SeatOf)
-    private static SeatDto? SeatOf(EntityRepository world, Entity holder, int seat, ITkbDatabase? tkb)
-    {
-        if (tkb is null || !world.IsComponentTypeRegistered<TkbIdentity>() || !world.HasComponent<TkbIdentity>(holder)
-            || !tkb.TryGetByType(world.GetComponentRO<TkbIdentity>(holder).TkbType, out var template) || template is null)
-        {
-            return null;
-        }
-
-        var seats = template.GetDescriptor<CarrierDefDto>()?.Seats;
-        return seats is not null && seat >= 0 && seat < seats.Count ? seats[seat] : null;
-    }
 
     private static HrotAction ActionOf(ushort actionId) => actionId switch
     {

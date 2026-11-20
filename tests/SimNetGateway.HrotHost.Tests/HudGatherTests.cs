@@ -7,6 +7,7 @@ using Fdp.Toolkit.Replication;
 using Fdp.Toolkit.Replication.Components;
 using Fdp.Toolkit.ScenarioRules;
 using Fdp.Toolkit.Tkb.Domain;
+using Hrot.Look.Hud;
 using SimNetGateway.Engine;
 using SimNetGateway.Engine.InMemory;
 using SimNetGateway.Protocol.Hrot;
@@ -225,7 +226,7 @@ public class HudGatherTests
         ];
         foreach (var (category, name) in kinds)
         {
-            Assert.Equal(name, HudNames.KindOf(category));
+            Assert.Equal(name, HudWords.KindOf(category));
         }
 
 
@@ -236,16 +237,16 @@ public class HudGatherTests
         db.Register(new Fdp.Interfaces.TkbTemplate("Mortar bomb", 6101));
         db.Register(new Fdp.Interfaces.TkbTemplate("BMP-2", 100));
         w.SetSingletonManaged<Fdp.Interfaces.ITkbDatabase>(db);
-        Assert.Equal("5.56 mm", HudNames.RoundName(w, 6100));   // a trailing " round" dropped
-        Assert.Equal("Mortar bomb", HudNames.RoundName(w, 6101));
-        Assert.Null(HudNames.RoundName(w, 0));
-        Assert.Null(HudNames.RoundName(w, 999));
+        Assert.Equal("5.56 mm", HudWords.RoundName(w, 6100));   // a trailing " round" dropped
+        Assert.Equal("Mortar bomb", HudWords.RoundName(w, 6101));
+        Assert.Null(HudWords.RoundName(w, 0));
+        Assert.Null(HudWords.RoundName(w, 999));
 
         var vehicle = w.CreateEntity();
         w.AddComponent(vehicle, new TkbIdentity { TkbType = new TkbTypeId(100) });
-        Assert.Equal("Drive BMP-2", HudNames.Label(w, new UseAction(UseVerbKind.Drive, "Drive", 1, true, UseReason.Ok, vehicle, 3f)));
-        Assert.Equal("Open door", HudNames.Label(w, new UseAction(UseVerbKind.OpenDoor, "Open door", 4, true, UseReason.Ok, vehicle, 3f)));   // a verb that names no type keeps its label
-        Assert.Equal("Drive", HudNames.Label(w, new UseAction(UseVerbKind.Drive, "Drive", 1, true, UseReason.Ok, Entity.Null, 3f)));
+        Assert.Equal("Drive BMP-2", HudWords.Label(w, new UseAction(UseVerbKind.Drive, "Drive", 1, true, UseReason.Ok, vehicle, 3f)));
+        Assert.Equal("Open door", HudWords.Label(w, new UseAction(UseVerbKind.OpenDoor, "Open door", 4, true, UseReason.Ok, vehicle, 3f)));   // a verb that names no type keeps its label
+        Assert.Equal("Drive", HudWords.Label(w, new UseAction(UseVerbKind.Drive, "Drive", 1, true, UseReason.Ok, Entity.Null, 3f)));
     }
 
     /// <summary>

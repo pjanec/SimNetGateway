@@ -9,8 +9,8 @@ namespace SimNetGateway.Plugin.DdsPlayer.Tests;
 public class DpsRoundThreeTests
 {
     private static HrotView View(double simTime = 1.0, string source = "Director", string mode = "Shoulder", int target = 12, string shot = "Take 1", double x = 10, float distance = 2.2f,
-        HrotQuat? rotation = null) =>
-        new(source, mode, target, distance, -1f, new HrotVec3(x, 20, 3), rotation ?? HrotQuat.Identity, 60f, shot, simTime);
+        HrotQuat? rotation = null, int cut = 0) =>
+        new(source, mode, target, distance, -1f, new HrotVec3(x, 20, 3), rotation ?? HrotQuat.Identity, 60f, shot, simTime, cut);
 
     private static HrotQuat Yaw(double deg)
     {
@@ -52,6 +52,24 @@ public class DpsRoundThreeTests
         Assert.True(views.Until(w => w.Events.Count == 6));
         Assert.Equal(new[] { 3u, 4u }, new[] { views.Events[4].CutSeq, views.Events[5].CutSeq });
         Assert.Equal(D.ViewMode.ViewModeChase, views.Events[5].Mode);
+    }
+
+    [Fact]
+    public void A_hard_cut_HROT_counts_is_a_cut_in_the_view_even_when_nothing_else_about_the_binding_changed()
+    {
+        uint domain = Watch.NewDomain();
+        using var views = new Watch.Watch<D.View>(domain, "station-1", v => "view");
+        using var rig = new Rig(domain);
+
+        rig.Send(View(cut: 7));
+        Assert.True(views.Until(w => w.Events.Count == 1));
+        rig.Send(View(simTime: 1.1, x: 12, cut: 7));   // the same HROT cut, the camera moving: the same CutSeq
+        Assert.True(views.Until(w => w.Events.Count == 2));
+        Assert.Equal(1u, views.Events[1].CutSeq);
+
+        rig.Send(View(simTime: 1.2, x: 12, cut: 8));   // the director cut to a camera with the same source, mode, target and shot
+        Assert.True(views.Until(w => w.Events.Count == 3));
+        Assert.Equal(2u, views.Events[2].CutSeq);
     }
 
     [Fact]
