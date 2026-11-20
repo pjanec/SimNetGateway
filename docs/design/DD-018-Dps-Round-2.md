@@ -216,6 +216,33 @@ falls back to extrapolating along the last knot's heading and speed only when a 
   the rate); `EntityState` per mover (one keyed DDS instance and a heartbeat per car); predictive future segments from the route (the
   gateway knows the route only as lanes; delayed interpolation is exact and simpler).
 
+### 3.6c One trajectory model, two playback modes (P-9)
+
+The owner (2026-11-20): generalise the traffic tracks to every entity if it fits gameplay with background traffic, but keep two
+lanes if a unified one would add latency or cost for ordinary entities (thousands of soldiers). Decision: unify the MODEL, keep the
+two TRANSPORTS and two PLAYBACK modes.
+
+- **Track point** (the one model): time, position, orientation, linear velocity, and (live entities) linear acceleration and angular
+  velocity. An `EntityState` sample IS a track point already; a `MoverTracks` knot is one with orientation reduced to heading and
+  pitch.
+- **Curve rule** (the one math, in the client guide with a reference implementation in the reference client): between two points a
+  cubic Hermite in position with the velocities as tangents and a slerp in orientation; past the newest point second-order dead
+  reckoning (position + v t + a t^2 / 2, orientation by angular velocity); a correction blends from the shown pose to the new curve
+  over 0.25 s.
+- **Send rule** (the one policy, two references): send a point when the client's curve would leave a tolerance. For a **live**
+  entity the reference is the extrapolation from the last sent point (today's `EntityState` thresholds: 0.05 m, 1 degree, 0.1 m/s,
+  heartbeat 5 s); for a **delayed** mover it is the interpolation through the sent points (0.10 m, 2 degrees, at most 1 s apart).
+- **Playback modes:** **Live** - shown at the newest simulation time by extrapolation; for everything a player sees and interacts
+  with (units, vehicles, aircraft, rounds, the own unit). **Delayed** - shown `PlaybackDelay` behind the newest point by
+  interpolation only; for background movers. Nothing is added to the latency of a live entity: its points and extrapolation are
+  today's.
+- **Transports:** live entities stay one keyed `EntityState` instance each (late join and disposal for free; thousands are fine);
+  movers stay batched in `MoverTracks` (tens of thousands). A mover that HROT turns into an entity leaves `Mover` and appears as an
+  `Entity`; the client blends the hand-over over the playback delay rather than jumping forward.
+- Rejected: one topic for both (a batch loses keyed late join and disposal for entities; a keyed instance per mover is the cost the
+  batch exists to avoid); delayed playback for every entity (a player would aim at where a target was a second ago, HROT judges the
+  shot where it is now).
+
 ### 3.7 Contract rules kept
 
 Fields are appended at the end of existing types; enumerations mirrored from HROT go by name with an unknown value 0 (DD-017 3.10);
