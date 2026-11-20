@@ -24,6 +24,11 @@ public sealed class DdsPlayerPlugin : IGatewayPlugin
     public PluginBound Bind(SideBinding binding)
     {
         var settings = (DpsSettings)binding.Settings;
+        if (Side is DpsSide dps)
+        {
+            dps.Log = binding.Log;
+        }
+
         string partition = settings.Partition.Length > 0
             ? settings.Partition
             : $"station-{binding.Config.Shared.Site}-{binding.Config.Shared.Application}";

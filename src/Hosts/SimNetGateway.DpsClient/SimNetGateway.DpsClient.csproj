@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../Protocols/SimNetGateway.Protocol.DdsPlayer/SimNetGateway.Protocol.DdsPlayer.csproj" />
+    <ProjectReference Include="../../Common/SimNetGateway.Common/SimNetGateway.Common.csproj" />
   </ItemGroup>
 
 </Project>

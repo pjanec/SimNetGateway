@@ -13,6 +13,9 @@ public sealed class DpsSide : IProtocolSide
     /// <summary>"dps".</summary>
     public const string SideKey = "dps";
 
+    /// <summary>The host's log, set when the plugin binds (the modules log through it; before that nothing is written).</summary>
+    internal Action<string> Log { get; set; } = _ => { };
+
     /// <inheritdoc />
     public string Key => SideKey;
 
@@ -68,7 +71,7 @@ public sealed class DpsSide : IProtocolSide
         c.Builder.AddModule(new DpsRoundFlameOutbound(ports));
         c.Builder.AddModule(new DpsHudOutbound(ports));
         c.Builder.AddModule(new DpsTypeCatalog(ports));
-        c.Builder.AddModule(new DpsBuildingOutbound(ports));
+        c.Builder.AddModule(new DpsBuildingOutbound(ports, () => Log));
         c.Builder.AddModule(new DpsTrafficOutbound(ports));
     }
 }

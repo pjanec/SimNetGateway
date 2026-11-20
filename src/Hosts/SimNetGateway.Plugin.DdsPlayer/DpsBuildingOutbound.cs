@@ -16,8 +16,14 @@ public sealed class DpsBuildingOutbound : IGatewayModule
 
     private readonly DpsPorts _ports;
     private readonly HashSet<string> _written = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _warned = new(StringComparer.Ordinal);
+    private readonly Func<Action<string>> _log;
 
-    internal DpsBuildingOutbound(DpsPorts ports) => _ports = ports;
+    internal DpsBuildingOutbound(DpsPorts ports, Func<Action<string>>? log = null)
+    {
+        _ports = ports;
+        _log = log ?? (() => _ => { });
+    }
 
     public string Name => nameof(DpsBuildingOutbound);
 
@@ -37,6 +43,12 @@ public sealed class DpsBuildingOutbound : IGatewayModule
         }
 
         _written.Add(key);
+        if ((m.Breaches.Count > MaxBreaches || m.Windows.Count > MaxWindows) && _warned.Add(key))
+        {
+            // one line per building, not per update: the damage beyond the bounds is not on the wire
+            _log()($"dps: warning: building '{key}' has {m.Breaches.Count} breaches and {m.Windows.Count} windows; only the first {MaxBreaches} breaches and {MaxWindows} windows are sent");
+        }
+
         _ports.BuildingDamage.Send(new DpsItem<D.BuildingDamage>(new D.BuildingDamage
         {
             Building = key,

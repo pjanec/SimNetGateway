@@ -62,6 +62,28 @@ public class DpsBuildingTests
     }
 
     [Fact]
+    public void A_building_beyond_the_bounds_is_warned_about_once_and_one_within_them_not_at_all()
+    {
+        uint domain = Watch.NewDomain();
+        var log = new List<string>();
+        using var rig = new Rig(domain, log: log.Add);
+        HrotBreach Breach(int i) => new(i, 0f, 1f, 0f, 1f, "Hole");
+        HrotWindowDamage Window(int i) => new(i % 20, i / 20, 3, 0, 0, 0, 0);
+
+        rig.Send(new HrotBuildingDamage("range/Fine", false, [.. Enumerable.Range(0, 64).Select(Breach)], [.. Enumerable.Range(0, 256).Select(Window)]));   // exactly at the bounds
+        Assert.DoesNotContain(log, l => l.Contains("range/Fine"));
+
+        rig.Send(new HrotBuildingDamage("range/Big", false, [.. Enumerable.Range(0, 65).Select(Breach)], []));
+        rig.Send(new HrotBuildingDamage("range/Big", false, [.. Enumerable.Range(0, 66).Select(Breach)], [.. Enumerable.Range(0, 300).Select(Window)]));   // the same building again: no second line
+        rig.Send(new HrotBuildingDamage("range/Glass", false, [], [.. Enumerable.Range(0, 257).Select(Window)]));
+
+        var warnings = log.Where(l => l.StartsWith("dps: warning: building")).ToList();
+        Assert.Equal(2, warnings.Count);
+        Assert.Contains("'range/Big' has 65 breaches and 0 windows; only the first 64 breaches and 256 windows are sent", warnings[0]);
+        Assert.Contains("'range/Glass' has 0 breaches and 257 windows", warnings[1]);
+    }
+
+    [Fact]
     public void Breach_kinds_map_by_name()
     {
         Assert.Equal(D.BreachKind.BreachKindHole, LookNames.ByName<D.BreachKind>("BreachKind", "Hole"));

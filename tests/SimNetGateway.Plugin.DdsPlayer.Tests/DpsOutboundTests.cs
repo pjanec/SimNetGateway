@@ -14,8 +14,8 @@ public class DpsOutboundTests
 {
     private static int _domainCounter = Environment.ProcessId % 50;
 
-    // DDS domains of the test assemblies are disjoint (Plugin 20..69, Protocol.DdsPlayer 80..139, DpsClient 150..229): the projects run in parallel and a shared domain lets their participants meet
-    internal static uint NewDomain() => (uint)(20 + Interlocked.Increment(ref _domainCounter) % 50);
+    // DDS domains of the test assemblies are disjoint (Plugin 1..50, Protocol.DdsPlayer 55..94, DpsClient 100..166): the projects run in parallel and a shared domain lets their participants meet; all stay below domain 167 because DDS uses UDP port 7400 + 250 * domain and Windows excludes or hands out the ports above 49152, where participant creation then fails at random
+    internal static uint NewDomain() => (uint)(1 + Interlocked.Increment(ref _domainCounter) % 50);
 
     internal static bool WaitFor(Func<bool> condition, int timeoutMs = 6000)
     {

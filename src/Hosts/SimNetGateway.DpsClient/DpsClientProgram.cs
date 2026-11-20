@@ -14,7 +14,10 @@ public static class DpsClientProgram
 
     private static readonly string[] SummaryTopics =
         [DpsProtocol.Entity, DpsProtocol.EntityState, DpsProtocol.PersonState, DpsProtocol.Appearance, DpsProtocol.VehicleLook, DpsProtocol.Fire, DpsProtocol.Detonation,
-         DpsProtocol.Effect, DpsProtocol.Articulation];
+         DpsProtocol.Effect, DpsProtocol.Articulation,
+         DpsProtocol.Round, DpsProtocol.MunitionLook, DpsProtocol.FlameJet, DpsProtocol.FireSpots, DpsProtocol.GroundMarks, DpsProtocol.Animal, DpsProtocol.TkbType,
+         DpsProtocol.BuildingDamage, DpsProtocol.ManDowned, DpsProtocol.PlayerMessage, DpsProtocol.Status, DpsProtocol.Exercise, DpsProtocol.Mover, DpsProtocol.MoverTracks,
+         DpsProtocol.TrafficLights];
 
     public static int Run(string[] args, TextWriter output, TextWriter error)
     {

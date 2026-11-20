@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | approved (R-133: the owner delegated the contract details; the contract is not handed to a client until the owner says so) |
+| **Status** | implemented (T-035, six stages, section 9; R-133: the owner delegated the contract details; the contract is not handed to a client until the owner says so) |
 | **Tasks** | T-035 |
 | **Rulings honoured** | R-132 (DD-017), R-133, R-049, R-050, R-127 |
 | **Date** | 2026-11-20 |
@@ -395,9 +395,11 @@ sequenceDiagram
   munition look once; a fire from an MG mount -> category; `ManDownedEvent` and `PlayerMessageEvent` -> messages; an `ObjectiveStatus`
   -> status, then disposed; the TKB gather emits each referenced type once and again after a boundary; `PlayerUnitStatus` carries the
   weapon names, fire mode, use outcome and warnings; a gizmo box gets the ground height.
-- Plugin (in-memory transport): each message -> the right sample; the type catalog writes once per type; name mapping with unknown
+- Plugin (in-memory transport): each message -> the right sample; the plugin writes each type record the host sends (the once-per-type rule is the host gather'''s: the host test checks it, and again after a boundary); name mapping with unknown
   fallback; the guard test of HROT's enumeration names (CivilianMode, WeaponCategory, HeatMarkKind, UseReason, UseOutcome,
-  RadarWarningLevel).
+  RadarWarningLevel, GuidanceKind, ObjectiveRole, ObjectiveState, TriggerState, ExercisePhase, SideOutcome, MunitionShape, OperatorFireMode, InjuryState). Added in the
+  build: the track curve and knot policy (Common), the building damage union, the traffic gather and signal heads, the lean rule, the reference client's mover
+  playback, HUD text and filters.
 - Reference client: shows the kill feed line, the weapon line with round name and fire mode, and the use verdict in its HUD text;
   counts the new topics in its headless summary.
 
@@ -407,4 +409,88 @@ P-1 .. P-6 are sections 3.1 .. 3.6, approved under R-133 (the owner delegated th
 
 ## 9. As-built
 
-(filled during T-035)
+T-035 was built in six stages, each reviewed and committed on its own. The contract is still protocol 1.0 (R-133). Topic count: 17 in round 1, 32 now.
+
+### Stage 1 (fa9e527): rounds, flames, people, vehicles, 64-bit ids
+
+- **Contract:** `Entity.TypeId`, `Fire.MunitionTypeId`, `Detonation.MunitionTypeId` are `long`. `PersonState` appended `Burning`, `Fear`, `Anger`, `CivilianMode`;
+  `OpeningLook.CrewExposed`; `Fire.WeaponCategory`; `VehicleLook.RotorSpeed` is filled. New state topics `Round`, `MunitionLook`, `FlameJet`
+  (key entity + mount), `FireSpots` (bounded 8), `GroundMarks` (bounded 16).
+- **Host:** `RoundGather`, `MunitionLookGather` (once per munition type per runtime, built-in looks included), `FlameJetGather`, `FireSpotGather`
+  (holder transform applied as `EffectLayer.HolderPoint`), `GroundMarkGather`; rotor speed is sent on a change of 0.05 and on reaching 0 or 1.
+  Rounds with a look were already published as entities (Domain Munition) by the adapter's query; only `HrotRound`, the look and the disposal were new.
+- **Deviations:** a `HeatMarkEnd` enum (mirrored by name) for the marks' hot end, which DD-018 does not name; the DIS gateway got no-op ingress modules for
+  every new message (the "no unhandled message" test requires one per message); a ground mark's z was 0 in this stage (filled in stage 4).
+
+### Stage 2 (de1d33b): the player HUD
+
+- **Contract:** `AmmoEntry` appended `AmmoTypeId`, `Max`, `Magazine`, `LoadedRounds`, `Busy`, `Overheated`, `HeatPercent`; `OwnUnit` appended `FireMode`,
+  `UseSeq`, `UseOutcome`, `UseReason`, `SpreadRad`, `RadarWarning` (+ bearing), `MissileLaunch` (+ bearing, time to impact, seeker). New `ManDowned` and
+  `PlayerMessage` (event QoS), `Status` (state, keyed by `StatusId`) and `Exercise` (state, one instance).
+- **Host:** `HudNames` ports HROT's HUD words (`Hud.KindOf`, `RoundName`, `TypeName`, `Label`, `Resolve`; they live in Hrot.Presentation, which the host must
+  not reference); `HrotPlayerStation.ReadUnit` fills the weapon line, the last control frame's mount and fire preference, the use label and verdict, the
+  spread (a controlled weapon system for slots of 32 and up) and the warnings; `HudGather` reads kills, messages, statuses (as `RulesReader` does) and the
+  exercise result.
+- **Deviations:** `AmmoEntry.Weapon` is HROT's HUD word ("RIFLE", "MG", "HANDS"), not the enum name (the enum name is on `Fire.WeaponCategory`);
+  `AmmoEntry.Reserve` stays 0 (HROT does not say whether `AmmoOf` includes the magazine); where HROT's own value 0 is a real value (`Objective`, `Pending`,
+  `Running`, `Ok`) the contract's 0 is Unknown and the real values start at 1 (HROT's "none" values map to 0); sides, owners, challengers and the visible-sides
+  mask use the contract's force numbers (1 friendly, 2 opposing, 3 neutral, the mask remapped); `Status` carries `TriggerState` (DD-018 3.1 does not name it);
+  `MissileTimeToImpactS` is the time left when written and is refreshed about once a second; the keyless `Exercise` topic cannot be disposed per instance
+  (CycloneDDS.NET has no key to dispose by): it ends with the writers at a world boundary.
+
+### Stage 3 (d201a9f): type data, animals, the aim point, the two-wheeler lean
+
+- **Contract:** `TkbType` (state, keyed by the 64-bit type id; `Json` is an unbounded string, which the IDL expresses as `string Json;`; a text over 1 MB round
+  trips), `Domain` appended `DomainAnimal`, `Animal` (state), `EntityState` appended `Bank`.
+- **Host:** `TkbPresentation.Descriptors` (the allow-list, matched by CLR type so a rename in HROT breaks the build), `TkbGather` (once per type per runtime;
+  referenced by entity types, fire and detonation munitions, loaded ammunition and a unit's own mount round); `AnimalGather`; `BankRule` / `BankTracker`
+  (HROT's `MotionTracker` rule: target = clamp(-atan(v * yawRate / g), +-0.61), eased with 0.15 s on simulation time; v and yaw rate from the simulation's own
+  velocity); `PersonState.AimPoint` now comes from `WeaponPostureOf.TryAimPoint` (the target's chest, 1 m up, or the aimed point).
+- **Deviations:** animal categories are 200..209 (HROT's `Animals.IsAnimalDis`; DD-018 said 200..208); a two-wheeler is found with HROT's own
+  `VisualFamilies.Of(dis) == Motorcycle` (Hrot.Look), not a TKB class lookup; the aim change also reaches the DIS side (`HrotEntityState.AimPoint`), and a
+  non-null target that is gone now reads as "ready" instead of using the stored point.
+
+### Stage 4 (8a911a7): building damage, ground heights
+
+- **Contract:** `BuildingDamage` (state, keyed by the terrain object label "terrain/building label"): `Collapsed`, bounded breaches (64) and windows (256).
+- **Host:** `BuildingDamageGather` unites HROT's damage entities per building as its own scenario save does (`BuildingDamages.KeyOf`, panel as the index
+  within the building through `BuildingPanelIndex.ToLocal`). Ground heights come from `WorldQuery.Of(world).GroundHeightAt` (FDP, public): gizmo box and text
+  primitives and `GroundMarks.Centre.z`.
+- **Deviations:** the bounds are 64 breaches and 256 windows (HROT holds 16 and 64 per damage entity); filled gizmo triangles still arrive with z = 0.
+  The test DDS domains were made disjoint per assembly.
+
+### Stage 5 (ec9d3ac): ambient traffic as world-space tracks
+
+- **Contract:** `Mover` (state), `MoverTracks` (event QoS, at most 4096 knots), `TrafficLights` (state, one instance per signal head). A knot is 28 bytes:
+  int id, float dt (relative to the batch, at most 0), float x y z, short heading and short pitch in hundredths of a degree, float speed.
+- **Shared curve:** `SimNetGateway.Common.Tracks` holds `TrackCurve` (cubic Hermite with the velocities as tangents, shortest-way heading, straight
+  extrapolation past the newest knot) and `TrackBuilder` (the delayed-mode send rule: a knot at the first pose, when the curve through the sent knots would miss a
+  pose by 0.10 m or 2 degrees, and at least one a second). The sender and the reference client use the same code.
+- **Host:** `TrafficGather` reads HROT's `TrafficFrame` (Hrot.Traffic) and the road net's signal heads (`TrafficNetCache.Roads.Signals`). The traffic replica
+  entities are on the SumoSharp route and were already excluded from the entity gather, so a car is only ever a mover and the DIS side is unchanged.
+- **Deviations:** referencing `Hrot.Traffic` pulls HROT's vendored SumoSharp projects into the build (compile-only; the package keeps only `SimNetGateway.*`;
+  the first cold build prints one `CS8602` from HROT's `Sim.Core`); a pose with network id 0 (a SUMO id that is not an integer) has no mover; a signal head's
+  position is the lane's stop line, 5 m up (HROT's own placement), and its heading is computed by the host from the lane's last segment (HROT stores none);
+  speed is the 3-D speed along the heading so that speed * (heading, pitch) is the velocity.
+- **Knot rates measured on synthetic poses at 20 Hz:** a straight road at 14 m/s about 1.0 - 1.3 knots/s; standing 1.0 - 1.2; a 6 m radius turn at 10 m/s about
+  1.75; random acceleration and steering 1 - 6.7 (55 - 400 knots per 60 s over 25 seeded runs). A straight mover costs about 28 B/s.
+
+### Stage 6: the reference client and the closing work
+
+- **Reference client** (`src/Hosts/SimNetGateway.DpsClient`): `DpsWorld` (still free of raylib) subscribes to every new topic and keeps the latest state (not
+  alive = gone, a new world epoch drops it); `MoverPlayback` plays ambient movers delayed (`PlaybackDelay` = 1.2 s, one constant) with `TrackCurve`, never
+  past the newest knot, from a mover's second knot; `DpsHud` words the weapon line (weapon word, round, rounds, fire mode), the use prompt and the verdict
+  (shown only when `UseSeq` equals the client's last press), the kill line, the message filter of HROT's HUD (All, Side, Unit, Station only when the client
+  knows its station, Instructor only in an instructor's view) and the objective filter (visible sides or owner, titled leaves); `DpsClientWindow` draws
+  movers, signal heads, fire spots, flame jets, ground marks and the HUD text, and F presses use. The headless summary counts every topic.
+- **Building damage bounds:** the plugin logs one warning per building when breaches or windows beyond the bounds are left out.
+- **Test infrastructure:** DDS uses UDP port 7400 + 250 * domain, and Windows excludes or hands out the ports above 49152, so a domain of 167 or more fails to
+  create a participant at random; the old DpsClient range (130 .. 209) did that. All test domains are now below 167 and disjoint per assembly.
+
+### Open items
+
+- The map-only presentation rules (gait, limb swing, rotors spinning, wheels, tracer streams, the lean of the riders) are not in HROT's look library; the client
+  guide links them for porting (HROT's work).
+- Not in the contract: door states (DD-017 section 10 gap), felled trees (`TreeDamage`), ground patches (craters, road blockage), replay effects beyond
+  today's, filled gizmo triangles with a ground height (z = 0), and an exercise result that goes away inside a run.
+- A flock's birds, a rider's seat pose and a dragon are described by the type data and the animal state; the client draws them by HROT's rules.

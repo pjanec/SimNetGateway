@@ -97,6 +97,11 @@ internal static class DpsClientWindow
                     world.CycleStance();
                 }
 
+                if (Raylib.IsKeyPressed(KeyboardKey.F))
+                {
+                    world.PressUse();
+                }
+
                 if (Raylib.IsKeyPressed(KeyboardKey.Escape))
                 {
                     world.Leave();
@@ -122,8 +127,10 @@ internal static class DpsClientWindow
             Raylib.ClearBackground(new Color(24, 28, 34, 255));
             DrawGrid(center, metersPerPixel);
             DrawGizmos(world, center, metersPerPixel);
+            DrawRoundTwo(world, center, metersPerPixel, now);
             DrawEntities(world, center, metersPerPixel, now, picked);
             DrawHud(world, note, mouseWorld);
+            DrawPlayerHud(world, now);
             Raylib.EndDrawing();
 
             if (!playing && Raylib.IsKeyPressed(KeyboardKey.Escape))
@@ -266,6 +273,124 @@ internal static class DpsClientWindow
         }
     }
 
+
+    /// <summary>The DPS round 2 state on the map: ground marks, burning spots, flame jets, signal heads and the delayed ambient movers (simple shapes).</summary>
+    private static void DrawRoundTwo(DpsWorld world, Vector2 center, float mpp, double now)
+    {
+        var corners = new Vector2[4];
+        foreach (var marks in world.GroundMarks.Values)
+        {
+            foreach (var m in marks.Marks ?? [])
+            {
+                var color = m.Kind == D.HeatMarkKind.HeatMarkKindBurnedArea ? new Color(10, 10, 10, 200) : new Color(120, 80, 40, 90);
+                double c = Math.Cos(m.Heading), s = Math.Sin(m.Heading), hl = m.Length / 2, hw = m.Width / 2;
+                double[] fx = [hl, -hl, -hl, hl], fy = [hw, hw, -hw, -hw];
+                for (int i = 0; i < 4; i++)
+                {
+                    corners[i] = ToScreen(m.Centre.X + fx[i] * c - fy[i] * s, m.Centre.Y + fx[i] * s + fy[i] * c, center, mpp);
+                }
+
+                for (int i = 0; i < 4; i++)
+                {
+                    Raylib.DrawLineV(corners[i], corners[(i + 1) % 4], color);
+                }
+            }
+        }
+
+        foreach (var spots in world.FireSpots.Values)
+        {
+            foreach (var spot in spots.Spots ?? [])
+            {
+                var p = ToScreen(spot.Position.X, spot.Position.Y, center, mpp);
+                Raylib.DrawCircleV(p, Math.Max(3f, spot.Radius / mpp), new Color(255, 140, 30, 180));
+            }
+        }
+
+        foreach (var jet in world.FlameJets.Values)
+        {
+            if (world.Entities.TryGetValue(jet.EntityId, out var shooter) && shooter.State is not null)
+            {
+                var from = shooter.PositionAt(now);
+                Raylib.DrawLineEx(ToScreen(from.X, from.Y, center, mpp), ToScreen(jet.AimPoint.X, jet.AimPoint.Y, center, mpp), 3f, new Color(255, 170, 40, 220));
+            }
+        }
+
+        foreach (var light in world.TrafficLights.Values)
+        {
+            var lamp = light.State switch
+            {
+                D.TrafficLightState.TrafficLightStateRed => new Color(225, 40, 40, 255),
+                D.TrafficLightState.TrafficLightStateYellow => new Color(245, 205, 40, 255),
+                D.TrafficLightState.TrafficLightStateGreen => new Color(40, 210, 70, 255),
+                _ => new Color(90, 90, 90, 255),
+            };
+            Raylib.DrawCircleV(ToScreen(light.Position.X, light.Position.Y, center, mpp), 3f, lamp);
+        }
+
+        // ambient movers: where they were MoverPlayback.PlaybackDelay seconds ago, never extrapolated (DD-018 3.6c)
+        foreach (var (info, pose) in world.Movers.Visible(now))
+        {
+            var p = ToScreen(pose.X, pose.Y, center, mpp);
+            if (info.Kind == D.MoverKind.MoverKindPedestrian)
+            {
+                Raylib.DrawCircleV(p, 2.5f, new Color(230, 230, 120, 255));
+                continue;
+            }
+
+            var body = Rgba(info.ColourRgba == 0 ? 0xA0A0A0FFu : info.ColourRgba);
+            float length = (info.Length > 0 ? info.Length : 4.5f) / mpp, width = (info.Width > 0 ? info.Width : 1.8f) / mpp;
+            var rect = new Rectangle(p.X, p.Y, Math.Max(length, 6f), Math.Max(width, 3f));
+            Raylib.DrawRectanglePro(rect, new Vector2(rect.Width / 2, rect.Height / 2), -(float)(pose.HeadingRad * 180.0 / Math.PI), body);
+        }
+    }
+
+    /// <summary>The text of the player HUD (DD-018 3.1): weapon line, use prompt and verdict, kill feed, the last message, the objectives and the exercise result.</summary>
+    private static void DrawPlayerHud(DpsWorld world, double now)
+    {
+        int y = 70;
+        var text = new Color(235, 235, 235, 255);
+        if (world.IsPlaying)
+        {
+            foreach (string? line in new[] { world.WeaponLine(), world.UsePrompt(), world.UseVerdict() })
+            {
+                if (line is not null)
+                {
+                    Raylib.DrawText(line, 10, y, 16, Color.Yellow);
+                    y += 20;
+                }
+            }
+
+            if (world.Own is { MissileLaunch: true } own)
+            {
+                Raylib.DrawText($"MISSILE LAUNCH {own.MissileBearingDeg:0} deg  {own.MissileTimeToImpactS:0.#} s", 10, y, 16, Color.Red);
+                y += 20;
+            }
+        }
+
+        if (world.CurrentMessage(now) is { } message)
+        {
+            Raylib.DrawText(message.Text ?? string.Empty, Raylib.GetScreenWidth() / 2 - 200, Raylib.GetScreenHeight() - 60, 18, Color.White);
+        }
+
+        int ky = 74;
+        foreach (string line in world.KillFeed)
+        {
+            Raylib.DrawText(line, Raylib.GetScreenWidth() - 360, ky, 14, new Color(255, 190, 170, 255));
+            ky += 16;
+        }
+
+        foreach (var status in world.VisibleObjectives().Take(8))
+        {
+            Raylib.DrawText(DpsHud.StatusLine(status), Raylib.GetScreenWidth() - 360, ky + 10, 13, text);
+            ky += 15;
+        }
+
+        if (world.Exercise is { Phase: D.ExercisePhase.ExercisePhaseEnded } ex)
+        {
+            Raylib.DrawText($"EXERCISE ENDED {ex.Reason}", Raylib.GetScreenWidth() / 2 - 120, 12, 20, Color.Orange);
+        }
+    }
+
     private static void DrawGizmos(DpsWorld world, Vector2 center, float mpp)
     {
         foreach (var frame in world.Gizmos.Values)
@@ -358,10 +483,10 @@ internal static class DpsClientWindow
         string state = world.Slot is { } slot ? slot.State.ToString().Replace("SlotState", string.Empty) : "no slot yet";
         string reason = world.Slot is { Reason: { Length: > 0 } r } ? $" ({r})" : string.Empty;
         Raylib.DrawText($"{state}{reason}   entities {world.Entities.Count}   gizmo layers {world.Gizmos.Count}   {note}", 10, 8, 16, Color.White);
-        Raylib.DrawText("J join  WASD move  mouse aim  LMB fire  C stance  Esc leave/quit  RMB pick  G gizmos  wheel zoom", 10, 28, 14, new Color(150, 160, 175, 255));
+        Raylib.DrawText("J join  WASD move  mouse aim  LMB fire  C stance  F use  Esc leave/quit  RMB pick  G gizmos  wheel zoom", 10, 28, 14, new Color(150, 160, 175, 255));
         if (world.Own is { } own && world.IsPlaying)
         {
-            string ammo = own.Ammo is { Count: > 0 } a ? $"   ammo {a[0].Rounds}/{a[0].Reserve}" : string.Empty;
+            string ammo = string.Empty;   // the weapon line below says it
             Raylib.DrawText($"health {own.Health:0}/{own.MaxHealth:0}{ammo}", 10, 48, 16, Color.Yellow);
         }
 

@@ -89,6 +89,7 @@ public sealed class DpsWorld : IDisposable
         Count<D.Detonation>(DpsProtocol.Detonation);
         Count<D.Effect>(DpsProtocol.Effect);
         Count<D.Articulation>(DpsProtocol.Articulation);
+        SubscribeRoundTwo();
     }
 
     /// <summary>Samples received per topic since start (live samples only), for the topics the client does not otherwise keep.</summary>
@@ -119,6 +120,11 @@ public sealed class DpsWorld : IDisposable
         }
 
         LatestSimTime = 0;
+        foreach (var clear in _clears)
+        {
+            clear();
+        }
+
         if (_lastView is { } view)
         {
             _view.Write(view);
@@ -175,6 +181,172 @@ public sealed class DpsWorld : IDisposable
         }
         while (id == 0);
         return id;
+    }
+
+
+    // ---- DPS round 2: the state the client keeps besides the entities ----------------------------------------------------------
+
+    /// <summary>The kill feed keeps this many lines.</summary>
+    public const int KillFeedLines = 5;
+
+    private readonly List<Action> _clears = new();
+    private readonly List<string> _killFeed = new();
+    private readonly List<(D.PlayerMessage Message, double At)> _messages = new();
+    private readonly HashSet<(int Id, int Origin)> _messagesSeen = new();
+    private int? _lastUsePress;
+    private string _lastUseLabel = string.Empty;
+
+    /// <summary>The rounds with a look, by the round's entity id.</summary>
+    public Dictionary<int, D.Round> Rounds { get; } = new();
+
+    public Dictionary<long, D.MunitionLook> MunitionLooks { get; } = new();
+
+    /// <summary>The lit flame jets by (entity id, mount).</summary>
+    public Dictionary<(int Entity, int Mount), D.FlameJet> FlameJets { get; } = new();
+
+    public Dictionary<int, D.FireSpots> FireSpots { get; } = new();
+
+    public Dictionary<int, D.GroundMarks> GroundMarks { get; } = new();
+
+    public Dictionary<int, D.Animal> Animals { get; } = new();
+
+    /// <summary>The TKB type records by type id.</summary>
+    public Dictionary<long, D.TkbType> TkbTypes { get; } = new();
+
+    /// <summary>The damage of the buildings by their terrain object label.</summary>
+    public Dictionary<string, D.BuildingDamage> BuildingDamage { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>The rule statuses by id.</summary>
+    public Dictionary<int, D.Status> Statuses { get; } = new();
+
+    public D.Exercise? Exercise { get; private set; }
+
+    public Dictionary<int, D.TrafficLights> TrafficLights { get; } = new();
+
+    /// <summary>The ambient movers, played delayed (<see cref="MoverPlayback.PlaybackDelay"/>).</summary>
+    public MoverPlayback Movers { get; } = new();
+
+    /// <summary>The last <see cref="KillFeedLines"/> kill feed lines, oldest first.</summary>
+    public IReadOnlyList<string> KillFeed => _killFeed;
+
+    /// <summary>The player's station id, when the client knows it (messages to a station are shown only then).</summary>
+    public int StationId { get; set; } = -1;
+
+    /// <summary>Who looks, for the message and objective filters.</summary>
+    public DpsViewer Viewer => new(Slot?.UnitId ?? 0, Slot?.Side ?? 0, StationId);
+
+    private void Watch<T>(string topic, Action<T> alive, Action<T> gone)
+        where T : struct
+    {
+        Received[topic] = 0;
+        var reader = new DdsReader<T>(_participant);
+        _counters.Add(reader);
+        _countPumps.Add(() => Drain(reader, d =>
+        {
+            Received[topic]++;
+            alive(d);
+        }, gone));
+    }
+
+    private void Keep<T, TKey>(string topic, Dictionary<TKey, T> cache, Func<T, TKey> key)
+        where T : struct
+        where TKey : notnull
+    {
+        _clears.Add(cache.Clear);
+        Watch<T>(topic, d => cache[key(d)] = d, d => cache.Remove(key(d)));
+    }
+
+    private void SubscribeRoundTwo()
+    {
+        Keep(DpsProtocol.Round, Rounds, (D.Round r) => r.EntityId);
+        Keep(DpsProtocol.MunitionLook, MunitionLooks, (D.MunitionLook l) => l.MunitionTypeId);
+        Keep(DpsProtocol.FlameJet, FlameJets, (D.FlameJet j) => (j.EntityId, j.Mount));
+        Keep(DpsProtocol.FireSpots, FireSpots, (D.FireSpots s) => s.EntityId);
+        Keep(DpsProtocol.GroundMarks, GroundMarks, (D.GroundMarks m) => m.EntityId);
+        Keep(DpsProtocol.Animal, Animals, (D.Animal a) => a.EntityId);
+        Keep(DpsProtocol.TkbType, TkbTypes, (D.TkbType t) => t.TypeId);
+        Keep(DpsProtocol.BuildingDamage, BuildingDamage, (D.BuildingDamage b) => b.Building ?? string.Empty);
+        Keep(DpsProtocol.Status, Statuses, (D.Status s) => s.StatusId);
+        Keep(DpsProtocol.TrafficLights, TrafficLights, (D.TrafficLights l) => l.SignalId);
+        _clears.Add(() => Exercise = null);
+        Watch<D.Exercise>(DpsProtocol.Exercise, e => Exercise = e, _ => Exercise = null);
+
+        // movers: who (state), where (batches of knots)
+        _clears.Add(Movers.Clear);
+        Watch<D.Mover>(DpsProtocol.Mover, m => Movers.SetMover(m), m => Movers.Remove(m.MoverId));
+        Watch<D.MoverTracks>(DpsProtocol.MoverTracks, b => Movers.AddBatch(b, _clock()), _ => { });
+
+        // events: the kill feed and the messages
+        _clears.Add(_killFeed.Clear);
+        _clears.Add(_messages.Clear);
+        _clears.Add(_messagesSeen.Clear);
+        Watch<D.ManDowned>(DpsProtocol.ManDowned, k =>
+        {
+            _killFeed.Add(DpsHud.KillLine(k, id => Entities.TryGetValue(id, out var e) && e.Info is { } info && !string.IsNullOrEmpty(info.Name) ? info.Name : "#" + id));
+            while (_killFeed.Count > KillFeedLines)
+            {
+                _killFeed.RemoveAt(0);
+            }
+        }, _ => { });
+        Watch<D.PlayerMessage>(DpsProtocol.PlayerMessage, m =>
+        {
+            // a message is kept once (the same id and origin is a repeat); who it is for is judged when it is shown, by whoever the player is then
+            if (_messagesSeen.Add((m.MessageId, m.OriginNode)))
+            {
+                _messages.Add((m, _clock()));
+                if (_messages.Count > 20)
+                {
+                    _messages.RemoveAt(0);
+                }
+            }
+        }, _ => { });
+    }
+
+    /// <summary>The newest message addressed to the player that is still within its display time at client time <paramref name="now"/>.</summary>
+    public D.PlayerMessage? CurrentMessage(double now)
+    {
+        for (int i = _messages.Count - 1; i >= 0; i--)
+        {
+            var (message, at) = _messages[i];
+            if (now - at <= Math.Max(message.Seconds, 1f) && DpsHud.Addressed(message, Viewer))
+            {
+                return message;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The objectives the player's side sees (title and state), as HROT's player HUD filters them.</summary>
+    public IEnumerable<D.Status> VisibleObjectives()
+    {
+        var parents = new HashSet<int>(Statuses.Values.Select(s => s.ParentId).Where(p => p != 0));
+        byte side = Slot?.Side ?? 0;
+        return Statuses.Values.Where(s => DpsHud.VisibleTo(s, side, parents.Contains(s.StatusId))).OrderBy(s => s.StatusId);
+    }
+
+    /// <summary>The weapon line of the own unit, or null.</summary>
+    public string? WeaponLine() => Own is { } own ? DpsHud.WeaponLine(own) : null;
+
+    /// <summary>The use prompt of the own unit, or null.</summary>
+    public string? UsePrompt() => Own is { } own ? DpsHud.UsePrompt(own) : null;
+
+    /// <summary>The verdict of the client's last use press, once the unit's answer is for it.</summary>
+    public string? UseVerdict() => Own is { } own ? DpsHud.UseVerdict(own, _lastUsePress, _lastUseLabel) : null;
+
+    /// <summary>A use press on what the unit can use now: the press counter changes, the verb and target are the unit's own offer.</summary>
+    public void PressUse()
+    {
+        if (Own is not { } own)
+        {
+            return;
+        }
+
+        _frame.UseSeq = unchecked((byte)(_frame.UseSeq + 1));
+        _frame.UseVerb = own.UseVerb;
+        _frame.UseTarget = own.UseTargetId;
+        _lastUsePress = _frame.UseSeq;
+        _lastUseLabel = own.UseLabel ?? string.Empty;
     }
 
     /// <summary>Takes what the gateway published since the last call.</summary>

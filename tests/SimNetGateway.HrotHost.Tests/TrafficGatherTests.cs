@@ -45,16 +45,16 @@ public class TrafficGatherTests
                 }
             }
 
-            Frame = new TrafficFrame();
+            Traffic = new TrafficFrame();
             Steps(3);
         }
 
-        public TrafficFrame Frame { get; }
+        public TrafficFrame Traffic { get; }
 
         public void Show(IReadOnlyList<TrafficCarPose> cars, IReadOnlyList<TrafficPedPose>? peds = null, IReadOnlyDictionary<int, byte>? lights = null)
         {
-            Frame.Fill(cars, _ => false, lights ?? new Dictionary<int, byte>(), peds);
-            World.SetSingletonManaged(Frame);
+            Traffic.Fill(cars, _ => false, lights ?? new Dictionary<int, byte>(), peds);
+            World.SetSingletonManaged(Traffic);
         }
 
         public void Hide() => World.SetSingletonManaged<TrafficFrame>(null!);
