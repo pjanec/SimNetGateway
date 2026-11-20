@@ -502,3 +502,26 @@ public readonly record struct HrotWindowDamage(int Panel, int Opening, byte Hits
 /// "terrain/building label". Not collapsed and no breaches and no windows = the building has no damage any more (a reload).
 /// </summary>
 public readonly record struct HrotBuildingDamage(string Building, bool Collapsed, IReadOnlyList<HrotBreach> Breaches, IReadOnlyList<HrotWindowDamage> Windows) : IHrotToGatewayMessage;
+
+// ---- DPS round 2 (DD-018 3.6b): ambient traffic -----------------------------------------------------------------------
+
+/// <summary>
+/// An ambient mover (a car or pedestrian of the simulation's traffic), sent at its spawn. <paramref name="Kind"/> and <paramref name="Source"/> are names ("Car" or
+/// "Pedestrian", "Sumo"). <paramref name="Colour"/> is 0xRRGGBBAA (0 for a pedestrian), <paramref name="Seed"/> the pedestrian's clothes-and-face seed.
+/// </summary>
+public readonly record struct HrotMover(int Id, string Kind, long TypeId, uint Colour, uint Seed, float Length, float Width, string Source) : IHrotToGatewayMessage;
+
+/// <summary>The mover <see cref="Id"/> is gone (despawned, or turned into an entity of its own).</summary>
+public readonly record struct HrotMoverRemoved(int Id) : IHrotToGatewayMessage;
+
+/// <summary>One knot: time = batch time + <paramref name="Dt"/>, local metres, heading and pitch in hundredths of a degree, speed in m/s along the heading.</summary>
+public readonly record struct HrotMoverKnot(int MoverId, float Dt, float X, float Y, float Z, short HeadingCentiDeg, short PitchCentiDeg, float Speed);
+
+/// <summary>The knots made since the last batch; a batch is at most 4096 knots.</summary>
+public readonly record struct HrotMoverTracks(double SimTime, IReadOnlyList<HrotMoverKnot> Knots) : IHrotToGatewayMessage;
+
+/// <summary>One signal head: <paramref name="State"/> is the lamp ("Red", "Yellow", "Green", "Off"); <paramref name="HeadingDeg"/> is the controlled lane's direction of travel at the stop line.</summary>
+public readonly record struct HrotTrafficLight(int SignalId, HrotVec3 Position, float HeadingDeg, string State) : IHrotToGatewayMessage;
+
+/// <summary>The signal head <see cref="SignalId"/> is gone.</summary>
+public readonly record struct HrotTrafficLightRemoved(int SignalId) : IHrotToGatewayMessage;

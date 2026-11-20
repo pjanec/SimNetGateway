@@ -110,6 +110,9 @@ public sealed class DpsTransport : IDisposable
             GroundMarks = Add(new DpsChannel<GroundMarks>(_participant));
             Animal = Add(new DpsChannel<Animal>(_participant));
             BuildingDamage = Add(new DpsChannel<BuildingDamage>(_participant));
+            Mover = Add(new DpsChannel<Mover>(_participant));
+            MoverTracks = Add(new DpsChannel<MoverTracks>(_participant));
+            TrafficLights = Add(new DpsChannel<TrafficLights>(_participant));
             TkbType = Add(new DpsChannel<TkbType>(_participant));
             ManDowned = Add(new DpsChannel<ManDowned>(_participant));
             PlayerMessage = Add(new DpsChannel<PlayerMessage>(_participant));
@@ -168,6 +171,12 @@ public sealed class DpsTransport : IDisposable
     internal DpsChannel<Animal> Animal { get; } = null!;
 
     internal DpsChannel<BuildingDamage> BuildingDamage { get; } = null!;
+
+    internal DpsChannel<Mover> Mover { get; } = null!;
+
+    internal DpsChannel<MoverTracks> MoverTracks { get; } = null!;
+
+    internal DpsChannel<TrafficLights> TrafficLights { get; } = null!;
 
     internal DpsChannel<TkbType> TkbType { get; } = null!;
 

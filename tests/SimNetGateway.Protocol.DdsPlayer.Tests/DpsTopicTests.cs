@@ -461,6 +461,26 @@ public class DpsTopicTests
     }
 
     [Fact]
+    public void The_traffic_topics_round_trip_with_the_compact_knot_units()
+    {
+        var mover = RoundTrip(new Mover { MoverId = 101, Kind = MoverKind.MoverKindCar, TypeId = 8851, ColourRgba = 0xB02A2AFF, Seed = 205, Length = 4.5f, Width = 1.8f, Source = MoverSource.MoverSourceSumo }, "t2-mover");
+        Assert.Equal((101, MoverKind.MoverKindCar, 8851L, 0xB02A2AFFu, 205u, 4.5f, 1.8f, MoverSource.MoverSourceSumo), (mover.MoverId, mover.Kind, mover.TypeId, mover.ColourRgba, mover.Seed, mover.Length, mover.Width, mover.Source));
+
+        var batch = RoundTrip(new MoverTracks
+        {
+            SimTime = 42.5,
+            Knots = Enumerable.Range(0, 4096).Select(i => new MoverKnot { MoverId = i, Dt = -0.05f, X = 1f + i, Y = 2f, Z = 3f, HeadingCentiDeg = -18000, PitchCentiDeg = 9000, Speed = 13.9f }).ToList(),
+        }, "t2-tracks");
+        Assert.Equal((42.5, 4096), (batch.SimTime, batch.Knots.Count));
+        Assert.Equal((4095, -0.05f, 4096f, (short)-18000, (short)9000, 13.9f), (batch.Knots[4095].MoverId, batch.Knots[4095].Dt, batch.Knots[4095].X, batch.Knots[4095].HeadingCentiDeg, batch.Knots[4095].PitchCentiDeg, batch.Knots[4095].Speed));
+
+        var light = RoundTrip(new TrafficLights { SignalId = 4, Position = new Vec3d { X = 100, Y = -1.7, Z = 5 }, HeadingDeg = 90f, State = TrafficLightState.TrafficLightStateGreen }, "t2-light");
+        Assert.Equal((4, 90f, TrafficLightState.TrafficLightStateGreen), (light.SignalId, light.HeadingDeg, light.State));
+        Assert.Equal(7, LateJoin(new Mover { MoverId = 7 }, "t2-late-mover").MoverId);
+        Assert.Equal(8, LateJoin(new TrafficLights { SignalId = 8 }, "t2-late-light").SignalId);
+    }
+
+    [Fact]
     public void Late_joiner_gets_every_live_instance()
     {
         using var writerSide = new DdsParticipant(NewDomain(), defaultPartition: "late");
@@ -540,7 +560,17 @@ public class DpsTopicTests
             var type = topic["DPS_".Length..];
             Assert.Contains($"struct {type} ", idl);
         }
-        Assert.Equal(29, DpsProtocol.AllTopics.Count);
+        Assert.Equal(32, DpsProtocol.AllTopics.Count);
+        foreach (var name in new[] { "Mover", "MoverTracks", "TrafficLights" })
+        {
+            Assert.Contains("DPS_" + name, DpsProtocol.AllTopics);
+        }
+
+        foreach (var enumerator in new[] { "MoverKindPedestrian", "MoverSourceSumo", "TrafficLightStateYellow" })
+        {
+            Assert.Contains(enumerator, idl);
+        }
+
         Assert.Contains("DPS_BuildingDamage", DpsProtocol.AllTopics);
         foreach (var enumerator in new[] { "BreachKindPassage" })
         {

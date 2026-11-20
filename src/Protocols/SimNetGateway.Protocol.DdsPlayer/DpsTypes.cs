@@ -150,3 +150,12 @@ public enum FlockMode : byte { FlockModeUnknown = 0, FlockModeFlying, FlockModeL
 
 /// <summary>What kind of hole a wall breach is (HROT's <c>BreachKind</c>, by name): a Hole is a gap to see or shoot through, a Passage is one to walk through; Unknown = a kind this contract does not name.</summary>
 public enum BreachKind : byte { BreachKindUnknown = 0, BreachKindHole, BreachKindPassage }
+
+/// <summary>What an ambient mover is.</summary>
+public enum MoverKind : byte { MoverKindUnknown = 0, MoverKindCar, MoverKindPedestrian }
+
+/// <summary>Where an ambient mover comes from (any simulator's traffic or crowd can feed the contract).</summary>
+public enum MoverSource : byte { MoverSourceUnknown = 0, MoverSourceSumo }
+
+/// <summary>A signal head's lamp (0 = off or unknown).</summary>
+public enum TrafficLightState : byte { TrafficLightStateOff = 0, TrafficLightStateRed, TrafficLightStateYellow, TrafficLightStateGreen }

@@ -668,6 +668,73 @@ public partial struct Exercise
 
 #endregion
 
+#region Ambient traffic (gateway to client)
+
+/// <summary>
+/// An ambient mover (a car or a pedestrian of the simulation's traffic, DD-018 3.6b): who and what it is, written at spawn and disposed at despawn. Its motion is in
+/// <see cref="MoverTracks"/>. A mover the simulation turns into an entity of its own is disposed here and appears as an <see cref="Entity"/>.
+/// </summary>
+[DdsTopic(DpsProtocol.Mover)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+public partial struct Mover
+{
+    /// <summary>The simulation's network id of the mover.</summary>
+    [DdsKey] public int MoverId;
+    public MoverKind Kind;
+    /// <summary>The simulation's TKB type (a car the traffic source gave no type is the generic traffic car's).</summary>
+    public long TypeId;
+    /// <summary>A car's paint as 0xRRGGBBAA (already resolved); 0 for a pedestrian.</summary>
+    public uint ColourRgba;
+    /// <summary>The seed of a pedestrian's clothes and face (the simulation's own: the network id); 0 for a car.</summary>
+    public uint Seed;
+    /// <summary>Metres; 0 = take the type's.</summary>
+    public float Length, Width;
+    public MoverSource Source;
+}
+
+/// <summary>
+/// One knot of a mover's track. The time is <see cref="MoverTracks.SimTime"/> + <see cref="Dt"/> (seconds, at most 0). Position in the local frame (float metres: 1 cm up to
+/// about 100 km from the origin). <see cref="HeadingCentiDeg"/> is the heading about up in hundredths of a degree (0 = +x, counter-clockwise, -18000 .. 18000),
+/// <see cref="PitchCentiDeg"/> the pitch in hundredths of a degree (positive = nose up). <see cref="Speed"/> is m/s along the heading. The curve between knots is the
+/// cubic Hermite with the knots' velocities as tangents (DD-018 3.6c).
+/// </summary>
+[DdsStruct]
+public partial struct MoverKnot
+{
+    public int MoverId;
+    public float Dt;
+    public float X, Y, Z;
+    public short HeadingCentiDeg, PitchCentiDeg;
+    public float Speed;
+}
+
+/// <summary>The knots added to the movers' tracks since the last batch (about 10 Hz); a late joiner shows a mover from its second knot.</summary>
+[DdsTopic(DpsProtocol.MoverTracks)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 16)]
+[DdsManaged]
+public partial struct MoverTracks
+{
+    /// <summary>The simulation time the batch was made.</summary>
+    public double SimTime;
+    [DdsBound(4096)] public List<MoverKnot> Knots;
+}
+
+/// <summary>
+/// One signal head of a traffic light, placed in the local frame by the host so a client needs no road network. <see cref="HeadingDeg"/> is the direction of travel of the
+/// controlled lane at its stop line (0 = +x, counter-clockwise); the head faces the traffic coming the opposite way.
+/// </summary>
+[DdsTopic(DpsProtocol.TrafficLights)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+public partial struct TrafficLights
+{
+    [DdsKey] public int SignalId;
+    public Vec3d Position;
+    public float HeadingDeg;
+    public TrafficLightState State;
+}
+
+#endregion
+
 #region Player (client to gateway)
 
 /// <summary>Choose a playable unit by id, a role by name, or observe.</summary>
