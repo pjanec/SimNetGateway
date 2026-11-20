@@ -3,7 +3,7 @@
        tests are the host); loading them BY PATH from the packaged folder is SimNetGateway.HrotHost.Staged.Tests. HrotRoot is the HROT checkout (see the host project). -->
   <PropertyGroup>
     <HrotRoot Condition="'$(HrotRoot)' == ''">$(HROT_ROOT)</HrotRoot>
-    <HrotRoot Condition="'$(HrotRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', '..', '..', 'hrot'))</HrotRoot>
+    <HrotRoot Condition="'$(HrotRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', '..', 'hrot'))</HrotRoot>
     <HrotRoot>$([MSBuild]::NormalizeDirectory('$(HrotRoot)'))</HrotRoot>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>

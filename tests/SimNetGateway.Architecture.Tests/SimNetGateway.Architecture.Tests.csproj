@@ -6,7 +6,7 @@
   <!-- a host built against the product it extends is referenced only when that checkout exists (HrotRoot as in the host project); its declared references are checked either way -->
   <PropertyGroup>
     <HrotRoot Condition="'$(HrotRoot)' == ''">$(HROT_ROOT)</HrotRoot>
-    <HrotRoot Condition="'$(HrotRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', '..', '..', 'hrot'))</HrotRoot>
+    <HrotRoot Condition="'$(HrotRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', '..', 'hrot'))</HrotRoot>
     <HrotRoot>$([MSBuild]::NormalizeDirectory('$(HrotRoot)'))</HrotRoot>
   </PropertyGroup>
   <ItemGroup Condition="Exists('$(HrotRoot)Hrot/Engine/Hrot.Common/Hrot.Common.csproj')">
