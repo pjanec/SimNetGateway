@@ -170,6 +170,8 @@ breached wall stays closed.
   crack points as bytes 0..255). Several HROT entities for one building (capacity overflow) are merged into one sample. Disposed when the
   building's damage goes (a reload).
 - The pane geometry is static terrain (a `glazed` flag per window opening) and comes with the terrain export, not over DPS.
+- Not in this round, same family, a later round: felled / damaged trees (`TreeDamage`), ground patches (craters, road blockage), door
+  states (DD-017 section 10 gap). The client guide links them.
 - Rejected: one topic for windows and one for breaches (HROT keeps them apart only so a glass hit does not re-send breaches on its
   internal wire; a client applies both to the same building); keying by HROT's building index (an index into one import's list; the
   label survives a re-export).
