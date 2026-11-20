@@ -63,9 +63,10 @@ public class DpsTopicTests
 
         var entity = RoundTrip(new Entity
         {
-            EntityId = 11, TypeId = 4711, Domain = Domain.DomainGround, Side = 2, Name = "Tank 1", Dis = Dis, Playable = true, ParentId = 3,
+            EntityId = 11, TypeId = 5_000_000_011L, Domain = Domain.DomainGround, Side = 2, Name = "Tank 1", Dis = Dis, Playable = true, ParentId = 3,
         }, "t-entity");
         Assert.Equal(11, entity.EntityId);
+        Assert.Equal(5_000_000_011L, entity.TypeId);   // 64-bit (DD-018 3.2)
         Assert.Equal(Domain.DomainGround, entity.Domain);
         Assert.Equal("Tank 1", entity.Name);
         Assert.Equal((ushort)225, entity.Dis.Country);
@@ -213,6 +214,132 @@ public class DpsTopicTests
         Assert.Equal(GizmoShape.GizmoShapeText, gizmo.Primitives[1].Shape);
     }
 
+    /// <summary>Writes a sample, then joins a reader: a late reader still gets it only on a TRANSIENT_LOCAL state topic (DD-017 3.11).</summary>
+    private static T LateJoin<T>(T value, string partition) where T : struct
+    {
+        using var writerSide = new DdsParticipant(NewDomain(), defaultPartition: partition);
+        using var writer = new DdsWriter<T>(writerSide);
+        writer.Write(value);
+        using var readerSide = new DdsParticipant(NewDomain(), defaultPartition: partition);
+        using var reader = new DdsReader<T>(readerSide);
+        T? got = null;
+        Assert.True(WaitFor(() =>
+        {
+            using var loan = reader.Take(8);
+            foreach (var sample in loan)
+            {
+                if (sample.IsValid)
+                {
+                    got = sample.Data;
+                }
+            }
+            return got is not null;
+        }), $"{typeof(T).Name}: a late reader got nothing (not a state topic?)");
+        return got!.Value;
+    }
+
+    [Fact]
+    public void Round_two_extensions_and_topics_round_trip()
+    {
+        var person = RoundTrip(new PersonState { EntityId = 12, Burning = true, Fear = 3, Anger = 4, CivilianMode = CivilianMode.CivilianModeArmedHostile }, "t2-person");
+        Assert.True(person.Burning);
+        Assert.Equal((byte)3, person.Fear);
+        Assert.Equal((byte)4, person.Anger);
+        Assert.Equal(CivilianMode.CivilianModeArmedHostile, person.CivilianMode);
+
+        var look = RoundTrip(new VehicleLook { EntityId = 11, RotorSpeed = 0.55f, Parts = [], Openings = [new OpeningLook { OpeningId = 9, Progress = 1f, CrewExposed = true }] }, "t2-vlook");
+        Assert.Equal(0.55f, look.RotorSpeed);
+        Assert.True(look.Openings[0].CrewExposed);
+
+        var fire = RoundTrip(new Fire { ShooterId = 12, MunitionTypeId = 7_000_000_077L, WeaponCategory = WeaponCategory.WeaponCategoryMachineGun }, "t2-fire");
+        Assert.Equal(7_000_000_077L, fire.MunitionTypeId);
+        Assert.Equal(WeaponCategory.WeaponCategoryMachineGun, fire.WeaponCategory);
+        var detonation = RoundTrip(new Detonation { ShooterId = 12, MunitionTypeId = 7_000_000_077L }, "t2-det");
+        Assert.Equal(7_000_000_077L, detonation.MunitionTypeId);
+
+        var round = RoundTrip(new Round
+        {
+            EntityId = 21, MunitionTypeId = 6_000_000_001L, ShooterId = 12, Muzzle = new Vec3d { X = 1, Y = 2, Z = 3 }, Lying = true, FuzeLeftS = -1f, Stopped = true,
+        }, "t2-round");
+        Assert.Equal(21, round.EntityId);
+        Assert.Equal(6_000_000_001L, round.MunitionTypeId);
+        Assert.Equal(3.0, round.Muzzle.Z);
+        Assert.True(round.Lying);
+        Assert.Equal(-1f, round.FuzeLeftS);
+        Assert.True(round.Stopped);
+
+        var munition = RoundTrip(new MunitionLook
+        {
+            MunitionTypeId = 6_000_000_001L, Shape = MunitionShape.MunitionShapeArrow, Length = 0.7f, Diameter = 0.01f, ColourRgba = 0x4B5320FF, SmokeTrail = true, Tracer = true,
+            TracerColourRgba = 0xFF9A30FF, Sticks = true, Bolt = true,
+        }, "t2-mlook");
+        Assert.Equal(MunitionShape.MunitionShapeArrow, munition.Shape);
+        Assert.Equal(0xFF9A30FFu, munition.TracerColourRgba);
+        Assert.True(munition.Bolt);
+
+        var jet = RoundTrip(new FlameJet
+        {
+            EntityId = 12, Mount = 2, AimPoint = new Vec3d { X = 9 }, TargetId = 13, RangeM = 25f, HalfAngleRad = 0.1f, Intensity = 0.8f, BurstStartedAt = 4.5, BurnSeconds = 30f,
+        }, "t2-jet");
+        Assert.Equal(2, jet.Mount);
+        Assert.Equal(25f, jet.RangeM);
+        Assert.Equal(4.5, jet.BurstStartedAt);
+
+        var spots = RoundTrip(new FireSpots
+        {
+            EntityId = 11,
+            Spots = Enumerable.Range(0, 8).Select(i => new FireSpot { Position = new Vec3d { X = i }, Radius = 1.5f, Intensity = 1f, Since = 3, Seconds = 60 }).ToList(),
+        }, "t2-spots");
+        Assert.Equal(8, spots.Spots.Count);
+        Assert.Equal(7.0, spots.Spots[7].Position.X);
+
+        var marks = RoundTrip(new GroundMarks
+        {
+            EntityId = 31,
+            Marks = Enumerable.Range(0, 16).Select(i => new GroundMark
+            {
+                Kind = HeatMarkKind.HeatMarkKindBurnedArea, Centre = new Vec3d { X = i, Y = 2 }, Heading = 0.5f, Length = 6f, Width = 3f, HotEnd = HeatMarkEnd.HeatMarkEndRear,
+                StandSince = 5, LeftAt = 9,
+            }).ToList(),
+        }, "t2-marks");
+        Assert.Equal(16, marks.Marks.Count);
+        Assert.Equal(HeatMarkKind.HeatMarkKindBurnedArea, marks.Marks[15].Kind);
+        Assert.Equal(HeatMarkEnd.HeatMarkEndRear, marks.Marks[0].HotEnd);
+        Assert.Equal(9.0, marks.Marks[3].LeftAt);
+    }
+
+    [Fact]
+    public async Task The_new_topics_are_state_topics_a_late_joiner_reads_and_a_jet_is_keyed_by_entity_and_mount()
+    {
+        Assert.Equal(21, LateJoin(new Round { EntityId = 21 }, "t2-late-round").EntityId);
+        Assert.Equal(6L, LateJoin(new MunitionLook { MunitionTypeId = 6 }, "t2-late-mlook").MunitionTypeId);
+        Assert.Equal(2, LateJoin(new FlameJet { EntityId = 12, Mount = 2 }, "t2-late-jet").Mount);
+        Assert.Equal(11, LateJoin(new FireSpots { EntityId = 11, Spots = [] }, "t2-late-spots").EntityId);
+        Assert.Equal(31, LateJoin(new GroundMarks { EntityId = 31, Marks = [] }, "t2-late-marks").EntityId);
+
+        using var participant = new DdsParticipant(NewDomain(), defaultPartition: "t2-jet-keys");
+        using var writer = new DdsWriter<FlameJet>(participant);
+        using var reader = new DdsReader<FlameJet>(participant);
+        Assert.True(await writer.WaitForReaderAsync(TimeSpan.FromSeconds(5)));
+        writer.Write(new FlameJet { EntityId = 12, Mount = 0, Intensity = 0.25f });
+        writer.Write(new FlameJet { EntityId = 12, Mount = 1, Intensity = 0.75f });
+        writer.Write(new FlameJet { EntityId = 12, Mount = 1, Intensity = 1f });
+        var seen = new Dictionary<int, float>();
+        Assert.True(WaitFor(() =>
+        {
+            using var loan = reader.Take(8);
+            foreach (var sample in loan)
+            {
+                if (sample.IsValid)
+                {
+                    seen[sample.Data.Mount] = sample.Data.Intensity;
+                }
+            }
+            return seen.Count == 2 && seen[1] == 1f;
+        }));
+        Assert.Equal(0.25f, seen[0]);
+    }
+
     [Fact]
     public void Late_joiner_gets_every_live_instance()
     {
@@ -293,7 +420,21 @@ public class DpsTopicTests
             var type = topic["DPS_".Length..];
             Assert.Contains($"struct {type} ", idl);
         }
-        Assert.Equal(17, DpsProtocol.AllTopics.Count);
+        Assert.Equal(22, DpsProtocol.AllTopics.Count);
+
+        // the round-2 topics and their enumerations (every enumerator carries its enum name; ids are 64-bit)
+        foreach (var name in new[] { "Round", "MunitionLook", "FlameJet", "FireSpots", "GroundMarks" })
+        {
+            Assert.Contains("DPS_" + name, DpsProtocol.AllTopics);
+        }
+
+        foreach (var enumerator in new[] { "CivilianModePanic", "WeaponCategoryMachineGun", "WeaponCategoryFlamethrower", "MunitionShapeArrow", "HeatMarkKindBurnedArea", "HeatMarkEndRear" })
+        {
+            Assert.Contains(enumerator, idl);
+        }
+
+        Assert.Contains("int64 _TypeId;", idl);
+        Assert.Contains("int64 MunitionTypeId;", idl);
         Assert.Equal("DPS_GizmoFrame", DdsTopicName.Of<GizmoFrame>());
         Assert.Equal("DPS_Session", DdsTopicName.Of<Session>());
     }

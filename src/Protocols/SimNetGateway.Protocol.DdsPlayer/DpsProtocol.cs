@@ -19,6 +19,11 @@ public static class DpsProtocol
     public const string Detonation = "DPS_Detonation";
     public const string Effect = "DPS_Effect";
     public const string VehicleLook = "DPS_VehicleLook";
+    public const string Round = "DPS_Round";
+    public const string MunitionLook = "DPS_MunitionLook";
+    public const string FlameJet = "DPS_FlameJet";
+    public const string FireSpots = "DPS_FireSpots";
+    public const string GroundMarks = "DPS_GroundMarks";
     public const string PlayerSlot = "DPS_PlayerSlot";
     public const string OwnUnit = "DPS_OwnUnit";
     public const string JoinRequest = "DPS_JoinRequest";
@@ -31,6 +36,7 @@ public static class DpsProtocol
     public static readonly IReadOnlyList<string> AllTopics =
     [
         Session, Entity, EntityState, Articulation, PersonState, Appearance, Fire, Detonation, Effect, VehicleLook,
+        Round, MunitionLook, FlameJet, FireSpots, GroundMarks,
         PlayerSlot, OwnUnit, JoinRequest, ControlFrame, Leave, GizmoView, GizmoFrame,
     ];
 }

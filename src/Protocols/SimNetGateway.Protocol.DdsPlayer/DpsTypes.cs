@@ -62,3 +62,32 @@ public enum EffectSurface : byte { EffectSurfaceUnknown = 0, EffectSurfaceGround
 public enum Sex : byte { SexUnknown = 0, SexMale, SexFemale }
 
 public enum AgeClass : byte { AgeClassUnknown = 0, AgeClassChild, AgeClassAdult, AgeClassElder }
+
+/// <summary>A civilian's mode (HROT's <c>CivilianMode</c>, by name); Unknown = none or a mode this contract does not name.</summary>
+public enum CivilianMode : byte
+{
+    CivilianModeUnknown = 0, CivilianModeRoutine, CivilianModeAlarmed, CivilianModePanic, CivilianModeShelter, CivilianModeInside, CivilianModeCower,
+    CivilianModeCasualty, CivilianModeProtest, CivilianModeRiot, CivilianModeDispersing, CivilianModeArmedHostile, CivilianModeGather, CivilianModeSurrender,
+    CivilianModeWatch,
+}
+
+/// <summary>A weapon mount's category (HROT's <c>WeaponCategory</c>, by name); Unknown = none or a category this contract does not name.</summary>
+public enum WeaponCategory : byte
+{
+    WeaponCategoryUnknown = 0, WeaponCategorySmallArms, WeaponCategoryMachineGun, WeaponCategoryAutocannon, WeaponCategoryTankGun, WeaponCategoryAtgm,
+    WeaponCategoryMortar, WeaponCategoryGrenade, WeaponCategoryBomb, WeaponCategoryRocket, WeaponCategoryHowitzer, WeaponCategorySam,
+    WeaponCategoryCountermeasure, WeaponCategoryAirToAir, WeaponCategoryBow, WeaponCategorySmokeDischarger, WeaponCategoryFlamethrower,
+}
+
+/// <summary>The form of a round (HROT's <c>MunitionShape</c>, by name); Unknown = a shape this contract does not name.</summary>
+public enum MunitionShape : byte
+{
+    MunitionShapeUnknown = 0, MunitionShapeGrenade, MunitionShapeBomb, MunitionShapeShell, MunitionShapeRocket, MunitionShapeMissile, MunitionShapeBullet,
+    MunitionShapeAxe, MunitionShapeSpear, MunitionShapeStar, MunitionShapeArrow,
+}
+
+/// <summary>What left a ground heat mark (HROT's <c>HeatMarkKind</c>, by name); Unknown = no mark or a kind this contract does not name.</summary>
+public enum HeatMarkKind : byte { HeatMarkKindUnknown = 0, HeatMarkKindVehicleStand, HeatMarkKindBurnedArea, HeatMarkKindBodyImprint }
+
+/// <summary>The hottest end of a heat mark (HROT's <c>HeatMarkEnd</c>, by name); Unknown = none or not named.</summary>
+public enum HeatMarkEnd : byte { HeatMarkEndUnknown = 0, HeatMarkEndFront, HeatMarkEndRear }

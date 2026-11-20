@@ -66,8 +66,8 @@ public partial struct Session
 public partial struct Entity
 {
     [DdsKey] public int EntityId;
-    /// <summary>The simulation's type id (an integer).</summary>
-    public int TypeId;
+    /// <summary>The simulation's type id (64-bit, as in the simulation's TKB).</summary>
+    public long TypeId;
     public Domain Domain;
     public byte Side;
     [MaxLength(64)] public string Name;
@@ -133,6 +133,11 @@ public partial struct PersonState
     public SeatRole SeatRole;
     public CarryMode CarryMode;
     public int CarryOtherId;
+    /// <summary>The person is on fire.</summary>
+    public bool Burning;
+    /// <summary>Fear and anger in quarters, 0 calm .. 4 extreme.</summary>
+    public byte Fear, Anger;
+    public CivilianMode CivilianMode;
 }
 
 [DdsStruct]
@@ -192,6 +197,8 @@ public partial struct OpeningLook
     public int OpeningId;
     /// <summary>0 closed .. 1 open.</summary>
     public float Progress;
+    /// <summary>A crewman's head is out of this opening.</summary>
+    public bool CrewExposed;
 }
 
 /// <summary>A vehicle's look: part conditions, openings and lights (HROT's vehicle look).</summary>
@@ -210,10 +217,122 @@ public partial struct VehicleLook
     [DdsBound(16)] public List<OpeningLook> Openings;
     /// <summary>Effective light mask (headlights, brake lights, ...).</summary>
     public uint LightMask;
-    /// <summary>0 until the simulation provides it.</summary>
+    /// <summary>0 stopped .. 1 full speed (rotor, engine level); sent on a change of 0.05 and when it reaches 0 or 1.</summary>
     public float RotorSpeed;
     /// <summary>Smoke launchers fired, 0 until the simulation provides it.</summary>
     public byte SmokeLaunchers;
+}
+
+/// <summary>
+/// A round with a look (tracer, shell, rocket, missile, grenade, bomb; ball ammo has none) beside its <see cref="Entity"/> (Domain Munition) and
+/// <see cref="EntityState"/>. Sent on creation and on a change of <see cref="Lying"/> / <see cref="Stopped"/>; the client dead-reckons the pose and draws the look
+/// (<see cref="MunitionLook"/>), the tracer streak and the smoke trail back toward <see cref="Muzzle"/>.
+/// </summary>
+[DdsTopic(DpsProtocol.Round)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+public partial struct Round
+{
+    [DdsKey] public int EntityId;
+    public long MunitionTypeId;
+    /// <summary>The entity that fired it (0 = unknown).</summary>
+    public int ShooterId;
+    /// <summary>The launch point (the round's own position when the simulation does not know it).</summary>
+    public Vec3d Muzzle;
+    public bool Lying;
+    /// <summary>Seconds left on a time fuze; negative = no time fuze.</summary>
+    public float FuzeLeftS;
+    /// <summary>Frozen where it hit a wall or the ground.</summary>
+    public bool Stopped;
+}
+
+/// <summary>How a munition type's round looks: the simulation's resolved look, built-in looks included. Sent once per munition type that is fired or seen.</summary>
+[DdsTopic(DpsProtocol.MunitionLook)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+public partial struct MunitionLook
+{
+    [DdsKey] public long MunitionTypeId;
+    public MunitionShape Shape;
+    /// <summary>Body length and diameter in metres.</summary>
+    public float Length, Diameter;
+    /// <summary>Colour as 0xRRGGBBAA.</summary>
+    public uint ColourRgba;
+    public bool SmokeTrail;
+    public bool Tracer;
+    /// <summary>The tracer's glow as 0xRRGGBBAA.</summary>
+    public uint TracerColourRgba;
+    /// <summary>The round sticks where it stops (an arrow in a wall).</summary>
+    public bool Sticks;
+    /// <summary>A sticking round that is a crossbow bolt.</summary>
+    public bool Bolt;
+}
+
+/// <summary>A lit flame jet of a unit's flamethrower mount; the instance exists while the jet is lit.</summary>
+[DdsTopic(DpsProtocol.FlameJet)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+public partial struct FlameJet
+{
+    [DdsKey] public int EntityId;
+    /// <summary>The unit's mount index, where the jet is anchored (its muzzle).</summary>
+    [DdsKey] public int Mount;
+    public Vec3d AimPoint;
+    /// <summary>The aimed entity (0 = the aim point only).</summary>
+    public int TargetId;
+    public float RangeM;
+    public float HalfAngleRad;
+    /// <summary>0..1, how hard it burns.</summary>
+    public float Intensity;
+    /// <summary>The simulation time the burst began.</summary>
+    public double BurstStartedAt;
+    /// <summary>How long what it lights burns (0 = not stated).</summary>
+    public float BurnSeconds;
+}
+
+/// <summary>One burning spot, in world coordinates.</summary>
+[DdsStruct]
+public partial struct FireSpot
+{
+    public Vec3d Position;
+    public float Radius;
+    /// <summary>0..1, how hard it burns.</summary>
+    public float Intensity;
+    /// <summary>The simulation time it was lit and how long it burns.</summary>
+    public double Since;
+    public float Seconds;
+}
+
+/// <summary>The burning spots of one holder (a vehicle, a building, a terrain cell); the instance exists while any spot burns.</summary>
+[DdsTopic(DpsProtocol.FireSpots)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+[DdsManaged]
+public partial struct FireSpots
+{
+    [DdsKey] public int EntityId;
+    [DdsBound(8)] public List<FireSpot> Spots;
+}
+
+/// <summary>One ground heat mark: where something stood or burned.</summary>
+[DdsStruct]
+public partial struct GroundMark
+{
+    public HeatMarkKind Kind;
+    /// <summary>The centre in the local frame; z is the ground height when the simulation provides it, else 0.</summary>
+    public Vec3d Centre;
+    /// <summary>Radians.</summary>
+    public float Heading;
+    public float Length, Width;
+    public HeatMarkEnd HotEnd;
+    /// <summary>The simulation time the stand began and ended.</summary>
+    public double StandSince, LeftAt;
+}
+
+/// <summary>The heat marks of one terrain cell; a renderer draws BurnedArea as a scorch, an infrared renderer all kinds.</summary>
+[DdsTopic(DpsProtocol.GroundMarks)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+[DdsManaged]
+public partial struct GroundMarks
+{
+    [DdsKey] public int EntityId;
+    [DdsBound(16)] public List<GroundMark> Marks;
 }
 
 #endregion
@@ -226,11 +345,13 @@ public partial struct Fire
 {
     public double SimTime;
     public int ShooterId, TargetId;
-    public int MunitionTypeId;
+    public long MunitionTypeId;
     public DisType MunitionDis;
     public byte WeaponSlot;
     public Vec3d Origin;
     public Vec3f Velocity;
+    /// <summary>The shooter's mount category; a client draws tracer streams for machine guns and autocannons and knows a flamethrower.</summary>
+    public WeaponCategory WeaponCategory;
 }
 
 [DdsTopic(DpsProtocol.Detonation)]
@@ -239,7 +360,7 @@ public partial struct Detonation
 {
     public double SimTime;
     public int ShooterId, TargetId;
-    public int MunitionTypeId;
+    public long MunitionTypeId;
     public DisType MunitionDis;
     public Vec3d Position;
     public Vec3f Velocity;

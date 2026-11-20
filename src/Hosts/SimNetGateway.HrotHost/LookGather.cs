@@ -122,11 +122,13 @@ internal sealed class AppearanceGather
 internal sealed class VehicleLookGather
 {
     private const float ProgressSteps = 50f;
+    private const float RotorStep = 0.05f;
 
     private readonly Dictionary<int, HrotVehicleLook> _sent = new();
     private readonly BrakeLights _brakes = new();
     private readonly List<(byte Part, byte State)> _parts = new();
     private readonly List<(byte Opening, float Progress)> _openings = new();
+    private readonly List<byte> _crew = new();
 
     public void Forget(int id) => _sent.Remove(id);
 
@@ -145,6 +147,7 @@ internal sealed class VehicleLookGather
         }
 
         _openings.Clear();
+        _crew.Clear();
         if (tkb is not null && world.IsComponentTypeRegistered<TkbIdentity>() && world.HasComponent<TkbIdentity>(e)
             && tkb.TryGetByType(world.GetComponentRO<TkbIdentity>(e).TkbType, out var template))
         {
@@ -152,20 +155,33 @@ internal sealed class VehicleLookGather
             {
                 float progress = MathF.Round(VehicleLook.OpeningProgress(world, e, opening.Id, now) * ProgressSteps) / ProgressSteps;
                 _openings.Add((opening.Id, progress));
+                if (VehicleLook.CrewExposed(world, e, opening.Id))
+                {
+                    _crew.Add(opening.Id);
+                }
             }
         }
 
         string destruction = VehicleLook.Destruction(world, e).ToString();   // HROT's destruction kind by name
         bool turret = VehicleLook.TurretThrown(world, e), burning = VehicleLook.Burning(world, e, now), smoking = VehicleLook.Smoking(world, e, now);
         uint lights = VehicleLook.Lights(world, e, now, _brakes);
-        if (_sent.TryGetValue(id, out var previous) && string.Equals(previous.Destruction, destruction, StringComparison.Ordinal) && previous.TurretThrown == turret && previous.Burning == burning
-            && previous.Smoking == smoking && previous.Lights == lights && previous.Parts.SequenceEqual(_parts) && previous.Openings.SequenceEqual(_openings))
+
+        // the rotor / engine level changes continuously: a new value is sent on a change of RotorStep or more, and when it reaches 0 or 1
+        float rotor = VehicleLook.RotorSpeed(world, e, now);
+        bool known = _sent.TryGetValue(id, out var previous);
+        if (known && MathF.Abs(rotor - previous.RotorSpeed) < RotorStep && !(rotor is 0f or 1f && rotor != previous.RotorSpeed))
+        {
+            rotor = previous.RotorSpeed;
+        }
+        if (known && string.Equals(previous.Destruction, destruction, StringComparison.Ordinal) && previous.TurretThrown == turret && previous.Burning == burning
+            && previous.Smoking == smoking && previous.Lights == lights && previous.Parts.SequenceEqual(_parts) && previous.Openings.SequenceEqual(_openings)
+            && previous.RotorSpeed == rotor && (previous.CrewExposed ?? []).SequenceEqual(_crew))
         {
             message = default;
             return false;   // the steady path allocates nothing
         }
 
-        message = new HrotVehicleLook(id, destruction, turret, burning, smoking, lights, _parts.ToArray(), _openings.ToArray());
+        message = new HrotVehicleLook(id, destruction, turret, burning, smoking, lights, _parts.ToArray(), _openings.ToArray(), rotor, _crew.Count == 0 ? null : _crew.ToArray());
         _sent[id] = message;
         return true;
     }

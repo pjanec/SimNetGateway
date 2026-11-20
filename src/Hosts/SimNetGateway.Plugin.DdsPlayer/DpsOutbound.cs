@@ -132,7 +132,7 @@ public sealed class DpsOutbound : IGatewayModule
             _ports.Entity.Send(new DpsItem<D.Entity>(new D.Entity
             {
                 EntityId = s.Id,
-                TypeId = unchecked((int)s.TkbType),
+                TypeId = s.TkbType,
                 Domain = DomainOf(dis),
                 Side = (byte)Math.Clamp(s.Force, 0, 255),
                 Name = Truncate(s.Marking, 64),
@@ -281,6 +281,10 @@ public sealed class DpsOutbound : IGatewayModule
                 _ => D.CarryMode.CarryModeNone,
             },
             CarryOtherId = 0,
+            Burning = d.Burning,
+            Fear = d.Fear,
+            Anger = d.Anger,
+            CivilianMode = LookNames.CivilianModeOf(d.CivilianMode),
         };
         if (b.HasSentPerson && !PersonDue(b, in person))
         {
@@ -301,6 +305,7 @@ public sealed class DpsOutbound : IGatewayModule
             || p.HasLookTarget != o.HasLookTarget || p.Gesture != o.Gesture || p.Injury != o.Injury || p.Action != o.Action || p.ActionTargetId != o.ActionTargetId
             || p.ActionState != o.ActionState || p.ActionStartSimTime != o.ActionStartSimTime || p.SeatVehicleId != o.SeatVehicleId || p.SeatRole != o.SeatRole
             || p.CarryMode != o.CarryMode || MathF.Abs(p.StanceProgress - o.StanceProgress) >= 0.02f
+            || p.Burning != o.Burning || p.Fear != o.Fear || p.Anger != o.Anger || p.CivilianMode != o.CivilianMode
             || Dist(p.AimPoint, o.AimPoint) > _settings.PositionThresholdM
             || (p.HasLookTarget && Dist(p.LookTarget, o.LookTarget) > _settings.PositionThresholdM)
             || MathF.Abs(p.HeadYaw - o.HeadYaw) * (180f / MathF.PI) > _settings.AngleThresholdDeg;
@@ -327,6 +332,7 @@ public sealed class DpsOutbound : IGatewayModule
         }
 
         book.HasVehicleLook = true;
+        var crew = m.CrewExposed;
         var look = new D.VehicleLook
         {
             EntityId = m.Id,
@@ -336,7 +342,8 @@ public sealed class DpsOutbound : IGatewayModule
             Smoking = m.Smoking,
             LightMask = m.Lights,
             Parts = [.. m.Parts.Take(32).Select(p => new D.PartLook { PartId = p.Part, State = (D.PartCondition)Math.Min(p.State, (byte)2) })],
-            Openings = [.. m.Openings.Take(16).Select(o => new D.OpeningLook { OpeningId = o.Opening, Progress = o.Progress })],
+            RotorSpeed = float.IsFinite(m.RotorSpeed) ? Math.Clamp(m.RotorSpeed, 0f, 1f) : 0f,
+            Openings = [.. m.Openings.Take(16).Select(o => new D.OpeningLook { OpeningId = o.Opening, Progress = o.Progress, CrewExposed = crew?.Contains(o.Opening) ?? false })],
         };
         _ports.VehicleLook.Send(new DpsItem<D.VehicleLook>(look));
     }
@@ -349,11 +356,12 @@ public sealed class DpsOutbound : IGatewayModule
             SimTime = _simTime,
             ShooterId = m.ShooterId,
             TargetId = m.TargetId,
-            MunitionTypeId = unchecked((int)m.MunitionTkb),
+            MunitionTypeId = m.MunitionTkb,
             MunitionDis = ToDis(DisTypeCode.Unpack(m.MunitionDisType)),
             WeaponSlot = 0,
             Origin = V3d(m.Origin),
             Velocity = V3f(m.Velocity),
+            WeaponCategory = LookNames.WeaponCategoryOf(m.WeaponCategory),
         }));
 
     private void OnDetonation(in HrotDetonation m, IngressContext ctx) =>
@@ -362,7 +370,7 @@ public sealed class DpsOutbound : IGatewayModule
             SimTime = _simTime,
             ShooterId = m.ShooterId,
             TargetId = m.TargetId,
-            MunitionTypeId = unchecked((int)m.MunitionTkb),
+            MunitionTypeId = m.MunitionTkb,
             MunitionDis = ToDis(DisTypeCode.Unpack(m.MunitionDisType)),
             Position = V3d(m.Location),
             Velocity = V3f(m.Velocity),

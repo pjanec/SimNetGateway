@@ -21,6 +21,11 @@ internal sealed class DpsPorts
         Detonation = b.RequireOutbound<DpsItem<Detonation>>("dps.Detonation");
         Effect = b.RequireOutbound<DpsItem<Effect>>("dps.Effect");
         VehicleLook = b.RequireOutbound<DpsItem<VehicleLook>>("dps.VehicleLook");
+        Round = b.RequireOutbound<DpsItem<Round>>("dps.Round");
+        MunitionLook = b.RequireOutbound<DpsItem<MunitionLook>>("dps.MunitionLook");
+        FlameJet = b.RequireOutbound<DpsItem<FlameJet>>("dps.FlameJet");
+        FireSpots = b.RequireOutbound<DpsItem<FireSpots>>("dps.FireSpots");
+        GroundMarks = b.RequireOutbound<DpsItem<GroundMarks>>("dps.GroundMarks");
     }
 
     public IOutboundChannel<DpsItem<Session>> Session { get; }
@@ -43,6 +48,16 @@ internal sealed class DpsPorts
 
     public IOutboundChannel<DpsItem<VehicleLook>> VehicleLook { get; }
 
+    public IOutboundChannel<DpsItem<Round>> Round { get; }
+
+    public IOutboundChannel<DpsItem<MunitionLook>> MunitionLook { get; }
+
+    public IOutboundChannel<DpsItem<FlameJet>> FlameJet { get; }
+
+    public IOutboundChannel<DpsItem<FireSpots>> FireSpots { get; }
+
+    public IOutboundChannel<DpsItem<GroundMarks>> GroundMarks { get; }
+
     /// <summary>Declares (idempotently) every port on the builder.</summary>
     public static DpsPorts Require(GatewayBuilder builder) => new(builder);
 
@@ -59,5 +74,10 @@ internal sealed class DpsPorts
         b.BindOutbound<DpsItem<Detonation>>("dps.Detonation", t.Detonation);
         b.BindOutbound<DpsItem<Effect>>("dps.Effect", t.Effect);
         b.BindOutbound<DpsItem<VehicleLook>>("dps.VehicleLook", t.VehicleLook);
+        b.BindOutbound<DpsItem<Round>>("dps.Round", t.Round);
+        b.BindOutbound<DpsItem<MunitionLook>>("dps.MunitionLook", t.MunitionLook);
+        b.BindOutbound<DpsItem<FlameJet>>("dps.FlameJet", t.FlameJet);
+        b.BindOutbound<DpsItem<FireSpots>>("dps.FireSpots", t.FireSpots);
+        b.BindOutbound<DpsItem<GroundMarks>>("dps.GroundMarks", t.GroundMarks);
     }
 }

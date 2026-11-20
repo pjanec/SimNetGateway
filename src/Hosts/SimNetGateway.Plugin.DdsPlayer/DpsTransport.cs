@@ -103,6 +103,11 @@ public sealed class DpsTransport : IDisposable
             Detonation = Add(new DpsChannel<Detonation>(_participant));
             Effect = Add(new DpsChannel<Effect>(_participant));
             VehicleLook = Add(new DpsChannel<VehicleLook>(_participant));
+            Round = Add(new DpsChannel<Round>(_participant));
+            MunitionLook = Add(new DpsChannel<MunitionLook>(_participant));
+            FlameJet = Add(new DpsChannel<FlameJet>(_participant));
+            FireSpots = Add(new DpsChannel<FireSpots>(_participant));
+            GroundMarks = Add(new DpsChannel<GroundMarks>(_participant));
             PlayerSlot = Add(new DpsChannel<PlayerSlot>(_participant));
             OwnUnit = Add(new DpsChannel<OwnUnit>(_participant));
             _inbound = new DpsInbound(_participant, settings, station, log ?? (_ => { }));
@@ -142,6 +147,16 @@ public sealed class DpsTransport : IDisposable
     internal DpsChannel<Effect> Effect { get; } = null!;
 
     internal DpsChannel<VehicleLook> VehicleLook { get; } = null!;
+
+    internal DpsChannel<Round> Round { get; } = null!;
+
+    internal DpsChannel<MunitionLook> MunitionLook { get; } = null!;
+
+    internal DpsChannel<FlameJet> FlameJet { get; } = null!;
+
+    internal DpsChannel<FireSpots> FireSpots { get; } = null!;
+
+    internal DpsChannel<GroundMarks> GroundMarks { get; } = null!;
 
     internal DpsChannel<PlayerSlot> PlayerSlot { get; } = null!;
 

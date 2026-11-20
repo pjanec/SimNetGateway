@@ -165,7 +165,10 @@ public readonly record struct HrotEntityRemoved(int Id) : IHrotToGatewayMessage;
 /// <summary>The pose of one turret (articulated part) of an entity, radians (stage H4).</summary>
 public readonly record struct HrotTurretPose(int Id, int PartId, double Azimuth, double Elevation) : IHrotToGatewayMessage;
 
-/// <summary><see cref="TargetId"/> 0 = none. <see cref="Origin"/> and <see cref="Velocity"/> are ENU.</summary>
+/// <summary>
+/// <see cref="TargetId"/> 0 = none. <see cref="Origin"/> and <see cref="Velocity"/> are ENU. <see cref="WeaponCategory"/> is the NAME of HROT's weapon category of the shooter's
+/// mount ("" = not known), written by the host from the enumeration.
+/// </summary>
 public readonly record struct HrotFire(
     int ShooterId,
     int TargetId,
@@ -173,7 +176,8 @@ public readonly record struct HrotFire(
     long MunitionDisType,
     HrotVec3 Origin,
     HrotVec3 Velocity,
-    int Quantity) : IHrotToGatewayMessage;
+    int Quantity,
+    string WeaponCategory = "") : IHrotToGatewayMessage;
 
 /// <summary><see cref="TargetId"/> 0 = ground. <see cref="Location"/> and <see cref="Velocity"/> are ENU.</summary>
 public readonly record struct HrotDetonation(
@@ -346,11 +350,13 @@ public enum HrotCarryMode : byte
 /// The semantic state of a person's body beyond <see cref="HrotEntityState"/> (DD-017 3.5), sent for life forms when any field changes. Ids are HROT network
 /// ids (0 = none). <see cref="LookTarget"/> is a local ENU point, <see cref="HeadYaw"/> radians, + to his left. <see cref="StanceProgress"/> is 0..1 (1 when
 /// the stance is settled). <see cref="ActionStartedAt"/> is the simulation time the gateway first saw the action running (0 = no action).
+/// <see cref="Burning"/> is HROT's person-on-fire reading, <see cref="Fear"/> and <see cref="Anger"/> are quarters 0..4 and <see cref="CivilianMode"/> the NAME of HROT's
+/// civilian mode ("" or "None" = none), all from the person's demeanour (DD-018 3.4, 3.5).
 /// </summary>
 public readonly record struct HrotPersonDetail(
     int Id, HrotStance TargetStance, float StanceProgress, HrotHeldItem HeldItem, byte ActiveMount, HrotVec3 LookTarget, bool HasLookTarget, float HeadYaw,
     HrotGesture Gesture, HrotAction Action, int ActionTarget, HrotActionState ActionState, double ActionStartedAt, int SeatVehicle, HrotSeatRole SeatRole,
-    HrotCarryMode Carry) : IHrotToGatewayMessage;
+    HrotCarryMode Carry, bool Burning = false, byte Fear = 0, byte Anger = 0, string CivilianMode = "") : IHrotToGatewayMessage;
 
 /// <summary>
 /// One visual effect derived by HROT's look rules (muzzle flash, explosion, ground mark, backblast, ...). <paramref name="Kind"/>, <paramref name="SizeClass"/> and
@@ -382,7 +388,47 @@ public readonly record struct HrotPersonAppearance(
 /// parts that are not intact (part id, 1 damaged / 2 destroyed; an absent part is intact); <paramref name="Openings"/> every opening of the vehicle's type (opening id,
 /// progress 0 closed .. 1 open, in steps of 1/50); <paramref name="Lights"/> the effective light mask (brake lights included). A part's burning needs the part's
 /// centre, which only a renderer knows, so burning is the vehicle's.
+/// <paramref name="RotorSpeed"/> is HROT's rotor / engine level 0..1 (sent on a change of 0.05 and on reaching 0 or 1); <paramref name="CrewExposed"/> lists the ids of the
+/// openings a crewman's head is out of (null = none).
 /// </summary>
 public readonly record struct HrotVehicleLook(
     int Id, string Destruction, bool TurretThrown, bool Burning, bool Smoking, uint Lights, IReadOnlyList<(byte Part, byte State)> Parts,
-    IReadOnlyList<(byte Opening, float Progress)> Openings) : IHrotToGatewayMessage;
+    IReadOnlyList<(byte Opening, float Progress)> Openings, float RotorSpeed = 0f, IReadOnlyList<byte>? CrewExposed = null) : IHrotToGatewayMessage;
+
+// ---- DPS round 2 (DD-018): rounds, munition looks, flames, fire spots, ground marks -----------------------------------
+
+/// <summary>
+/// A round with a look (HROT's lightweight round: tracer, shell, rocket, missile, grenade, bomb), beside its <see cref="HrotEntityState"/>. Sent on creation and when
+/// <see cref="Lying"/> or <see cref="Stopped"/> changes. <see cref="ShooterId"/> 0 = unknown. <see cref="Muzzle"/> is the launch point (the round's own position when
+/// this node does not know it). <see cref="FuzeLeftS"/> is negative without a time fuze. Removed with the entity (<see cref="HrotEntityRemoved"/>).
+/// </summary>
+public readonly record struct HrotRound(int Id, long MunitionTkb, int ShooterId, HrotVec3 Muzzle, bool Lying, float FuzeLeftS, bool Stopped) : IHrotToGatewayMessage;
+
+/// <summary>
+/// How a munition type's round looks (HROT's resolved munition look, the built-in looks included), sent once per munition type per runtime. <paramref name="Shape"/> is
+/// the NAME of HROT's munition shape; colours are 0xRRGGBBAA.
+/// </summary>
+public readonly record struct HrotMunitionLook(
+    long MunitionTkb, string Shape, float Length, float Diameter, uint Colour, bool SmokeTrail, bool Tracer, uint TracerColour, bool Sticks, bool Bolt) : IHrotToGatewayMessage;
+
+/// <summary>A lit flame jet of mount <see cref="Mount"/> of entity <see cref="Id"/>; sent when it lights and when it changes while lit. <see cref="TargetId"/> 0 = the aim point only.</summary>
+public readonly record struct HrotFlameJet(
+    int Id, int Mount, HrotVec3 AimPoint, int TargetId, float RangeM, float HalfAngleRad, float Intensity, double BurstStartedAt, float BurnSeconds) : IHrotToGatewayMessage;
+
+/// <summary>The jet of mount <see cref="Mount"/> of entity <see cref="Id"/> went out.</summary>
+public readonly record struct HrotFlameJetRemoved(int Id, int Mount) : IHrotToGatewayMessage;
+
+/// <summary>One burning spot in local ENU metres (the host applied the holder's transform); <see cref="Since"/> is sim time, <see cref="Seconds"/> how long it burns.</summary>
+public readonly record struct HrotFireSpot(HrotVec3 Position, float Radius, float Intensity, double Since, float Seconds);
+
+/// <summary>The spots burning on holder <see cref="Id"/> (a vehicle, a building's damage record, a terrain cell's record); sent when the set changes, an empty set = none burns any more.</summary>
+public readonly record struct HrotFireSpots(int Id, IReadOnlyList<HrotFireSpot> Spots) : IHrotToGatewayMessage;
+
+/// <summary>
+/// One ground heat mark. <see cref="Kind"/> and <see cref="HotEnd"/> are the NAMES of HROT's enumerations. <see cref="Centre"/>.Z is the ground height when the host
+/// has it, else 0.
+/// </summary>
+public readonly record struct HrotGroundMark(string Kind, HrotVec3 Centre, float Heading, float Length, float Width, string HotEnd, double StandSince, double LeftAt);
+
+/// <summary>The heat marks of terrain cell record <see cref="Id"/>; sent when the set changes, an empty set = the cell holds none any more.</summary>
+public readonly record struct HrotGroundMarks(int Id, IReadOnlyList<HrotGroundMark> Marks) : IHrotToGatewayMessage;

@@ -55,6 +55,11 @@ public sealed class EcsHrotAdapter
     private readonly EffectGather _effects = new();
     private readonly AppearanceGather _appearances = new();
     private readonly VehicleLookGather _vehicleLooks = new();
+    private readonly RoundGather _rounds = new();
+    private readonly MunitionLookGather _munitions = new();
+    private readonly FlameJetGather _jets = new();
+    private readonly FireSpotGather _fireSpots = new();
+    private readonly GroundMarkGather _groundMarks = new();
     private readonly List<int> _scratch = new();
     private readonly List<(int Parent, int Part)> _scratchPoses = new();
     private EntityQuery? _hrotQuery;
@@ -168,6 +173,20 @@ public sealed class EcsHrotAdapter
                 Counters.StatesSent++;
             }
 
+            // a round with a look: its munition look (once per type) and its round state, after the state so the gateway knows the entity
+            if (RoundGather.IsRound(world, e))
+            {
+                if (_munitions.TryGather(tkb, state.TkbType, out var munitionLook))
+                {
+                    inbound.Enqueue(in munitionLook);
+                }
+
+                if (_rounds.TryGather(world, e, id, state.TkbType, out var round))
+                {
+                    inbound.Enqueue(in round);
+                }
+            }
+
             // after the state, so the gateway knows the entity; a person is sent again only when something about him changed
             if (state.DisType != 0 && DisTypeCode.Unpack(state.DisType).Kind == LifeFormKind)
             {
@@ -201,10 +220,16 @@ public sealed class EcsHrotAdapter
             _sent.Remove(id);
             _details.Forget(id);
             _appearances.Forget(id);
+            _rounds.Forget(id);
             _vehicleLooks.Forget(id);
             inbound.Enqueue(new HrotEntityRemoved(id));
             Counters.RemovalsSent++;
         }
+
+        // flames, burning spots and ground marks follow HROT's state of this frame
+        _jets.Gather(world, inbound, simTime);
+        _fireSpots.Gather(world, inbound, simTime);
+        _groundMarks.Gather(world, inbound);
     }
 
     /// <summary>
@@ -299,7 +324,13 @@ public sealed class EcsHrotAdapter
 
             TryHrotId(world, f.Target, out int target);
             var origin = f.Origin == Vector3.Zero && world.HasComponent<SimTransform>(f.Shooter) ? (Vector3)world.GetComponentRO<SimTransform>(f.Shooter).Position : f.Origin;
-            inbound.Enqueue(new HrotFire(shooter, target, f.AmmoGuid, MunitionDis(tkb, f.AmmoGuid), V(origin), V(f.Velocity), Math.Max(1, f.Quantity)));
+            if (_munitions.TryGather(tkb, f.AmmoGuid, out var munitionLook))
+            {
+                inbound.Enqueue(in munitionLook);
+            }
+
+            string category = CombatTkb.MountOf(world, f.Shooter, f.WeaponIndex)?.Category.ToString() ?? string.Empty;   // HROT's weapon category by name
+            inbound.Enqueue(new HrotFire(shooter, target, f.AmmoGuid, MunitionDis(tkb, f.AmmoGuid), V(origin), V(f.Velocity), Math.Max(1, f.Quantity), category));
             Counters.FiresSent++;
         }
 
@@ -755,6 +786,11 @@ public sealed class EcsHrotAdapter
         _details.Clear();
         _appearances.Clear();
         _vehicleLooks.Clear();
+        _rounds.Clear();
+        _munitions.Clear();
+        _jets.Clear();
+        _fireSpots.Clear();
+        _groundMarks.Clear();
         ForgetReplayEffects();
         SweepRoutedEntities(world);
         _queryWorld = null;

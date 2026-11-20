@@ -6,7 +6,7 @@ namespace SimNetGateway.Plugin.DdsPlayer;
 
 /// <summary>
 /// The dps side (DD-017): the "dps" section, the outbound ports of the published topics (no inbound port and no origin: it introduces no entity into the pivot)
-/// and one module, <see cref="DpsOutbound"/>, that maps the messages HROT sends to DPS samples.
+/// and two modules, <see cref="DpsOutbound"/> and <see cref="DpsRoundFlameOutbound"/>, that map the messages HROT sends to DPS samples.
 /// </summary>
 public sealed class DpsSide : IProtocolSide
 {
@@ -61,6 +61,10 @@ public sealed class DpsSide : IProtocolSide
     public void Declare(SideDeclaration d, object settings) => DpsPorts.Require(d.Builder);
 
     /// <inheritdoc />
-    public void Register(SideContext c, object settings) =>
-        c.Builder.AddModule(new DpsOutbound((DpsSettings)settings, DpsPorts.Require(c.Builder)));
+    public void Register(SideContext c, object settings)
+    {
+        var ports = DpsPorts.Require(c.Builder);
+        c.Builder.AddModule(new DpsOutbound((DpsSettings)settings, ports));
+        c.Builder.AddModule(new DpsRoundFlameOutbound(ports));
+    }
 }

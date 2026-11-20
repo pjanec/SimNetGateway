@@ -281,4 +281,22 @@ public class LookGatherTests
         Assert.Equal(["Ground", "Water", "Building", "Vehicle", "Person", "Air"], Enum.GetNames<Hrot.Look.Effects.EffectSurface>());
         Assert.Equal(["None", "KnockedOut", "BurntOut", "Catastrophic"], Enum.GetNames<DestructionKind>());
     }
+
+    /// <summary>
+    /// DPS round 2 (DD-018): the enumerations of a person's mood, a weapon mount, a round's form and a ground heat mark also cross by name and are mapped by the plugin's
+    /// <c>LookNames</c>. A value HROT appends or renames fails this test until the plugin maps it (and the contract gains the value).
+    /// </summary>
+    [Fact]
+    public void The_round_two_enumerations_the_plugins_map_by_name_are_unchanged()
+    {
+        Assert.Equal(["None", "Routine", "Alarmed", "Panic", "Shelter", "Inside", "Cower", "Casualty", "Protest", "Riot", "Dispersing", "ArmedHostile", "Gather", "Surrender", "Watch"],
+            Enum.GetNames<Fdp.Toolkit.Civilians.CivilianMode>());
+        Assert.Equal(
+            ["Unknown", "SmallArms", "MachineGun", "Autocannon", "TankGun", "Atgm", "Mortar", "Grenade", "Bomb", "Rocket", "Howitzer", "Sam", "Countermeasure", "AirToAir", "Bow",
+                "SmokeDischarger", "Flamethrower"],
+            Enum.GetNames<Fdp.Toolkit.Tkb.Domain.WeaponCategory>());
+        Assert.Equal(["NoMark", "VehicleStand", "BurnedArea", "BodyImprint"], Enum.GetNames<Fdp.Toolkit.Terrain.HeatMarkKind>());
+        Assert.Equal(["NoHotEnd", "Front", "Rear"], Enum.GetNames<Fdp.Toolkit.Terrain.HeatMarkEnd>());
+        Assert.Equal(["Grenade", "Bomb", "Shell", "Rocket", "Missile", "Bullet", "Axe", "Spear", "Star", "Arrow"], Enum.GetNames<Fdp.Toolkit.Tkb.Domain.MunitionShape>());
+    }
 }

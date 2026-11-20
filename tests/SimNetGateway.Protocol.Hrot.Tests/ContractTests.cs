@@ -15,7 +15,10 @@ public class ContractTests
     public void The_pack_to_gateway_messages_are_exactly_those_of_the_contract_table()
     {
         string[] expected =
-            ["HrotDetonation", "HrotEffect", "HrotEntityRemoved", "HrotEntityState", "HrotFire", "HrotOrigin", "HrotPersonAppearance", "HrotPersonDetail", "HrotSession", "HrotTurretPose", "HrotVehicleLook"];
+            [
+                "HrotDetonation", "HrotEffect", "HrotEntityRemoved", "HrotEntityState", "HrotFire", "HrotFireSpots", "HrotFlameJet", "HrotFlameJetRemoved", "HrotGroundMarks",
+                "HrotMunitionLook", "HrotOrigin", "HrotPersonAppearance", "HrotPersonDetail", "HrotRound", "HrotSession", "HrotTurretPose", "HrotVehicleLook",
+            ];
         var actual = Messages.Where(t => typeof(IHrotToGatewayMessage).IsAssignableFrom(t)).Select(t => t.Name).Order().ToArray();
         Assert.Equal(expected, actual);
     }

@@ -3,12 +3,14 @@ using Fbt;
 using Fdp.Core;
 using Fdp.Toolkit.Behavior;
 using Fdp.Toolkit.Behavior.Components;
+using Fdp.Toolkit.Civilians;
 using Fdp.Toolkit.Combat;
 using Fdp.Toolkit.Combat.Components;
 using Fdp.Toolkit.Creatures;
 using Fdp.Toolkit.Perception.Look;
 using Fdp.Toolkit.Replication.Components;
 using Fdp.Toolkit.Tkb.Domain;
+using Hrot.Look.People;
 using Hrot.MuscleCharacter.Animation.Components;
 using SimNetGateway.Protocol.Hrot;
 
@@ -38,6 +40,7 @@ internal sealed class PersonDetailGather
         Ensure<StanceStatus>(world);
         Ensure<LookState>(world);
         Ensure<Demeanour>(world);   // the gesture is Demeanour.Kind (read through Gestures.Of)
+        Ensure<EffectState>(world);   // PersonLook.IsBurning reads EffectState.BurningUntil
         Ensure<InteractionChannel>(world);
         Ensure<IsEmbarkedTag>(world);
         Ensure<CarrierSeats>(world);
@@ -118,6 +121,19 @@ internal sealed class PersonDetailGather
 
         var gesture = (HrotGesture)(byte)Gestures.Of(world, e);
 
+        // fear, anger (quarters) and the civilian mode by name: HROT's demeanour; burning: HROT's own person look
+        byte fear = 0, anger = 0;
+        string mode = string.Empty;
+        if (world.HasComponent<Demeanour>(e))
+        {
+            var demeanour = world.GetComponentRO<Demeanour>(e);
+            fear = demeanour.Fear;
+            anger = demeanour.Anger;
+            mode = demeanour.Mode == CivilianMode.None ? string.Empty : demeanour.Mode.ToString();
+        }
+
+        bool burning = world.IsComponentTypeRegistered<EffectState>() && PersonLook.IsBurning(world, e, simTime);
+
         var action = HrotAction.None;
         var actionState = HrotActionState.None;
         int actionTarget = 0;
@@ -186,7 +202,7 @@ internal sealed class PersonDetailGather
         }
 
         return new HrotPersonDetail(id, target, progress, held, mount, lookTarget, hasLook, headYaw, gesture, action, actionTarget, actionState, started, seatVehicle,
-            seatRole, carry);
+            seatRole, carry, burning, fear, anger, mode);
     }
 
     private static HrotAction ActionOf(ushort actionId) => actionId switch
