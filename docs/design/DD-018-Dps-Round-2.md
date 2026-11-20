@@ -173,6 +173,24 @@ cats, rabbits, hens, birds and flocks. Ridden horses are carriers with seats lik
   within HROT's limits (twist 75 degrees, pitch 35 degrees, eased with a 0.12 s time constant; none when prone or dead), and turns
   the head by `HeadYaw` less the drawn twist, within the neck - the rules are in the client guide.
 
+### 3.5b Two-wheeler lean (P-5b)
+
+HROT's 3-D map leans a motorcycle into a turn (HROT `MotionTracker`, `case Motorcycle`; `DESIGN_Map_3D_Mode.md` 6al.2): target
+`atan(v * yawRate / g)`, clamped to 35 degrees, eased with a 0.15 s time constant, about the body's ground line; the seated riders lean
+with it (their seat frame is the leaned body). The simulation itself drives the bike upright. The owner: the client should not have to
+derive it.
+
+- **`EntityState` appended `Bank`** (radians, roll about the body's forward axis, right-hand rule: positive = the top toward the
+  right; a left turn is negative), computed by the host with HROT's rule from the simulation's own forward speed and yaw rate, eased on
+  simulation time, for two-wheelers only (HROT's motorcycle class); 0 for everything else. A change of the angle threshold (1 degree)
+  sends a sample as any orientation change does.
+- `Orientation` stays the simulation's (hit boxes, the seat eye, the chase camera read it); the client applies `Bank` about the
+  ground line under the drawn body, and the riders, placed in the carrier's seat frame, lean with it.
+- The rule is a few lines in a presentation assembly the host must not reference, so the host carries it with a pointer to HROT's
+  source and a test pinning the same numbers.
+- Rejected: baking the lean into `Orientation` (a different pose from the simulation's, which the client also uses for the seat eye
+  and the player's camera); leaving it to every client (the owner).
+
 ### 3.6 Gizmo heights (P-6)
 
 The host gives 2-D primitives (box, text) the ground height at their point from HROT's terrain height query, so a client never sees
