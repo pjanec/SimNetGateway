@@ -157,6 +157,23 @@ Bullets without a look stay off the wire (`Fire` is enough).
 The host gives 2-D primitives (box, text) the ground height at their point from HROT's terrain height query, so a client never sees
 z = 0 for them. Rejected: a 2-D flag for the client to drape (every client would need the terrain query the host already has).
 
+### 3.6a Building damage and glass (P-7)
+
+HROT replicates a building's damage on runtime damage entities (HROT `docs/DESIGN_Glass_Windows.md`, `DESIGN_Terrain_Import_UTM.md` §8):
+`BuildingDamage` (wall breaches as rectangles on a panel, collapsed) and `WindowDamage` (per hit window: hits 1..2 = cracked with up
+to two crack points (u, v), 3 = broken). A renderer that draws HROT's terrain must show both, or a shot window stays whole and a
+breached wall stays closed.
+
+- **`BuildingDamage`** (state, keyed by the building's `TerrainObjectKey` label `"<terrain>/<building label>"`, the identity the
+  terrain export keeps): `Collapsed`; breaches (panel index within the building, from / to metres along the panel from its A end,
+  bottom / top absolute z, kind: Hole / Passage); windows (panel index within the building, opening index on the panel, hits, the two
+  crack points as bytes 0..255). Several HROT entities for one building (capacity overflow) are merged into one sample. Disposed when the
+  building's damage goes (a reload).
+- The pane geometry is static terrain (a `glazed` flag per window opening) and comes with the terrain export, not over DPS.
+- Rejected: one topic for windows and one for breaches (HROT keeps them apart only so a glass hit does not re-send breaches on its
+  internal wire; a client applies both to the same building); keying by HROT's building index (an index into one import's list; the
+  label survives a re-export).
+
 ### 3.7 Contract rules kept
 
 Fields are appended at the end of existing types; enumerations mirrored from HROT go by name with an unknown value 0 (DD-017 3.10);
