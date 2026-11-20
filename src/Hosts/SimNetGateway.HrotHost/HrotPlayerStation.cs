@@ -1,7 +1,11 @@
 using System.Numerics;
 using Fdp.Core;
 using Fdp.Toolkit.Behavior.Possession;
+using Fdp.Toolkit.Combat;
 using Fdp.Toolkit.Combat.Components;
+using Fdp.Toolkit.Perception.Radar;
+using Fdp.Toolkit.Time;
+using Fdp.Toolkit.Tkb.Domain;
 using Fdp.Toolkit.Replication.Components;
 using Hrot.Common;
 using Hrot.Common.Orders;
@@ -50,6 +54,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
     private PlayerSlotSnapshot _slot = new(PlayerSlotState.Waiting, 0, 0.0, 0);
     private PlayerUnitStatus _unit = PlayerUnitStatus.None;
     private int _useTarget;
+    private byte _mount, _firePref;
     private bool _detached;
 
     public HrotPlayerStation(HrotServices services)
@@ -96,6 +101,8 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         _flow.Boundary();
         _gizmos.SetView(null);
         _useTarget = 0;
+        _mount = 0;
+        _firePref = 0;
         _unit = PlayerUnitStatus.None;
         Refresh();
     }
@@ -147,6 +154,8 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
 
         _flow.Leave();
         _useTarget = 0;
+        _mount = 0;
+        _firePref = 0;
         Refresh();
     }
 
@@ -158,6 +167,8 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         }
 
         _useTarget = frame.UseTarget;
+        _mount = frame.Mount;
+        _firePref = frame.FirePref;
         _orders.Control(_flow.UnitId, new Fdp.Toolkit.Behavior.Possession.OperatorControlFrameEvent
         {
             Seq = frame.Seq,
@@ -213,20 +224,25 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
             max = h.Max;
         }
 
-        var ammo = new List<(byte Mount, long Ammo, int Rounds)>();
+        double now = SimClock.TotalTimeOf(world);
+        var ammo = new List<PlayerWeapon>();
         if (world.IsComponentTypeRegistered<WeaponAmmo>() && world.HasComponent<WeaponAmmo>(unit))
         {
             var a = world.GetComponentRO<WeaponAmmo>(unit);
-            int[] rounds = [a.Ammo0, a.Ammo1, a.Ammo2, a.Ammo3];
-            long[] loaded = [a.Load0, a.Load1, a.Load2, a.Load3];
             for (int i = 0; i < a.Count && i < WeaponAmmo.MaxMounts; i++)
             {
-                ammo.Add(((byte)i, loaded[i], rounds[i]));
+                // the weapon line of HROT's HUD (Hud.WeaponLine), field by field
+                var dto = CombatTkb.MountOf(world, unit, i);
+                long loaded = a.LoadedOf(i) != 0 ? a.LoadedOf(i) : unchecked((long)(dto?.AmmoGuid ?? 0UL));
+                string kind = dto is { Hands: true } ? HudNames.HandsKind : HudNames.KindOf(dto?.Category ?? WeaponCategory.Unknown);
+                ammo.Add(new PlayerWeapon((byte)i, kind, HudNames.RoundName(world, loaded) ?? string.Empty, loaded, a.AmmoOf(i), a.MaxOf(i), a.MagazineOf(i), a.LoadedRoundsOf(i),
+                    a.IsBusy(i), a.IsHot(i), a.HeatPercentAt(i, now)));
             }
         }
 
         byte verb = 0;
         int useTarget = 0;
+        string useLabel = string.Empty;
         var target = Entity.Null;
         if (_useTarget != 0)
         {
@@ -238,6 +254,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
             if (action.Available)
             {
                 verb = (byte)action.Verb;
+                useLabel = HudNames.Label(world, action);
                 if (!action.Target.IsNull && world.IsAlive(action.Target) && world.HasComponent<NetworkIdentity>(action.Target))
                 {
                     useTarget = world.GetComponentRO<NetworkIdentity>(action.Target).Value;
@@ -247,7 +264,56 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
             }
         }
 
-        return new PlayerUnitStatus(health, max, ammo, verb, useTarget);
+        // the selected weapon: a controlled weapon system's mount 0 for a slot of 32 or more, else the unit's own mount
+        var (holder, local) = HudNames.Resolve(world, unit, _mount);
+        string fireMode = nameof(OperatorFireMode.Sight);
+        float spread = 0f;
+        if (!holder.IsNull && world.IsAlive(holder))
+        {
+            var mount = CombatTkb.MountOf(world, holder, local);
+            fireMode = OperatorFireModes.Of(world, holder, mount, 0L, _firePref).ToString();
+            spread = HitModel.Sigma(world, holder, mount, now);
+        }
+
+        // the use press the brain last answered, shown by the client when it is its own last press
+        byte useSeq = 0;
+        string outcome = string.Empty, reason = string.Empty;
+        if (world.IsComponentTypeRegistered<OperatorUseStatus>() && world.HasComponent<OperatorUseStatus>(unit))
+        {
+            var status = world.GetComponentRO<OperatorUseStatus>(unit);
+            useSeq = status.UseSeq;
+            outcome = status.Outcome.ToString();
+            reason = status.Reason.ToString();
+        }
+
+        // the aircraft warnings; a missile warning is a launch cue while its time to impact (counted from its arrival) has not run out, as HROT's fighter HUD reads it
+        string radar = string.Empty;
+        float radarBearing = 0f;
+        if (world.IsComponentTypeRegistered<RadarWarning>() && world.HasComponent<RadarWarning>(unit))
+        {
+            var warning = world.GetComponentRO<RadarWarning>(unit);
+            radar = warning.Level.ToString();
+            radarBearing = warning.BearingDeg;
+        }
+
+        bool launch = false;
+        float missileBearing = 0f, timeToImpact = 0f;
+        string seeker = string.Empty;
+        if (world.IsComponentTypeRegistered<MissileWarning>() && world.HasComponent<MissileWarning>(unit))
+        {
+            var warning = world.GetComponentRO<MissileWarning>(unit);
+            float left = warning.TimeToImpactS - (float)(now - warning.At.Seconds);
+            if (left > 0f)
+            {
+                launch = true;
+                missileBearing = warning.BearingDeg;
+                timeToImpact = left;
+                seeker = warning.Seeker.ToString();
+            }
+        }
+
+        return new PlayerUnitStatus(health, max, ammo, verb, useTarget, _mount, fireMode, useLabel, useSeq, outcome, reason, spread, radar, radarBearing, launch, missileBearing,
+            timeToImpact, seeker);
     }
 }
 

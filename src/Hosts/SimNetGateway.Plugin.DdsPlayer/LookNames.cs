@@ -68,6 +68,14 @@ internal static class LookNames
         _ => D.KillKind.KillKindUnknown,
     };
 
+    /// <summary>
+    /// A HROT enumeration name as the contract's enumerator <c>&lt;prefix&gt;&lt;name&gt;</c> (every enumerator carries its enum's name). A name the contract does not have
+    /// (a value HROT appends, or HROT's own "none" spelled differently) is the enumeration's value 0, its unknown / none value, never another value.
+    /// </summary>
+    public static T ByName<T>(string prefix, string? name)
+        where T : struct, Enum =>
+        !string.IsNullOrEmpty(name) && Enum.TryParse<T>(prefix + name, out var value) && Enum.IsDefined(value) && prefix + name == value.ToString() ? value : default;
+
     /// <summary>HROT's civilian mode; "None" and an empty name are "no mode".</summary>
     public static D.CivilianMode CivilianModeOf(string? name) => name switch
     {

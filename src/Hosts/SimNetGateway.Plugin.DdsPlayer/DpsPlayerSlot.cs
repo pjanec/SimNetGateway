@@ -9,6 +9,8 @@ namespace SimNetGateway.Plugin.DdsPlayer;
 /// </summary>
 internal sealed class DpsPlayerSlot
 {
+    private const float MissileRefreshS = 1f;
+
     private readonly IPlayerStation? _station;
     private readonly DpsChannel<D.PlayerSlot> _slot;
     private readonly DpsChannel<D.OwnUnit> _unit;
@@ -76,12 +78,41 @@ internal sealed class DpsPlayerSlot
             UnitId = slot.State is PlayerSlotState.Playing or PlayerSlotState.Dead ? slot.UnitId : 0,
             Health = (float)status.Health,
             MaxHealth = (float)status.HealthMax,
+            ActiveSlot = status.ActiveMount,
             CanUse = status.UseVerb != 0,
             UseTargetId = status.UseTarget,
             UseVerb = status.UseVerb,
-            UseLabel = string.Empty,
-            Ammo = [.. status.Ammo.Take(16).Select(a => new D.AmmoEntry { Slot = a.Mount, Weapon = string.Empty, AmmoType = a.Ammo == 0 ? string.Empty : a.Ammo.ToString(System.Globalization.CultureInfo.InvariantCulture), Rounds = a.Rounds })],
+            UseLabel = Cut(status.UseLabel, 32),
+            FireMode = LookNames.ByName<D.FireMode>("FireMode", status.FireMode),
+            UseSeq = status.UseSeq,
+            UseOutcome = LookNames.ByName<D.UseOutcome>("UseOutcome", status.UseOutcome),
+            UseReason = LookNames.ByName<D.UseReason>("UseReason", status.UseReason),
+            SpreadRad = status.SpreadRad,
+            RadarWarning = LookNames.ByName<D.RadarWarningLevel>("RadarWarningLevel", status.RadarWarning),
+            RadarBearingDeg = status.RadarBearingDeg,
+            MissileLaunch = status.MissileLaunch,
+            MissileBearingDeg = status.MissileBearingDeg,
+            MissileTimeToImpactS = status.MissileTimeToImpactS,
+            MissileSeeker = LookNames.ByName<D.MissileSeeker>("MissileSeeker", status.MissileSeeker),
+            Ammo =
+            [
+                .. status.Ammo.Take(16).Select(a => new D.AmmoEntry
+                {
+                    Slot = a.Mount,
+                    Weapon = Cut(a.Weapon, 32),
+                    AmmoType = Cut(a.AmmoName, 32),
+                    Rounds = a.Rounds,
+                    AmmoTypeId = a.AmmoTypeId,
+                    Max = a.Max,
+                    Magazine = a.Magazine,
+                    LoadedRounds = a.LoadedRounds,
+                    Busy = a.Busy,
+                    Overheated = a.Overheated,
+                    HeatPercent = a.HeatPercent,
+                }),
+            ],
         };
+
         if (!_wroteUnit || !SameUnit(in _lastUnit, in unit))
         {
             _wroteUnit = true;
@@ -90,7 +121,17 @@ internal sealed class DpsPlayerSlot
         }
     }
 
+    private static string Cut(string? s, int max) => s is null ? string.Empty : s.Length <= max ? s : s[..max];
+
+    // everything but the time to impact, which counts down: it only matters when it moved by a second (the client counts down from the sample it has)
     private static bool SameUnit(in D.OwnUnit a, in D.OwnUnit b) =>
-        a.UnitId == b.UnitId && a.Health == b.Health && a.MaxHealth == b.MaxHealth && a.UseVerb == b.UseVerb && a.UseTargetId == b.UseTargetId
-        && a.Ammo.Count == b.Ammo.Count && a.Ammo.Zip(b.Ammo).All(p => p.First.Slot == p.Second.Slot && p.First.Rounds == p.Second.Rounds && p.First.AmmoType == p.Second.AmmoType);
+        a.UnitId == b.UnitId && a.Health == b.Health && a.MaxHealth == b.MaxHealth && a.ActiveSlot == b.ActiveSlot && a.CanUse == b.CanUse && a.UseVerb == b.UseVerb
+        && a.UseTargetId == b.UseTargetId && a.UseLabel == b.UseLabel && a.FireMode == b.FireMode && a.UseSeq == b.UseSeq && a.UseOutcome == b.UseOutcome
+        && a.UseReason == b.UseReason && a.SpreadRad == b.SpreadRad && a.RadarWarning == b.RadarWarning && a.RadarBearingDeg == b.RadarBearingDeg
+        && a.MissileLaunch == b.MissileLaunch && a.MissileBearingDeg == b.MissileBearingDeg && a.MissileSeeker == b.MissileSeeker
+        && MathF.Abs(a.MissileTimeToImpactS - b.MissileTimeToImpactS) < MissileRefreshS
+        && a.Ammo.Count == b.Ammo.Count
+        && a.Ammo.Zip(b.Ammo).All(p => p.First.Slot == p.Second.Slot && p.First.Rounds == p.Second.Rounds && p.First.AmmoType == p.Second.AmmoType && p.First.Weapon == p.Second.Weapon
+            && p.First.AmmoTypeId == p.Second.AmmoTypeId && p.First.Max == p.Second.Max && p.First.Magazine == p.Second.Magazine && p.First.LoadedRounds == p.Second.LoadedRounds
+            && p.First.Busy == p.Second.Busy && p.First.Overheated == p.Second.Overheated && p.First.HeatPercent == p.Second.HeatPercent);
 }

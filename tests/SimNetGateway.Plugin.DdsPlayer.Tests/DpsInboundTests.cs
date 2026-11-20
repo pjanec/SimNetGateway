@@ -314,12 +314,15 @@ public class DpsInboundTests
         Assert.True(slots.Until(w => w.Alive["slot"].Offers.Count == 1));
     }
 
+    private static PlayerWeapon Weapon(byte mount, long type, int rounds, string kind, string name) =>
+        new(mount, kind, name, type, rounds, 0, -1, -1, false, false, 0);
+
     [Fact]
     public void Own_unit_carries_ammo_health_and_use_verdict()
     {
         uint domain = Watch.NewDomain();
         var station = new RecordingStation { Slot = new PlayerSlotSnapshot(PlayerSlotState.Playing, 1201, 0.0, 1) };
-        station.Unit = new PlayerUnitStatus(80.0, 100.0, [((byte)0, 77L, 30), ((byte)1, 0L, 5)], 3, 55);
+        station.Unit = new PlayerUnitStatus(80.0, 100.0, [Weapon(0, 77L, 30, "RIFLE", "5.56 mm"), Weapon(1, 0L, 5, "HANDS", "")], 3, 55);
         using var units = new Watch.Watch<D.OwnUnit>(domain, "station-1", u => "unit");
         using var rig = new Rig(domain, station: station);
 
@@ -329,10 +332,10 @@ public class DpsInboundTests
         var u = units.Alive["unit"];
         Assert.Equal((1201, 80f, 100f, true, (byte)3, 55), (u.UnitId, u.Health, u.MaxHealth, u.CanUse, u.UseVerb, u.UseTargetId));
         Assert.Equal([((byte)0, 30), ((byte)1, 5)], u.Ammo.Select(a => (a.Slot, a.Rounds)).ToArray());
-        Assert.Equal("77", u.Ammo[0].AmmoType);
+        Assert.Equal(("RIFLE", "5.56 mm", 77L), (u.Ammo[0].Weapon, u.Ammo[0].AmmoType, u.Ammo[0].AmmoTypeId));
         Assert.Equal(1, rig.Transport.OwnUnit.Written);
 
-        station.Unit = new PlayerUnitStatus(70.0, 100.0, [((byte)0, 77L, 29)], 0, 0);
+        station.Unit = new PlayerUnitStatus(70.0, 100.0, [Weapon(0, 77L, 29, "RIFLE", "5.56 mm")], 0, 0);
         Frames(rig);
         Assert.Equal(2, rig.Transport.OwnUnit.Written);
         Assert.True(units.Until(w => w.Alive["unit"].Health == 70f));

@@ -432,3 +432,42 @@ public readonly record struct HrotGroundMark(string Kind, HrotVec3 Centre, float
 
 /// <summary>The heat marks of terrain cell record <see cref="Id"/>; sent when the set changes, an empty set = the cell holds none any more.</summary>
 public readonly record struct HrotGroundMarks(int Id, IReadOnlyList<HrotGroundMark> Marks) : IHrotToGatewayMessage;
+
+// ---- DPS round 2 (DD-018 3.1): kills, player messages, rule statuses, the exercise result ------------------------------
+
+/// <summary>
+/// A man went out of the fight (HROT's man-downed event, local or remote). Ids are HROT network ids (0 = unknown). <paramref name="State"/> is the NAME of HROT's injury
+/// state (Incapacitated, Dead). <paramref name="BodyPart"/> is 0 = unknown, else HROT's body part id + 1. <paramref name="VictimSide"/> is the DIS force (1 friendly,
+/// 2 opposing, 3 neutral).
+/// </summary>
+public readonly record struct HrotManDowned(double SimTime, int VictimId, int SourceId, int OriginalSourceId, string State, int BodyPart, int VictimSide) : IHrotToGatewayMessage;
+
+/// <summary>
+/// A message to the players (HROT's player-message event) with its addressing: <paramref name="To"/> is the NAME of its address kind (All, Side, Station, Unit,
+/// Instructor), <paramref name="ToValue"/> the side (DIS force numbering), station or unit network id it names. <paramref name="OriginNode"/> 0 = raised on this node.
+/// </summary>
+public readonly record struct HrotPlayerMessage(
+    int MessageId, int OriginNode, string To, int ToValue, string Text, float Seconds, byte Priority, double SentAt, int SourceId) : IHrotToGatewayMessage;
+
+/// <summary>
+/// An objective, measure or trigger of the scenario rules (HROT's objective status plus its links), sent when it changes. <paramref name="Id"/> is the rule entity's network
+/// id. <paramref name="Role"/>, <paramref name="State"/> and <paramref name="TriggerState"/> are the NAMES of HROT's enumerations. <paramref name="Owner"/> and
+/// <paramref name="Challenger"/> are DIS force numbers (0 = none for the challenger), <paramref name="VisibleSides"/> a mask with bit n = DIS force n.
+/// </summary>
+public readonly record struct HrotStatus(
+    int Id, string Role, string State, string TriggerState, bool Closed, byte Owner, int ProgressCur, int ProgressNeed, float Value, float Target, float Score, float Pass,
+    float Points, double ChangedAt, string Reason, string Title, string Kind, string Group, byte Phase, bool Required, bool Scored, float Weight, byte VisibleSides,
+    byte StepCur, byte StepCount, float HoldFor, float Deadline, double ExpectedAt, bool Capture, byte Challenger, HrotVec3 AreaCentre, float AreaRadius, bool EndsExercise,
+    int SubjectId, int ParentId) : IHrotToGatewayMessage;
+
+/// <summary>The rule entity <see cref="Id"/> is gone.</summary>
+public readonly record struct HrotStatusRemoved(int Id) : IHrotToGatewayMessage;
+
+/// <summary>One side's result: <paramref name="Outcome"/> is the NAME of HROT's side outcome.</summary>
+public readonly record struct HrotSideResult(string Outcome, float Points, float Score);
+
+/// <summary>
+/// The exercise's result (HROT's exercise result), sent when it changes. <paramref name="Phase"/> is the NAME of HROT's exercise phase; the sides are friendly, opposing and
+/// neutral (HROT's Friend, Hostile, Neutral).
+/// </summary>
+public readonly record struct HrotExercise(string Phase, double EndedAt, string Reason, HrotSideResult Friendly, HrotSideResult Opposing, HrotSideResult Neutral) : IHrotToGatewayMessage;

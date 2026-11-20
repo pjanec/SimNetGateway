@@ -16,8 +16,9 @@ public class ContractTests
     {
         string[] expected =
             [
-                "HrotDetonation", "HrotEffect", "HrotEntityRemoved", "HrotEntityState", "HrotFire", "HrotFireSpots", "HrotFlameJet", "HrotFlameJetRemoved", "HrotGroundMarks",
-                "HrotMunitionLook", "HrotOrigin", "HrotPersonAppearance", "HrotPersonDetail", "HrotRound", "HrotSession", "HrotTurretPose", "HrotVehicleLook",
+                "HrotDetonation", "HrotEffect", "HrotEntityRemoved", "HrotEntityState", "HrotExercise", "HrotFire", "HrotFireSpots", "HrotFlameJet", "HrotFlameJetRemoved",
+                "HrotGroundMarks", "HrotManDowned", "HrotMunitionLook", "HrotOrigin", "HrotPersonAppearance", "HrotPersonDetail", "HrotPlayerMessage", "HrotRound", "HrotSession",
+                "HrotStatus", "HrotStatusRemoved", "HrotTurretPose", "HrotVehicleLook",
             ];
         var actual = Messages.Where(t => typeof(IHrotToGatewayMessage).IsAssignableFrom(t)).Select(t => t.Name).Order().ToArray();
         Assert.Equal(expected, actual);

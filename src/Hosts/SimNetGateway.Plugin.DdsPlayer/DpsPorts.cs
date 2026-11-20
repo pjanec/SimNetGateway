@@ -26,6 +26,10 @@ internal sealed class DpsPorts
         FlameJet = b.RequireOutbound<DpsItem<FlameJet>>("dps.FlameJet");
         FireSpots = b.RequireOutbound<DpsItem<FireSpots>>("dps.FireSpots");
         GroundMarks = b.RequireOutbound<DpsItem<GroundMarks>>("dps.GroundMarks");
+        ManDowned = b.RequireOutbound<DpsItem<ManDowned>>("dps.ManDowned");
+        PlayerMessage = b.RequireOutbound<DpsItem<PlayerMessage>>("dps.PlayerMessage");
+        Status = b.RequireOutbound<DpsItem<Status>>("dps.Status");
+        Exercise = b.RequireOutbound<DpsItem<Exercise>>("dps.Exercise");
     }
 
     public IOutboundChannel<DpsItem<Session>> Session { get; }
@@ -58,6 +62,14 @@ internal sealed class DpsPorts
 
     public IOutboundChannel<DpsItem<GroundMarks>> GroundMarks { get; }
 
+    public IOutboundChannel<DpsItem<ManDowned>> ManDowned { get; }
+
+    public IOutboundChannel<DpsItem<PlayerMessage>> PlayerMessage { get; }
+
+    public IOutboundChannel<DpsItem<Status>> Status { get; }
+
+    public IOutboundChannel<DpsItem<Exercise>> Exercise { get; }
+
     /// <summary>Declares (idempotently) every port on the builder.</summary>
     public static DpsPorts Require(GatewayBuilder builder) => new(builder);
 
@@ -79,5 +91,9 @@ internal sealed class DpsPorts
         b.BindOutbound<DpsItem<FlameJet>>("dps.FlameJet", t.FlameJet);
         b.BindOutbound<DpsItem<FireSpots>>("dps.FireSpots", t.FireSpots);
         b.BindOutbound<DpsItem<GroundMarks>>("dps.GroundMarks", t.GroundMarks);
+        b.BindOutbound<DpsItem<ManDowned>>("dps.ManDowned", t.ManDowned);
+        b.BindOutbound<DpsItem<PlayerMessage>>("dps.PlayerMessage", t.PlayerMessage);
+        b.BindOutbound<DpsItem<Status>>("dps.Status", t.Status);
+        b.BindOutbound<DpsItem<Exercise>>("dps.Exercise", t.Exercise);
     }
 }

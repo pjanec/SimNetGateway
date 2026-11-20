@@ -60,6 +60,7 @@ public sealed class EcsHrotAdapter
     private readonly FlameJetGather _jets = new();
     private readonly FireSpotGather _fireSpots = new();
     private readonly GroundMarkGather _groundMarks = new();
+    private readonly HudGather _hud = new();
     private readonly List<int> _scratch = new();
     private readonly List<(int Parent, int Part)> _scratchPoses = new();
     private EntityQuery? _hrotQuery;
@@ -114,6 +115,16 @@ public sealed class EcsHrotAdapter
         if (!world.Bus.IsRegistered<DetonationNotification>())
         {
             world.RegisterEvent<DetonationNotification>();
+        }
+
+        if (!world.Bus.IsRegistered<ManDownedEvent>())
+        {
+            world.RegisterEvent<ManDownedEvent>();
+        }
+
+        if (!world.Bus.IsRegisteredManaged<Fdp.Toolkit.ScenarioRules.PlayerMessageEvent>())
+        {
+            world.RegisterManagedEvent<Fdp.Toolkit.ScenarioRules.PlayerMessageEvent>();
         }
     }
 
@@ -230,6 +241,7 @@ public sealed class EcsHrotAdapter
         _jets.Gather(world, inbound, simTime);
         _fireSpots.Gather(world, inbound, simTime);
         _groundMarks.Gather(world, inbound);
+        _hud.GatherState(world, inbound);
     }
 
     /// <summary>
@@ -307,6 +319,7 @@ public sealed class EcsHrotAdapter
     {
         var tkb = _services.Tkb();
         _effects.Gather(world, tkb, inbound);   // HROT's look rules over the same events: flashes, explosions, marks
+        _hud.GatherEvents(world, inbound, Fdp.Toolkit.Time.SimClock.TotalTimeOf(world));
         var fires = world.ReadEvents<WeaponFireNotification>();
         for (int i = 0; i < fires.Length; i++)
         {
@@ -791,6 +804,7 @@ public sealed class EcsHrotAdapter
         _jets.Clear();
         _fireSpots.Clear();
         _groundMarks.Clear();
+        _hud.Clear();
         ForgetReplayEffects();
         SweepRoutedEntities(world);
         _queryWorld = null;

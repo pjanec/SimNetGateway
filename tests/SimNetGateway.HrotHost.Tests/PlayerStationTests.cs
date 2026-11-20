@@ -2,6 +2,8 @@ using System.Numerics;
 using Fdp.Core;
 using Fdp.Toolkit.Behavior.Possession;
 using Fdp.Toolkit.Combat.Components;
+using Fdp.Toolkit.Replication.Components;
+using Fdp.Toolkit.Perception.Radar;
 using DISnet;
 using Fdp.Toolkit.Orchestration;
 using Fdp.Toolkit.Replication.Services;
@@ -345,6 +347,92 @@ public class PlayerStationTests
     }
 
     [Fact]
+    public void Unit_status_carries_the_weapon_line_fire_mode_use_verdict_spread_and_warnings()
+    {
+        using var h = new Stage();
+        var e = h.Play();
+        var rifleman = new Fdp.Interfaces.TkbTemplate("test rifleman", 301);
+        rifleman.AddDescriptor(new Fdp.Toolkit.Tkb.Domain.WeaponSuiteDto
+        {
+            Mounts =
+            {
+                new Fdp.Toolkit.Tkb.Domain.WeaponMountDto { Category = Fdp.Toolkit.Tkb.Domain.WeaponCategory.SmallArms, AmmoGuid = 6100 },
+                new Fdp.Toolkit.Tkb.Domain.WeaponMountDto { Category = Fdp.Toolkit.Tkb.Domain.WeaponCategory.Grenade, AmmoGuid = 6101 },
+            },
+        });
+        h.TestTkb.Register(rifleman);
+        h.TestTkb.Register(new Fdp.Interfaces.TkbTemplate("5.56 mm round", 6100));
+        h.TestTkb.Register(new Fdp.Interfaces.TkbTemplate("M67 grenade", 6101));
+        h.World.SetSingletonManaged<Fdp.Interfaces.ITkbDatabase>(h.TestTkb);
+        h.World.SetComponent(e, new TkbIdentity { TkbType = new TkbTypeId(301) });
+        void Reg<T>()
+            where T : unmanaged
+        {
+            if (!h.World.IsComponentTypeRegistered<T>())
+            {
+                h.World.RegisterComponent<T>();
+            }
+        }
+
+        Reg<WeaponAmmo>();
+        Reg<OperatorUseStatus>();
+        Reg<Fdp.Toolkit.Perception.Radar.RadarWarning>();
+        Reg<MissileWarning>();
+        h.World.AddComponent(e, new WeaponAmmo
+        {
+            Count = 2, Ammo0 = 30, Max0 = 210, Mag0 = 3, Load0 = 6100, LoadRounds0 = 25, Busy = 0b01, Hot = 0b01, HeatAtLastShot0 = 0.5f, LastShotAt0 = h.SimTime, Ammo1 = 2, Mag1 = -1, Load1 = 0,
+            LoadRounds1 = -1,
+        });
+        h.World.AddComponent(e, new OperatorUseStatus { UseSeq = 9, Outcome = UseOutcome.Refused, Reason = UseReason.Locked });
+        h.World.AddComponent(e, new Fdp.Toolkit.Perception.Radar.RadarWarning { Level = Fdp.Toolkit.Perception.Radar.RadarWarningLevel.Tracked, BearingDeg = 135f });
+        h.World.AddComponent(e, new MissileWarning { At = new SimInstant(h.SimTime), BearingDeg = 270f, Seeker = Fdp.Toolkit.Tkb.Domain.GuidanceKind.InfraRed, TimeToImpactS = 30f });
+        h.Station.Control(Frame() with { Mount = 1, FirePref = 0 });
+        h.Steps(1);
+
+        var unit = h.Station.Unit;
+
+        Assert.Equal((byte)1, unit.ActiveMount);   // the last control frame's mount
+        var rifle = unit.Ammo[0];
+        Assert.Equal(("RIFLE", "5.56 mm", 6100L, 30, 210, 3, 25, true, true), (rifle.Weapon, rifle.AmmoName, rifle.AmmoTypeId, rifle.Rounds, rifle.Max, rifle.Magazine, rifle.LoadedRounds, rifle.Busy,
+            rifle.Overheated));
+        Assert.Equal(50, rifle.HeatPercent);
+        var grenade = unit.Ammo[1];   // no loaded round: the mount's own
+        Assert.Equal(("GRENADE", "M67 grenade", 6101L, 2, -1, -1), (grenade.Weapon, grenade.AmmoName, grenade.AmmoTypeId, grenade.Rounds, grenade.Magazine, grenade.LoadedRounds));
+        Assert.False(grenade.Busy);
+        Assert.Equal("Lock", unit.FireMode);   // the selected weapon is the thrown one
+        Assert.Equal(Fdp.Toolkit.Combat.HitModel.Sigma(h.World, e, Fdp.Toolkit.Combat.CombatTkb.MountOf(h.World, e, 1), h.SimTime), unit.SpreadRad);
+        Assert.Equal((9, "Refused", "Locked"), ((int)unit.UseSeq, unit.UseOutcome, unit.UseReason));
+        Assert.Equal(("Tracked", 135f), (unit.RadarWarning, unit.RadarBearingDeg));
+        Assert.True(unit.MissileLaunch);
+        Assert.Equal((270f, "InfraRed"), (unit.MissileBearingDeg, unit.MissileSeeker));
+        Assert.InRange(unit.MissileTimeToImpactS, 29f, 30f);
+
+        // the rifle selected: sight; the missile warning runs out with its time to impact
+        h.Station.Control(Frame() with { Mount = 0 });
+        h.Steps(1);
+        Assert.Equal(((byte)0, "Sight"), (h.Station.Unit.ActiveMount, h.Station.Unit.FireMode));
+        h.World.SetComponent(e, new MissileWarning { At = new SimInstant(h.SimTime - 40.0), BearingDeg = 270f, Seeker = Fdp.Toolkit.Tkb.Domain.GuidanceKind.InfraRed, TimeToImpactS = 30f });
+        h.Steps(1);
+        Assert.False(h.Station.Unit.MissileLaunch);
+        Assert.Equal((0f, string.Empty), (h.Station.Unit.MissileTimeToImpactS, h.Station.Unit.MissileSeeker));
+    }
+
+    [Fact]
+    public void A_unit_without_the_hud_components_has_empty_hud_fields()
+    {
+        using var h = new Stage();
+        h.Play();
+        h.Steps(1);
+
+        var unit = h.Station.Unit;
+
+        Assert.Equal((string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, false, 0f), (unit.UseLabel, unit.UseOutcome, unit.UseReason, unit.RadarWarning, unit.MissileSeeker,
+            unit.MissileLaunch, unit.MissileTimeToImpactS));
+        Assert.Equal((byte)0, unit.UseSeq);
+        Assert.Empty(unit.Ammo);
+    }
+
+    [Fact]
     public void Unit_status_reads_health_and_ammunition()
     {
         using var h = new Stage();
@@ -361,7 +449,7 @@ public class PlayerStationTests
         var unit = h.Station.Unit;
         Assert.Equal(80.0, unit.Health);
         Assert.Equal(100.0, unit.HealthMax);
-        Assert.Equal([((byte)0, 77L, 30), ((byte)1, 0L, 5)], unit.Ammo);
+        Assert.Equal([((byte)0, 77L, 30), ((byte)1, 0L, 5)], unit.Ammo.Select(a => (a.Mount, a.AmmoTypeId, a.Rounds)).ToArray());
         Assert.Equal((byte)0, unit.UseVerb);
         Assert.Equal(0, unit.UseTarget);
     }

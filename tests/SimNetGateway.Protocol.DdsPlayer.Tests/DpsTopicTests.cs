@@ -341,6 +341,79 @@ public class DpsTopicTests
     }
 
     [Fact]
+    public void The_hud_extensions_and_topics_round_trip()
+    {
+        var own = RoundTrip(new OwnUnit
+        {
+            UnitId = 12, Health = 80f, MaxHealth = 100f, ActiveSlot = 1, CanUse = true, UseTargetId = 55, UseVerb = 2, UseLabel = "Drive BMP-2", FireMode = FireMode.FireModeLock, UseSeq = 9,
+            UseOutcome = UseOutcome.UseOutcomeRefused, UseReason = UseReason.UseReasonLocked, SpreadRad = 0.004f, RadarWarning = RadarWarningLevel.RadarWarningLevelTracked,
+            RadarBearingDeg = 135f, MissileLaunch = true, MissileBearingDeg = 270f, MissileTimeToImpactS = 8.5f, MissileSeeker = MissileSeeker.MissileSeekerInfraRed,
+            Ammo =
+            [
+                new AmmoEntry
+                {
+                    Slot = 1, Weapon = "MG", AmmoType = "7.62 mm", Rounds = 120, Reserve = 0, AmmoTypeId = 7_000_000_001L, Max = 200, Magazine = 3, LoadedRounds = 25, Busy = true, Overheated = true,
+                    HeatPercent = 87,
+                },
+            ],
+        }, "t2-own");
+        Assert.Equal((FireMode.FireModeLock, (byte)9, UseOutcome.UseOutcomeRefused, UseReason.UseReasonLocked, 0.004f), (own.FireMode, own.UseSeq, own.UseOutcome, own.UseReason, own.SpreadRad));
+        Assert.Equal((RadarWarningLevel.RadarWarningLevelTracked, 135f, true, 270f, 8.5f, MissileSeeker.MissileSeekerInfraRed),
+            (own.RadarWarning, own.RadarBearingDeg, own.MissileLaunch, own.MissileBearingDeg, own.MissileTimeToImpactS, own.MissileSeeker));
+        var a = own.Ammo[0];
+        Assert.Equal((7_000_000_001L, 200, 3, 25, true, true, 87), (a.AmmoTypeId, a.Max, a.Magazine, a.LoadedRounds, a.Busy, a.Overheated, a.HeatPercent));
+
+        var kill = RoundTrip(new ManDowned { SimTime = 5.5, VictimId = 1, SourceId = 2, OriginalSourceId = 3, State = Injury.InjuryDead, BodyPart = 4, VictimSide = 2 }, "t2-kill");
+        Assert.Equal((5.5, 1, 2, 3, Injury.InjuryDead, (byte)4, (byte)2), (kill.SimTime, kill.VictimId, kill.SourceId, kill.OriginalSourceId, kill.State, kill.BodyPart, kill.VictimSide));
+
+        var message = RoundTrip(new PlayerMessage
+        {
+            MessageId = 7, OriginNode = 3, To = MessageAddress.MessageAddressSide, ToValue = 1, Text = new string('m', 256), Seconds = 6f, Priority = 2, SentAt = 90.5, SourceId = 3001,
+        }, "t2-message");
+        Assert.Equal((7, 3, MessageAddress.MessageAddressSide, 1, 256, 6f, (byte)2, 90.5, 3001), (message.MessageId, message.OriginNode, message.To, message.ToValue, message.Text.Length,
+            message.Seconds, message.Priority, message.SentAt, message.SourceId));
+
+        var status = RoundTrip(new Status
+        {
+            StatusId = 3001, Role = ObjectiveRole.ObjectiveRoleTrigger, State = ObjectiveState.ObjectiveStateAchieved, TriggerState = TriggerState.TriggerStateFired, Closed = true, Owner = 2,
+            ProgressCur = 3, ProgressNeed = 10, Value = 0.5f, Target = 1f, Score = 0.25f, Pass = 0.8f, Points = 5f, ChangedAt = 12.5, Reason = "held", Title = "Hold", Kind = "HoldArea",
+            Group = "mission", Phase = 2, Required = true, Scored = true, Weight = 2f, VisibleSides = 6, StepCur = 1, StepCount = 3, HoldFor = 60f, Deadline = 900f, ExpectedAt = 130.0,
+            Capture = true, Challenger = 1, AreaCentre = new Vec3d { X = 100, Y = 200 }, AreaRadius = 50f, EndsExercise = true, SubjectId = 77, ParentId = 5,
+        }, "t2-status");
+        Assert.Equal((3001, ObjectiveRole.ObjectiveRoleTrigger, ObjectiveState.ObjectiveStateAchieved, TriggerState.TriggerStateFired, true, (byte)2), (status.StatusId, status.Role, status.State,
+            status.TriggerState, status.Closed, status.Owner));
+        Assert.Equal(("held", "Hold", "HoldArea", "mission", (byte)6, 100.0, 77, 5), (status.Reason, status.Title, status.Kind, status.Group, status.VisibleSides, status.AreaCentre.X, status.SubjectId, status.ParentId));
+
+        var exercise = RoundTrip(new Exercise
+        {
+            Phase = ExercisePhase.ExercisePhaseEnded, EndedAt = 1800.5, Reason = "Time is up", Friendly = new SideResult { Outcome = SideOutcome.SideOutcomeWin, Points = 40f, Score = 0.9f },
+            Opposing = new SideResult { Outcome = SideOutcome.SideOutcomeLose }, Neutral = new SideResult(),
+        }, "t2-exercise");
+        Assert.Equal((ExercisePhase.ExercisePhaseEnded, 1800.5, "Time is up", SideOutcome.SideOutcomeWin, 0.9f, SideOutcome.SideOutcomeLose),
+            (exercise.Phase, exercise.EndedAt, exercise.Reason, exercise.Friendly.Outcome, exercise.Friendly.Score, exercise.Opposing.Outcome));
+    }
+
+    [Fact]
+    public void The_hud_state_topics_are_late_join_topics_and_the_events_are_not()
+    {
+        Assert.Equal(3001, LateJoin(new Status { StatusId = 3001, Reason = "", Title = "", Kind = "", Group = "" }, "t2-late-status").StatusId);
+        Assert.Equal(ExercisePhase.ExercisePhaseClosing, LateJoin(new Exercise { Phase = ExercisePhase.ExercisePhaseClosing, Reason = "" }, "t2-late-exercise").Phase);
+
+        // an event is volatile: written before the reader joined, it is not delivered
+        using var writerSide = new DdsParticipant(NewDomain(), defaultPartition: "t2-late-kill");
+        using var writer = new DdsWriter<ManDowned>(writerSide);
+        writer.Write(new ManDowned { VictimId = 1 });
+        using var readerSide = new DdsParticipant(NewDomain(), defaultPartition: "t2-late-kill");
+        using var reader = new DdsReader<ManDowned>(readerSide);
+        Thread.Sleep(500);
+        using var loan = reader.Take(8);
+        foreach (var sample in loan)
+        {
+            Assert.False(sample.IsValid);
+        }
+    }
+
+    [Fact]
     public void Late_joiner_gets_every_live_instance()
     {
         using var writerSide = new DdsParticipant(NewDomain(), defaultPartition: "late");
@@ -420,7 +493,17 @@ public class DpsTopicTests
             var type = topic["DPS_".Length..];
             Assert.Contains($"struct {type} ", idl);
         }
-        Assert.Equal(22, DpsProtocol.AllTopics.Count);
+        Assert.Equal(26, DpsProtocol.AllTopics.Count);
+        foreach (var name in new[] { "ManDowned", "PlayerMessage", "Status", "Exercise" })
+        {
+            Assert.Contains("DPS_" + name, DpsProtocol.AllTopics);
+        }
+
+        foreach (var enumerator in new[] { "FireModeLock", "UseOutcomeRefused", "UseReasonOtherSide", "RadarWarningLevelTracked", "MissileSeekerInfraRed", "MessageAddressInstructor", "ObjectiveRoleTrigger", "ObjectiveStateSkipped", "TriggerStateCooldown", "ExercisePhaseEnded", "SideOutcomeDraw" })
+        {
+            Assert.Contains(enumerator, idl);
+        }
+
 
         // the round-2 topics and their enumerations (every enumerator carries its enum name; ids are 64-bit)
         foreach (var name in new[] { "Round", "MunitionLook", "FlameJet", "FireSpots", "GroundMarks" })

@@ -56,10 +56,26 @@ public readonly record struct PlayerSlotSnapshot(PlayerSlotState State, int Unit
 /// <summary>One playable unit (<see cref="Role"/> is its slot name) and the side (DIS force numbering) it belongs to.</summary>
 public readonly record struct PlayerOffer(int UnitId, string? Role, int Force);
 
-/// <summary>The data a HUD needs about the player's own unit: health, ammunition per weapon mount, and what the use key does now.</summary>
-public readonly record struct PlayerUnitStatus(double Health, double HealthMax, IReadOnlyList<(byte Mount, long Ammo, int Rounds)> Ammo, byte UseVerb, int UseTarget)
+/// <summary>
+/// One weapon mount of the player's unit as the HUD shows it. <see cref="Weapon"/> is the mount's kind as HROT's HUD names it (RIFLE, MG, CANNON, HANDS ...) and
+/// <see cref="AmmoName"/> the loaded round's name (empty = none); <see cref="Magazine"/> -1 = no magazine model, <see cref="LoadedRounds"/> -1 = not stated,
+/// <see cref="Max"/> 0 = none stated.
+/// </summary>
+public readonly record struct PlayerWeapon(
+    byte Mount, string Weapon, string AmmoName, long AmmoTypeId, int Rounds, int Max, int Magazine, int LoadedRounds, bool Busy, bool Overheated, int HeatPercent);
+
+/// <summary>
+/// The data a HUD needs about the player's own unit: health, ammunition per weapon mount, what the use key does now and the verdict of the last press, the fire mode and
+/// spread of the selected weapon, and the aircraft warnings. HROT's enumerations are the NAMES of the enumeration ("" = none): <see cref="FireMode"/> (Sight, Lock),
+/// <see cref="UseOutcome"/>, <see cref="UseReason"/>, <see cref="RadarWarning"/> (the warning receiver level) and <see cref="MissileSeeker"/>. Bearings are degrees, 0 = north,
+/// clockwise; <see cref="MissileTimeToImpactS"/> is the time left at the moment of reading.
+/// </summary>
+public readonly record struct PlayerUnitStatus(
+    double Health, double HealthMax, IReadOnlyList<PlayerWeapon> Ammo, byte UseVerb, int UseTarget, byte ActiveMount = 0, string FireMode = "", string UseLabel = "",
+    byte UseSeq = 0, string UseOutcome = "", string UseReason = "", float SpreadRad = 0f, string RadarWarning = "", float RadarBearingDeg = 0f, bool MissileLaunch = false,
+    float MissileBearingDeg = 0f, float MissileTimeToImpactS = 0f, string MissileSeeker = "")
 {
-    public static PlayerUnitStatus None { get; } = new(0.0, 0.0, Array.Empty<(byte, long, int)>(), 0, 0);
+    public static PlayerUnitStatus None { get; } = new(0.0, 0.0, Array.Empty<PlayerWeapon>(), 0, 0);
 }
 
 /// <summary>

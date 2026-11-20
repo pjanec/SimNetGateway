@@ -119,6 +119,11 @@ public class ProfileTests
             new HrotFlameJetRemoved(1, 0),
             new HrotFireSpots(1, []),
             new HrotGroundMarks(1, []),
+            new HrotManDowned(1.0, 1, 0, 0, "Dead", 0, 2),
+            new HrotPlayerMessage(1, 0, "All", 0, "x", 1f, 0, 1.0, 0),
+            new HrotStatus(1, "Objective", "Active", "Disarmed", false, 1, 0, 0, 0f, 0f, 0f, 0f, 0f, 0.0, "", "", "", "", 0, false, false, 0f, 0, 0, 0, 0f, 0f, 0.0, false, 0, default, 0f, false, 0, 0),
+            new HrotStatusRemoved(1),
+            new HrotExercise("Running", 0.0, "", default, default, default),
             new HrotEntityRemoved(1),
         };
         Assert.Equal(typeof(IHrotToGatewayMessage).Assembly.GetExportedTypes().Count(t => !t.IsInterface && typeof(IHrotToGatewayMessage).IsAssignableFrom(t)), messages.Length);
@@ -143,6 +148,11 @@ public class ProfileTests
                 case HrotFlameJetRemoved m: h.HrotStep(m); break;
                 case HrotFireSpots m: h.HrotStep(m); break;
                 case HrotGroundMarks m: h.HrotStep(m); break;
+                case HrotManDowned m: h.HrotStep(m); break;
+                case HrotPlayerMessage m: h.HrotStep(m); break;
+                case HrotStatus m: h.HrotStep(m); break;
+                case HrotStatusRemoved m: h.HrotStep(m); break;
+                case HrotExercise m: h.HrotStep(m); break;
                 default: throw new InvalidOperationException(message.GetType().Name);
             }
         }

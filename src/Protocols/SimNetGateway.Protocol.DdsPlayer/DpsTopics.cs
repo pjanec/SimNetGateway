@@ -429,6 +429,19 @@ public partial struct AmmoEntry
     [MaxLength(32)] public string Weapon;
     [MaxLength(32)] public string AmmoType;
     public int Rounds, Reserve;
+    /// <summary>The loaded round's type id (0 = none).</summary>
+    public long AmmoTypeId;
+    /// <summary>The mount's maximum (0 = none stated).</summary>
+    public int Max;
+    /// <summary>Rounds in the magazine, -1 = no magazine model.</summary>
+    public int Magazine;
+    /// <summary>Rounds of the loaded type in the breech, -1 = not stated.</summary>
+    public int LoadedRounds;
+    /// <summary>Loading or switching.</summary>
+    public bool Busy;
+    public bool Overheated;
+    /// <summary>Barrel heat 0..100.</summary>
+    public int HeatPercent;
 }
 
 /// <summary>The data a HUD needs about the player's own unit.</summary>
@@ -446,6 +459,128 @@ public partial struct OwnUnit
     public int UseTargetId;
     public byte UseVerb;
     [MaxLength(32)] public string UseLabel;
+    /// <summary>How the selected weapon's trigger works.</summary>
+    public FireMode FireMode;
+    /// <summary>The use press the verdict answers; a client shows it when this equals its last press.</summary>
+    public byte UseSeq;
+    public UseOutcome UseOutcome;
+    public UseReason UseReason;
+    /// <summary>Half-width of the spread of the selected weapon's shots, radians (0 = none stated).</summary>
+    public float SpreadRad;
+    public RadarWarningLevel RadarWarning;
+    /// <summary>Bearings in degrees, 0 = north, clockwise.</summary>
+    public float RadarBearingDeg;
+    public bool MissileLaunch;
+    public float MissileBearingDeg;
+    /// <summary>Seconds to impact when the sample was written (refreshed about once a second).</summary>
+    public float MissileTimeToImpactS;
+    public MissileSeeker MissileSeeker;
+}
+
+#endregion
+
+#region HUD (gateway to client)
+
+/// <summary>A man went out of the fight (HROT's one kill authority); local and remote kills alike. Ids are entity ids, 0 = unknown.</summary>
+[DdsTopic(DpsProtocol.ManDowned)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 16)]
+public partial struct ManDowned
+{
+    public double SimTime;
+    public int VictimId, SourceId, OriginalSourceId;
+    /// <summary>What the hit made of him: Incapacitated or Dead.</summary>
+    public Injury State;
+    /// <summary>0 = unknown, else the body part id + 1.</summary>
+    public byte BodyPart;
+    /// <summary>The victim's side in the contract's force numbering (1 friendly, 2 opposing, 3 neutral).</summary>
+    public byte VictimSide;
+}
+
+/// <summary>A message to the players with its addressing; the client filters (All, its side, its unit, its station; Instructor only for an instructor view).</summary>
+[DdsTopic(DpsProtocol.PlayerMessage)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 16)]
+[DdsManaged]
+public partial struct PlayerMessage
+{
+    public int MessageId;
+    /// <summary>The simulation node that raised it (0 = this node).</summary>
+    public int OriginNode;
+    public MessageAddress To;
+    /// <summary>The side (force numbering of the contract), station or unit id <see cref="To"/> names; 0 for All and Instructor.</summary>
+    public int ToValue;
+    [MaxLength(256)] public string Text;
+    /// <summary>How long a subtitle shows.</summary>
+    public float Seconds;
+    public byte Priority;
+    public double SentAt;
+    /// <summary>The entity that sent it (0 = none).</summary>
+    public int SourceId;
+}
+
+/// <summary>An objective, measure or trigger of the scenario rules (HROT's <c>ObjectiveStatus</c>); the instance exists while the rule entity does.</summary>
+[DdsTopic(DpsProtocol.Status)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+[DdsManaged]
+public partial struct Status
+{
+    /// <summary>The rule entity's id.</summary>
+    [DdsKey] public int StatusId;
+    public ObjectiveRole Role;
+    public ObjectiveState State;
+    public TriggerState TriggerState;
+    public bool Closed;
+    /// <summary>The side it belongs to (force numbering of the contract: 1 friendly, 2 opposing, 3 neutral).</summary>
+    public byte Owner;
+    public int ProgressCur, ProgressNeed;
+    public float Value, Target;
+    /// <summary>0..1; GO is Score at or above Pass.</summary>
+    public float Score, Pass;
+    public float Points;
+    public double ChangedAt;
+    [MaxLength(64)] public string Reason;
+    [MaxLength(64)] public string Title;
+    [MaxLength(32)] public string Kind;
+    [MaxLength(32)] public string Group;
+    public byte Phase;
+    public bool Required, Scored;
+    public float Weight;
+    /// <summary>Bit n set = side n sees it (force numbering of the contract); 0 = the display decides.</summary>
+    public byte VisibleSides;
+    public byte StepCur, StepCount;
+    public float HoldFor;
+    public float Deadline;
+    public double ExpectedAt;
+    /// <summary>A capture point; <see cref="Challenger"/> is the side whose clock runs against the owner (0 = none).</summary>
+    public bool Capture;
+    public byte Challenger;
+    public Vec3d AreaCentre;
+    public float AreaRadius;
+    public bool EndsExercise;
+    /// <summary>The entity whose men it watches and the parent rule (0 = none).</summary>
+    public int SubjectId, ParentId;
+}
+
+/// <summary>One side's result.</summary>
+[DdsStruct]
+public partial struct SideResult
+{
+    public SideOutcome Outcome;
+    public float Points;
+    /// <summary>0..1.</summary>
+    public float Score;
+}
+
+/// <summary>The exercise's phase and the result per side (HROT's <c>ExerciseResult</c>); one instance.</summary>
+[DdsTopic(DpsProtocol.Exercise)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+[DdsManaged]
+public partial struct Exercise
+{
+    public ExercisePhase Phase;
+    /// <summary>The simulation time the exercise ended.</summary>
+    public double EndedAt;
+    [MaxLength(64)] public string Reason;
+    public SideResult Friendly, Opposing, Neutral;
 }
 
 #endregion

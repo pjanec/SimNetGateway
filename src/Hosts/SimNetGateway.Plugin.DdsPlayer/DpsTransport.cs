@@ -108,6 +108,10 @@ public sealed class DpsTransport : IDisposable
             FlameJet = Add(new DpsChannel<FlameJet>(_participant));
             FireSpots = Add(new DpsChannel<FireSpots>(_participant));
             GroundMarks = Add(new DpsChannel<GroundMarks>(_participant));
+            ManDowned = Add(new DpsChannel<ManDowned>(_participant));
+            PlayerMessage = Add(new DpsChannel<PlayerMessage>(_participant));
+            Status = Add(new DpsChannel<Status>(_participant));
+            Exercise = Add(new DpsChannel<Exercise>(_participant));
             PlayerSlot = Add(new DpsChannel<PlayerSlot>(_participant));
             OwnUnit = Add(new DpsChannel<OwnUnit>(_participant));
             _inbound = new DpsInbound(_participant, settings, station, log ?? (_ => { }));
@@ -157,6 +161,14 @@ public sealed class DpsTransport : IDisposable
     internal DpsChannel<FireSpots> FireSpots { get; } = null!;
 
     internal DpsChannel<GroundMarks> GroundMarks { get; } = null!;
+
+    internal DpsChannel<ManDowned> ManDowned { get; } = null!;
+
+    internal DpsChannel<PlayerMessage> PlayerMessage { get; } = null!;
+
+    internal DpsChannel<Status> Status { get; } = null!;
+
+    internal DpsChannel<Exercise> Exercise { get; } = null!;
 
     internal DpsChannel<PlayerSlot> PlayerSlot { get; } = null!;
 
