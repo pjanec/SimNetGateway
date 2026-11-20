@@ -88,6 +88,8 @@ public partial struct EntityState
     public Vec3f LinearVelocity, AngularVelocity;
     public Vec3f LinearAcceleration, AngularAcceleration;
     public PartCondition Damage;
+    /// <summary>Roll about the body's forward axis in radians, right-hand rule: positive = the top toward the right, a left turn is negative. A two-wheeler's lean into a turn computed by the host; 0 for everything else. Orientation stays the simulation's.</summary>
+    public float Bank;
 }
 
 /// <summary>A movable part of an entity (turret, gun, rotor, door ...).</summary>
@@ -333,6 +335,49 @@ public partial struct GroundMarks
 {
     [DdsKey] public int EntityId;
     [DdsBound(16)] public List<GroundMark> Marks;
+}
+
+/// <summary>An animal's state (HROT's animal state and flock state); for animals only, beside their <see cref="Entity"/> (Domain Animal). The species is the entity's type.</summary>
+[DdsTopic(DpsProtocol.Animal)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+public partial struct Animal
+{
+    [DdsKey] public int EntityId;
+    public AnimalMode Mode;
+    /// <summary>0 calm, 1 uneasy, 2 frightened, 3 panic.</summary>
+    public byte FearBand;
+    /// <summary>A ridden horse bolting.</summary>
+    public bool Bolting;
+    /// <summary>Attacking right now.</summary>
+    public bool Dangerous;
+    /// <summary>Calling (a moo, a bark): the mouth may open.</summary>
+    public bool Calling;
+    /// <summary>A flock is one entity drawn as <see cref="FlockCount"/> birds from <see cref="FlockSeed"/>; count 0 = a single body.</summary>
+    public int FlockCount, FlockInitialCount;
+    public uint FlockSeed;
+    public FlockMode FlockMode;
+}
+
+/// <summary>
+/// One TKB type as the running simulation has it (a scenario may replace the TKB, so a file shipped with a client would drift from the run). <see cref="Json"/> is the
+/// simulation's own serialization of the template, restricted to its presentation descriptors; <see cref="ContentHash"/> is the FNV-1a 64 of <see cref="Json"/> (UTF-8).
+/// Published once per type when first referenced by an entity, a fire, a round or a loaded weapon.
+/// </summary>
+[DdsTopic(DpsProtocol.TkbType)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+[DdsManaged]
+public partial struct TkbType
+{
+    [DdsKey] public long TypeId;
+    [MaxLength(64)] public string Name;
+    [MaxLength(128)] public string CategoryPath;
+    /// <summary>The DIS entity type as text.</summary>
+    [MaxLength(64)] public string DisType;
+    /// <summary>The shape of <see cref="Json"/>: "hrot/1".</summary>
+    [MaxLength(16)] public string Schema;
+    public ulong ContentHash;
+    /// <summary>{"tkbType", "name", "categoryPath", "disType", "descriptors": [{"type", "partId", "data"}]}; a descriptor that failed to serialize carries "serializationError" instead of "data".</summary>
+    public string Json;
 }
 
 #endregion

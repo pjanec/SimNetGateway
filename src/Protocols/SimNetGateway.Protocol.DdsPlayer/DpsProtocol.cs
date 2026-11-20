@@ -24,6 +24,8 @@ public static class DpsProtocol
     public const string FlameJet = "DPS_FlameJet";
     public const string FireSpots = "DPS_FireSpots";
     public const string GroundMarks = "DPS_GroundMarks";
+    public const string Animal = "DPS_Animal";
+    public const string TkbType = "DPS_TkbType";
     public const string ManDowned = "DPS_ManDowned";
     public const string PlayerMessage = "DPS_PlayerMessage";
     public const string Status = "DPS_Status";
@@ -41,6 +43,7 @@ public static class DpsProtocol
     [
         Session, Entity, EntityState, Articulation, PersonState, Appearance, Fire, Detonation, Effect, VehicleLook,
         Round, MunitionLook, FlameJet, FireSpots, GroundMarks,
+        Animal, TkbType,
         ManDowned, PlayerMessage, Status, Exercise,
         PlayerSlot, OwnUnit, JoinRequest, ControlFrame, Leave, GizmoView, GizmoFrame,
     ];

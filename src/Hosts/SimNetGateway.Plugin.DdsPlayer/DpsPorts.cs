@@ -26,6 +26,8 @@ internal sealed class DpsPorts
         FlameJet = b.RequireOutbound<DpsItem<FlameJet>>("dps.FlameJet");
         FireSpots = b.RequireOutbound<DpsItem<FireSpots>>("dps.FireSpots");
         GroundMarks = b.RequireOutbound<DpsItem<GroundMarks>>("dps.GroundMarks");
+        Animal = b.RequireOutbound<DpsItem<Animal>>("dps.Animal");
+        TkbType = b.RequireOutbound<DpsItem<TkbType>>("dps.TkbType");
         ManDowned = b.RequireOutbound<DpsItem<ManDowned>>("dps.ManDowned");
         PlayerMessage = b.RequireOutbound<DpsItem<PlayerMessage>>("dps.PlayerMessage");
         Status = b.RequireOutbound<DpsItem<Status>>("dps.Status");
@@ -62,6 +64,10 @@ internal sealed class DpsPorts
 
     public IOutboundChannel<DpsItem<GroundMarks>> GroundMarks { get; }
 
+    public IOutboundChannel<DpsItem<Animal>> Animal { get; }
+
+    public IOutboundChannel<DpsItem<TkbType>> TkbType { get; }
+
     public IOutboundChannel<DpsItem<ManDowned>> ManDowned { get; }
 
     public IOutboundChannel<DpsItem<PlayerMessage>> PlayerMessage { get; }
@@ -91,6 +97,8 @@ internal sealed class DpsPorts
         b.BindOutbound<DpsItem<FlameJet>>("dps.FlameJet", t.FlameJet);
         b.BindOutbound<DpsItem<FireSpots>>("dps.FireSpots", t.FireSpots);
         b.BindOutbound<DpsItem<GroundMarks>>("dps.GroundMarks", t.GroundMarks);
+        b.BindOutbound<DpsItem<Animal>>("dps.Animal", t.Animal);
+        b.BindOutbound<DpsItem<TkbType>>("dps.TkbType", t.TkbType);
         b.BindOutbound<DpsItem<ManDowned>>("dps.ManDowned", t.ManDowned);
         b.BindOutbound<DpsItem<PlayerMessage>>("dps.PlayerMessage", t.PlayerMessage);
         b.BindOutbound<DpsItem<Status>>("dps.Status", t.Status);

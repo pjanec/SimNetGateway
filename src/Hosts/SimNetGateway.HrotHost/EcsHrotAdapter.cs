@@ -61,6 +61,9 @@ public sealed class EcsHrotAdapter
     private readonly FireSpotGather _fireSpots = new();
     private readonly GroundMarkGather _groundMarks = new();
     private readonly HudGather _hud = new();
+    private readonly TkbGather _types = new();
+    private readonly AnimalGather _animals = new();
+    private readonly BankTracker _banks = new();
     private readonly List<int> _scratch = new();
     private readonly List<(int Parent, int Part)> _scratchPoses = new();
     private EntityQuery? _hrotQuery;
@@ -162,6 +165,7 @@ public sealed class EcsHrotAdapter
 
             var state = StateOf(world, e, id, tkb, simTime);
             bool sendState;
+            bool isNew = !_sent.ContainsKey(id);
             if (_sent.TryGetValue(id, out var previous))
             {
                 previous.Seen = true;
@@ -184,6 +188,9 @@ public sealed class EcsHrotAdapter
                 Counters.StatesSent++;
             }
 
+            _types.Reference(state.TkbType);
+            ReferenceLoadedAmmo(world, e, isNew);
+
             // a round with a look: its munition look (once per type) and its round state, after the state so the gateway knows the entity
             if (RoundGather.IsRound(world, e))
             {
@@ -199,7 +206,14 @@ public sealed class EcsHrotAdapter
             }
 
             // after the state, so the gateway knows the entity; a person is sent again only when something about him changed
-            if (state.DisType != 0 && DisTypeCode.Unpack(state.DisType).Kind == LifeFormKind)
+            if (state.DisType != 0 && DisTypeCode.Unpack(state.DisType).Kind == LifeFormKind && AnimalGather.IsAnimal(world, e))
+            {
+                if (_animals.TryGather(world, e, id, out var animal))
+                {
+                    inbound.Enqueue(in animal);
+                }
+            }
+            else if (state.DisType != 0 && DisTypeCode.Unpack(state.DisType).Kind == LifeFormKind)
             {
                 if (_details.TryGather(world, e, id, simTime, out var detail))
                 {
@@ -232,6 +246,8 @@ public sealed class EcsHrotAdapter
             _details.Forget(id);
             _appearances.Forget(id);
             _rounds.Forget(id);
+            _animals.Forget(id);
+            _banks.Forget(id);
             _vehicleLooks.Forget(id);
             inbound.Enqueue(new HrotEntityRemoved(id));
             Counters.RemovalsSent++;
@@ -242,6 +258,7 @@ public sealed class EcsHrotAdapter
         _fireSpots.Gather(world, inbound, simTime);
         _groundMarks.Gather(world, inbound);
         _hud.GatherState(world, inbound);
+        _types.Flush(tkb, inbound);
     }
 
     /// <summary>
@@ -342,6 +359,7 @@ public sealed class EcsHrotAdapter
                 inbound.Enqueue(in munitionLook);
             }
 
+            _types.Reference(f.AmmoGuid);
             string category = CombatTkb.MountOf(world, f.Shooter, f.WeaponIndex)?.Category.ToString() ?? string.Empty;   // HROT's weapon category by name
             inbound.Enqueue(new HrotFire(shooter, target, f.AmmoGuid, MunitionDis(tkb, f.AmmoGuid), V(origin), V(f.Velocity), Math.Max(1, f.Quantity), category));
             Counters.FiresSent++;
@@ -356,10 +374,38 @@ public sealed class EcsHrotAdapter
                 continue;
             }
 
+            _types.Reference(d.Ammo);
             TryHrotId(world, d.Target, out int target);
             inbound.Enqueue(new HrotDetonation(shooter, target, d.Ammo, MunitionDis(tkb, d.Ammo), new HrotVec3(d.HitX, d.HitY, d.HitZ),
                 new HrotVec3(d.TravelX, d.TravelY, d.TravelZ)));
             Counters.DetonationsSent++;
+        }
+
+        _types.Flush(tkb, inbound);
+    }
+
+    /// <summary>
+    /// The munition types an entity's weapons have loaded (a mount with no loadout fires the mount's own round, so that one is asked once, when the entity is first seen).
+    /// </summary>
+    private void ReferenceLoadedAmmo(EntityRepository world, Entity e, bool first)
+    {
+        if (!world.IsComponentTypeRegistered<WeaponAmmo>() || !world.HasComponent<WeaponAmmo>(e))
+        {
+            return;
+        }
+
+        ref readonly var ammo = ref world.GetComponentRO<WeaponAmmo>(e);
+        for (int i = 0; i < ammo.Count && i < WeaponAmmo.MaxMounts; i++)
+        {
+            long loaded = ammo.LoadedOf(i);
+            if (loaded != 0)
+            {
+                _types.Reference(loaded);
+            }
+            else if (first && CombatTkb.MountOf(world, e, i) is { } mount)
+            {
+                _types.Reference(unchecked((long)mount.AmmoGuid));
+            }
         }
     }
 
@@ -412,8 +458,9 @@ public sealed class EcsHrotAdapter
         }
 
         var (stance, weapon, aim, injury) = LifeFormOf(world, e, dis);
+        double bank = _banks.Update(world, e, id, tkbType, dis, simTime);
         return new HrotEntityState(id, tkbType, dis, marking, force, 0, V(tf.Position), new HrotQuat(tf.Rotation.X, tf.Rotation.Y, tf.Rotation.Z, tf.Rotation.W),
-            velocity, angular, current, max, simTime, stance, weapon, aim, injury);
+            velocity, angular, current, max, simTime, stance, weapon, aim, injury, bank);
     }
 
     /// <summary>
@@ -460,13 +507,10 @@ public sealed class EcsHrotAdapter
                 };
                 if (weapon == HrotWeaponPosture.Aimed)
                 {
-                    if (posture.Target != Entity.Null && world.IsAlive(posture.Target) && world.HasComponent<SimTransform>(posture.Target))
+                    // HROT's one reading of the posture's aim: the target's chest (1 m above its position) or the aimed point
+                    if (WeaponPostureOf.TryAimPoint(world, e, out var at))
                     {
-                        aim = V(world.GetComponentRO<SimTransform>(posture.Target).Position);
-                    }
-                    else if (posture.Point.X != 0f || posture.Point.Y != 0f || posture.Point.Z != 0f)
-                    {
-                        aim = V(posture.Point.AsVector3);
+                        aim = V(at);
                     }
                     else
                     {
@@ -482,7 +526,7 @@ public sealed class EcsHrotAdapter
     private static bool Changed(in HrotEntityState a, in HrotEntityState b)
     {
         if (a.Marking != b.Marking || a.Force != b.Force || a.TkbType != b.TkbType || a.HealthCurrent != b.HealthCurrent || a.HealthMax != b.HealthMax
-            || a.Stance != b.Stance || a.Weapon != b.Weapon || a.Injury != b.Injury || (b.Weapon == HrotWeaponPosture.Aimed && Dist(a.AimPoint, b.AimPoint) > AimEpsilonM))
+            || a.Stance != b.Stance || a.Weapon != b.Weapon || a.Injury != b.Injury || Math.Abs(a.Bank - b.Bank) * (180.0 / Math.PI) > OrientationEpsilonDeg || (b.Weapon == HrotWeaponPosture.Aimed && Dist(a.AimPoint, b.AimPoint) > AimEpsilonM))
         {
             return true;
         }
@@ -805,6 +849,9 @@ public sealed class EcsHrotAdapter
         _fireSpots.Clear();
         _groundMarks.Clear();
         _hud.Clear();
+        _types.Clear();
+        _animals.Clear();
+        _banks.Clear();
         ForgetReplayEffects();
         SweepRoutedEntities(world);
         _queryWorld = null;

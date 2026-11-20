@@ -21,6 +21,7 @@ public sealed class DpsOutbound : IGatewayModule
         public HrotVec3 SentPosition, SentVelocity;
         public HrotQuat SentRotation;
         public D.PartCondition SentDamage;
+        public double SentBank;
         public bool IsPerson;
         public HrotPersonDetail Detail;
         public bool HasDetail;
@@ -125,7 +126,7 @@ public sealed class DpsOutbound : IGatewayModule
         var previous = book.State;
         book.State = s;
         var dis = DisTypeCode.Unpack(s.DisType);
-        book.IsPerson = dis.Kind == 3;
+        book.IsPerson = dis.Kind == 3 && !IsAnimal(dis);
 
         if (!known || previous.TkbType != s.TkbType || previous.DisType != s.DisType || previous.Force != s.Force || previous.Marking != s.Marking)
         {
@@ -149,6 +150,7 @@ public sealed class DpsOutbound : IGatewayModule
             book.SentVelocity = s.Velocity;
             book.SentRotation = s.Rotation;
             book.SentDamage = damage;
+            book.SentBank = s.Bank;
             _ports.EntityState.Send(new DpsItem<D.EntityState>(new D.EntityState
             {
                 EntityId = s.Id,
@@ -158,6 +160,7 @@ public sealed class DpsOutbound : IGatewayModule
                 LinearVelocity = V3f(s.Velocity),
                 AngularVelocity = V3f(s.AngularVelocity),
                 Damage = damage,
+                Bank = (float)s.Bank,
             }));
         }
 
@@ -170,6 +173,7 @@ public sealed class DpsOutbound : IGatewayModule
     private bool StateDue(Book b, in HrotEntityState s, D.PartCondition damage) =>
         s.SimTime - b.StateSentAt >= _settings.HeartbeatSeconds
         || damage != b.SentDamage
+        || Math.Abs(s.Bank - b.SentBank) * (180.0 / Math.PI) > _settings.AngleThresholdDeg
         || Dist(b.SentPosition, s.Position) > _settings.PositionThresholdM
         || Dist(b.SentVelocity, s.Velocity) > _settings.VelocityThreshold
         || AngleDeg(b.SentRotation, s.Rotation) > _settings.AngleThresholdDeg;
@@ -405,6 +409,7 @@ public sealed class DpsOutbound : IGatewayModule
 
     private static D.Domain DomainOf(DisTypeCode t) => t.Kind switch
     {
+        3 when IsAnimal(t) => D.Domain.DomainAnimal,
         3 => D.Domain.DomainPerson,
         2 => D.Domain.DomainMunition,
         1 => t.Domain switch
@@ -417,6 +422,9 @@ public sealed class DpsOutbound : IGatewayModule
         },
         _ => D.Domain.DomainOther,
     };
+
+    /// <summary>A DIS life form in the animal categories 200 .. 209 (HROT's <c>Animals.IsAnimalDis</c>).</summary>
+    private static bool IsAnimal(DisTypeCode t) => t.Kind == 3 && t.Category is >= 200 and <= 209;
 
     private static D.DisType ToDis(DisTypeCode t) =>
         new() { Kind = t.Kind, Domain = t.Domain, Country = t.Country, Category = t.Category, Subcategory = t.Subcategory, Specific = t.Specific, Extra = t.Extra };

@@ -414,6 +414,37 @@ public class DpsTopicTests
     }
 
     [Fact]
+    public void The_type_animal_and_bank_additions_round_trip()
+    {
+        string json = "{\"descriptors\":[" + string.Join(",", Enumerable.Range(0, 30000).Select(i => "{\"type\":\"WeaponSuiteDto\",\"partId\":" + i + "}")) + "]}";
+        var type = RoundTrip(new TkbType
+        {
+            TypeId = 5_000_000_001L, Name = "T-72", CategoryPath = "Vehicles/Tanks", DisType = "1.1.225.1.1.3.0", Schema = "hrot/1", ContentHash = 0xAF63DC4C8601EC8CUL, Json = json,
+        }, "t2-type");
+        Assert.Equal((5_000_000_001L, "T-72", "Vehicles/Tanks", "1.1.225.1.1.3.0", "hrot/1", 0xAF63DC4C8601EC8CUL), (type.TypeId, type.Name, type.CategoryPath, type.DisType, type.Schema, type.ContentHash));
+        Assert.Equal(json, type.Json);   // an unbounded text of well over 1 MB
+
+        var animal = RoundTrip(new Animal
+        {
+            EntityId = 3001, Mode = AnimalMode.AnimalModeFlee, FearBand = 3, Bolting = true, Dangerous = true, Calling = true, FlockCount = 12, FlockInitialCount = 20, FlockSeed = 4_000_000_000u,
+            FlockMode = FlockMode.FlockModeLanded,
+        }, "t2-animal");
+        Assert.Equal((3001, AnimalMode.AnimalModeFlee, (byte)3, true, true, true, 12, 20, 4_000_000_000u, FlockMode.FlockModeLanded), (animal.EntityId, animal.Mode, animal.FearBand, animal.Bolting,
+            animal.Dangerous, animal.Calling, animal.FlockCount, animal.FlockInitialCount, animal.FlockSeed, animal.FlockMode));
+
+        var state = RoundTrip(new EntityState { EntityId = 4001, Bank = -0.4710f }, "t2-bank");
+        Assert.Equal(-0.4710f, state.Bank);
+        Assert.Equal(Domain.DomainAnimal, RoundTrip(new Entity { EntityId = 1, Domain = Domain.DomainAnimal, Name = "Cow" }, "t2-domain").Domain);
+    }
+
+    [Fact]
+    public void The_type_and_animal_topics_are_late_join_state_topics()
+    {
+        Assert.Equal(7L, LateJoin(new TkbType { TypeId = 7, Name = "", CategoryPath = "", DisType = "", Schema = "hrot/1", Json = "{}" }, "t2-late-type").TypeId);
+        Assert.Equal(9, LateJoin(new Animal { EntityId = 9 }, "t2-late-animal").EntityId);
+    }
+
+    [Fact]
     public void Late_joiner_gets_every_live_instance()
     {
         using var writerSide = new DdsParticipant(NewDomain(), defaultPartition: "late");
@@ -493,7 +524,14 @@ public class DpsTopicTests
             var type = topic["DPS_".Length..];
             Assert.Contains($"struct {type} ", idl);
         }
-        Assert.Equal(26, DpsProtocol.AllTopics.Count);
+        Assert.Equal(28, DpsProtocol.AllTopics.Count);
+        Assert.Contains("DPS_Animal", DpsProtocol.AllTopics);
+        Assert.Contains("DPS_TkbType", DpsProtocol.AllTopics);
+        foreach (var enumerator in new[] { "DomainAnimal", "AnimalModeGuard", "FlockModePerched" })
+        {
+            Assert.Contains(enumerator, idl);
+        }
+
         foreach (var name in new[] { "ManDowned", "PlayerMessage", "Status", "Exercise" })
         {
             Assert.Contains("DPS_" + name, DpsProtocol.AllTopics);

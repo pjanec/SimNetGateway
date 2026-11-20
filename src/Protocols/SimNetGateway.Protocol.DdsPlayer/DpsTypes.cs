@@ -6,7 +6,7 @@ namespace SimNetGateway.Protocol.DdsPlayer;
 // does not provide yet is sent as 0. Values are only ever appended.
 // IDL enumerators share one scope per module, so every enumerator carries its enum's name as a prefix (StanceCrouched).
 
-public enum Domain : byte { DomainOther = 0, DomainPerson, DomainGround, DomainAir, DomainSurface, DomainSubsurface, DomainMunition }
+public enum Domain : byte { DomainOther = 0, DomainPerson, DomainGround, DomainAir, DomainSurface, DomainSubsurface, DomainMunition, DomainAnimal }
 
 public enum SessionMode : byte { SessionModeLive = 0, SessionModePaused, SessionModeReplay }
 
@@ -138,3 +138,12 @@ public enum ExercisePhase : byte { ExercisePhaseUnknown = 0, ExercisePhaseRunnin
 
 /// <summary>How a side came out (HROT's <c>SideOutcome</c>, by name); None = not decided or a value this contract does not name.</summary>
 public enum SideOutcome : byte { SideOutcomeNone = 0, SideOutcomeWin, SideOutcomeLose, SideOutcomeDraw }
+
+/// <summary>What an animal is doing (HROT's <c>AnimalMode</c>, by name); Unknown = a mode this contract does not name.</summary>
+public enum AnimalMode : byte
+{
+    AnimalModeUnknown = 0, AnimalModeCalm, AnimalModeAlert, AnimalModeFlee, AnimalModeRecover, AnimalModeRest, AnimalModeGuard, AnimalModeCrouch,
+}
+
+/// <summary>A flock's mode (HROT's <c>FlockMode</c>, by name); Unknown = not a flock or a mode this contract does not name.</summary>
+public enum FlockMode : byte { FlockModeUnknown = 0, FlockModeFlying, FlockModeLanded, FlockModePerched }

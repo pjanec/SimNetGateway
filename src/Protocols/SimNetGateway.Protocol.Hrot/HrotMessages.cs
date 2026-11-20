@@ -113,6 +113,7 @@ public readonly record struct HrotSession(ClusterPhase Phase, bool Advancing, do
 /// uses the DIS numbering (0 other, 1 friendly, 2 opposing, 3 neutral). <see cref="CommanderId"/> 0 = none.
 /// The last four fields describe a life form (DD-015): <see cref="AimPoint"/> is in local metres, the frame of <see cref="Position"/>, and means something only when
 /// <see cref="Weapon"/> is <see cref="HrotWeaponPosture.Aimed"/>.
+/// <see cref="Bank"/> is a two-wheeler's lean into a turn in radians about its forward axis (positive = the top toward the right, a left turn negative; 0 for everything else, DD-018 3.5b).
 /// </summary>
 public readonly record struct HrotEntityState(
     int Id,
@@ -131,7 +132,8 @@ public readonly record struct HrotEntityState(
     HrotStance Stance = default,
     HrotWeaponPosture Weapon = default,
     HrotVec3 AimPoint = default,
-    HrotInjury Injury = default) : IHrotToGatewayMessage;
+    HrotInjury Injury = default,
+    double Bank = 0.0) : IHrotToGatewayMessage;
 
 /// <summary>The stance of a life form; <see cref="Unknown"/> for anything that has none (a vehicle).</summary>
 public enum HrotStance : byte
@@ -471,3 +473,18 @@ public readonly record struct HrotSideResult(string Outcome, float Points, float
 /// neutral (HROT's Friend, Hostile, Neutral).
 /// </summary>
 public readonly record struct HrotExercise(string Phase, double EndedAt, string Reason, HrotSideResult Friendly, HrotSideResult Opposing, HrotSideResult Neutral) : IHrotToGatewayMessage;
+
+// ---- DPS round 2 (DD-018 3.2, 3.5a): type records and animals ---------------------------------------------------------
+
+/// <summary>
+/// One TKB type as the running simulation has it, sent once per type per runtime when first referenced. <paramref name="Json"/> is the simulation's own serialization of the
+/// template restricted to its presentation descriptors (the shape of its debug API's type record: tkbType, name, categoryPath, disType, descriptors).
+/// </summary>
+public readonly record struct HrotTypeRecord(long TypeId, string Name, string CategoryPath, string DisType, string Json) : IHrotToGatewayMessage;
+
+/// <summary>
+/// An animal's state beside its <see cref="HrotEntityState"/>, sent when it changes. <paramref name="Mode"/> and <paramref name="FlockMode"/> are the NAMES of HROT's
+/// enumerations; <paramref name="FlockMode"/> is "" for a single body (<paramref name="FlockCount"/> 0).
+/// </summary>
+public readonly record struct HrotAnimal(
+    int Id, string Mode, byte FearBand, bool Bolting, bool Dangerous, bool Calling, int FlockCount, int FlockInitialCount, uint FlockSeed, string FlockMode) : IHrotToGatewayMessage;

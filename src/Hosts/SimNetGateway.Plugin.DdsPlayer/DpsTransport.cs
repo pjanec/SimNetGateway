@@ -108,6 +108,8 @@ public sealed class DpsTransport : IDisposable
             FlameJet = Add(new DpsChannel<FlameJet>(_participant));
             FireSpots = Add(new DpsChannel<FireSpots>(_participant));
             GroundMarks = Add(new DpsChannel<GroundMarks>(_participant));
+            Animal = Add(new DpsChannel<Animal>(_participant));
+            TkbType = Add(new DpsChannel<TkbType>(_participant));
             ManDowned = Add(new DpsChannel<ManDowned>(_participant));
             PlayerMessage = Add(new DpsChannel<PlayerMessage>(_participant));
             Status = Add(new DpsChannel<Status>(_participant));
@@ -161,6 +163,10 @@ public sealed class DpsTransport : IDisposable
     internal DpsChannel<FireSpots> FireSpots { get; } = null!;
 
     internal DpsChannel<GroundMarks> GroundMarks { get; } = null!;
+
+    internal DpsChannel<Animal> Animal { get; } = null!;
+
+    internal DpsChannel<TkbType> TkbType { get; } = null!;
 
     internal DpsChannel<ManDowned> ManDowned { get; } = null!;
 

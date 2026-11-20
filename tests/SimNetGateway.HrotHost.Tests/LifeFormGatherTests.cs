@@ -56,7 +56,7 @@ public class LifeFormGatherTests
     }
 
     [Fact]
-    public void Aimed_AtALiveTarget_TheAimPointIsTheTargetsPosition()
+    public void Aimed_AtALiveTarget_TheAimPointIsTheTargetsChest_OneMetreAboveItsPosition()
     {
         using var h = Live();
         var target = h.AddHrotEntity(2002, new Vector3(40, 10, 0));
@@ -65,7 +65,7 @@ public class LifeFormGatherTests
         h.Steps(5);
         var p = Pivot(h, 2001);
         Assert.Equal((long)HrotWeaponPosture.Aimed, p.Weapon);
-        var expected = h.Frame.PointToEcef(new Vec3(40, 10, 0));
+        var expected = h.Frame.PointToEcef(new Vec3(40, 10, 1));
         Assert.Equal(expected.X, p.Aim.X, 1);
         Assert.Equal(expected.Y, p.Aim.Y, 1);
         Assert.Equal(expected.Z, p.Aim.Z, 1);
@@ -73,7 +73,7 @@ public class LifeFormGatherTests
         // the target moves: the aim point follows
         h.Move(target, new Vector3(60, 10, 0));
         h.Steps(5);
-        Assert.Equal(h.Frame.PointToEcef(new Vec3(60, 10, 0)).X, Pivot(h, 2001).Aim.X, 1);
+        Assert.Equal(h.Frame.PointToEcef(new Vec3(60, 10, 1)).X, Pivot(h, 2001).Aim.X, 1);
     }
 
     [Fact]

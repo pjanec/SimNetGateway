@@ -16,9 +16,9 @@ public class ContractTests
     {
         string[] expected =
             [
-                "HrotDetonation", "HrotEffect", "HrotEntityRemoved", "HrotEntityState", "HrotExercise", "HrotFire", "HrotFireSpots", "HrotFlameJet", "HrotFlameJetRemoved",
+                "HrotAnimal", "HrotDetonation", "HrotEffect", "HrotEntityRemoved", "HrotEntityState", "HrotExercise", "HrotFire", "HrotFireSpots", "HrotFlameJet", "HrotFlameJetRemoved",
                 "HrotGroundMarks", "HrotManDowned", "HrotMunitionLook", "HrotOrigin", "HrotPersonAppearance", "HrotPersonDetail", "HrotPlayerMessage", "HrotRound", "HrotSession",
-                "HrotStatus", "HrotStatusRemoved", "HrotTurretPose", "HrotVehicleLook",
+                "HrotStatus", "HrotStatusRemoved", "HrotTurretPose", "HrotTypeRecord", "HrotVehicleLook",
             ];
         var actual = Messages.Where(t => typeof(IHrotToGatewayMessage).IsAssignableFrom(t)).Select(t => t.Name).Order().ToArray();
         Assert.Equal(expected, actual);
@@ -98,7 +98,7 @@ public class ContractTests
         string[] expected =
         [
             "Id", "TkbType", "DisType", "Marking", "Force", "CommanderId", "Position", "Rotation", "Velocity", "AngularVelocity",
-            "HealthCurrent", "HealthMax", "SimTime", "Stance", "Weapon", "AimPoint", "Injury",
+            "HealthCurrent", "HealthMax", "SimTime", "Stance", "Weapon", "AimPoint", "Injury", "Bank",
         ];
         Assert.Equal(expected, typeof(HrotEntityState).GetProperties().Where(p => p.Name != "EqualityContract").Select(p => p.Name).ToArray());
         string[] replica = ["Id", "TkbType", "DisType", "Marking", "Force", "State", "HealthCurrent", "HealthMax", "Deactivated"];
