@@ -82,6 +82,7 @@ internal sealed class DpsPlayerSlot
             CanUse = status.UseVerb != 0,
             UseTargetId = status.UseTarget,
             UseVerb = status.UseVerb,
+            Verb = LookNames.ByName<D.UseVerb>("UseVerb", status.UseVerbName),
             UseLabel = Cut(status.UseLabel, 32),
             FireMode = LookNames.ByName<D.FireMode>("FireMode", status.FireMode),
             UseSeq = status.UseSeq,
@@ -125,7 +126,7 @@ internal sealed class DpsPlayerSlot
 
     // everything but the time to impact, which counts down: it only matters when it moved by a second (the client counts down from the sample it has)
     private static bool SameUnit(in D.OwnUnit a, in D.OwnUnit b) =>
-        a.UnitId == b.UnitId && a.Health == b.Health && a.MaxHealth == b.MaxHealth && a.ActiveSlot == b.ActiveSlot && a.CanUse == b.CanUse && a.UseVerb == b.UseVerb
+        a.UnitId == b.UnitId && a.Health == b.Health && a.MaxHealth == b.MaxHealth && a.ActiveSlot == b.ActiveSlot && a.CanUse == b.CanUse && a.UseVerb == b.UseVerb && a.Verb == b.Verb
         && a.UseTargetId == b.UseTargetId && a.UseLabel == b.UseLabel && a.FireMode == b.FireMode && a.UseSeq == b.UseSeq && a.UseOutcome == b.UseOutcome
         && a.UseReason == b.UseReason && a.SpreadRad == b.SpreadRad && a.RadarWarning == b.RadarWarning && a.RadarBearingDeg == b.RadarBearingDeg
         && a.MissileLaunch == b.MissileLaunch && a.MissileBearingDeg == b.MissileBearingDeg && a.MissileSeeker == b.MissileSeeker

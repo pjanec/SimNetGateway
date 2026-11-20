@@ -161,4 +161,36 @@ P-1 .. P-3 approved under R-135.
 
 ## 9. As-built
 
-(filled during T-037)
+T-037 was built in one round (protocol still 1.0, 35 topics). What waits for HROT is listed last.
+
+- **Rate classes (3.1):** the `[DpsRate(DpsRateClass.X)]` attribute (in `DpsProtocol.cs`) on every topic type; test `Every_topic_states_its_rate_class` covers every entry of `DpsProtocol.AllTopics`. Session, JoinRequest, Leave and GizmoView are Discrete; ControlFrame and GizmoFrame Continuous (the table of 3.1 did not list them). The guide has the table.
+- **PersonAim (3.2):** new Continuous topic (`EntityId`, `SimTime`, `AimTargetId`, `AimPoint`, `LookTargetId`, `HasLookTarget`, `LookTarget`, `HeadYaw`). `DpsOutbound.PublishAim` writes it on first sight of an aim or look, on a change of a target, of a point (point aim or look only), of `HasLookTarget`, when the head goes off or back onto the body (about 1 degree), and as a heartbeat while it is not empty; nothing for a man who never aimed or looked. `PersonState` is no longer written for aim point, look point, head yaw, `HasLookTarget` or stance progress; those fields hold the values of the last `PersonState` sample.
+- **Host aim and look:** `HrotEntityState.AimTargetId` (the network id of `WeaponPosture.Target` while Aimed; `AimPoint` stays filled with `WeaponPostureOf.TryAimPoint`, the chest as fallback). `EcsHrotAdapter.Changed` re-sends the state for a moved aim point only for a point aim (`AimTargetId` 0). `HrotPersonDetail.LookTargetId` (`LookState.TargetEntity`, available on the producing node). `PersonDetailGather` does not count a change of `HeadYaw` (unless it goes off or onto "straight", 0.02 rad), of `LookTarget` (while following an entity) or of the stance progress.
+- **Stance:** `HrotPersonDetail.StanceChangedAt` (the simulation time the gather first saw a new target stance; 0 for the first sight) and `StanceSeconds` (`StanceIntent.BlendTime`, 0 = none) become `PersonState.StanceChangedAt` / `StanceSeconds`. `StanceProgress` is 0 while `StanceStatus.Phase` is Transitioning and 1 otherwise, never streamed.
+- **Spool and openings:** HROT's rotor rule is a constant-rate ramp, so it is sent as data: `VehicleLook.RotorTarget`, `RotorFrom`, `RotorChangedAt`, `RotorSpoolSeconds`. The host gets target and from by calling HROT's own `VehicleLook.RotorSpeed` long after the change and at the change time (no rule is copied), the seconds from `ThermalDefaults` spin-up (rising) or spin-down (falling); a state held from the start (`HeatSource.Since` 0) is at its target at once. Openings are HROT's `VehicleOpenings` slots (state, `Since`, the type's open seconds): `OpeningLook.TargetProgress`, `ChangedAt`, `Seconds`. A new `VehicleLook` goes out when a spool or a motion starts (`HrotVehicleLook` appended the fields and `OpeningMotions`), not while it runs; both values that were streamed (the 0.05 rotor step and the 1/50 opening step) are gone. Every HROT spool and opening is such a motion, so nothing is left continuous.
+- **Producer-neutral contract (3.3):** enums `UseVerb`, `BodyPart`, `Gait`, `StanceRequest`, `ArticulationKind`; appended fields `ControlFrame.GaitMode`, `StanceWanted`, `Verb`, `OwnUnit.Verb`, `ManDowned.Part`, `Articulation.PartKind` and `Index` (the old fields stay equal and superseded). HROT values cross by name: `PlayerUnitStatus.UseVerbName` and `PlayerControl.UseVerbName` (the `UseVerbKind` name), `HrotManDowned.BodyPartName` (`PersonPart.NameOf`); `LookNames.ByName` gives the unknown value for a name the contract does not have. The one inbound rule, `DpsInbound.ToControl`: a set new enumeration wins, 0 falls back to the old byte (tested for gait, stance and verb). `HrotPlayerStation.UseVerbOf` maps a verb name to HROT's number and an unknown name to no verb. `Session.Vocabulary` ("hrot/1") and `TerrainFormat` ("hrot-terrain/1") are written by `DpsOutbound`. `TkbType` and `BuildingDamage` are marked producer-specific extensions in their comments and in the guide. Every comment of the contract defines the field in its own terms; the test `The_contract_source_does_not_mention_the_producer_outside_examples` fails on any line of the contract source that names HROT without "e.g.".
+- **Reference client:** `DpsWorld.Aims` (PersonAim cache), `AimPointOf` (the target's dead-reckoned position + 1 m, else the sample's point) and `LookPointOf`; it writes the new `ControlFrame` enumerations beside the old bytes.
+- **IDL and guide:** `scripts/refresh-dps-idl.sh` run; the guide has the rate-class table, the aim, look and head rules, the stance and spool start times, the enumerations and the old-field rule, `Session.Vocabulary` / `TerrainFormat` with where HROT's names are, the extensions marked optional.
+
+**Measured (staged fight, `DpsIntentRateTests`):** 20 men aim at 20 targets walking at 5 m/s, their heads follow, 10 s at 60 frames a second, host gather and the dps plugin in one run.
+
+| | PersonState samples | PersonAim samples | EntityState samples |
+| --- | --- | --- | --- |
+| Before (previous code, same staging) | 1380 | - | 4040 |
+| After | 80 | 60 | 4040 |
+
+`PersonState` fell by 94 % (1380 to 80: the heartbeats are what remain, 4 per man). The aim topic adds 60 small samples (one per man, then the heartbeat). `EntityState` is unchanged: the targets really move.
+
+**Deviations and limits**
+
+- `VehicleLook.RotorFrom` is an added field (the design lists target, changed-at and seconds): HROT's ramp starts at a level that depends on the state it left, so a late joiner cannot derive it.
+- `HeadYaw` is the value at the sample, written when the head goes off or onto the body; the client derives the turn between samples (guide). It is not "streamed for a glance": a glance is two samples (off, on).
+- `StanceChangedAt` is the time the gateway first saw the new target stance (up to a frame late; a person first seen mid-transition reads 0): HROT stores no start time.
+- The old pivot behaviour "the aim point follows the target" (pivot attribute `Lifeform.AimPoint`, DD-015) no longer holds for an entity target: the stored point is the one at the last state sent. No side reads it.
+- `StanceProgress` of the pivot message is 0 / 1 (phase), no longer HROT's mid-transition value.
+- The staged-fight test needs the dps plugin in the HrotHost test project (`HrotHost.Tests` references `Plugin.DdsPlayer`, with an `InternalsVisibleTo`), DDS domain 97.
+
+**What waits for HROT (T-037 is done on the gateway side)**
+
+1. A start time of a stance transition in `StanceIntent` or `StanceStatus` (today the gateway's first sight stands in).
+2. Nothing else is blocked: the aim target, the look target entity, the blend time, the spool and the opening rules are all in HROT's state on the producing node.

@@ -98,6 +98,7 @@ public sealed class DpsTransport : IDisposable
             EntityState = Add(new DpsChannel<EntityState>(_participant));
             Articulation = Add(new DpsChannel<Articulation>(_participant));
             PersonState = Add(new DpsChannel<PersonState>(_participant));
+            PersonAim = Add(new DpsChannel<PersonAim>(_participant));
             Appearance = Add(new DpsChannel<Appearance>(_participant));
             Fire = Add(new DpsChannel<Fire>(_participant));
             Detonation = Add(new DpsChannel<Detonation>(_participant));
@@ -149,6 +150,8 @@ public sealed class DpsTransport : IDisposable
     internal DpsChannel<Articulation> Articulation { get; } = null!;
 
     internal DpsChannel<PersonState> PersonState { get; } = null!;
+
+    internal DpsChannel<PersonAim> PersonAim { get; } = null!;
 
     internal DpsChannel<Appearance> Appearance { get; } = null!;
 

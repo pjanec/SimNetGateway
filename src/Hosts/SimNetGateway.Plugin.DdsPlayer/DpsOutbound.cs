@@ -28,9 +28,18 @@ public sealed class DpsOutbound : IGatewayModule
         public D.PersonState SentPerson;
         public double PersonSentAt = double.NegativeInfinity;
         public bool HasSentPerson;
+        public D.PersonAim SentAim;
+        public double AimSentAt = double.NegativeInfinity;
+        public bool HasSentAim;
         public readonly Dictionary<int, (double Azimuth, double Elevation)> Parts = new();
         public bool HasAppearance, HasVehicleLook;
     }
+
+    // the producer's part ids for turrets: 2000 + the turret index (the contract's Articulation says kind and index, PartId stays the opaque key)
+    private const int FirstTurretPartId = 2000, MaxTurrets = 16;
+
+    /// <summary>The producer vocabulary of the free strings this module writes, and the terrain export format the building keys refer to (DD-020 3.3).</summary>
+    internal const string Vocabulary = "hrot/1", TerrainFormat = "hrot-terrain/1";
 
     private readonly DpsSettings _settings;
     private readonly DpsPorts _ports;
@@ -98,6 +107,8 @@ public sealed class DpsOutbound : IGatewayModule
             TimeScale = s.TimeScale,
             Terrain = string.Empty,
             StationName = string.Empty,
+            Vocabulary = Vocabulary,
+            TerrainFormat = TerrainFormat,
         };
         if (_origin is { Frame: HrotOrigin.FrameUtm } o)
         {
@@ -167,6 +178,7 @@ public sealed class DpsOutbound : IGatewayModule
         if (book.IsPerson && book.HasDetail)
         {
             PublishPerson(s.Id, book);
+            PublishAim(s.Id, book);
         }
     }
 
@@ -187,6 +199,11 @@ public sealed class DpsOutbound : IGatewayModule
 
         _ports.Entity.Send(new DpsItem<D.Entity>(new D.Entity { EntityId = m.Id, Name = string.Empty }, true));
         _ports.EntityState.Send(new DpsItem<D.EntityState>(new D.EntityState { EntityId = m.Id }, true));
+        if (book.HasSentAim)
+        {
+            _ports.PersonAim.Send(new DpsItem<D.PersonAim>(new D.PersonAim { EntityId = m.Id }, true));
+        }
+
         if (book.HasSentPerson)
         {
             _ports.PersonState.Send(new DpsItem<D.PersonState>(new D.PersonState { EntityId = m.Id }, true));
@@ -221,11 +238,14 @@ public sealed class DpsOutbound : IGatewayModule
         }
 
         book.Parts[m.PartId] = (m.Azimuth, m.Elevation);
+        int turretIndex = m.PartId is >= FirstTurretPartId and < FirstTurretPartId + MaxTurrets ? m.PartId - FirstTurretPartId : -1;
         _ports.Articulation.Send(new DpsItem<D.Articulation>(new D.Articulation
         {
             EntityId = m.Id,
             PartId = m.PartId,
             Kind = "Turret",
+            PartKind = turretIndex >= 0 ? D.ArticulationKind.ArticulationKindTurret : D.ArticulationKind.ArticulationKindUnknown,
+            Index = turretIndex >= 0 ? turretIndex : m.PartId,
             SimTime = _simTime,
             Azimuth = (float)m.Azimuth,
             Elevation = (float)m.Elevation,
@@ -244,6 +264,7 @@ public sealed class DpsOutbound : IGatewayModule
         book.Detail = m;
         book.HasDetail = true;
         PublishPerson(m.Id, book);
+        PublishAim(m.Id, book);
     }
 
     private void PublishPerson(int id, Book b)
@@ -257,6 +278,8 @@ public sealed class DpsOutbound : IGatewayModule
             Stance = StanceOf(s.Stance),
             TargetStance = StanceOf(d.TargetStance),
             StanceProgress = d.StanceProgress,
+            StanceChangedAt = d.StanceChangedAt,
+            StanceSeconds = d.StanceSeconds,
             Posture = s.Weapon switch
             {
                 HrotWeaponPosture.Aimed => D.WeaponPosture.WeaponPostureAimed,
@@ -311,14 +334,63 @@ public sealed class DpsOutbound : IGatewayModule
         var o = b.SentPerson;
         return p.SimTime - b.PersonSentAt >= _settings.HeartbeatSeconds
             || p.Stance != o.Stance || p.TargetStance != o.TargetStance || p.Posture != o.Posture || p.ActiveSlot != o.ActiveSlot || p.Held != o.Held
-            || p.HasLookTarget != o.HasLookTarget || p.Gesture != o.Gesture || p.Injury != o.Injury || p.Action != o.Action || p.ActionTargetId != o.ActionTargetId
+            || p.Gesture != o.Gesture || p.Injury != o.Injury || p.Action != o.Action || p.ActionTargetId != o.ActionTargetId
             || p.ActionState != o.ActionState || p.ActionStartSimTime != o.ActionStartSimTime || p.SeatVehicleId != o.SeatVehicleId || p.SeatRole != o.SeatRole
             || p.CarryMode != o.CarryMode || p.CarryOtherId != o.CarryOtherId || p.CarryRole != o.CarryRole || p.PartnerId != o.PartnerId
-            || p.SeatIndex != o.SeatIndex || p.SeatExposed != o.SeatExposed || p.SeatPose != o.SeatPose || MathF.Abs(p.StanceProgress - o.StanceProgress) >= 0.02f
-            || p.Burning != o.Burning || p.Fear != o.Fear || p.Anger != o.Anger || p.CivilianMode != o.CivilianMode
-            || Dist(p.AimPoint, o.AimPoint) > _settings.PositionThresholdM
-            || (p.HasLookTarget && Dist(p.LookTarget, o.LookTarget) > _settings.PositionThresholdM)
-            || MathF.Abs(p.HeadYaw - o.HeadYaw) * (180f / MathF.PI) > _settings.AngleThresholdDeg;
+            || p.SeatIndex != o.SeatIndex || p.SeatExposed != o.SeatExposed || p.SeatPose != o.SeatPose || p.StanceChangedAt != o.StanceChangedAt || p.StanceSeconds != o.StanceSeconds
+            || p.Burning != o.Burning || p.Fear != o.Fear || p.Anger != o.Anger || p.CivilianMode != o.CivilianMode;
+    }
+
+    // ---- aim and look intent (DD-020 3.2) -----------------------------------------------------------------------------
+
+    /// <summary>A head turn smaller than this is "straight on the body" (about 1 degree).</summary>
+    private const float HeadOffRadians = 0.02f;
+
+    /// <summary>
+    /// The person's aim and look as intent: a target entity (the client derives the point from its pose) or a point. Written when the target, the point (a point aim or
+    /// look only) or the head's on/off state changes, and as a heartbeat while it is not empty; nothing is sent for a man who never aimed or looked.
+    /// </summary>
+    private void PublishAim(int id, Book b)
+    {
+        if (!b.IsPerson || !b.HasDetail)
+        {
+            return;
+        }
+
+        var s = b.State;
+        var d = b.Detail;
+        bool aimed = s.Weapon == HrotWeaponPosture.Aimed;
+        var aim = new D.PersonAim
+        {
+            EntityId = id,
+            SimTime = s.SimTime,
+            AimTargetId = aimed ? s.AimTargetId : 0,
+            AimPoint = aimed ? V3d(s.AimPoint) : default,
+            LookTargetId = d.HasLookTarget ? d.LookTargetId : 0,
+            HasLookTarget = d.HasLookTarget,
+            LookTarget = d.HasLookTarget ? V3d(d.LookTarget) : default,
+            HeadYaw = float.IsFinite(d.HeadYaw) ? d.HeadYaw : 0f,
+        };
+        bool empty = aim.AimTargetId == 0 && aim.AimPoint.X == 0 && aim.AimPoint.Y == 0 && aim.AimPoint.Z == 0 && aim.LookTargetId == 0 && !aim.HasLookTarget && aim.HeadYaw == 0f;
+        if (b.HasSentAim ? !AimDue(b, in aim, empty) : empty)
+        {
+            return;
+        }
+
+        b.SentAim = aim;
+        b.HasSentAim = true;
+        b.AimSentAt = s.SimTime;
+        _ports.PersonAim.Send(new DpsItem<D.PersonAim>(aim));
+    }
+
+    private bool AimDue(Book b, in D.PersonAim p, bool empty)
+    {
+        var o = b.SentAim;
+        return (!empty && p.SimTime - b.AimSentAt >= _settings.HeartbeatSeconds)
+            || p.AimTargetId != o.AimTargetId || p.LookTargetId != o.LookTargetId || p.HasLookTarget != o.HasLookTarget
+            || (p.AimTargetId == 0 && Dist(p.AimPoint, o.AimPoint) > _settings.PositionThresholdM)
+            || (p.LookTargetId == 0 && p.HasLookTarget && Dist(p.LookTarget, o.LookTarget) > _settings.PositionThresholdM)
+            || (MathF.Abs(p.HeadYaw) >= HeadOffRadians) != (MathF.Abs(o.HeadYaw) >= HeadOffRadians);
     }
 
     private void OnAppearance(in HrotPersonAppearance m, IngressContext ctx)
@@ -343,6 +415,7 @@ public sealed class DpsOutbound : IGatewayModule
 
         book.HasVehicleLook = true;
         var crew = m.CrewExposed;
+        var motions = m.OpeningMotions;
         var look = new D.VehicleLook
         {
             EntityId = m.Id,
@@ -354,7 +427,11 @@ public sealed class DpsOutbound : IGatewayModule
             FlailActive = m.FlailActive,
             Parts = [.. m.Parts.Take(32).Select(p => new D.PartLook { PartId = p.Part, State = (D.PartCondition)Math.Min(p.State, (byte)2) })],
             RotorSpeed = float.IsFinite(m.RotorSpeed) ? Math.Clamp(m.RotorSpeed, 0f, 1f) : 0f,
-            Openings = [.. m.Openings.Take(16).Select(o => new D.OpeningLook { OpeningId = o.Opening, Progress = o.Progress, CrewExposed = crew?.Contains(o.Opening) ?? false })],
+            RotorTarget = Unit(m.RotorTarget),
+            RotorFrom = Unit(m.RotorFrom),
+            RotorChangedAt = double.IsFinite(m.RotorChangedAt) ? m.RotorChangedAt : 0.0,
+            RotorSpoolSeconds = float.IsFinite(m.RotorSpoolSeconds) ? Math.Max(0f, m.RotorSpoolSeconds) : 0f,
+            Openings = [.. m.Openings.Take(16).Select(o => OpeningOf(o, crew, motions))],
         };
         _ports.VehicleLook.Send(new DpsItem<D.VehicleLook>(look));
     }
@@ -442,6 +519,27 @@ public sealed class DpsOutbound : IGatewayModule
         HrotStance.Prone => D.Stance.StanceProne,
         _ => D.Stance.StanceStanding,
     };
+
+    private static float Unit(float v) => float.IsFinite(v) ? Math.Clamp(v, 0f, 1f) : 0f;
+
+    private static D.OpeningLook OpeningOf((byte Opening, float Progress) o, IReadOnlyList<byte>? crew, IReadOnlyList<HrotOpeningMotion>? motions)
+    {
+        var look = new D.OpeningLook { OpeningId = o.Opening, Progress = o.Progress, CrewExposed = crew?.Contains(o.Opening) ?? false, TargetProgress = o.Progress >= 0.5f ? 1f : 0f };
+        if (motions is not null)
+        {
+            foreach (var motion in motions)
+            {
+                if (motion.Opening == o.Opening)
+                {
+                    look.TargetProgress = Unit(motion.Target);
+                    look.ChangedAt = double.IsFinite(motion.ChangedAt) ? motion.ChangedAt : 0.0;
+                    look.Seconds = float.IsFinite(motion.Seconds) ? Math.Max(0f, motion.Seconds) : 0f;
+                }
+            }
+        }
+
+        return look;
+    }
 
     private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max];
 

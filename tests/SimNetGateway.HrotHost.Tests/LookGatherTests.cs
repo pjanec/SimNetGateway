@@ -207,12 +207,49 @@ public class LookGatherTests
         // the same look again: nothing
         Assert.Empty(h.Gather(10.75).Of<HrotVehicleLook>());
 
-        // the hatch moves on: progress is sent in steps of 1/50
-        var later = Assert.Single(h.Gather(20.0).Of<HrotVehicleLook>());
-        Assert.Contains(((byte)2, 1f), later.Openings);
-        Assert.All(later.Openings, o => Assert.Equal(o.Progress, MathF.Round(o.Progress * 50f) / 50f));
+        // the motion is data (target, start, seconds): the hatch moving on sends nothing (DD-020 3.2)
+        var motion = Assert.Single(first.OpeningMotions!, m => m.Opening == 2);
+        Assert.Equal((1f, 10.0), (motion.Target, motion.ChangedAt));
+        Assert.True(motion.Seconds > 0f);
+        Assert.Empty(h.Gather(20.0).Of<HrotVehicleLook>());
+
+        // a new decision (closing from 25 s) is one message
+        var closing = new VehicleOpenings { Count = 3 };
+        closing.Slots[1] = new OpeningSlot { State = OpeningState.Closing, Since = 25.0 };
+        h.World.SetComponent(tank, closing);
+        var closed = Assert.Single(h.Gather(25.2).Of<HrotVehicleLook>());
+        Assert.Equal((0f, 25.0), (closed.OpeningMotions!.Single(m => m.Opening == 2).Target, closed.OpeningMotions!.Single(m => m.Opening == 2).ChangedAt));
     }
 
+
+    [Fact]
+    public void The_rotor_spool_is_sent_as_target_start_and_seconds_and_not_as_it_moves()
+    {
+        using var h = new Stage();
+        if (!h.World.IsComponentTypeRegistered<HeatSource>())
+        {
+            h.World.RegisterComponent<HeatSource>();
+        }
+
+        var tank = h.AddHrotEntity(2001, new Vector3(0, 0, 0), tkb: TankType);
+        h.World.AddComponent(tank, new HeatSource { State = HeatSourceState.Idle, Since = new SimInstant(100.0), MotionSince = new SimInstant(0.0) });
+        var idle = Assert.Single(h.Gather(100.0).Of<HrotVehicleLook>());
+        var plant = Fdp.Toolkit.Perception.Signatures.ThermalDefaults.Of(h.TestTkb.GetAll().First(t => t.TkbType == TankType));
+        Assert.True(plant is { SpinUpSeconds: > 0f });
+        Assert.Equal(0.6f, idle.RotorTarget);   // idle: a started engine spools from 0 to the idle speed
+        Assert.Equal((0f, 100.0, plant!.SpinUpSeconds), (idle.RotorFrom, idle.RotorChangedAt, idle.RotorSpoolSeconds));
+
+        // it runs on: the speed moves with time, the message does not
+        Assert.Empty(h.Gather(100.5).Of<HrotVehicleLook>());
+        Assert.Empty(h.Gather(101.0).Of<HrotVehicleLook>());
+        Assert.Empty(h.Gather(110.0).Of<HrotVehicleLook>());
+
+        // it drives off: one message, from the idle speed up to full
+        h.World.SetComponent(tank, new HeatSource { State = HeatSourceState.Running, Since = new SimInstant(120.0), MotionSince = new SimInstant(120.0) });
+        var running = Assert.Single(h.Gather(120.5).Of<HrotVehicleLook>());
+        Assert.Equal((1f, 0.6f, 120.0, plant.SpinUpSeconds), (running.RotorTarget, running.RotorFrom, running.RotorChangedAt, running.RotorSpoolSeconds));
+        Assert.Empty(h.Gather(121.0).Of<HrotVehicleLook>());
+    }
     [Fact]
     public void A_wreck_burns_and_is_sent_as_changed()
     {

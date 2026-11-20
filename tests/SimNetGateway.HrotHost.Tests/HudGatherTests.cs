@@ -104,11 +104,13 @@ public class HudGatherTests
         var kill = Assert.Single(h.GatherEvents().Of<HrotManDowned>());
 
         Assert.Equal((1201, 1202, 1203, "Dead", 4, 2), (kill.VictimId, kill.SourceId, kill.OriginalSourceId, kill.State, kill.BodyPart, kill.VictimSide));
+        Assert.Equal("ShinR", kill.BodyPartName);   // HROT's own name of its part 3, which the gateway passes on by name
 
         // a remote kill (it arrived over the network: the source may be unknown, the part not stated)
         h.PublishForNextFrame(new ManDownedEvent { Victim = victim, Source = Entity.Null, OriginalSource = Entity.Null, State = InjuryState.Incapacitated, HasBodyPart = 0, VictimSide = ForceId.Neutral, IsRemote = true });
         var remote = Assert.Single(h.GatherEvents().Of<HrotManDowned>());
         Assert.Equal((1201, 0, 0, "Incapacitated", 0, 3), (remote.VictimId, remote.SourceId, remote.OriginalSourceId, remote.State, remote.BodyPart, remote.VictimSide));
+        Assert.Equal(string.Empty, remote.BodyPartName);
 
         // a frame without events sends none
         h.World.Bus.SwapBuffers();

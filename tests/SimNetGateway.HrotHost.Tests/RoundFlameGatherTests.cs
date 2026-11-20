@@ -169,7 +169,7 @@ public class RoundFlameGatherTests
     // ---- vehicles -------------------------------------------------------------------------------------------------------------
 
     [Fact]
-    public void Rotor_speed_is_sent_on_a_change_of_a_twentieth_and_on_reaching_zero_or_one()
+    public void The_rotor_spool_is_one_message_per_change_with_the_value_at_the_time_of_sending()
     {
         using var h = new Stage(realTkb: true);
         var tank = h.AddHrotEntity(2001, Vector3.Zero, tkb: Hrot.Map.Common.TkbEntityTypes.Tank_T72);
@@ -178,56 +178,32 @@ public class RoundFlameGatherTests
         // held from the start: at its target at once (idle speed)
         var first = Assert.Single(h.Gather(1.0).Of<HrotVehicleLook>());
         Assert.Equal(VehicleLook.IdleSpeed, first.RotorSpeed);
+        Assert.Equal((VehicleLook.IdleSpeed, VehicleLook.IdleSpeed, 0.0, 0f), (first.RotorTarget, first.RotorFrom, first.RotorChangedAt, first.RotorSpoolSeconds));
         Assert.Empty(h.Gather(1.5).Of<HrotVehicleLook>());
 
-        // running from 100 s: the rotor winds up from idle to full over the type's spin-up
+        // running from 100 s: the rotor winds up from idle to full over the type's spin-up, announced once (DD-020 3.2)
         h.World.SetComponent(tank, new HeatSource { State = HeatSourceState.Running, Since = new SimInstant(100.0), MotionSince = new SimInstant(100.0) });
-        var sent = new List<float> { first.RotorSpeed };
-        double reachedFull = -1;
-        for (double t = 100.0; t < 400.0; t += 0.05)
+        var run = Assert.Single(h.Gather(100.0).Of<HrotVehicleLook>());
+        Assert.Equal((1f, VehicleLook.IdleSpeed, 100.0), (run.RotorTarget, run.RotorFrom, run.RotorChangedAt));
+        Assert.True(run.RotorSpoolSeconds > 0f);
+        for (double t = 100.05; t < 400.0; t += 0.05)
         {
-            float actual = VehicleLook.RotorSpeed(h.World, tank, t);
-            var looks = h.Gather(t).Of<HrotVehicleLook>();
-            if (looks.Count > 0)
-            {
-                Assert.Single(looks);
-                sent.Add(looks[0].RotorSpeed);
-                Assert.Equal(actual, looks[0].RotorSpeed);   // what is sent is HROT's own reading
-            }
-
-            if (actual >= 1f && reachedFull < 0)
-            {
-                reachedFull = t;
-            }
-
-            if (reachedFull >= 0 && t > reachedFull + 1.0)
-            {
-                break;
-            }
+            Assert.Empty(h.Gather(t).Of<HrotVehicleLook>());   // the speed moves, nothing is sent
         }
 
-        Assert.True(sent.Count >= 4, "the wind-up is sent in several steps");
-        Assert.Equal(1f, sent[^1]);   // and it ends on exactly 1
-        for (int i = 1; i < sent.Count; i++)
+        // the client's own reading of the spool equals HROT's at any time
+        for (double t = 100.0; t < 110.0; t += 0.25)
         {
-            Assert.True(MathF.Abs(sent[i] - sent[i - 1]) >= 0.05f || sent[i] is 0f or 1f, $"step {sent[i - 1]} -> {sent[i]} is below 0.05");
+            double step = (t - run.RotorChangedAt) / run.RotorSpoolSeconds;   // a full scale per spool seconds, toward the target, not past it
+            double expected = Math.Min(run.RotorTarget, run.RotorFrom + step);
+            Assert.Equal(VehicleLook.RotorSpeed(h.World, tank, t), (float)expected, 3);
         }
 
-        Assert.Empty(h.Gather(500.0).Of<HrotVehicleLook>());   // steady at 1: nothing
-
-        // the engine dies from full speed: it runs down and ends on exactly 0
+        // the engine dies from full speed: one message, from full to 0
         h.World.SetComponent(tank, new HeatSource { State = HeatSourceState.Dead, Since = new SimInstant(600.0), MotionSince = new SimInstant(100.0) });
-        float last = 1f;
-        for (double t = 600.0; t < 900.0; t += 0.05)
-        {
-            var looks = h.Gather(t).Of<HrotVehicleLook>();
-            if (looks.Count > 0)
-            {
-                last = looks[0].RotorSpeed;
-            }
-        }
-
-        Assert.Equal(0f, last);
+        var dead = Assert.Single(h.Gather(600.0).Of<HrotVehicleLook>());
+        Assert.Equal((0f, 1f, 600.0), (dead.RotorTarget, dead.RotorFrom, dead.RotorChangedAt));
+        Assert.True(dead.RotorSpoolSeconds > 0f);
     }
 
     [Fact]

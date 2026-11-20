@@ -69,11 +69,12 @@ public readonly record struct PlayerWeapon(
 /// spread of the selected weapon, and the aircraft warnings. HROT's enumerations are the NAMES of the enumeration ("" = none): <see cref="FireMode"/> (Sight, Lock),
 /// <see cref="UseOutcome"/>, <see cref="UseReason"/>, <see cref="RadarWarning"/> (the warning receiver level) and <see cref="MissileSeeker"/>. Bearings are degrees, 0 = north,
 /// clockwise; <see cref="MissileTimeToImpactS"/> is the time left at the moment of reading.
+/// <see cref="UseVerbName"/> is the NAME of HROT's use verb (empty = none), the same verb as the number <see cref="UseVerb"/> (DD-020 3.3).
 /// </summary>
 public readonly record struct PlayerUnitStatus(
     double Health, double HealthMax, IReadOnlyList<PlayerWeapon> Ammo, byte UseVerb, int UseTarget, byte ActiveMount = 0, string FireMode = "", string UseLabel = "",
     byte UseSeq = 0, string UseOutcome = "", string UseReason = "", float SpreadRad = 0f, string RadarWarning = "", float RadarBearingDeg = 0f, bool MissileLaunch = false,
-    float MissileBearingDeg = 0f, float MissileTimeToImpactS = 0f, string MissileSeeker = "")
+    float MissileBearingDeg = 0f, float MissileTimeToImpactS = 0f, string MissileSeeker = "", string UseVerbName = "")
 {
     public static PlayerUnitStatus None { get; } = new(0.0, 0.0, Array.Empty<PlayerWeapon>(), 0, 0);
 }
@@ -82,8 +83,9 @@ public readonly record struct PlayerUnitStatus(
 /// One control frame; the fields of the product's operator control frame. <see cref="Seq"/> grows (the newest wins); the press counters
 /// (<see cref="ShotSeq"/>, <see cref="CancelSeq"/>, <see cref="AmmoSeq"/>, <see cref="UseSeq"/>) are passed through unchanged. <see cref="Lean"/> is 0 none,
 /// 1 left, 2 right; <see cref="Stance"/> is the wanted stance + 1 (0 = no request).
+/// <see cref="UseVerbName"/> is the NAME of HROT's use verb the client asked for (empty = use the number <see cref="UseVerb"/>); the host maps a known name to the verb and ignores an unknown one (DD-020 3.3).
 /// </summary>
 public readonly record struct PlayerControl(
     uint Seq, float Forward, float Lateral, float Steer, float Yaw, float Vertical, byte Gait, bool Trigger, byte Mount, HrotVec3 AimPoint, byte Stance,
     byte ShotSeq, byte CancelSeq, byte AmmoSeq, int ShotTarget, byte UseSeq, byte UseVerb, int UseTarget, float Lean, bool Binoculars, HrotVec3 LookFrom,
-    HrotVec3 LookDir, byte FirePref);
+    HrotVec3 LookDir, byte FirePref, string UseVerbName = "");

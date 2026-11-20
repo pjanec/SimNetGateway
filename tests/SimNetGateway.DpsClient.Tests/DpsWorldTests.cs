@@ -265,7 +265,7 @@ public class DpsWorldTests
         string text = output.ToString();
         Assert.Contains("t=1 sim=", text);
         Assert.Contains("slot=SlotStateChoosing/0", text);
-        Assert.Contains("summary Entity=1 EntityState=0 PersonState=0 Appearance=0 VehicleLook=0 Fire=0 Detonation=0 Effect=0 Articulation=0", text);
+        Assert.Contains("summary Entity=1 EntityState=0 PersonState=0 PersonAim=0 Appearance=0 VehicleLook=0 Fire=0 Detonation=0 Effect=0 Articulation=0", text);
 
         // the join went to the gateway (retried each second while Choosing)
         for (int i = 0; i < 50 && gw.JoinsSeen.Count == 0; i++)

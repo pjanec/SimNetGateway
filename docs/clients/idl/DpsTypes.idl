@@ -483,6 +483,63 @@ module SimNetGateway {
                 ImpactKindStopped
             };
 
+            @bit_bound(8)
+            enum UseVerb {
+                UseVerbNone,
+                UseVerbOpenDoor,
+                UseVerbCloseDoor,
+                UseVerbLockDoor,
+                UseVerbUnlockDoor,
+                UseVerbBreachDoor,
+                UseVerbDrag,
+                UseVerbCarry,
+                UseVerbPutDown,
+                UseVerbDrive,
+                UseVerbPilot,
+                UseVerbBoard,
+                UseVerbMan,
+                UseVerbGetOut,
+                UseVerbTake,
+                UseVerbPickUpRound,
+                UseVerbDrop
+            };
+
+            @bit_bound(8)
+            enum BodyPart {
+                BodyPartUnknown,
+                BodyPartHead,
+                BodyPartTorso,
+                BodyPartUpperArmL,
+                BodyPartForearmL,
+                BodyPartUpperArmR,
+                BodyPartForearmR,
+                BodyPartThighL,
+                BodyPartShinL,
+                BodyPartThighR,
+                BodyPartShinR
+            };
+
+            @bit_bound(8)
+            enum Gait {
+                GaitUnknown,
+                GaitWalk,
+                GaitRun
+            };
+
+            @bit_bound(8)
+            enum StanceRequest {
+                StanceRequestNone,
+                StanceRequestStanding,
+                StanceRequestCrouched,
+                StanceRequestProne
+            };
+
+            @bit_bound(8)
+            enum ArticulationKind {
+                ArticulationKindUnknown,
+                ArticulationKindTurret
+            };
+
         };
     };
 };

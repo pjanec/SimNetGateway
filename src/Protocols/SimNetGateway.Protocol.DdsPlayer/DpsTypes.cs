@@ -37,10 +37,10 @@ public enum SeatRole : byte { SeatRoleNone = 0, SeatRoleDriver, SeatRoleGunner, 
 
 public enum CarryMode : byte { CarryModeNone = 0, CarryModeCarried, CarryModeDragged, CarryModeStretcher }
 
-/// <summary>How a man sits in a vehicle seat (HROT's <c>SeatPose</c>, by name); Unknown = not named or no seat.</summary>
+/// <summary>How a man sits in a vehicle seat; Unknown = not named or no seat.</summary>
 public enum SeatPose : byte { SeatPoseUnknown = 0, SeatPoseSit, SeatPoseSitLegsOut, SeatPoseStand, SeatPoseKneel, SeatPoseRide }
 
-/// <summary>How a man is held, or what he carries (HROT's carriage rule); None = free or seated.</summary>
+/// <summary>How a man is held, or what he carries (the producer's carriage rule); None = free or seated.</summary>
 public enum CarryRole : byte
 {
     CarryRoleNone = 0, CarryRoleCarried, CarryRoleDragged, CarryRoleOnStretcher, CarryRoleCarrying, CarryRoleDragging,
@@ -56,10 +56,10 @@ public enum OfferKind : byte { OfferKindUnit = 0, OfferKindRole }
 
 public enum GizmoShape : byte { GizmoShapeLineStrip = 0, GizmoShapeArrow, GizmoShapeCircle, GizmoShapePolygon, GizmoShapeBox, GizmoShapeText, GizmoShapeIcon }
 
-/// <summary>The condition of a vehicle part (HROT's look library).</summary>
+/// <summary>The condition of a vehicle part (intact, damaged or destroyed).</summary>
 public enum PartCondition : byte { PartConditionIntact = 0, PartConditionDamaged, PartConditionDestroyed }
 
-/// <summary>How a vehicle was destroyed (HROT's destruction kinds): None = not destroyed; Unknown = destroyed in a way this contract does not name.</summary>
+/// <summary>How a vehicle was destroyed (the producer's destruction kinds): None = not destroyed; Unknown = destroyed in a way this contract does not name.</summary>
 public enum KillKind : byte { KillKindNone = 0, KillKindKnockedOut, KillKindBurntOut, KillKindCatastrophic, KillKindUnknown }
 
 /// <summary>The effect's category; None = a kind this contract does not name (the effect's TKB <c>EffectType</c> still identifies it).</summary>
@@ -73,7 +73,7 @@ public enum Sex : byte { SexUnknown = 0, SexMale, SexFemale }
 
 public enum AgeClass : byte { AgeClassUnknown = 0, AgeClassChild, AgeClassAdult, AgeClassElder }
 
-/// <summary>A civilian's mode (HROT's <c>CivilianMode</c>, by name); Unknown = none or a mode this contract does not name.</summary>
+/// <summary>A civilian's mode; Unknown = none or a mode this contract does not name.</summary>
 public enum CivilianMode : byte
 {
     CivilianModeUnknown = 0, CivilianModeRoutine, CivilianModeAlarmed, CivilianModePanic, CivilianModeShelter, CivilianModeInside, CivilianModeCower,
@@ -81,7 +81,7 @@ public enum CivilianMode : byte
     CivilianModeWatch,
 }
 
-/// <summary>A weapon mount's category (HROT's <c>WeaponCategory</c>, by name); Unknown = none or a category this contract does not name.</summary>
+/// <summary>A weapon mount's category; Unknown = none or a category this contract does not name.</summary>
 public enum WeaponCategory : byte
 {
     WeaponCategoryUnknown = 0, WeaponCategorySmallArms, WeaponCategoryMachineGun, WeaponCategoryAutocannon, WeaponCategoryTankGun, WeaponCategoryAtgm,
@@ -89,76 +89,76 @@ public enum WeaponCategory : byte
     WeaponCategoryCountermeasure, WeaponCategoryAirToAir, WeaponCategoryBow, WeaponCategorySmokeDischarger, WeaponCategoryFlamethrower,
 }
 
-/// <summary>The form of a round (HROT's <c>MunitionShape</c>, by name); Unknown = a shape this contract does not name.</summary>
+/// <summary>The form of a round; Unknown = a shape this contract does not name.</summary>
 public enum MunitionShape : byte
 {
     MunitionShapeUnknown = 0, MunitionShapeGrenade, MunitionShapeBomb, MunitionShapeShell, MunitionShapeRocket, MunitionShapeMissile, MunitionShapeBullet,
     MunitionShapeAxe, MunitionShapeSpear, MunitionShapeStar, MunitionShapeArrow,
 }
 
-/// <summary>What left a ground heat mark (HROT's <c>HeatMarkKind</c>, by name); Unknown = no mark or a kind this contract does not name.</summary>
+/// <summary>What left a ground heat mark; Unknown = no mark or a kind this contract does not name.</summary>
 public enum HeatMarkKind : byte { HeatMarkKindUnknown = 0, HeatMarkKindVehicleStand, HeatMarkKindBurnedArea, HeatMarkKindBodyImprint }
 
-/// <summary>The hottest end of a heat mark (HROT's <c>HeatMarkEnd</c>, by name); Unknown = none or not named.</summary>
+/// <summary>The hottest end of a heat mark; Unknown = none or not named.</summary>
 public enum HeatMarkEnd : byte { HeatMarkEndUnknown = 0, HeatMarkEndFront, HeatMarkEndRear }
 
-/// <summary>How the selected weapon's trigger works (HROT's <c>OperatorFireMode</c>, by name): Sight = each round goes where the crosshair points, Lock = a press holds the point.</summary>
+/// <summary>How the selected weapon's trigger works: Sight = each round goes where the crosshair points, Lock = a press holds the point.</summary>
 public enum FireMode : byte { FireModeSight = 0, FireModeLock }
 
-/// <summary>The brain's answer to the last use press (HROT's <c>UseOutcome</c>, by name); None = no answer yet.</summary>
+/// <summary>The brain's answer to the last use press; None = no answer yet.</summary>
 public enum UseOutcome : byte { UseOutcomeNone = 0, UseOutcomeRunning, UseOutcomeDone, UseOutcomeRefused }
 
-/// <summary>Why a use press was refused (HROT's <c>UseReason</c>, by name); Unknown = a reason this contract does not name.</summary>
+/// <summary>Why a use press was refused; Unknown = a reason this contract does not name.</summary>
 public enum UseReason : byte
 {
     UseReasonUnknown = 0, UseReasonOk, UseReasonOutOfReach, UseReasonLocked, UseReasonDoorRefuses, UseReasonNotDown, UseReasonSeatTaken, UseReasonUnfit,
     UseReasonCarrying, UseReasonNothingToDo, UseReasonFailed, UseReasonOtherSide,
 }
 
-/// <summary>What the aircraft's radar warning receiver says (HROT's <c>RadarWarningLevel</c>, by name).</summary>
+/// <summary>What the aircraft's radar warning receiver says.</summary>
 public enum RadarWarningLevel : byte { RadarWarningLevelNone = 0, RadarWarningLevelSearched, RadarWarningLevelTracked }
 
-/// <summary>A missile's seeker (HROT's <c>GuidanceKind</c>, by name); Unknown = a kind this contract does not name.</summary>
+/// <summary>A missile's seeker; Unknown = a kind this contract does not name.</summary>
 public enum MissileSeeker : byte
 {
     MissileSeekerUnknown = 0, MissileSeekerUnguided, MissileSeekerCommand, MissileSeekerFireAndForget, MissileSeekerInfraRed, MissileSeekerRadar,
 }
 
-/// <summary>Who a player message is for (HROT's <c>PlayerMessageEvent.ToKind</c>, by name); Unknown = an address this contract does not name.</summary>
+/// <summary>Who a player message is for; Unknown = an address this contract does not name.</summary>
 public enum MessageAddress : byte { MessageAddressUnknown = 0, MessageAddressAll, MessageAddressSide, MessageAddressStation, MessageAddressUnit, MessageAddressInstructor }
 
-/// <summary>What a rule entity is (HROT's <c>ObjectiveRole</c>, by name).</summary>
+/// <summary>What a rule entity is.</summary>
 public enum ObjectiveRole : byte { ObjectiveRoleUnknown = 0, ObjectiveRoleObjective, ObjectiveRoleMeasure, ObjectiveRoleTrigger }
 
-/// <summary>The lifecycle of an objective (HROT's <c>ObjectiveState</c>, by name).</summary>
+/// <summary>The lifecycle of an objective.</summary>
 public enum ObjectiveState : byte
 {
     ObjectiveStateUnknown = 0, ObjectiveStatePending, ObjectiveStateActive, ObjectiveStateAchieved, ObjectiveStateFailed, ObjectiveStateInactive, ObjectiveStateSkipped,
 }
 
-/// <summary>Where a trigger is in its state machine (HROT's <c>TriggerState</c>, by name).</summary>
+/// <summary>Where a trigger is in its state machine.</summary>
 public enum TriggerState : byte
 {
     TriggerStateUnknown = 0, TriggerStateDisarmed, TriggerStateArmed, TriggerStateHolding, TriggerStateWaiting, TriggerStateActing, TriggerStateFired, TriggerStateCooldown,
     TriggerStateDone,
 }
 
-/// <summary>Where the exercise is (HROT's <c>ExercisePhase</c>, by name).</summary>
+/// <summary>Where the exercise is.</summary>
 public enum ExercisePhase : byte { ExercisePhaseUnknown = 0, ExercisePhaseRunning, ExercisePhaseClosing, ExercisePhaseEnded }
 
-/// <summary>How a side came out (HROT's <c>SideOutcome</c>, by name); None = not decided or a value this contract does not name.</summary>
+/// <summary>How a side came out; None = not decided or a value this contract does not name.</summary>
 public enum SideOutcome : byte { SideOutcomeNone = 0, SideOutcomeWin, SideOutcomeLose, SideOutcomeDraw }
 
-/// <summary>What an animal is doing (HROT's <c>AnimalMode</c>, by name); Unknown = a mode this contract does not name.</summary>
+/// <summary>What an animal is doing; Unknown = a mode this contract does not name.</summary>
 public enum AnimalMode : byte
 {
     AnimalModeUnknown = 0, AnimalModeCalm, AnimalModeAlert, AnimalModeFlee, AnimalModeRecover, AnimalModeRest, AnimalModeGuard, AnimalModeCrouch,
 }
 
-/// <summary>A flock's mode (HROT's <c>FlockMode</c>, by name); Unknown = not a flock or a mode this contract does not name.</summary>
+/// <summary>A flock's mode; Unknown = not a flock or a mode this contract does not name.</summary>
 public enum FlockMode : byte { FlockModeUnknown = 0, FlockModeFlying, FlockModeLanded, FlockModePerched }
 
-/// <summary>What kind of hole a wall breach is (HROT's <c>BreachKind</c>, by name): a Hole is a gap to see or shoot through, a Passage is one to walk through; Unknown = a kind this contract does not name.</summary>
+/// <summary>What kind of hole a wall breach is: a Hole is a gap to see or shoot through, a Passage is one to walk through; Unknown = a kind this contract does not name.</summary>
 public enum BreachKind : byte { BreachKindUnknown = 0, BreachKindHole, BreachKindPassage }
 
 /// <summary>What an ambient mover is.</summary>
@@ -176,5 +176,30 @@ public enum ViewSource : byte { ViewSourceNone = 0, ViewSourceDirector, ViewSour
 /// <summary>How the suggested camera sits: Free (no binding), Orbit (around a target), Eyes, Shoulder, Chase, Fixed (a scripted camera key); Unknown = a mode this contract does not name.</summary>
 public enum ViewMode : byte { ViewModeUnknown = 0, ViewModeFree, ViewModeOrbit, ViewModeEyes, ViewModeShoulder, ViewModeChase, ViewModeFixed }
 
-/// <summary>What a round did to a surface of the static world (HROT's impact kind, by name): it Entered a piece it passes through, Left it, or Stopped on it.</summary>
+/// <summary>What a round did to a surface of the static world (the producer's impact kind): it Entered a piece it passes through, Left it, or Stopped on it.</summary>
 public enum ImpactKind : byte { ImpactKindUnknown = 0, ImpactKindEntered, ImpactKindLeft, ImpactKindStopped }
+
+// ---- DD-020 3.3: producer-neutral enumerations (replace raw numbers; the old fields stay, equal and superseded) ----------------------------------------------
+
+/// <summary>What the use action of a player's unit does (the use key): None = no action available, or one this contract does not name.</summary>
+public enum UseVerb : byte
+{
+    UseVerbNone = 0, UseVerbOpenDoor, UseVerbCloseDoor, UseVerbLockDoor, UseVerbUnlockDoor, UseVerbBreachDoor, UseVerbDrag, UseVerbCarry, UseVerbPutDown,
+    UseVerbDrive, UseVerbPilot, UseVerbBoard, UseVerbMan, UseVerbGetOut, UseVerbTake, UseVerbPickUpRound, UseVerbDrop,
+}
+
+/// <summary>The part of a man's body a hit landed on; Unknown = not stated or a part this contract does not name.</summary>
+public enum BodyPart : byte
+{
+    BodyPartUnknown = 0, BodyPartHead, BodyPartTorso, BodyPartUpperArmL, BodyPartForearmL, BodyPartUpperArmR, BodyPartForearmR,
+    BodyPartThighL, BodyPartShinL, BodyPartThighR, BodyPartShinR,
+}
+
+/// <summary>How fast a walking unit moves on the forward axis: Walk = at most the unit's walking speed, Run = up to its top speed; Unknown = not stated.</summary>
+public enum Gait : byte { GaitUnknown = 0, GaitWalk, GaitRun }
+
+/// <summary>The stance a player asks for; None = no request (the unit keeps its stance).</summary>
+public enum StanceRequest : byte { StanceRequestNone = 0, StanceRequestStanding, StanceRequestCrouched, StanceRequestProne }
+
+/// <summary>What kind of movable part an <see cref="Articulation"/> is; Unknown = a kind this contract does not name.</summary>
+public enum ArticulationKind : byte { ArticulationKindUnknown = 0, ArticulationKindTurret }

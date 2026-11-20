@@ -14,6 +14,7 @@ public static class DpsProtocol
     public const string EntityState = "DPS_EntityState";
     public const string Articulation = "DPS_Articulation";
     public const string PersonState = "DPS_PersonState";
+    public const string PersonAim = "DPS_PersonAim";
     public const string Appearance = "DPS_Appearance";
     public const string Fire = "DPS_Fire";
     public const string Detonation = "DPS_Detonation";
@@ -47,10 +48,33 @@ public static class DpsProtocol
     /// <summary>Every topic name, in the order of DD-017 section 4.</summary>
     public static readonly IReadOnlyList<string> AllTopics =
     [
-        Session, Entity, EntityState, Articulation, PersonState, Appearance, Fire, Detonation, Effect, Impact, VehicleLook,
+        Session, Entity, EntityState, Articulation, PersonState, PersonAim, Appearance, Fire, Detonation, Effect, Impact, VehicleLook,
         Round, MunitionLook, FlameJet, FireSpots, GroundMarks,
         Animal, TkbType, BuildingDamage, Mover, MoverTracks, TrafficLights,
         ManDowned, PlayerMessage, Status, Exercise, View,
         PlayerSlot, OwnUnit, JoinRequest, ControlFrame, Leave, GizmoView, GizmoFrame,
     ];
+}
+
+/// <summary>How often a topic's samples change (DD-020 3.1); a field goes into the topic of its class.</summary>
+public enum DpsRateClass
+{
+    /// <summary>Once per instance (or per type); never re-sent unless the thing itself changes.</summary>
+    Fixed,
+
+    /// <summary>On discrete events; no continuous field: a value that moves over time is sent as a start time + target + duration.</summary>
+    Discrete,
+
+    /// <summary>By threshold plus a heartbeat; the client extrapolates between the small samples.</summary>
+    Continuous,
+
+    /// <summary>As they happen; a reader keeps up to 1024 samples.</summary>
+    Event,
+}
+
+/// <summary>States the <see cref="DpsRateClass"/> of a topic type.</summary>
+[AttributeUsage(AttributeTargets.Struct)]
+public sealed class DpsRateAttribute(DpsRateClass rateClass) : Attribute
+{
+    public DpsRateClass RateClass { get; } = rateClass;
 }

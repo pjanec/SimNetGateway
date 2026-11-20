@@ -74,6 +74,7 @@ public sealed class DpsWorld : IDisposable
         _gizmo = new DdsReader<D.GizmoFrame>(_participant);
         _join = new DdsWriter<D.JoinRequest>(_participant);
         _control = new DdsWriter<D.ControlFrame>(_participant);
+        _frame.GaitMode = D.Gait.GaitRun;   // the new enumeration and the old byte (0 = run) both say run
         _leave = new DdsWriter<D.Leave>(_participant);
         _view = new DdsWriter<D.GizmoView>(_participant);
         Count<D.PersonState>(DpsProtocol.PersonState);
@@ -197,6 +198,9 @@ public sealed class DpsWorld : IDisposable
     private string _lastUseLabel = string.Empty;
 
     /// <summary>The rounds with a look, by the round's entity id.</summary>
+    /// <summary>Where each person aims and looks (intent), by person id; see <see cref="AimPointOf"/>.</summary>
+    public Dictionary<int, D.PersonAim> Aims { get; } = new();
+
     public Dictionary<int, D.Round> Rounds { get; } = new();
 
     public Dictionary<long, D.MunitionLook> MunitionLooks { get; } = new();
@@ -258,6 +262,7 @@ public sealed class DpsWorld : IDisposable
 
     private void SubscribeRoundTwo()
     {
+        Keep(DpsProtocol.PersonAim, Aims, (D.PersonAim a) => a.EntityId);
         Keep(DpsProtocol.Round, Rounds, (D.Round r) => r.EntityId);
         Keep(DpsProtocol.MunitionLook, MunitionLooks, (D.MunitionLook l) => l.MunitionTypeId);
         Keep(DpsProtocol.FlameJet, FlameJets, (D.FlameJet j) => (j.EntityId, j.Mount));
@@ -331,6 +336,40 @@ public sealed class DpsWorld : IDisposable
     /// <summary>The use prompt of the own unit, or null.</summary>
     public string? UsePrompt() => Own is { } own ? DpsHud.UsePrompt(own) : null;
 
+
+    /// <summary>
+    /// The point a person aims at, at client time <paramref name="now"/> (DD-020 3.2): with an aim target the target's chest (its dead-reckoned position 1 m up, the
+    /// producer's rule), else the aim point of the sample, which is also the fallback when the target is not known to this client. Null when the person is not aiming.
+    /// </summary>
+    public D.Vec3d? AimPointOf(int personId, double now)
+    {
+        if (!Aims.TryGetValue(personId, out var aim))
+        {
+            return null;
+        }
+
+        if (aim.AimTargetId != 0 && Entities.TryGetValue(aim.AimTargetId, out var target) && target.State is not null)
+        {
+            var p = target.PositionAt(now);
+            return new D.Vec3d { X = p.X, Y = p.Y, Z = p.Z + ChestHeight };
+        }
+
+        return aim.AimPoint.X == 0 && aim.AimPoint.Y == 0 && aim.AimPoint.Z == 0 ? null : aim.AimPoint;
+    }
+
+    /// <summary>The point a person looks at (an entity's position, else the sample's point); null when his head is straight on the body.</summary>
+    public D.Vec3d? LookPointOf(int personId, double now)
+    {
+        if (!Aims.TryGetValue(personId, out var aim) || !aim.HasLookTarget)
+        {
+            return null;
+        }
+
+        return aim.LookTargetId != 0 && Entities.TryGetValue(aim.LookTargetId, out var target) && target.State is not null ? target.PositionAt(now) : aim.LookTarget;
+    }
+
+    /// <summary>The chest above an entity's position in metres (the producer's aim rule, stated in the client guide).</summary>
+    public const double ChestHeight = 1.0;
     /// <summary>The verdict of the client's last use press, once the unit's answer is for it.</summary>
     public string? UseVerdict() => Own is { } own ? DpsHud.UseVerdict(own, _lastUsePress, _lastUseLabel) : null;
 
@@ -344,6 +383,7 @@ public sealed class DpsWorld : IDisposable
 
         _frame.UseSeq = unchecked((byte)(_frame.UseSeq + 1));
         _frame.UseVerb = own.UseVerb;
+        _frame.Verb = own.Verb;
         _frame.UseTarget = own.UseTargetId;
         _lastUsePress = _frame.UseSeq;
         _lastUseLabel = own.UseLabel ?? string.Empty;
@@ -497,6 +537,7 @@ public sealed class DpsWorld : IDisposable
     {
         _stance = (_stance + 1) % 3;
         _frame.Stance = (byte)(_stance + 1);
+        _frame.StanceWanted = (D.StanceRequest)(_stance + 1);
     }
 
     private int _stance;

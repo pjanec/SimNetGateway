@@ -187,7 +187,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
             AmmoSeq = frame.AmmoSeq,
             ShotTarget = frame.ShotTarget,
             UseSeq = frame.UseSeq,
-            UseVerb = frame.UseVerb,
+            UseVerb = UseVerbOf(in frame),
             UseTarget = frame.UseTarget,
             Lean = (byte)Math.Clamp((int)MathF.Round(frame.Lean), 0, 2),
             Binoculars = (byte)(frame.Binoculars ? 1 : 0),
@@ -198,6 +198,14 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
     }
 
     private static Vector3 V(HrotVec3 v) => new((float)v.X, (float)v.Y, (float)v.Z);
+
+    /// <summary>
+    /// The use verb of a frame: the verb named by the client (DD-020 3.3) when it names one, else the number it sent. A name HROT has no such verb for is no verb (a
+    /// client must not get a different action than it asked for).
+    /// </summary>
+    internal static byte UseVerbOf(in PlayerControl frame) =>
+        string.IsNullOrEmpty(frame.UseVerbName) ? frame.UseVerb
+        : Enum.TryParse<UseVerbKind>(frame.UseVerbName, out var verb) && Enum.IsDefined(verb) && verb.ToString() == frame.UseVerbName ? (byte)verb : (byte)0;
 
     private void Refresh()
     {
@@ -313,7 +321,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         }
 
         return new PlayerUnitStatus(health, max, ammo, verb, useTarget, _mount, fireMode, useLabel, useSeq, outcome, reason, spread, radar, radarBearing, launch, missileBearing,
-            timeToImpact, seeker);
+            timeToImpact, seeker, verb == 0 ? string.Empty : ((UseVerbKind)verb).ToString());
     }
 }
 

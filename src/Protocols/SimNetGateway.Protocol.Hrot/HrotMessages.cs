@@ -114,6 +114,8 @@ public readonly record struct HrotSession(ClusterPhase Phase, bool Advancing, do
 /// The last four fields describe a life form (DD-015): <see cref="AimPoint"/> is in local metres, the frame of <see cref="Position"/>, and means something only when
 /// <see cref="Weapon"/> is <see cref="HrotWeaponPosture.Aimed"/>.
 /// <see cref="Bank"/> is a two-wheeler's lean into a turn in radians about its forward axis (positive = the top toward the right, a left turn negative; 0 for everything else, DD-018 3.5b).
+/// <see cref="AimTargetId"/> (DD-020 3.2) is the network id of the entity a man aims at (0 = a point aim or not aiming); <see cref="AimPoint"/> is then the target's chest at the time of sending, a fallback.
+/// A change of the aim point alone re-sends the state only for a point aim.
 /// </summary>
 public readonly record struct HrotEntityState(
     int Id,
@@ -133,7 +135,8 @@ public readonly record struct HrotEntityState(
     HrotWeaponPosture Weapon = default,
     HrotVec3 AimPoint = default,
     HrotInjury Injury = default,
-    double Bank = 0.0) : IHrotToGatewayMessage;
+    double Bank = 0.0,
+    int AimTargetId = 0) : IHrotToGatewayMessage;
 
 /// <summary>The stance of a life form; <see cref="Unknown"/> for anything that has none (a vehicle).</summary>
 public enum HrotStance : byte
@@ -381,13 +384,17 @@ public enum HrotCarryRole : byte
 /// DD-018 3.5c: <see cref="SeatIndex"/> is the seat slot of a man seated in a vehicle (<see cref="NoSeat"/> = none), <see cref="SeatExposed"/> whether he rides in the open,
 /// <see cref="SeatPose"/> the NAME of HROT's seat pose from the TKB seat ("" = unknown). <see cref="CarryRole"/> classifies the man by HROT's carriage rule;
 /// <see cref="CarryOther"/> is the network id of his holder (a man held by a person or seated in a vehicle) or of what he carries (the casualty or the load; 0 = none);
+/// DD-020 3.2: <see cref="StanceChangedAt"/> is the sim time the gateway first saw the current target stance and <see cref="StanceSeconds"/> HROT's blend time (0 = not stated); <see cref="StanceProgress"/> is 0 once a
+/// transition began and 1 when settled (never streamed in between). <see cref="LookTargetId"/> is the network id of the entity he looks at (0 = a point look or none); a look is reported only while his head is turned off
+/// his body, <see cref="HeadYaw"/> and <see cref="LookTarget"/> are the values at the time of sending (a change of either alone sends nothing).
 /// <see cref="Partner"/> the other man of a pair carrying one load (0 = none).
 /// </summary>
 public readonly record struct HrotPersonDetail(
     int Id, HrotStance TargetStance, float StanceProgress, HrotHeldItem HeldItem, byte ActiveMount, HrotVec3 LookTarget, bool HasLookTarget, float HeadYaw,
     HrotGesture Gesture, HrotAction Action, int ActionTarget, HrotActionState ActionState, double ActionStartedAt, int SeatVehicle, HrotSeatRole SeatRole,
     HrotCarryMode Carry, bool Burning = false, byte Fear = 0, byte Anger = 0, string CivilianMode = "", byte SeatIndex = HrotPersonDetail.NoSeat, bool SeatExposed = false,
-    string SeatPose = "", HrotCarryRole CarryRole = HrotCarryRole.None, int CarryOther = 0, int Partner = 0) : IHrotToGatewayMessage
+    string SeatPose = "", HrotCarryRole CarryRole = HrotCarryRole.None, int CarryOther = 0, int Partner = 0, double StanceChangedAt = 0.0, float StanceSeconds = 0f,
+    int LookTargetId = 0) : IHrotToGatewayMessage
 {
     /// <summary><see cref="SeatIndex"/> of a person who is not in a vehicle seat.</summary>
     public const byte NoSeat = 255;
@@ -425,10 +432,16 @@ public readonly record struct HrotPersonAppearance(
 /// centre, which only a renderer knows, so burning is the vehicle's.
 /// <paramref name="RotorSpeed"/> is HROT's rotor / engine level 0..1 (sent on a change of 0.05 and on reaching 0 or 1); <paramref name="CrewExposed"/> lists the ids of the
 /// openings a crewman's head is out of (null = none). <paramref name="FlailActive"/> is a mine clearer's flail turning (HROT's terrain mine-clearing state, DD-018 3.5c).
+/// DD-020 3.2: <paramref name="RotorTarget"/>, <paramref name="RotorFrom"/>, <paramref name="RotorChangedAt"/> and <paramref name="RotorSpoolSeconds"/> are HROT's spool rule as data (the speed it moves to, the speed at the change, the sim time of the change and seconds per full scale),
+/// <paramref name="OpeningMotions"/> the same per opening; a new message is sent when one of them changes, not as the value moves (<paramref name="RotorSpeed"/> and the progress are the values at the time of sending).
 /// </summary>
 public readonly record struct HrotVehicleLook(
     int Id, string Destruction, bool TurretThrown, bool Burning, bool Smoking, uint Lights, IReadOnlyList<(byte Part, byte State)> Parts,
-    IReadOnlyList<(byte Opening, float Progress)> Openings, float RotorSpeed = 0f, IReadOnlyList<byte>? CrewExposed = null, bool FlailActive = false) : IHrotToGatewayMessage;
+    IReadOnlyList<(byte Opening, float Progress)> Openings, float RotorSpeed = 0f, IReadOnlyList<byte>? CrewExposed = null, bool FlailActive = false,
+    float RotorTarget = 0f, float RotorFrom = 0f, double RotorChangedAt = 0.0, float RotorSpoolSeconds = 0f, IReadOnlyList<HrotOpeningMotion>? OpeningMotions = null) : IHrotToGatewayMessage;
+
+/// <summary>One opening's timed motion (DD-020 3.2): it moves at a constant rate to <paramref name="Target"/> (1 open, 0 closed) from the other end, starting at sim time <paramref name="ChangedAt"/> and taking <paramref name="Seconds"/> for the whole way (0 = instant).</summary>
+public readonly record struct HrotOpeningMotion(byte Opening, float Target, double ChangedAt, float Seconds);
 
 // ---- DPS round 2 (DD-018): rounds, munition looks, flames, fire spots, ground marks -----------------------------------
 
@@ -474,10 +487,10 @@ public readonly record struct HrotGroundMarks(int Id, IReadOnlyList<HrotGroundMa
 
 /// <summary>
 /// A man went out of the fight (HROT's man-downed event, local or remote). Ids are HROT network ids (0 = unknown). <paramref name="State"/> is the NAME of HROT's injury
-/// state (Incapacitated, Dead). <paramref name="BodyPart"/> is 0 = unknown, else HROT's body part id + 1. <paramref name="VictimSide"/> is the DIS force (1 friendly,
+/// state (Incapacitated, Dead). <paramref name="BodyPart"/> is 0 = unknown, else HROT's body part id + 1; <paramref name="BodyPartName"/> is the NAME of HROT's person part ("" = unknown). <paramref name="VictimSide"/> is the DIS force (1 friendly,
 /// 2 opposing, 3 neutral).
 /// </summary>
-public readonly record struct HrotManDowned(double SimTime, int VictimId, int SourceId, int OriginalSourceId, string State, int BodyPart, int VictimSide) : IHrotToGatewayMessage;
+public readonly record struct HrotManDowned(double SimTime, int VictimId, int SourceId, int OriginalSourceId, string State, int BodyPart, int VictimSide, string BodyPartName = "") : IHrotToGatewayMessage;
 
 /// <summary>
 /// A message to the players (HROT's player-message event) with its addressing: <paramref name="To"/> is the NAME of its address kind (All, Side, Station, Unit,

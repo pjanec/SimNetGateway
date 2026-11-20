@@ -37,6 +37,7 @@ public sealed class DpsHudOutbound : IGatewayModule
             OriginalSourceId = m.OriginalSourceId,
             State = LookNames.ByName<D.Injury>("Injury", m.State),
             BodyPart = (byte)Math.Clamp(m.BodyPart, 0, 255),
+            Part = LookNames.ByName<D.BodyPart>("BodyPart", m.BodyPartName),
             VictimSide = (byte)Math.Clamp(m.VictimSide, 0, 255),
         }));
 

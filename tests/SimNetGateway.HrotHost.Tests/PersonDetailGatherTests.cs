@@ -65,7 +65,7 @@ public class PersonDetailGatherTests
     private static HrotPersonDetail Single(List<HrotPersonDetail> details, int id) => Assert.Single(details, d => d.Id == id);
 
     [Fact]
-    public void Stance_transition_gives_target_and_progress()
+    public void Stance_transition_gives_target_and_a_zero_progress_while_it_runs()
     {
         using var h = Live();
         var e = Soldier(h, 2001);
@@ -75,7 +75,7 @@ public class PersonDetailGatherTests
         var d = Single(Gather(h, 1.0), 2001);
 
         Assert.Equal(HrotStance.Prone, d.TargetStance);
-        Assert.Equal(0.5f, d.StanceProgress);
+        Assert.Equal(0f, d.StanceProgress);   // 0 while the animation runs, the mid-transition value is never streamed (DD-020 3.2)
     }
 
     [Fact]

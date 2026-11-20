@@ -13,7 +13,7 @@ public static class DpsClientProgram
     public const string Usage = "usage: DpsClient --domain N --partition NAME [--headless --seconds N [--join] [--forward F --drive-seconds N] [--fire-after S] [--leave-after S]]";
 
     private static readonly string[] SummaryTopics =
-        [DpsProtocol.Entity, DpsProtocol.EntityState, DpsProtocol.PersonState, DpsProtocol.Appearance, DpsProtocol.VehicleLook, DpsProtocol.Fire, DpsProtocol.Detonation,
+        [DpsProtocol.Entity, DpsProtocol.EntityState, DpsProtocol.PersonState, DpsProtocol.PersonAim, DpsProtocol.Appearance, DpsProtocol.VehicleLook, DpsProtocol.Fire, DpsProtocol.Detonation,
          DpsProtocol.Effect, DpsProtocol.Articulation,
          DpsProtocol.Round, DpsProtocol.MunitionLook, DpsProtocol.FlameJet, DpsProtocol.FireSpots, DpsProtocol.GroundMarks, DpsProtocol.Animal, DpsProtocol.TkbType,
          DpsProtocol.BuildingDamage, DpsProtocol.ManDowned, DpsProtocol.PlayerMessage, DpsProtocol.Status, DpsProtocol.Exercise, DpsProtocol.Mover, DpsProtocol.MoverTracks,

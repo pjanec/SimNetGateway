@@ -470,22 +470,22 @@ public sealed class EcsHrotAdapter
             max = h.Max > 0 ? h.Max : max;
         }
 
-        var (stance, weapon, aim, injury) = LifeFormOf(world, e, dis);
+        var (stance, weapon, aim, injury, aimTarget) = LifeFormOf(world, e, dis);
         double bank = _banks.Update(world, e, id, tkbType, dis, simTime);
         return new HrotEntityState(id, tkbType, dis, marking, force, 0, V(tf.Position), new HrotQuat(tf.Rotation.X, tf.Rotation.Y, tf.Rotation.Z, tf.Rotation.W),
-            velocity, angular, current, max, simTime, stance, weapon, aim, injury, bank);
+            velocity, angular, current, max, simTime, stance, weapon, aim, injury, bank, aimTarget);
     }
 
     /// <summary>
     /// Stance, weapon posture, aim point and injury of a life form; a life form is an entity whose DIS kind is 3 (HROT's tanks carry a weapon posture too, and a spawned
     /// soldier has no stance intent until a stance is ordered) - anything else keeps Unknown / None / Ok. The aim point is the aim target's current position, else the aimed point; with neither the weapon is just ready.
     /// </summary>
-    private static (HrotStance, HrotWeaponPosture, HrotVec3, HrotInjury) LifeFormOf(EntityRepository world, Entity e, long disType)
+    private static (HrotStance, HrotWeaponPosture, HrotVec3, HrotInjury, int) LifeFormOf(EntityRepository world, Entity e, long disType)
     {
         bool hasPosture = world.HasComponent<WeaponPosture>(e);
         if (disType == 0 || DisTypeCode.Unpack(disType).Kind != LifeFormKind)
         {
-            return (HrotStance.Unknown, HrotWeaponPosture.None, HrotVec3.Zero, HrotInjury.Ok);
+            return (HrotStance.Unknown, HrotWeaponPosture.None, HrotVec3.Zero, HrotInjury.Ok, 0);
         }
 
         var injury = world.HasComponent<Health>(e)
@@ -506,6 +506,7 @@ public sealed class EcsHrotAdapter
 
         var weapon = HrotWeaponPosture.None;
         var aim = HrotVec3.Zero;
+        int aimTarget = 0;
         if (hasPosture)
         {
             var posture = world.GetComponentRO<WeaponPosture>(e);
@@ -524,6 +525,8 @@ public sealed class EcsHrotAdapter
                     if (WeaponPostureOf.TryAimPoint(world, e, out var at))
                     {
                         aim = V(at);
+                        // the intent (DD-020 3.2): the aimed entity, whose chest the client derives itself; the point stays as the fallback
+                        aimTarget = LookIds.NetworkIdOf(world, posture.Target);
                     }
                     else
                     {
@@ -533,13 +536,13 @@ public sealed class EcsHrotAdapter
             }
         }
 
-        return (stance, weapon, aim, injury);
+        return (stance, weapon, aim, injury, aimTarget);
     }
 
     private static bool Changed(in HrotEntityState a, in HrotEntityState b)
     {
         if (a.Marking != b.Marking || a.Force != b.Force || a.TkbType != b.TkbType || a.HealthCurrent != b.HealthCurrent || a.HealthMax != b.HealthMax
-            || a.Stance != b.Stance || a.Weapon != b.Weapon || a.Injury != b.Injury || Math.Abs(a.Bank - b.Bank) * (180.0 / Math.PI) > OrientationEpsilonDeg || (b.Weapon == HrotWeaponPosture.Aimed && Dist(a.AimPoint, b.AimPoint) > AimEpsilonM))
+            || a.Stance != b.Stance || a.Weapon != b.Weapon || a.Injury != b.Injury || Math.Abs(a.Bank - b.Bank) * (180.0 / Math.PI) > OrientationEpsilonDeg || a.AimTargetId != b.AimTargetId || (b.Weapon == HrotWeaponPosture.Aimed && b.AimTargetId == 0 && Dist(a.AimPoint, b.AimPoint) > AimEpsilonM))
         {
             return true;
         }

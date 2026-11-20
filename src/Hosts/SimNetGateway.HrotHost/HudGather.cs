@@ -41,7 +41,7 @@ internal sealed class HudGather
                 ref readonly var m = ref downed[i];
                 int part = m.HasBodyPart != 0 ? m.BodyPart + 1 : 0;
                 inbound.Enqueue(new HrotManDowned(simTime, LookIds.NetworkIdOf(world, m.Victim), LookIds.NetworkIdOf(world, m.Source), LookIds.NetworkIdOf(world, m.OriginalSource),
-                    m.State.ToString(), part, DisForce(m.VictimSide)));
+                    m.State.ToString(), part, DisForce(m.VictimSide), m.HasBodyPart != 0 ? Fdp.Toolkit.Physics.BodyParts.PersonPart.NameOf(m.BodyPart) : string.Empty));
             }
         }
 

@@ -61,6 +61,8 @@ module SimNetGateway {
                 boolean UtmNorthern;
                 double OriginEasting;
                 double OriginNorthing;
+                string<32> Vocabulary;
+                string<32> TerrainFormat;
             };
 
             @topic
@@ -102,6 +104,8 @@ module SimNetGateway {
                 float Elevation;
                 float Extension;
                 float Rate;
+                SimNetGateway::Protocol::DdsPlayer::ArticulationKind PartKind;
+                int32 Index;
             };
 
             @topic
@@ -138,6 +142,21 @@ module SimNetGateway {
                 SimNetGateway::Protocol::DdsPlayer::SeatPose SeatPose;
                 SimNetGateway::Protocol::DdsPlayer::CarryRole CarryRole;
                 int32 PartnerId;
+                double StanceChangedAt;
+                float StanceSeconds;
+            };
+
+            @topic
+            @appendable
+            struct PersonAim {
+                @key int32 EntityId;
+                double SimTime;
+                int32 AimTargetId;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d AimPoint;
+                int32 LookTargetId;
+                boolean HasLookTarget;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d LookTarget;
+                float HeadYaw;
             };
 
             @appendable
@@ -185,6 +204,9 @@ module SimNetGateway {
                 int32 OpeningId;
                 float Progress;
                 boolean CrewExposed;
+                float TargetProgress;
+                double ChangedAt;
+                float Seconds;
             };
 
             @topic
@@ -201,6 +223,10 @@ module SimNetGateway {
                 float RotorSpeed;
                 octet SmokeLaunchers;
                 boolean FlailActive;
+                float RotorTarget;
+                float RotorFrom;
+                double RotorChangedAt;
+                float RotorSpoolSeconds;
             };
 
             @topic
@@ -473,6 +499,7 @@ module SimNetGateway {
                 float MissileBearingDeg;
                 float MissileTimeToImpactS;
                 SimNetGateway::Protocol::DdsPlayer::MissileSeeker MissileSeeker;
+                SimNetGateway::Protocol::DdsPlayer::UseVerb Verb;
             };
 
             @topic
@@ -485,6 +512,7 @@ module SimNetGateway {
                 SimNetGateway::Protocol::DdsPlayer::Injury State;
                 octet BodyPart;
                 octet VictimSide;
+                SimNetGateway::Protocol::DdsPlayer::BodyPart Part;
             };
 
             @topic
@@ -640,6 +668,9 @@ module SimNetGateway {
                 SimNetGateway::Protocol::DdsPlayer::Vec3f LookDir;
                 octet FirePref;
                 @key uint64 ClientId;
+                SimNetGateway::Protocol::DdsPlayer::Gait GaitMode;
+                SimNetGateway::Protocol::DdsPlayer::StanceRequest StanceWanted;
+                SimNetGateway::Protocol::DdsPlayer::UseVerb Verb;
             };
 
             @topic

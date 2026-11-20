@@ -6,6 +6,14 @@ namespace SimNetGateway.Protocol.DdsPlayer;
 // quaternion (x, y, z, w), simulation time in seconds. EntityId is the gateway's network id of the entity. Fields are only ever
 // appended. Strings and sequences are bounded: names 64, kinds 32, colours as RGBA bytes.
 //
+// Rate classes (DpsRate attribute on each topic, DD-020 3.1): Fixed = once per instance or type; Discrete = on events, with no continuous field (a value that moves
+// over time is a start time + target + duration); Continuous = by threshold plus a heartbeat, the client extrapolates; Event = as they happen. A new field goes into a
+// topic of its class.
+//
+// Vocabulary: free strings that carry the producer's own names (garment kinds, camouflage, hair, objective kinds and groups, impact materials, weapon and ammunition
+// names, effect types, gizmo layers and families) are names from the producer's vocabulary, which Session.Vocabulary names (e.g. "hrot/1"). TkbType and BuildingDamage
+// are producer-specific extensions a client may ignore.
+//
 // QoS: state topics Reliable + TransientLocal + KeepLast 1 (a late joiner gets every live instance); event topics Reliable +
 // Volatile + KeepLast 1024 (MoverTracks 16); player topics (client to gateway) Reliable + Volatile + KeepLast 1 with automatic liveliness.
 
@@ -41,6 +49,7 @@ public partial struct NameItem
 #region World state (gateway to client)
 
 /// <summary>One instance: the exercise and the geo reference.</summary>
+[DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.Session)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 [DdsManaged]
@@ -58,8 +67,13 @@ public partial struct Session
     public int UtmZone;
     public bool UtmNorthern;
     public double OriginEasting, OriginNorthing;
+    /// <summary>The producer vocabulary the free strings of this session come from, as "name/version" (e.g. "hrot/1"); empty = not stated. See the client guide for the lists.</summary>
+    [MaxLength(32)] public string Vocabulary;
+    /// <summary>The format of the terrain export that <see cref="BuildingDamage.Building"/> keys refer to, as "name/version" (e.g. "hrot-terrain/1"); empty = no such export.</summary>
+    [MaxLength(32)] public string TerrainFormat;
 }
 
+[DpsRate(DpsRateClass.Fixed)]
 [DdsTopic(DpsProtocol.Entity)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 [DdsManaged]
@@ -77,6 +91,7 @@ public partial struct Entity
     public int ParentId;
 }
 
+[DpsRate(DpsRateClass.Continuous)]
 [DdsTopic(DpsProtocol.EntityState)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 public partial struct EntityState
@@ -93,20 +108,34 @@ public partial struct EntityState
 }
 
 /// <summary>A movable part of an entity (turret, gun, rotor, door ...).</summary>
+[DpsRate(DpsRateClass.Continuous)]
 [DdsTopic(DpsProtocol.Articulation)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 [DdsManaged]
 public partial struct Articulation
 {
     [DdsKey] public int EntityId;
+    /// <summary>Identifies the part within its entity; opaque to a client (use <see cref="PartKind"/> and <see cref="Index"/> to know what it is).</summary>
     [DdsKey] public int PartId;
+    /// <summary>Superseded by <see cref="PartKind"/>: the producer's name of the kind ("Turret"); kept equal to it.</summary>
     [MaxLength(32)] public string Kind;
     public double SimTime;
-    public float Azimuth, Elevation, Extension;
+    /// <summary>Traverse in radians, counter-clockwise from the entity's forward (relative to the hull).</summary>
+    public float Azimuth;
+    /// <summary>Elevation in radians, up from the part's own plane.</summary>
+    public float Elevation;
+    /// <summary>Linear extension in meters; 0 = unused.</summary>
+    public float Extension;
+    /// <summary>Angular rate in radians per second; 0 = unused.</summary>
     public float Rate;
+    /// <summary>What kind of part this is.</summary>
+    public ArticulationKind PartKind;
+    /// <summary>The part's ordinal among the parts of its kind on the entity, from 0 (the first turret is 0).</summary>
+    public int Index;
 }
 
 /// <summary>What a person's body does; the client chooses clips, blends and IK (DD-017 3.5).</summary>
+[DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.PersonState)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 public partial struct PersonState
@@ -114,12 +143,14 @@ public partial struct PersonState
     [DdsKey] public int EntityId;
     public double SimTime;
     public Stance Stance, TargetStance;
-    /// <summary>Progress of the stance transition, 0..1.</summary>
+    /// <summary>Superseded by <see cref="StanceChangedAt"/> + <see cref="StanceSeconds"/>: the transition's progress 0..1 as of the last sample (0 when a transition began, 1 when settled); never streamed.</summary>
     public float StanceProgress;
     public WeaponPosture Posture;
+    /// <summary>Superseded by <see cref="PersonAim"/>: the aim point as of the last sample of this topic; not re-sent when it moves.</summary>
     public Vec3d AimPoint;
     public byte ActiveSlot;
     public HeldItem Held;
+    /// <summary>Superseded by <see cref="PersonAim"/> (<c>HasLookTarget</c>, <c>LookTarget</c>, <c>HeadYaw</c>): the values as of the last sample of this topic; not re-sent when they change.</summary>
     public bool HasLookTarget;
     public Vec3d LookTarget;
     public float HeadYaw;
@@ -144,21 +175,53 @@ public partial struct PersonState
     public byte SeatIndex;
     /// <summary>The seat is in the open (the man is seen and can be hit); false in an enclosed seat.</summary>
     public bool SeatExposed;
-    /// <summary>How the man sits (HROT's seat pose, by name); Unknown = not named.</summary>
+    /// <summary>How the man sits (the seat's pose); Unknown = not named.</summary>
     public SeatPose SeatPose;
-    /// <summary>How the man is held, or what he carries (HROT's carriage rule). With <see cref="CarryOtherId"/> = his holder (a held or seated man) or what he carries.</summary>
+    /// <summary>How the man is held, or what he carries (the producer's carriage rule). With <see cref="CarryOtherId"/> = his holder (a held or seated man) or what he carries.</summary>
     public CarryRole CarryRole;
     /// <summary>The other man of a pair carrying one load (a stretcher, a two-man weapon); 0 = none.</summary>
     public int PartnerId;
+    /// <summary>Simulation time the current stance transition began (0 = none yet). The transition's progress is (now - StanceChangedAt) / <see cref="StanceSeconds"/>, clamped to 0..1, toward <see cref="TargetStance"/>.</summary>
+    public double StanceChangedAt;
+    /// <summary>How long the transition lasts in seconds; 0 = not stated (use the client's own clip length).</summary>
+    public float StanceSeconds;
+}
+
+/// <summary>
+/// Where a person aims and looks, as intent (DD-020 3.2): a target entity, or a point only when there is no entity. While <see cref="AimTargetId"/> is not 0 the client takes
+/// the aim point from that entity's own <see cref="EntityState"/> (its chest: 1 m above its position, in the simulation's up axis) every frame and no further sample is sent
+/// as it moves; <see cref="AimPoint"/> is then the chest at the time of the sample, a fallback for a client that does not have the entity. With no target
+/// entity, <see cref="AimPoint"/> is the point aimed at (all 0 = not aiming) and a new sample is sent when it moves. The look works the same way with
+/// <see cref="LookTargetId"/> and <see cref="LookTarget"/> (an entity's position, not its chest); <see cref="HasLookTarget"/> is false when the head is straight on the body.
+/// <see cref="HeadYaw"/> is the head's turn in radians off the body (positive = to his left, counter-clockwise from above) at the time of the sample; between samples a client derives
+/// it from the targets. One instance per person, written when something other than a heartbeat changes.
+/// </summary>
+[DpsRate(DpsRateClass.Continuous)]
+[DdsTopic(DpsProtocol.PersonAim)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+public partial struct PersonAim
+{
+    [DdsKey] public int EntityId;
+    public double SimTime;
+    /// <summary>The entity aimed at (0 = none, or a point aim).</summary>
+    public int AimTargetId;
+    /// <summary>The point aimed at in the local frame; see the type's comment.</summary>
+    public Vec3d AimPoint;
+    /// <summary>The entity looked at (0 = none, or a point look).</summary>
+    public int LookTargetId;
+    public bool HasLookTarget;
+    /// <summary>The point looked at in the local frame.</summary>
+    public Vec3d LookTarget;
+    public float HeadYaw;
 }
 
 [DdsStruct]
 [DdsManaged]
 public partial struct AppearanceSlot
 {
-    /// <summary>Skin, Top, Legs, Over, Head, Hair, Beard, Extra.</summary>
+    /// <summary>The slot: Skin, Top, Legs, Over, Head, Hair, Beard, Extra.</summary>
     [MaxLength(32)] public string Slot;
-    /// <summary>The simulation's garment kind name.</summary>
+    /// <summary>A garment kind name from the producer's vocabulary.</summary>
     [MaxLength(32)] public string Kind;
     /// <summary>Colour as 0xRRGGBBAA.</summary>
     public uint ColourRgba;
@@ -168,15 +231,17 @@ public partial struct AppearanceSlot
 [DdsManaged]
 public partial struct EquipmentItem
 {
-    /// <summary>Helmet, Vest, Backpack, Weapon0 ... as far as the simulation provides them.</summary>
+    /// <summary>The slot: Helmet, Vest, Backpack, Weapon0 ... as far as the simulation provides them.</summary>
     [MaxLength(32)] public string Slot;
+    /// <summary>The equipment kind, a name from the producer's vocabulary.</summary>
     [MaxLength(32)] public string Kind;
     public int TypeId;
     /// <summary>Attachments, comma separated.</summary>
     [MaxLength(64)] public string Attachments;
 }
 
-/// <summary>A person's resolved look (HROT's person look: outfit colours and garment kinds, camouflage, face, flags).</summary>
+/// <summary>A person's resolved look (outfit colors and garment kinds, camouflage, face, flags).</summary>
+[DpsRate(DpsRateClass.Fixed)]
 [DdsTopic(DpsProtocol.Appearance)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 [DdsManaged]
@@ -186,8 +251,11 @@ public partial struct Appearance
     public uint Seed;
     public byte Side;
     [DdsBound(16)] public List<AppearanceSlot> Slots;
+    /// <summary>A camouflage pattern name from the producer's vocabulary.</summary>
     [MaxLength(32)] public string Camouflage;
+    /// <summary>A hair style name from the producer's vocabulary.</summary>
     [MaxLength(32)] public string Hair;
+    /// <summary>The beard kind (a name from the producer's vocabulary) and face traits as text.</summary>
     [MaxLength(64)] public string FaceTraits;
     public Sex Sex;
     public AgeClass AgeClass;
@@ -207,13 +275,20 @@ public partial struct OpeningLook
 {
     /// <summary>The simulation's opening id.</summary>
     public int OpeningId;
-    /// <summary>0 closed .. 1 open.</summary>
+    /// <summary>0 closed .. 1 open as of the sample (for a client that only needs a value); not re-sent while the opening moves.</summary>
     public float Progress;
     /// <summary>A crewman's head is out of this opening.</summary>
     public bool CrewExposed;
+    /// <summary>Where the opening is going: 1 = open, 0 = closed. It moves at a constant rate from the other end: progress = lerp(1 - target, target, clamp((now - ChangedAt) / Seconds, 0, 1)).</summary>
+    public float TargetProgress;
+    /// <summary>Simulation time the motion toward <see cref="TargetProgress"/> began (0 = from the start of the session: already there).</summary>
+    public double ChangedAt;
+    /// <summary>How long the whole motion takes in seconds; 0 = instant.</summary>
+    public float Seconds;
 }
 
-/// <summary>A vehicle's look: part conditions, openings and lights (HROT's vehicle look).</summary>
+/// <summary>A vehicle's look: part conditions, openings and lights (its look state).</summary>
+[DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.VehicleLook)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 [DdsManaged]
@@ -229,12 +304,23 @@ public partial struct VehicleLook
     [DdsBound(16)] public List<OpeningLook> Openings;
     /// <summary>Effective light mask (headlights, brake lights, ...).</summary>
     public uint LightMask;
-    /// <summary>0 stopped .. 1 full speed (rotor, engine level); sent on a change of 0.05 and when it reaches 0 or 1.</summary>
+    /// <summary>0 stopped .. 1 full speed (rotor, engine level) as of the sample (for a client that only needs a value); not re-sent while it spools.</summary>
     public float RotorSpeed;
     /// <summary>Smoke launchers fired, 0 until the simulation provides it.</summary>
     public byte SmokeLaunchers;
     /// <summary>A mine clearer's flail is turning.</summary>
     public bool FlailActive;
+    /// <summary>
+    /// The speed the rotor is spooling to, 0..1. It moves at a constant rate from <see cref="RotorFrom"/>, a full scale per <see cref="RotorSpoolSeconds"/>:
+    /// speed = RotorFrom moved toward RotorTarget by (now - <see cref="RotorChangedAt"/>) / RotorSpoolSeconds, not past the target.
+    /// </summary>
+    public float RotorTarget;
+    /// <summary>The speed the spool started from, 0..1 (the speed at <see cref="RotorChangedAt"/>).</summary>
+    public float RotorFrom;
+    /// <summary>Simulation time the spool began (0 = from the start of the session: already at the target).</summary>
+    public double RotorChangedAt;
+    /// <summary>Seconds for a full scale (0 to 1 or 1 to 0) at the spool's rate; 0 = instant.</summary>
+    public float RotorSpoolSeconds;
 }
 
 /// <summary>
@@ -242,6 +328,7 @@ public partial struct VehicleLook
 /// <see cref="EntityState"/>. Sent on creation and on a change of <see cref="Lying"/> / <see cref="Stopped"/>; the client dead-reckons the pose and draws the look
 /// (<see cref="MunitionLook"/>), the tracer streak and the smoke trail back toward <see cref="Muzzle"/>.
 /// </summary>
+[DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.Round)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 public partial struct Round
@@ -264,6 +351,7 @@ public partial struct Round
 }
 
 /// <summary>How a munition type's round looks: the simulation's resolved look, built-in looks included. Sent once per munition type that is fired or seen.</summary>
+[DpsRate(DpsRateClass.Fixed)]
 [DdsTopic(DpsProtocol.MunitionLook)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 public partial struct MunitionLook
@@ -285,6 +373,7 @@ public partial struct MunitionLook
 }
 
 /// <summary>A lit flame jet of a unit's flamethrower mount; the instance exists while the jet is lit.</summary>
+[DpsRate(DpsRateClass.Continuous)]
 [DdsTopic(DpsProtocol.FlameJet)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 public partial struct FlameJet
@@ -319,6 +408,7 @@ public partial struct FireSpot
 }
 
 /// <summary>The burning spots of one holder (a vehicle, a building, a terrain cell); the instance exists while any spot burns.</summary>
+[DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.FireSpots)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 [DdsManaged]
@@ -344,6 +434,7 @@ public partial struct GroundMark
 }
 
 /// <summary>The heat marks of one terrain cell; a renderer draws BurnedArea as a scorch, an infrared renderer all kinds.</summary>
+[DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.GroundMarks)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 [DdsManaged]
@@ -353,7 +444,8 @@ public partial struct GroundMarks
     [DdsBound(16)] public List<GroundMark> Marks;
 }
 
-/// <summary>An animal's state (HROT's animal state and flock state); for animals only, beside their <see cref="Entity"/> (Domain Animal). The species is the entity's type.</summary>
+/// <summary>An animal's state (behavior mode, fear, flock); for animals only, beside their <see cref="Entity"/> (Domain Animal). The species is the entity's type.</summary>
+[DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.Animal)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 public partial struct Animal
@@ -377,10 +469,11 @@ public partial struct Animal
 }
 
 /// <summary>
-/// One TKB type as the running simulation has it (a scenario may replace the TKB, so a file shipped with a client would drift from the run). <see cref="Json"/> is the
+/// A producer-specific extension, optional for a client. One type-database record as the running simulation has it (a scenario may replace the database, so a file shipped with a client would drift from the run). <see cref="Json"/> is the
 /// simulation's own serialization of the template, restricted to its presentation descriptors; <see cref="ContentHash"/> is the FNV-1a 64 of <see cref="Json"/> (UTF-8).
 /// Published once per type when first referenced by an entity, a fire, a round or a loaded weapon.
 /// </summary>
+[DpsRate(DpsRateClass.Fixed)]
 [DdsTopic(DpsProtocol.TkbType)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 [DdsManaged]
@@ -391,14 +484,14 @@ public partial struct TkbType
     [MaxLength(128)] public string CategoryPath;
     /// <summary>The DIS entity type as text.</summary>
     [MaxLength(64)] public string DisType;
-    /// <summary>The shape of <see cref="Json"/>: "hrot/1".</summary>
+    /// <summary>The shape of <see cref="Json"/>, a producer-specific name and version (e.g. "hrot/1"); a client that does not know it ignores <see cref="Json"/>.</summary>
     [MaxLength(16)] public string Schema;
     public ulong ContentHash;
     /// <summary>{"tkbType", "name", "categoryPath", "disType", "descriptors": [{"type", "partId", "data"}]}; a descriptor that failed to serialize carries "serializationError" instead of "data".</summary>
     public string Json;
 }
 
-/// <summary>A hole in a wall (HROT's wall breach): metres along the panel from its A end, absolute heights.</summary>
+/// <summary>A hole in a wall (a wall breach): metres along the panel from its A end, absolute heights.</summary>
 [DdsStruct]
 public partial struct Breach
 {
@@ -421,10 +514,11 @@ public partial struct WindowDamage
 }
 
 /// <summary>
-/// The damage of one building as HROT replicates it (wall breaches, collapse and hit windows, all damage entities of the building merged), keyed by the building's terrain
+/// A producer-specific extension, optional for a client. The damage of one building as the simulation reports it (wall breaches, collapse and hit windows, all damage entities of the building merged), keyed by the building's terrain
 /// object label "terrain/building label" (the identity the terrain export keeps). A renderer of the terrain applies it to the same building. The instance exists while the
 /// building has damage.
 /// </summary>
+[DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.BuildingDamage)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 [DdsManaged]
@@ -440,6 +534,7 @@ public partial struct BuildingDamage
 
 #region Events (gateway to client)
 
+[DpsRate(DpsRateClass.Event)]
 [DdsTopic(DpsProtocol.Fire)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1024)]
 public partial struct Fire
@@ -455,6 +550,7 @@ public partial struct Fire
     public WeaponCategory WeaponCategory;
 }
 
+[DpsRate(DpsRateClass.Event)]
 [DdsTopic(DpsProtocol.Detonation)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1024)]
 public partial struct Detonation
@@ -468,7 +564,8 @@ public partial struct Detonation
     public byte Result;
 }
 
-/// <summary>An effect derived by HROT's effect rules (muzzle flash, explosion, ground mark, wreck flames / smoke).</summary>
+/// <summary>An effect derived by the simulation's effect rules (muzzle flash, explosion, ground mark, wreck flames / smoke).</summary>
+[DpsRate(DpsRateClass.Event)]
 [DdsTopic(DpsProtocol.Effect)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1024)]
 public partial struct Effect
@@ -479,7 +576,7 @@ public partial struct Effect
     public EffectSurface Surface;
     /// <summary>The munition's DIS entity type.</summary>
     public DisType MunitionDis;
-    /// <summary>The simulation's effect type (TKB).</summary>
+    /// <summary>The simulation's effect type id, a number from the producer's vocabulary (its type database).</summary>
     public int EffectType;
     public Vec3d Position;
     public Quat Rotation;
@@ -494,6 +591,7 @@ public partial struct Effect
 /// A round marked a surface of the static world (DD-019 3.2): it entered or left a piece it passed through (a fence, a wall) or stopped on one (a wall, the
 /// ground). A strike on a unit stays a <see cref="Detonation"/> with a target. The derived puff and mark still arrive as <see cref="Effect"/>.
 /// </summary>
+[DpsRate(DpsRateClass.Event)]
 [DdsTopic(DpsProtocol.Impact)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1024)]
 [DdsManaged]
@@ -509,7 +607,7 @@ public partial struct Impact
     public long MunitionTypeId;
     /// <summary>The entity that fired the round (0 = unknown).</summary>
     public int ShooterId;
-    /// <summary>The terrain material name; empty when the simulation does not say (its impact event carries none).</summary>
+    /// <summary>The terrain material, a name from the producer's vocabulary; empty when the simulation does not say.</summary>
     [MaxLength(32)] public string Material;
 }
 
@@ -522,6 +620,7 @@ public partial struct Impact
 /// The client owns its camera: it may follow this, follow only the binding (target, mode, distance) with its own controller, or ignore it. A client blends between
 /// samples of the same <see cref="CutSeq"/> and jumps on a new one. <see cref="Source"/> None = the simulation suggests nothing now.
 /// </summary>
+[DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.View)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 [DdsManaged]
@@ -565,6 +664,7 @@ public partial struct Offer
     public int Count, Max;
 }
 
+[DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.PlayerSlot)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 [DdsManaged]
@@ -584,7 +684,9 @@ public partial struct PlayerSlot
 public partial struct AmmoEntry
 {
     public byte Slot;
+    /// <summary>The weapon's kind label as a HUD shows it (RIFLE, MG, CANNON, HANDS ...), a name from the producer's vocabulary.</summary>
     [MaxLength(32)] public string Weapon;
+    /// <summary>The loaded round's name, from the producer's vocabulary; empty = none.</summary>
     [MaxLength(32)] public string AmmoType;
     public int Rounds, Reserve;
     /// <summary>The loaded round's type id (0 = none).</summary>
@@ -603,6 +705,7 @@ public partial struct AmmoEntry
 }
 
 /// <summary>The data a HUD needs about the player's own unit.</summary>
+[DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.OwnUnit)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 [DdsManaged]
@@ -615,6 +718,7 @@ public partial struct OwnUnit
     /// <summary>Something can be used right now (door, casualty, vehicle, weapon).</summary>
     public bool CanUse;
     public int UseTargetId;
+    /// <summary>Superseded by <see cref="Verb"/>: the producer's verb number, 0 = none; kept equal to it (<see cref="CanUse"/> is true when it is not 0).</summary>
     public byte UseVerb;
     [MaxLength(32)] public string UseLabel;
     /// <summary>How the selected weapon's trigger works.</summary>
@@ -633,13 +737,16 @@ public partial struct OwnUnit
     /// <summary>Seconds to impact when the sample was written (refreshed about once a second).</summary>
     public float MissileTimeToImpactS;
     public MissileSeeker MissileSeeker;
+    /// <summary>What the use action does now (replaces <see cref="UseVerb"/>); None = nothing to use.</summary>
+    public UseVerb Verb;
 }
 
 #endregion
 
 #region HUD (gateway to client)
 
-/// <summary>A man went out of the fight (HROT's one kill authority); local and remote kills alike. Ids are entity ids, 0 = unknown.</summary>
+/// <summary>A man went out of the fight (the simulation's one kill authority); local and remote kills alike. Ids are entity ids, 0 = unknown.</summary>
+[DpsRate(DpsRateClass.Event)]
 [DdsTopic(DpsProtocol.ManDowned)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1024)]
 public partial struct ManDowned
@@ -648,13 +755,16 @@ public partial struct ManDowned
     public int VictimId, SourceId, OriginalSourceId;
     /// <summary>What the hit made of him: Incapacitated or Dead.</summary>
     public Injury State;
-    /// <summary>0 = unknown, else the body part id + 1.</summary>
+    /// <summary>Superseded by <see cref="Part"/>: 0 = unknown, else the producer's body part id + 1; kept equal to it.</summary>
     public byte BodyPart;
     /// <summary>The victim's side in the contract's force numbering (1 friendly, 2 opposing, 3 neutral).</summary>
     public byte VictimSide;
+    /// <summary>The body part the hit landed on; Unknown = not stated.</summary>
+    public BodyPart Part;
 }
 
 /// <summary>A message to the players with its addressing; the client filters (All, its side, its unit, its station; Instructor only for an instructor view).</summary>
+[DpsRate(DpsRateClass.Event)]
 [DdsTopic(DpsProtocol.PlayerMessage)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1024)]
 [DdsManaged]
@@ -675,7 +785,8 @@ public partial struct PlayerMessage
     public int SourceId;
 }
 
-/// <summary>An objective, measure or trigger of the scenario rules (HROT's <c>ObjectiveStatus</c>); the instance exists while the rule entity does.</summary>
+/// <summary>An objective, measure or trigger of the scenario rules (scenario objectives); the instance exists while the rule entity does.</summary>
+[DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.Status)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 [DdsManaged]
@@ -697,6 +808,7 @@ public partial struct Status
     public double ChangedAt;
     [MaxLength(64)] public string Reason;
     [MaxLength(64)] public string Title;
+    /// <summary>What the rule is (a kind name) and the group it belongs to, both names from the producer's vocabulary.</summary>
     [MaxLength(32)] public string Kind;
     [MaxLength(32)] public string Group;
     public byte Phase;
@@ -728,7 +840,8 @@ public partial struct SideResult
     public float Score;
 }
 
-/// <summary>The exercise's phase and the result per side (HROT's <c>ExerciseResult</c>); one instance.</summary>
+/// <summary>The exercise's phase and the result per side (exercise result); one instance.</summary>
+[DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.Exercise)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 [DdsManaged]
@@ -749,6 +862,7 @@ public partial struct Exercise
 /// An ambient mover (a car or a pedestrian of the simulation's traffic, DD-018 3.6b): who and what it is, written at spawn and disposed at despawn. Its motion is in
 /// <see cref="MoverTracks"/>. A mover the simulation turns into an entity of its own is disposed here and appears as an <see cref="Entity"/>.
 /// </summary>
+[DpsRate(DpsRateClass.Fixed)]
 [DdsTopic(DpsProtocol.Mover)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 public partial struct Mover
@@ -784,6 +898,7 @@ public partial struct MoverKnot
 }
 
 /// <summary>The knots added to the movers' tracks since the last batch (about 10 Hz); a late joiner shows a mover from its second knot.</summary>
+[DpsRate(DpsRateClass.Continuous)]
 [DdsTopic(DpsProtocol.MoverTracks)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 16)]
 [DdsManaged]
@@ -798,6 +913,7 @@ public partial struct MoverTracks
 /// One signal head of a traffic light, placed in the local frame by the host so a client needs no road network. <see cref="HeadingDeg"/> is the direction of travel of the
 /// controlled lane at its stop line (0 = +x, counter-clockwise); the head faces the traffic coming the opposite way.
 /// </summary>
+[DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.TrafficLights)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 public partial struct TrafficLights
@@ -813,6 +929,7 @@ public partial struct TrafficLights
 #region Player (client to gateway)
 
 /// <summary>Choose a playable unit by id, a role by name, or observe.</summary>
+[DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.JoinRequest)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1,
         LivelinessKind = DdsLivelinessKind.Automatic, LivelinessLeaseDurationMs = DpsProtocol.DefaultLeaseMs)]
@@ -835,7 +952,8 @@ public partial struct JoinRequest
     [DdsKey] public ulong ClientId;
 }
 
-/// <summary>One per client frame; the fields of HROT's operator control frame.</summary>
+/// <summary>One per client frame; the operator's controls for this frame.</summary>
+[DpsRate(DpsRateClass.Continuous)]
 [DdsTopic(DpsProtocol.ControlFrame)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1,
         LivelinessKind = DdsLivelinessKind.Automatic, LivelinessLeaseDurationMs = DpsProtocol.DefaultLeaseMs)]
@@ -844,16 +962,19 @@ public partial struct ControlFrame
     /// <summary>Increasing; the newest wins.</summary>
     public uint Seq;
     public float Forward, Lateral, Steer, Yaw, Vertical;
+    /// <summary>Superseded by <see cref="GaitMode"/>: 0 = run, 1 = walk. The gateway reads it only when <see cref="GaitMode"/> is unknown (0).</summary>
     public byte Gait;
     public byte Trigger;
     public byte Mount;
     public Vec3d AimPoint;
-    /// <summary>The wanted stance as Stance + 1 (1 standing, 2 crouched, 3 prone); 0 = no request.</summary>
+    /// <summary>Superseded by <see cref="StanceWanted"/>: the wanted stance as Stance + 1 (1 standing, 2 crouched, 3 prone), 0 = no request; the gateway reads it only when <see cref="StanceWanted"/> is None (0).</summary>
     public byte Stance;
     /// <summary>Press counters (wrap): a change is a press.</summary>
     public byte ShotSeq, CancelSeq, AmmoSeq;
     public int ShotTarget;
-    public byte UseSeq, UseVerb;
+    public byte UseSeq;
+    /// <summary>Superseded by <see cref="Verb"/>: the producer's verb number; the gateway reads it only when <see cref="Verb"/> is None (0).</summary>
+    public byte UseVerb;
     public int UseTarget;
     /// <summary>0 none, 1 left, 2 right.</summary>
     public byte Lean;
@@ -864,8 +985,15 @@ public partial struct ControlFrame
     public byte FirePref;
     /// <summary>The client's identity and the key (see <see cref="JoinRequest.ClientId"/>); a frame of another client than the player's is dropped.</summary>
     [DdsKey] public ulong ClientId;
+    /// <summary>How fast to move: Walk or Run (replaces <see cref="Gait"/>); Unknown (0) = fall back to the old byte.</summary>
+    public Gait GaitMode;
+    /// <summary>The stance asked for (replaces <see cref="Stance"/>); None (0) = fall back to the old byte.</summary>
+    public StanceRequest StanceWanted;
+    /// <summary>The use action asked for on <see cref="UseTarget"/> (replaces <see cref="UseVerb"/>); None (0) = fall back to the old byte.</summary>
+    public UseVerb Verb;
 }
 
+[DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.Leave)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1,
         LivelinessKind = DdsLivelinessKind.Automatic, LivelinessLeaseDurationMs = DpsProtocol.DefaultLeaseMs)]
@@ -877,6 +1005,7 @@ public partial struct Leave
 }
 
 /// <summary>What the client wants of the gateway's gizmo projectors; none sent = no projectors run.</summary>
+[DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.GizmoView)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1,
         LivelinessKind = DdsLivelinessKind.Automatic, LivelinessLeaseDurationMs = DpsProtocol.DefaultLeaseMs)]
@@ -909,6 +1038,7 @@ public partial struct GizmoPrimitive
 }
 
 /// <summary>The complete primitives of one layer of one producer for the latest gizmo frame; each sample replaces the previous.</summary>
+[DpsRate(DpsRateClass.Continuous)]
 [DdsTopic(DpsProtocol.GizmoFrame)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 [DdsManaged]

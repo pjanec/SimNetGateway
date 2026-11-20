@@ -291,10 +291,33 @@ internal sealed class DpsInbound : IDisposable
     /// <summary>A sequence number newer than the last, with wrap-around.</summary>
     private static bool Newer(uint candidate, uint last) => unchecked((int)(candidate - last)) > 0;
 
-    private static PlayerControl ToControl(in D.ControlFrame f) => new(
-        f.Seq, f.Forward, f.Lateral, f.Steer, f.Yaw, f.Vertical, f.Gait, f.Trigger != 0, f.Mount, new HrotVec3(f.AimPoint.X, f.AimPoint.Y, f.AimPoint.Z), f.Stance,
+    /// <summary>
+    /// The one rule for the control frame's old and new fields (DD-020 3.3): a new enumeration that is set (not 0) wins, one that is 0 falls back to the old byte, so a client
+    /// that fills only the old bytes (or only the new enumerations) works. The new gait and stance are written as the numbers the simulation takes (walk 1, run 0; stance + 1);
+    /// the use verb crosses as its name, the host maps it.
+    /// </summary>
+    internal static PlayerControl ToControl(in D.ControlFrame f) => new(
+        f.Seq, f.Forward, f.Lateral, f.Steer, f.Yaw, f.Vertical, GaitOf(in f), f.Trigger != 0, f.Mount, new HrotVec3(f.AimPoint.X, f.AimPoint.Y, f.AimPoint.Z), StanceOf(in f),
         f.ShotSeq, f.CancelSeq, f.AmmoSeq, f.ShotTarget, f.UseSeq, f.UseVerb, f.UseTarget, f.Lean, f.Binoculars != 0, new HrotVec3(f.LookFrom.X, f.LookFrom.Y, f.LookFrom.Z),
-        new HrotVec3(f.LookDir.X, f.LookDir.Y, f.LookDir.Z), f.FirePref);
+        new HrotVec3(f.LookDir.X, f.LookDir.Y, f.LookDir.Z), f.FirePref, VerbNameOf(in f));
+
+    private static byte GaitOf(in D.ControlFrame f) => f.GaitMode switch
+    {
+        D.Gait.GaitWalk => 1,
+        D.Gait.GaitRun => 0,
+        _ => f.Gait,
+    };
+
+    private static byte StanceOf(in D.ControlFrame f) => f.StanceWanted switch
+    {
+        D.StanceRequest.StanceRequestStanding => 1,
+        D.StanceRequest.StanceRequestCrouched => 2,
+        D.StanceRequest.StanceRequestProne => 3,
+        _ => f.Stance,
+    };
+
+    private static string VerbNameOf(in D.ControlFrame f) =>
+        f.Verb == D.UseVerb.UseVerbNone || !Enum.IsDefined(f.Verb) ? string.Empty : f.Verb.ToString()["UseVerb".Length..];
 
     public void Dispose()
     {

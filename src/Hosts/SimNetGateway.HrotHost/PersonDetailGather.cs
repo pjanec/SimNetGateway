@@ -31,6 +31,9 @@ internal sealed class PersonDetailGather
         public ushort Action;
         public uint Instance;
         public double Started;
+        public HrotStance LastTarget;
+        public bool HasTarget;
+        public double StanceChangedAt;
     }
 
     private readonly Dictionary<int, Book> _book = new();
@@ -64,6 +67,24 @@ internal sealed class PersonDetailGather
 
     public void Clear() => _book.Clear();
 
+    /// <summary>A head turn smaller than this is "straight on the body" (about 1 degree, radians).</summary>
+    private const float HeadOffRadians = 0.02f;
+
+    /// <summary>
+    /// <paramref name="now"/> with the values that must not cause a send replaced by the ones last sent (DD-020 3.2): the stance progress, the head turn while it stays on the
+    /// same side of "straight on", and the look point while the look follows an entity (the client derives both from the entity).
+    /// </summary>
+    private static HrotPersonDetail Normalized(in HrotPersonDetail sent, in HrotPersonDetail now)
+    {
+        bool headFlip = Math.Abs(sent.HeadYaw) >= HeadOffRadians != Math.Abs(now.HeadYaw) >= HeadOffRadians;
+        return now with
+        {
+            StanceProgress = sent.StanceProgress,
+            HeadYaw = headFlip ? now.HeadYaw : sent.HeadYaw,
+            LookTarget = now.LookTargetId != 0 ? sent.LookTarget : now.LookTarget,
+        };
+    }
+
     /// <summary>True when the person's detail differs from the last one sent (or none was sent); <paramref name="detail"/> is then the new one.</summary>
     public bool TryGather(EntityRepository world, ITkbDatabase? tkb, Entity e, int id, double simTime, out HrotPersonDetail detail)
     {
@@ -73,7 +94,7 @@ internal sealed class PersonDetailGather
         }
 
         detail = Read(world, tkb, e, id, simTime, book);
-        if (book.HasSent && book.Sent.Equals(detail))
+        if (book.HasSent && book.Sent.Equals(Normalized(in book.Sent, in detail)))
         {
             return false;
         }
@@ -91,15 +112,26 @@ internal sealed class PersonDetailGather
             StanceId.Prone => HrotStance.Prone,
             _ => HrotStance.Standing,
         };
+        // the stance the brain ordered, when it changed (the gateway first saw it) and how long HROT blends (DD-020 3.2); the progress is only 0 while the animation runs, never streamed
         float progress = 1f;
-        if (world.HasComponent<StanceStatus>(e))
+        float stanceSeconds = 0f;
+        if (world.HasComponent<StanceStatus>(e) && world.GetComponentRO<StanceStatus>(e).Phase == StanceTransitionPhase.Transitioning)
         {
-            var status = world.GetComponentRO<StanceStatus>(e);
-            if (status.Phase == StanceTransitionPhase.Transitioning)
-            {
-                progress = Math.Clamp(status.TransitionProgress, 0f, 1f);
-            }
+            progress = 0f;
         }
+
+        if (world.HasComponent<StanceIntent>(e))
+        {
+            stanceSeconds = (float)Math.Max(0.0, world.GetComponentRO<StanceIntent>(e).BlendTime.Seconds);
+        }
+
+        if (book.HasTarget && book.LastTarget != target)
+        {
+            book.StanceChangedAt = simTime;
+        }
+
+        book.LastTarget = target;
+        book.HasTarget = true;
 
         var held = HrotHeldItem.None;
         byte mount = 0;
@@ -113,6 +145,7 @@ internal sealed class PersonDetailGather
         var lookTarget = HrotVec3.Zero;
         bool hasLook = false;
         float headYaw = 0f;
+        int lookTargetId = 0;
         if (world.HasComponent<LookState>(e))
         {
             var look = world.GetComponentRO<LookState>(e);
@@ -121,6 +154,7 @@ internal sealed class PersonDetailGather
             {
                 hasLook = true;
                 lookTarget = new HrotVec3(look.Target.X, look.Target.Y, look.Target.Z);
+                lookTargetId = LookIds.NetworkIdOf(world, look.TargetEntity);
             }
         }
 
@@ -209,7 +243,8 @@ internal sealed class PersonDetailGather
         var carriage = CarriageOf(world, tkb, e);
 
         return new HrotPersonDetail(id, target, progress, held, mount, lookTarget, hasLook, headYaw, gesture, action, actionTarget, actionState, started, seatVehicle,
-            seatRole, carry, burning, fear, anger, mode, carriage.SeatIndex, carriage.SeatExposed, carriage.SeatPose, carriage.Role, carriage.Other, carriage.Partner);
+            seatRole, carry, burning, fear, anger, mode, carriage.SeatIndex, carriage.SeatExposed, carriage.SeatPose, carriage.Role, carriage.Other, carriage.Partner,
+            book.StanceChangedAt, stanceSeconds, lookTargetId);
     }
 
     /// <summary>The carriage facts of one person (DD-018 3.5c), in network ids.</summary>
