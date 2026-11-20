@@ -176,6 +176,32 @@ breached wall stays closed.
   internal wire; a client applies both to the same building); keying by HROT's building index (an index into one import's list; the
   label survives a re-export).
 
+### 3.6b SUMO traffic (P-8)
+
+HROT runs SUMO through SumoSharp (vendored in HROT `FDP/ExtDeps/SumoSharp`, upstream public `pjanec/SumoSharp`). HROT's own ruling
+(AQ93 D-wire, R-4020): SUMO cars and traffic lights travel ONLY on SumoSharp's own DDS topics (`sumo/vehicles`, `sumo/lifecycle`,
+`sumo/tl`, `sumo/geometry`, `sumo/ped-*`), a lane-relative dead-reckoning wire batched into 64 KiB chunks for 10k+ movers, published
+with a DR-error policy (0.3 m along, 0.2 m lateral, 3 s heartbeat); every receiver reconstructs poses with SumoSharp's
+`DrExtrapolation` + `KinematicReconstructor`. `sumo/lifecycle` already carries per car its name (= its HROT network id), the HROT
+TKB type (`ExternalType`) and its colour; the net geometry and the traffic-light state have their own topics.
+
+- **The client reads SumoSharp's wire, unchanged, in the station's partition.** On a node that has no DDS tee of its own (the
+  networkless editor runs SUMO in process with no participant), the host attaches SumoSharp's own DDS sinks (`DdsReplicationSink`,
+  `DdsPedReplicationSink`, the geometry and TL writers) to the in-process session, on the station's participant and partition. In a
+  cluster (DD-017 step 2) the client may instead subscribe to the traffic nodes' topics directly; the `Traffic` topic below says which.
+- **`Traffic`** (DPS state, keyed by `Source`, the SumoSharp source key): the placement of the net in the simulation frame (HROT's
+  `SumoNetPlacement`: a rigid 2-D transform, as HROT fits it at terrain load), `Flat` (a net without z: the client drapes roads and
+  cars onto the terrain, HROT R-4030), the partition and topic names the SUMO wire uses, the default car type (HROT's
+  `TkbEntityTypes.TrafficCar`) for a car whose `ExternalType` is 0.
+- **One source per car.** SUMO cars near HROT units become local replica entities in HROT (`TrafficReplicas`, within 300 m + 50 m);
+  the DPS `Entity` topic must not publish those replicas (the client would draw the car twice). A SUMO car or pedestrian that HROT
+  converts into its own entity (a panicking pedestrian becomes a civilian, AQ93 §15.7) leaves SUMO's wire and appears as a DPS entity.
+- **Looks:** a car with colour 0 gets HROT's paint rule (`TrafficPaint`, FNV-1a of the vehicle id); a pedestrian's civilian type and
+  clothes seed come from his network id (`TrafficReplicas.PedestrianTypeOf`). Pure functions, linked in the client guide for porting.
+- Rejected: SUMO cars as DPS `Entity` / `EntityState` (one keyed instance per mover, the cost SumoSharp's wire exists to avoid;
+  HROT itself never sends SUMO cars as entities); a new DPS batch topic (a second encoding of the same data, a second codec for every
+  client to keep in step with SumoSharp).
+
 ### 3.7 Contract rules kept
 
 Fields are appended at the end of existing types; enumerations mirrored from HROT go by name with an unknown value 0 (DD-017 3.10);
