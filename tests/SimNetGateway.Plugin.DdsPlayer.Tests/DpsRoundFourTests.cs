@@ -17,9 +17,9 @@ public class DpsRoundFourTests
             aim ?? HrotVec3.Zero, HrotInjury.Ok, 0.0, aimTarget);
 
     private static HrotPersonDetail Detail(int id, HrotVec3? look = null, bool hasLook = false, float headYaw = 0f, int lookTarget = 0, float progress = 1f, double stanceAt = 0.0,
-        float stanceSeconds = 0f, HrotStance target = HrotStance.Standing) =>
+        float stanceSeconds = 0f, HrotStance target = HrotStance.Standing, HrotStance stanceFrom = HrotStance.Unknown) =>
         new(id, target, progress, HrotHeldItem.None, 0, look ?? HrotVec3.Zero, hasLook, headYaw, HrotGesture.None, HrotAction.None, 0, HrotActionState.None, 0.0, 0, HrotSeatRole.None,
-            HrotCarryMode.None, StanceChangedAt: stanceAt, StanceSeconds: stanceSeconds, LookTargetId: lookTarget);
+            HrotCarryMode.None, StanceChangedAt: stanceAt, StanceSeconds: stanceSeconds, LookTargetId: lookTarget, StanceFrom: stanceFrom);
 
     [Fact]
     public void An_aim_at_a_moving_unit_is_one_PersonAim_and_no_further_samples()
@@ -98,14 +98,14 @@ public class DpsRoundFourTests
         rig.Send(Detail(1201));
         int sent = rig.Transport.PersonState.Written;
 
-        rig.Send(Detail(1201, target: HrotStance.Prone, progress: 0f, stanceAt: 12.4, stanceSeconds: 0.9f));
+        rig.Send(Detail(1201, target: HrotStance.Prone, progress: 0f, stanceAt: 12.4, stanceSeconds: 0.9f, stanceFrom: HrotStance.Crouched));
         Assert.Equal(sent + 1, rig.Transport.PersonState.Written);
-        rig.Send(Detail(1201, target: HrotStance.Prone, progress: 0.5f, stanceAt: 12.4, stanceSeconds: 0.9f));
-        rig.Send(Detail(1201, target: HrotStance.Prone, progress: 1f, stanceAt: 12.4, stanceSeconds: 0.9f));
+        rig.Send(Detail(1201, target: HrotStance.Prone, progress: 0.5f, stanceAt: 12.4, stanceSeconds: 0.9f, stanceFrom: HrotStance.Crouched));
+        rig.Send(Detail(1201, target: HrotStance.Prone, progress: 1f, stanceAt: 12.4, stanceSeconds: 0.9f, stanceFrom: HrotStance.Crouched));
         Assert.Equal(sent + 1, rig.Transport.PersonState.Written);
 
         Assert.True(people.Until(w => w.Alive.TryGetValue("1201", out var p) && p.StanceChangedAt == 12.4 && p.TargetStance == D.Stance.StanceProne));
-        Assert.Equal(0.9f, people.Alive["1201"].StanceSeconds);
+        Assert.Equal((0.9f, D.Stance.StanceCrouched), (people.Alive["1201"].StanceSeconds, people.Alive["1201"].StanceFrom));   // a client that joins mid-blend knows where it started
     }
 
     [Fact]

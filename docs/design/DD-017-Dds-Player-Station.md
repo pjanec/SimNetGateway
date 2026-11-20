@@ -392,7 +392,7 @@ client code, test names.
 ### Spike (Task 1: DDS features and HROT entry points)
 
 Measured on CycloneDDS.NET 1.2.20 by `tests/SimNetGateway.Protocol.DdsPlayer.Tests/SpikeTests.cs` (kept as regression tests) and read from
-HROT `coordinator` a7a0cb4fe (`external/hrot`, read-only): the commit the gateway is tested against since DPS round 5 (DD-019 section 9). The file:line below were measured at 0b6cf8d96 and may have moved; the entry points are unchanged.
+HROT `coordinator` c5f8c1971 (`external/hrot`, read-only): the commit the gateway is tested against since DPS round 6 (DD-019 section 9, Round 6; a7a0cb4fe from round 5 until then). The file:line below were measured at 0b6cf8d96 and may have moved; the entry points are unchanged.
 
 #### DDS features (all three are exposed, no fallback needed)
 

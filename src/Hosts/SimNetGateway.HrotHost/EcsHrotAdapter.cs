@@ -347,7 +347,6 @@ public sealed class EcsHrotAdapter
     public void GatherEvents(EntityRepository world, InMemoryInbound inbound)
     {
         var tkb = _services.Tkb();
-        _effects.Gather(world, tkb, inbound);   // HROT's look rules over the same events: flashes, explosions, marks
         _hud.GatherEvents(world, inbound, Fdp.Toolkit.Time.SimClock.TotalTimeOf(world));
         _impacts.Gather(world, tkb, _types, inbound, Fdp.Toolkit.Time.SimClock.TotalTimeOf(world));
         var fires = world.ReadEvents<WeaponFireNotification>();
@@ -788,16 +787,6 @@ public sealed class EcsHrotAdapter
                 TryHrotId(world, burst.Shooter, out int shooter);
                 inbound.Enqueue(new HrotDetonation(shooter, 0, burst.Ammo, MunitionDis(tkb, burst.Ammo), V(burst.At), HrotVec3.Zero));
                 Counters.DetonationsSent++;
-                // HROT's own per-event rule over the recorded burst. The memory keeps no target and no damage; the recorded effect entity of the same burst does (EffectCause), so a
-                // burst that struck a unit is replayed as one. With no such entity (not recorded yet, or none made) it is judged as on the ground or in the air.
-                var replayed = new DetonationNotification { Shooter = burst.Shooter, Ammo = burst.Ammo, HitX = burst.At.X, HitY = burst.At.Y, HitZ = burst.At.Z, IsRemote = true };
-                if (TryCauseOf(world, burst.Ammo, burst.At, out var cause))
-                {
-                    replayed.Target = cause.Target;
-                    replayed.Damage = cause.Damage;
-                }
-
-                _effects.GatherDetonation(replayed, world, tkb, inbound);
             }
 
             _lastSerial = newest;
@@ -825,54 +814,37 @@ public sealed class EcsHrotAdapter
             var at = world.HasComponent<SimTransform>(anchor.Shooter) ? V(world.GetComponentRO<SimTransform>(anchor.Shooter).Position) : HrotVec3.Zero;
             inbound.Enqueue(new HrotFire(shooterId, 0, ammo, MunitionDis(tkb, ammo), at, HrotVec3.Zero, 1));
             Counters.FiresSent++;
-            // HROT's own per-event rule over the recorded shot (the flash entity names the shooter and the mount; the world holds no round or target of it)
-            _effects.GatherShot(new WeaponFireNotification { Shooter = anchor.Shooter, WeaponIndex = anchor.WeaponIndex, AmmoGuid = ammo, Quantity = 1, IsRemote = true },
-                world, tkb, inbound);
         }
 
         _flashesSeen.IntersectWith(_flashesNow);
     }
 
-    private const float CauseRadiusM = 1.5f;
-    private EntityQuery? _causeQuery;
-    private EntityRepository? _causeWorld;
-
     /// <summary>
-    /// The cause HROT stamped on the effect entities it made from the burst (<c>EffectCause</c>: what it struck, the damage): the one of the same munition within a
-    /// metre or two of the burst; a hit on a unit is preferred over the ground mark beside it. False when the world has no such component or entity.
+    /// Effects from state, live and in a replay (the one path, R-11007): the effect entities HROT's spawner made or a recording holds, each sent once. Call every frame the gateway
+    /// gathers events. A node that runs no effect spawner has no such entities: it warns once when shots were sent and no effect ever followed.
     /// </summary>
-    private bool TryCauseOf(EntityRepository world, long ammo, Vector3 at, out EffectCause cause)
+    public void GatherEffects(EntityRepository world, InMemoryInbound inbound, double simNow, bool replaying)
     {
-        cause = default;
-        if (!world.IsComponentTypeRegistered<EffectCause>() || !world.IsComponentTypeRegistered<SimTransform>())
+        _effects.Gather(world, _services.Tkb(), inbound, simNow, replaying, ReplayJumpS);
+        if (_effects.Sent > 0 || _warnedNoSpawner || Counters.FiresSent == 0)
         {
-            return false;
+            return;
         }
 
-        if (!ReferenceEquals(_causeWorld, world))
+        if (_firstFireAt < 0.0)
         {
-            _causeWorld = world;
-            _causeQuery = world.Query().With<EffectCause>().With<SimTransform>().Build();
+            _firstFireAt = simNow;
         }
-
-        bool found = false;
-        foreach (var e in _causeQuery!)
+        else if (simNow - _firstFireAt > NoSpawnerWarnS)
         {
-            var c = world.GetComponentRO<EffectCause>(e);
-            if (c.Ammo != ammo || Vector3.Distance((Vector3)world.GetComponentRO<SimTransform>(e).Position, at) > CauseRadiusM)
-            {
-                continue;
-            }
-
-            if (!found || (cause.Target.IsNull && !c.Target.IsNull))
-            {
-                cause = c;
-                found = true;
-            }
+            _warnedNoSpawner = true;
+            Console.Error.WriteLine("[SimNetGateway] shots were sent but this node made no effect entity: Effect needs HROT's effect spawner (a map host) on the gateway's node.");
         }
-
-        return found;
     }
+
+    private const double NoSpawnerWarnS = 3.0;
+    private bool _warnedNoSpawner;
+    private double _firstFireAt = -1.0;
 
     /// <summary>Leaving a replay (or the world moving): the next replay starts from a fresh baseline.</summary>
     public void ForgetReplayEffects()
@@ -926,6 +898,9 @@ public sealed class EcsHrotAdapter
         _view.Clear();
         _banks.Clear();
         ForgetReplayEffects();
+        _effects.Clear();
+        _warnedNoSpawner = false;
+        _firstFireAt = -1.0;
         SweepRoutedEntities(world);
         _queryWorld = null;
     }

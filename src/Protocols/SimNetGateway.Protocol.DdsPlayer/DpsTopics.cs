@@ -181,10 +181,12 @@ public partial struct PersonState
     public CarryRole CarryRole;
     /// <summary>The other man of a pair carrying one load (a stretcher, a two-man weapon); 0 = none.</summary>
     public int PartnerId;
-    /// <summary>Simulation time the current stance transition began (0 = none yet). The transition's progress is (now - StanceChangedAt) / <see cref="StanceSeconds"/>, clamped to 0..1, toward <see cref="TargetStance"/>.</summary>
+    /// <summary>Simulation time the current stance transition began (0 = none yet). The transition's progress is clamp((now - StanceChangedAt) / <see cref="StanceSeconds"/>, 0, 1), from <see cref="StanceFrom"/> toward <see cref="TargetStance"/>.</summary>
     public double StanceChangedAt;
     /// <summary>How long the transition lasts in seconds; 0 = not stated (use the client's own clip length).</summary>
     public float StanceSeconds;
+    /// <summary>The stance the current transition leaves (equal to <see cref="TargetStance"/> when none is stated), so a client that first sees a man mid-transition knows what to blend from.</summary>
+    public Stance StanceFrom;
 }
 
 /// <summary>
@@ -570,6 +572,7 @@ public partial struct Detonation
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1024)]
 public partial struct Effect
 {
+    /// <summary>The simulation time the effect began.</summary>
     public double SimTime;
     public EffectKind Kind;
     public EffectSize SizeClass;

@@ -358,7 +358,7 @@ public class DpsOutboundTests
 
         Assert.True(watch.Until(w =>
         {
-            rig.Send(new HrotEffect("Explosion", "Huge", "Building", dis, 1234, new HrotVec3(5, 6, 7), new HrotQuat(0, 0, 0.5, 0.5), 2001, 1, 2.5f, 4f));
+            rig.Send(new HrotEffect("Explosion", "Huge", "Building", dis, 1234, new HrotVec3(5, 6, 7), new HrotQuat(0, 0, 0.5, 0.5), 2001, 1, 2.5f, 4f, 9.5));
             rig.Send(new HrotEffect("Tracer", "Small", "Ground", 0, 1, HrotVec3.Zero, HrotQuat.Identity, 0, 0, 1f, 1f));   // a tracer: DPS carries no tracers
             return w.Events.Count > 0;
         }));
@@ -375,6 +375,7 @@ public class DpsOutboundTests
         Assert.Equal((byte)1, e.AnchorWeaponSlot);
         Assert.Equal(2.5f, e.LifetimeSeconds);
         Assert.Equal(4f, e.Size);
+        Assert.Equal(9.5, e.SimTime);   // EffectSpec.StartedAt is the effect's time
     }
 
     [Fact]

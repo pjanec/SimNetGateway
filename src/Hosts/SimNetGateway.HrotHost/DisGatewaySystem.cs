@@ -170,6 +170,7 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
             if (!replaying || runtime.EventsInReplay)
             {
                 _adapter.GatherEvents(world, runtime.HrotIn);
+                _adapter.GatherEffects(world, runtime.HrotIn, clock.TotalTime, replaying);
             }
 
             // a replay does not play events back: fire and detonations come from what the recorded world remembers

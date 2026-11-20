@@ -280,6 +280,7 @@ public sealed class DpsOutbound : IGatewayModule
             StanceProgress = d.StanceProgress,
             StanceChangedAt = d.StanceChangedAt,
             StanceSeconds = d.StanceSeconds,
+            StanceFrom = d.StanceFrom == HrotStance.Unknown ? StanceOf(d.TargetStance) : StanceOf(d.StanceFrom),
             Posture = s.Weapon switch
             {
                 HrotWeaponPosture.Aimed => D.WeaponPosture.WeaponPostureAimed,
@@ -337,7 +338,7 @@ public sealed class DpsOutbound : IGatewayModule
             || p.Gesture != o.Gesture || p.Injury != o.Injury || p.Action != o.Action || p.ActionTargetId != o.ActionTargetId
             || p.ActionState != o.ActionState || p.ActionStartSimTime != o.ActionStartSimTime || p.SeatVehicleId != o.SeatVehicleId || p.SeatRole != o.SeatRole
             || p.CarryMode != o.CarryMode || p.CarryOtherId != o.CarryOtherId || p.CarryRole != o.CarryRole || p.PartnerId != o.PartnerId
-            || p.SeatIndex != o.SeatIndex || p.SeatExposed != o.SeatExposed || p.SeatPose != o.SeatPose || p.StanceChangedAt != o.StanceChangedAt || p.StanceSeconds != o.StanceSeconds
+            || p.SeatIndex != o.SeatIndex || p.SeatExposed != o.SeatExposed || p.SeatPose != o.SeatPose || p.StanceChangedAt != o.StanceChangedAt || p.StanceSeconds != o.StanceSeconds || p.StanceFrom != o.StanceFrom
             || p.Burning != o.Burning || p.Fear != o.Fear || p.Anger != o.Anger || p.CivilianMode != o.CivilianMode;
     }
 
@@ -474,7 +475,7 @@ public sealed class DpsOutbound : IGatewayModule
 
         _ports.Effect.Send(new DpsItem<D.Effect>(new D.Effect
         {
-            SimTime = _simTime,
+            SimTime = m.StartedAt > 0.0 ? m.StartedAt : _simTime,
             Kind = kind,
             SizeClass = LookNames.EffectSizeOf(m.SizeClass),
             Surface = LookNames.EffectSurfaceOf(m.Surface),

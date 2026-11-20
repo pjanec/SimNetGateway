@@ -182,15 +182,18 @@ public class RoundThreeGatherTests
     }
 
     [Fact]
-    public void An_impact_is_also_an_effect_through_the_same_event()
+    public void An_impact_is_also_an_effect_through_the_effect_entities_HROT_made_of_it()
     {
         using var h = new Stage();
-        h.PublishForNextFrame(new RoundImpactNotification { X = 5, Y = 6, Z = 0.1f, NormalZ = 1f, Ammo = h.MunitionWithEffects(), Kind = (byte)ImpactKind.Stop });
+        h.GatherEffects(10.0);
+        var hit = new RoundImpactNotification { X = 5, Y = 6, Z = 0.1f, NormalZ = 1f, Ammo = h.MunitionWithEffects(), Kind = (byte)ImpactKind.Stop };
+        h.SpawnEffects(10.1, specs => Hrot.Look.Effects.EffectRules.ForImpact(in hit, h.World, h.TestTkb, specs));
+        h.PublishForNextFrame(hit);
 
         var got = h.GatherEvents();
 
         Assert.Single(got.Of<HrotImpact>());
-        Assert.NotEmpty(got.Of<HrotEffect>());   // the derived puff and mark still arrive as Effect (HROT's ForFrame)
+        Assert.NotEmpty(h.GatherEffects(10.2));   // the derived puff and mark still arrive as Effect (HROT's SpecOf over the entities)
     }
 
     // ---- a round's launch time and motor (3.4) ----------------------------------------------------------------------------------------
@@ -236,43 +239,59 @@ public class RoundThreeGatherTests
         Assert.Equal((98.25, 5f), (later.LaunchedAt, later.BurnSeconds));
     }
 
-    // ---- effects in replay (3.7) ------------------------------------------------------------------------------------------------------
+    // ---- effects in replay (3.7): the same state path as live (Round 6) ---------------------------------------------------------------
 
     [Fact]
-    public void In_replay_a_recorded_burst_and_a_recorded_muzzle_flash_give_effects_through_HROTs_per_event_rules()
+    public void In_replay_a_recorded_burst_and_a_recorded_muzzle_flash_give_effects_from_the_recorded_effect_entities_and_fire_and_detonation_still_flow()
     {
         using var h = new Stage();
         var tank = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: ShooterTkb);
         long ammo = h.MunitionWithEffects();
         Assert.Empty(h.GatherReplay(1.0).All);   // entering a replay: only a baseline
+        Assert.Empty(h.GatherEffects(1.0, replaying: true));
 
+        // what HROT recorded of a burst and of a shot: its memory entry, the effect entities of both
         RecentDetonations.Add(h.World, new Vector3(50, 20, 0.4f), 1.05, tank, ammo);
-        var flash = h.World.CreateEntity();
-        h.World.AddComponent(flash, new EffectAnchor { Shooter = tank, WeaponIndex = 0, Kind = EffectAnchorKind.Muzzle });
-        h.World.AddComponent(flash, Lifespan.Starting(1.05, 0.1f));
+        var burst = new DetonationNotification { Shooter = tank, Ammo = ammo, HitX = 50, HitY = 20, HitZ = 0.4f };
+        var shot = new WeaponFireNotification { Shooter = tank, WeaponIndex = 0, Quantity = 1 };
+        h.SpawnEffects(1.05, specs => Hrot.Look.Effects.EffectRules.ForDetonation(in burst, h.World, h.TestTkb, specs));
+        h.SpawnEffects(1.05, specs => Hrot.Look.Effects.EffectRules.ForShot(in shot, h.World, h.TestTkb, specs));
         var got = h.GatherReplay(1.1);
+        var effects = h.GatherEffects(1.1, replaying: true);
 
-        var boom = got.Of<HrotEffect>().Where(e => e.Kind == nameof(Fdp.Toolkit.Tkb.Domain.EffectKind.Explosion)).ToList();
+        var boom = effects.Where(e => e.Kind == nameof(Fdp.Toolkit.Tkb.Domain.EffectKind.Explosion)).ToList();
         Assert.NotEmpty(boom);
         Assert.Equal(nameof(Hrot.Look.Effects.EffectSurface.Ground), boom[0].Surface);
         Assert.Equal(new HrotVec3(50, 20, 0.4f), boom[0].At);
-        var muzzle = Assert.Single(got.Of<HrotEffect>(), e => e.Kind == nameof(Fdp.Toolkit.Tkb.Domain.EffectKind.MuzzleFlash));
+        Assert.Equal(1.05, boom[0].StartedAt);
+        var muzzle = Assert.Single(effects, e => e.Kind == nameof(Fdp.Toolkit.Tkb.Domain.EffectKind.MuzzleFlash));
         Assert.Equal((2001, nameof(Hrot.Look.Effects.EffectSurface.Air)), (muzzle.AnchorEntity, muzzle.Surface));
-        Assert.Single(got.Of<HrotDetonation>());   // the replay's fire and detonation still flow, one effect path beside them
+        Assert.Single(got.Of<HrotDetonation>());   // the replay's fire and detonation still flow, from the recorded memory and flash
         Assert.Single(got.Of<HrotFire>());
+        Assert.Empty(got.Of<HrotEffect>());   // and the replay path of fire and detonation makes no effect of its own
 
-        Assert.Empty(h.GatherReplay(1.2).Of<HrotEffect>());   // each recorded event once
+        Assert.Empty(h.GatherReplay(1.2).All);   // each recorded entity once
+        Assert.Empty(h.GatherEffects(1.2, replaying: true));
     }
 
     [Fact]
-    public void After_a_seek_the_recorded_past_makes_no_effects()
+    public void After_a_seek_or_a_change_between_live_and_replay_the_recorded_past_makes_no_effects()
     {
         using var h = new Stage();
         var tank = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: ShooterTkb);
-        h.GatherReplay(1.0);
-        RecentDetonations.Add(h.World, new Vector3(50, 20, 0.4f), 1.05, tank, h.MunitionWithEffects());
+        long ammo = h.MunitionWithEffects();
+        h.GatherEffects(1.0, replaying: true);
+        var burst = new DetonationNotification { Shooter = tank, Ammo = ammo, HitX = 50, HitY = 20, HitZ = 0.4f };
+        h.SpawnEffects(1.05, specs => Hrot.Look.Effects.EffectRules.ForDetonation(in burst, h.World, h.TestTkb, specs));
 
-        Assert.Empty(h.GatherReplay(40.0).All);   // a jump of more than 2 s: what lies behind it is only taken as already sent
+        Assert.Empty(h.GatherEffects(40.0, replaying: true));   // a jump of more than 2 s: what lies behind it is only taken as already sent
+        h.SpawnEffects(40.5, specs => Hrot.Look.Effects.EffectRules.ForDetonation(in burst, h.World, h.TestTkb, specs));
+        Assert.NotEmpty(h.GatherEffects(40.6, replaying: true));   // what is recorded after the seek flows
+
+        h.SpawnEffects(40.65, specs => Hrot.Look.Effects.EffectRules.ForDetonation(in burst, h.World, h.TestTkb, specs));
+        Assert.Empty(h.GatherEffects(40.7, replaying: false));   // leaving the replay: a new baseline
+        h.SpawnEffects(40.8, specs => Hrot.Look.Effects.EffectRules.ForDetonation(in burst, h.World, h.TestTkb, specs));
+        Assert.NotEmpty(h.GatherEffects(40.9, replaying: false));   // live is the same path
     }
 
     // ---- round 5 (DD-019 section 9, Round 5): HROT's own suggested camera, effect cause, airborne ---------------------------------------------
@@ -322,46 +341,34 @@ public class RoundThreeGatherTests
 
 
     [Fact]
-    public void A_replayed_burst_that_hit_a_unit_is_a_unit_burst_by_its_recorded_effect_cause()
+    public void An_effect_entity_that_struck_a_unit_is_a_unit_effect_by_its_recorded_cause_live_and_in_replay()
     {
         using var h = new Stage();
-        h.World.RegisterComponent<EffectCause>();
         var tank = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: ShooterTkb);
         var target = h.AddHrotEntity(2002, new Vector3(50, 20, 0.4f), tkb: ShooterTkb);
         long ammo = h.MunitionWithEffects();
-        h.GatherReplay(1.0);
+        h.GatherEffects(1.0);
 
-        // HROT's spawner recorded the effect of this burst with what it struck
-        var effect = h.World.CreateEntity();
-        h.World.AddComponent(effect, new SimTransform { Position = new Vector3(50.2f, 20f, 0.4f), Rotation = Quaternion.Identity });
-        h.World.AddComponent(effect, new EffectCause { Surface = (byte)Hrot.Look.Effects.EffectSurface.Vehicle, Target = target, Damage = 80f, Ammo = ammo });
-        RecentDetonations.Add(h.World, new Vector3(50, 20, 0.4f), 1.05, tank, ammo);
-        var boom = h.GatherReplay(1.1).Of<HrotEffect>().Where(e => e.Kind == nameof(Fdp.Toolkit.Tkb.Domain.EffectKind.Explosion)).ToList();
+        // HROT's spawner made the effect of a burst that struck the unit: the cause says what and how hard
+        var burst = new DetonationNotification { Shooter = tank, Target = target, Ammo = ammo, HitX = 50, HitY = 20, HitZ = 0.4f, Damage = 80f };
+        h.SpawnEffects(1.05, specs => Hrot.Look.Effects.EffectRules.ForDetonation(in burst, h.World, h.TestTkb, specs));
+        var effects = h.GatherEffects(1.1);
 
-        Assert.NotEmpty(boom);
-        Assert.Equal(nameof(Hrot.Look.Effects.EffectSurface.Vehicle), boom[0].Surface);   // not the ground mark a burst with no known target gets
-        Assert.DoesNotContain(boom, e => e.Surface == nameof(Hrot.Look.Effects.EffectSurface.Ground));
+        Assert.NotEmpty(effects);
+        Assert.All(effects, e => Assert.Equal(nameof(Hrot.Look.Effects.EffectSurface.Vehicle), e.Surface));   // not the ground mark a burst with no known target gets
+        Assert.Equal((ulong)h.TestTkb.GetAll().First(t => (long)t.TkbType == ammo).DisType.Value, effects[0].MunitionDis);   // the munition comes from the cause's ammo
     }
 
     [Fact]
-    public void A_replayed_burst_with_an_effect_cause_of_another_round_or_place_stays_a_ground_burst()
+    public void A_world_with_no_effect_entities_sends_no_effect_and_a_non_effect_entity_with_a_lifespan_is_ignored()
     {
         using var h = new Stage();
-        h.World.RegisterComponent<EffectCause>();
-        var tank = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: ShooterTkb);
-        var target = h.AddHrotEntity(2002, new Vector3(50, 20, 0.4f), tkb: ShooterTkb);
-        long ammo = h.MunitionWithEffects();
-        h.GatherReplay(1.0);
+        h.GatherEffects(1.0);
+        var other = h.World.CreateEntity();   // a timed entity that is no effect of the type database
+        h.World.AddComponent(other, new SimTransform { Position = Vector3.Zero, Rotation = Quaternion.Identity });
+        h.World.AddComponent(other, new TkbIdentity { TkbType = (Fdp.Core.TkbTypeId)0x5EED });
+        h.World.AddComponent(other, Lifespan.Starting(1.0, 5f));
 
-        var far = h.World.CreateEntity();   // the right round, 40 m away
-        h.World.AddComponent(far, new SimTransform { Position = new Vector3(90, 20, 0.4f), Rotation = Quaternion.Identity });
-        h.World.AddComponent(far, new EffectCause { Target = target, Damage = 80f, Ammo = ammo });
-        var other = h.World.CreateEntity();   // the right place, another round
-        h.World.AddComponent(other, new SimTransform { Position = new Vector3(50, 20, 0.4f), Rotation = Quaternion.Identity });
-        h.World.AddComponent(other, new EffectCause { Target = target, Damage = 80f, Ammo = ammo + 1 });
-        RecentDetonations.Add(h.World, new Vector3(50, 20, 0.4f), 1.05, tank, ammo);
-        var boom = h.GatherReplay(1.1).Of<HrotEffect>().Where(e => e.Kind == nameof(Fdp.Toolkit.Tkb.Domain.EffectKind.Explosion)).ToList();
-
-        Assert.Equal(nameof(Hrot.Look.Effects.EffectSurface.Ground), boom[0].Surface);
+        Assert.Empty(h.GatherEffects(1.1));
     }
 }

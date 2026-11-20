@@ -82,9 +82,11 @@ public class LookGatherTests
     {
         using var h = new Stage();
         var munition = h.TestTkb.GetAll().First(t => t.DisType.Kind == 2);
-        h.PublishForNextFrame(new DetonationNotification { Target = Entity.Null, Ammo = (long)munition.TkbType, HitX = 50, HitY = 20, HitZ = 0.4f, Damage = 1100f });
+        h.GatherEffects(10.0);   // the baseline
+        var burst = new DetonationNotification { Target = Entity.Null, Ammo = (long)munition.TkbType, HitX = 50, HitY = 20, HitZ = 0.4f, Damage = 1100f };
+        h.SpawnEffects(10.1, specs => Hrot.Look.Effects.EffectRules.ForDetonation(in burst, h.World, h.TestTkb, specs));   // what HROT's spawner makes of the event
 
-        var effects = h.GatherEvents().Of<HrotEffect>();
+        var effects = h.GatherEffects(10.2);
 
         Assert.NotEmpty(effects);
         var boom = effects[0];
@@ -94,6 +96,7 @@ public class LookGatherTests
         Assert.Equal(new HrotVec3(50, 20, 0.4f), boom.At);
         Assert.Equal(0, boom.AnchorEntity);
         Assert.True(boom.Lifetime > 0f);
+        Assert.Equal(10.1, boom.StartedAt);   // EffectSpec.StartedAt: the effect entity's recorded birth
         Assert.All(effects, e => Assert.NotEqual(0L, e.EffectType));
     }
 
@@ -102,15 +105,36 @@ public class LookGatherTests
     {
         using var h = new Stage();
         var tank = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: TankType);
-        h.PublishForNextFrame(new WeaponFireNotification { Shooter = tank, Target = Entity.Null, WeaponIndex = 0 });
+        h.GatherEffects(10.0);
+        var fire = new WeaponFireNotification { Shooter = tank, Target = Entity.Null, WeaponIndex = 0 };
+        h.SpawnEffects(10.1, specs => Hrot.Look.Effects.EffectRules.ForShot(in fire, h.World, h.TestTkb, specs));
 
-        var effects = h.GatherEvents().Of<HrotEffect>();
+        var effects = h.GatherEffects(10.2);
 
         var flash = Assert.Single(effects, e => e.Kind == nameof(Fdp.Toolkit.Tkb.Domain.EffectKind.MuzzleFlash));
         Assert.Equal(2001, flash.AnchorEntity);
         Assert.Equal((byte)0, flash.AnchorMount);
         Assert.Equal(nameof(Hrot.Look.Effects.EffectSurface.Air), flash.Surface);
         Assert.True(flash.Lifetime > 0f);
+    }
+
+    [Fact]
+    public void An_effect_entity_is_sent_once_whatever_the_later_frames_and_a_frame_without_effects_sends_none()
+    {
+        using var h = new Stage();
+        var tank = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: TankType);
+        Assert.Empty(h.GatherEffects(10.0));
+        var fire = new WeaponFireNotification { Shooter = tank, Target = Entity.Null, WeaponIndex = 0 };
+        h.SpawnEffects(10.1, specs => Hrot.Look.Effects.EffectRules.ForShot(in fire, h.World, h.TestTkb, specs));
+
+        Assert.NotEmpty(h.GatherEffects(10.1));
+        for (double t = 10.2; t < 11.0; t += 0.1)
+        {
+            Assert.Empty(h.GatherEffects(t));   // the effect lives on: never sent again (no heartbeat)
+        }
+
+        h.SpawnEffects(11.0, specs => Hrot.Look.Effects.EffectRules.ForShot(in fire, h.World, h.TestTkb, specs));   // the next shot is a new effect
+        Assert.Single(h.GatherEffects(11.0), e => e.Kind == nameof(Fdp.Toolkit.Tkb.Domain.EffectKind.MuzzleFlash));
     }
 
     [Fact]
@@ -125,13 +149,6 @@ public class LookGatherTests
         h.PublishForNextFrame(new WeaponFireNotification { Shooter = tank, Target = Entity.Null, WeaponIndex = 0, Quantity = 1 });
         var fire = Assert.Single(h.GatherEvents().Of<HrotFire>());
         Assert.Equal(2001, fire.ShooterId);
-    }
-
-    [Fact]
-    public void A_frame_without_events_sends_no_effect()
-    {
-        using var h = new Stage();
-        Assert.Empty(h.GatherEvents().Of<HrotEffect>());
     }
 
     [Fact]

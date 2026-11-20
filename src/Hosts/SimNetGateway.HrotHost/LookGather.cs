@@ -6,6 +6,7 @@ using Fdp.Toolkit.Combat.Contracts;
 using Fdp.Toolkit.Combat.Events;
 using Fdp.Toolkit.Physics.BodyParts;
 using Fdp.Toolkit.Replication.Components;
+using Fdp.Toolkit.Time;
 using Hrot.Look;
 using Hrot.Look.Effects;
 using Hrot.Look.People;
@@ -17,54 +18,85 @@ using SimNetGateway.Protocol.Hrot;
 // rule of HROT is copied here.
 namespace SimNetGateway.HrotHost;
 
-/// <summary>Effects of the frame: <c>EffectRules.ForFrame</c> once per frame into one reused list, one <see cref="HrotEffect"/> per spec.</summary>
+/// <summary>
+/// Effects from STATE (HROT R-11007, DD-019 9 Round 6): every effect entity HROT's spawner made (live) or a recording holds (replay), rebuilt into an <see cref="EffectSpec"/> by
+/// <c>EffectRules.SpecOf</c> and sent once, keyed on the entity and its birth time (never re-sent on a later frame). Entering or leaving a replay, a seek or any jump of the clock
+/// only takes what is there as already sent. One path for live and replay: it needs the node to run HROT's effect spawner (every map host does).
+/// </summary>
 internal sealed class EffectGather
 {
-    private readonly List<EffectSpec> _specs = new();
+    private readonly HashSet<(Entity Entity, double BornAt)> _seen = new();
+    private readonly HashSet<(Entity Entity, double BornAt)> _present = new();
+    private EntityQuery? _query;
+    private EntityRepository? _queryWorld;
+    private bool _synced;
+    private bool _replaying;
+    private double _time;
 
-    public int Gather(EntityRepository world, ITkbDatabase? tkb, InMemoryInbound inbound)
+    /// <summary>Effects sent since the last <see cref="Clear"/>.</summary>
+    public long Sent { get; private set; }
+
+    public void Clear()
     {
-        _specs.Clear();
-        EffectRules.ForFrame(world, tkb, _specs);
-        return Publish(world, inbound);
+        _seen.Clear();
+        _present.Clear();
+        _synced = false;
+        _query = null;
+        _queryWorld = null;
+        Sent = 0;
     }
 
-    /// <summary>A shot rebuilt from a recording (replay raises no events): HROT's per-event rule <c>EffectRules.ForShot</c> over it.</summary>
-    public int GatherShot(in WeaponFireNotification fire, EntityRepository world, ITkbDatabase? tkb, InMemoryInbound inbound)
+    public int Gather(EntityRepository world, ITkbDatabase? tkb, InMemoryInbound inbound, double simNow, bool replaying, double jumpSeconds)
     {
-        _specs.Clear();
-        EffectRules.ForShot(in fire, world, tkb, _specs);
-        return Publish(world, inbound);
-    }
-
-    /// <summary>A burst rebuilt from a recording: HROT's per-event rule <c>EffectRules.ForDetonation</c> over it.</summary>
-    public int GatherDetonation(in DetonationNotification burst, EntityRepository world, ITkbDatabase? tkb, InMemoryInbound inbound)
-    {
-        _specs.Clear();
-        EffectRules.ForDetonation(in burst, world, tkb, _specs);
-        return Publish(world, inbound);
-    }
-
-    private int Publish(EntityRepository world, InMemoryInbound inbound)
-    {
-        for (int i = 0; i < _specs.Count; i++)
+        if (!world.IsComponentTypeRegistered<Lifespan>() || !world.IsComponentTypeRegistered<TkbIdentity>() || !world.IsComponentTypeRegistered<SimTransform>())
         {
-            var s = _specs[i];
-            int anchor = 0;
-            byte mount = 0;
-            if (s.Anchor is { } a)
-            {
-                anchor = LookIds.NetworkIdOf(world, a.Shooter);
-                mount = (byte)a.WeaponIndex;
-            }
-
-            // HROT's enumerations go as their names (the plugins never decode HROT's numbers)
-            var msg = new HrotEffect(s.Kind.ToString(), s.SizeClass.ToString(), s.Surface.ToString(), (ulong)s.MunitionDis.Value, s.EffectType, new HrotVec3(s.At.X, s.At.Y, s.At.Z),
-                new HrotQuat(s.Rotation.X, s.Rotation.Y, s.Rotation.Z, s.Rotation.W), anchor, mount, s.Lifetime, s.Size);
-            inbound.Enqueue(in msg);
+            return 0;
         }
 
-        return _specs.Count;
+        if (!ReferenceEquals(_queryWorld, world))
+        {
+            _queryWorld = world;
+            _query = world.Query().With<Lifespan>().With<TkbIdentity>().With<SimTransform>().Build();
+        }
+
+        bool baseline = !_synced || replaying != _replaying || simNow < _time - 1e-6 || simNow - _time > jumpSeconds;
+        _synced = true;
+        _replaying = replaying;
+        _time = simNow;
+        _present.Clear();
+        int sent = 0;
+        foreach (var e in _query!)
+        {
+            var key = (e, (double)world.GetComponentRO<Lifespan>(e).BornAtSimSeconds);
+            _present.Add(key);
+            if (!_seen.Add(key) || baseline || !EffectRules.SpecOf(world, e, tkb, out var spec))
+            {
+                continue;
+            }
+
+            Publish(world, in spec, inbound);
+            sent++;
+        }
+
+        _seen.IntersectWith(_present);
+        Sent += sent;
+        return sent;
+    }
+
+    private static void Publish(EntityRepository world, in EffectSpec s, InMemoryInbound inbound)
+    {
+        int anchor = 0;
+        byte mount = 0;
+        if (s.Anchor is { } a)
+        {
+            anchor = LookIds.NetworkIdOf(world, a.Shooter);
+            mount = (byte)a.WeaponIndex;
+        }
+
+        // HROT's enumerations go as their names (the plugins never decode HROT's numbers)
+        var msg = new HrotEffect(s.Kind.ToString(), s.SizeClass.ToString(), s.Surface.ToString(), (ulong)s.MunitionDis.Value, s.EffectType, new HrotVec3(s.At.X, s.At.Y, s.At.Z),
+            new HrotQuat(s.Rotation.X, s.Rotation.Y, s.Rotation.Z, s.Rotation.W), anchor, mount, s.Lifetime, s.Size, s.StartedAt);
+        inbound.Enqueue(in msg);
     }
 }
 

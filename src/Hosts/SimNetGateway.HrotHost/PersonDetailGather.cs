@@ -32,9 +32,6 @@ internal sealed class PersonDetailGather
         public ushort Action;
         public uint Instance;
         public double Started;
-        public HrotStance LastTarget;
-        public bool HasTarget;
-        public double StanceChangedAt;
     }
 
     private readonly Dictionary<int, Book> _book = new();
@@ -113,26 +110,33 @@ internal sealed class PersonDetailGather
             StanceId.Prone => HrotStance.Prone,
             _ => HrotStance.Standing,
         };
-        // the stance the brain ordered, when it changed (the gateway first saw it) and how long HROT blends (DD-020 3.2); the progress is only 0 while the animation runs, never streamed
+        // when HROT's muscle began the current blend, how long it lasts and the stance it leaves (StanceStatus, written by StanceTransitionSystem, replicated and recorded; DD-020 9 Round 6);
+        // a blend is the current one only while it leaves another stance than the ordered one (one tick after an order the status still holds the previous blend); none run = not stated
         float progress = 1f;
         float stanceSeconds = 0f;
-        if (world.HasComponent<StanceStatus>(e) && world.GetComponentRO<StanceStatus>(e).Phase == StanceTransitionPhase.Transitioning)
+        double stanceStart = 0.0;
+        var stanceFrom = target;
+        if (world.HasComponent<StanceStatus>(e))
         {
-            progress = 0f;
-        }
+            var status = world.GetComponentRO<StanceStatus>(e);
+            if (status.Phase == StanceTransitionPhase.Transitioning)
+            {
+                progress = 0f;
+            }
 
-        if (world.HasComponent<StanceIntent>(e))
-        {
-            stanceSeconds = (float)Math.Max(0.0, world.GetComponentRO<StanceIntent>(e).BlendTime.Seconds);
+            var from = status.FromStance switch
+            {
+                StanceId.Crouched => HrotStance.Crouched,
+                StanceId.Prone => HrotStance.Prone,
+                _ => HrotStance.Standing,
+            };
+            if (status.TransitionSeconds.Seconds > 0f && from != target)
+            {
+                stanceStart = status.TransitionStartedAt.Seconds;
+                stanceSeconds = status.TransitionSeconds.Seconds;
+                stanceFrom = from;
+            }
         }
-
-        if (book.HasTarget && book.LastTarget != target)
-        {
-            book.StanceChangedAt = simTime;
-        }
-
-        book.LastTarget = target;
-        book.HasTarget = true;
 
         var held = HrotHeldItem.None;
         byte mount = 0;
@@ -245,7 +249,7 @@ internal sealed class PersonDetailGather
 
         return new HrotPersonDetail(id, target, progress, held, mount, lookTarget, hasLook, headYaw, gesture, action, actionTarget, actionState, started, seatVehicle,
             seatRole, carry, burning, fear, anger, mode, carriage.SeatIndex, carriage.SeatExposed, carriage.SeatPose, carriage.Role, carriage.Other, carriage.Partner,
-            book.StanceChangedAt, stanceSeconds, lookTargetId);
+            stanceStart, stanceSeconds, lookTargetId, stanceFrom);
     }
 
     /// <summary>The carriage facts of one person (DD-018 3.5c), in network ids.</summary>

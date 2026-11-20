@@ -84,8 +84,8 @@ public class DpsRoundFourTests
         }, "t4-aim");
         Assert.Equal((5, 7.5, 77, 78, true, 0.5f, 3.0, 6.0), (aim.EntityId, aim.SimTime, aim.AimTargetId, aim.LookTargetId, aim.HasLookTarget, aim.HeadYaw, aim.AimPoint.Z, aim.LookTarget.Z));
 
-        var person = RoundTrip(new PersonState { EntityId = 5, StanceChangedAt = 12.4, StanceSeconds = 0.9f }, "t4-person");
-        Assert.Equal((12.4, 0.9f), (person.StanceChangedAt, person.StanceSeconds));
+        var person = RoundTrip(new PersonState { EntityId = 5, StanceChangedAt = 12.4, StanceSeconds = 0.9f, StanceFrom = Stance.StanceCrouched }, "t4-person");
+        Assert.Equal((12.4, 0.9f, Stance.StanceCrouched), (person.StanceChangedAt, person.StanceSeconds, person.StanceFrom));
 
         var look = RoundTrip(new VehicleLook
         {

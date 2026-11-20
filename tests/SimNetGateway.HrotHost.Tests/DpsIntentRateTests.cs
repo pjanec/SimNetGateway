@@ -204,14 +204,22 @@ public class DpsIntentRateTests(ITestOutputHelper output)
         Assert.Equal((0.0, 1f), (settled.StanceChangedAt, settled.StanceProgress));
 
         h.World.SetComponent(man, new StanceIntent { TargetStance = StanceId.Prone, BlendTime = 0.9f, Version = 1 });
-        h.World.SetComponent(man, new StanceStatus { CurrentStance = StanceId.Standing, Phase = StanceTransitionPhase.Transitioning, TransitionProgress = 0f });
-        var change = Assert.Single(Gather(h, 12.4).Of<HrotPersonDetail>(), d => d.Id == 2001);
+        h.World.SetComponent(man, new StanceStatus
+        {
+            CurrentStance = StanceId.Standing, Phase = StanceTransitionPhase.Transitioning, TransitionProgress = 0f, FromStance = StanceId.Standing,
+            TransitionStartedAt = new SimInstant(12.4), TransitionSeconds = new SimDuration(0.9f),
+        });
+        var change = Assert.Single(Gather(h, 12.45).Of<HrotPersonDetail>(), d => d.Id == 2001);
         Assert.Equal((HrotStance.Prone, 12.4, 0.9f, 0f), (change.TargetStance, change.StanceChangedAt, change.StanceSeconds, change.StanceProgress));
 
         // the animation runs: the progress is not streamed
         foreach (float progress in new[] { 0.2f, 0.5f, 0.8f })
         {
-            h.World.SetComponent(man, new StanceStatus { CurrentStance = StanceId.Standing, Phase = StanceTransitionPhase.Transitioning, TransitionProgress = progress });
+            h.World.SetComponent(man, new StanceStatus
+            {
+                CurrentStance = StanceId.Standing, Phase = StanceTransitionPhase.Transitioning, TransitionProgress = progress, FromStance = StanceId.Standing,
+                TransitionStartedAt = new SimInstant(12.4), TransitionSeconds = new SimDuration(0.9f),
+            });
             Assert.DoesNotContain(Gather(h, 12.4 + progress).Of<HrotPersonDetail>(), d => d.Id == 2001);
         }
     }

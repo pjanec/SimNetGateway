@@ -9,6 +9,7 @@ using Fdp.Toolkit.Combat.Components;
 using Fdp.Toolkit.Creatures;
 using Fdp.Toolkit.Perception.Look;
 using Fdp.Toolkit.Tkb.Domain;
+using Fdp.Toolkit.Time;
 using Hrot.MuscleCharacter.Animation.Components;
 using SimNetGateway.Engine;
 using SimNetGateway.Engine.InMemory;
@@ -76,6 +77,44 @@ public class PersonDetailGatherTests
 
         Assert.Equal(HrotStance.Prone, d.TargetStance);
         Assert.Equal(0f, d.StanceProgress);   // 0 while the animation runs, the mid-transition value is never streamed (DD-020 3.2)
+    }
+
+    [Fact]
+    public void A_man_first_seen_mid_transition_gets_HROTs_real_start_duration_and_from_stance()
+    {
+        using var h = Live();
+        var e = Soldier(h, 2001);
+        h.World.AddComponent(e, new StanceIntent { TargetStance = StanceId.Prone });
+        h.World.AddComponent(e, new StanceStatus
+        {
+            CurrentStance = StanceId.Standing, Phase = StanceTransitionPhase.Transitioning, FromStance = StanceId.Crouched,
+            TransitionStartedAt = new SimInstant(7.25), TransitionSeconds = new SimDuration(0.8f),
+        });
+
+        var d = Single(Gather(h, 9.0), 2001);   // first seen long after the blend began
+
+        Assert.Equal((HrotStance.Prone, HrotStance.Crouched, 7.25, 0.8f), (d.TargetStance, d.StanceFrom, d.StanceChangedAt, d.StanceSeconds));
+    }
+
+    [Fact]
+    public void A_blend_that_leaves_the_ordered_stance_is_the_previous_one_and_no_blend_run_is_not_stated()
+    {
+        using var h = Live();
+        var e = Soldier(h, 2001);
+        h.World.AddComponent(e, new StanceIntent { TargetStance = StanceId.Standing });
+        h.World.AddComponent(e, new StanceStatus
+        {
+            CurrentStance = StanceId.Prone, Phase = StanceTransitionPhase.Locked, FromStance = StanceId.Standing,
+            TransitionStartedAt = new SimInstant(3.0), TransitionSeconds = new SimDuration(0.8f),
+        });
+        var stale = Single(Gather(h, 4.0), 2001);   // the order to stand is one tick old: the status still holds the blend into prone, which leaves standing
+        Assert.Equal((0.0, 0f, HrotStance.Standing), (stale.StanceChangedAt, stale.StanceSeconds, stale.StanceFrom));
+
+        var f = Soldier(h, 2002);
+        h.World.AddComponent(f, new StanceIntent { TargetStance = StanceId.Crouched });
+        h.World.AddComponent(f, new StanceStatus { CurrentStance = StanceId.Standing, Phase = StanceTransitionPhase.Idle });   // no blend has run (TransitionSeconds 0)
+        var none = Single(Gather(h, 4.0), 2002);
+        Assert.Equal((0.0, 0f, HrotStance.Crouched), (none.StanceChangedAt, none.StanceSeconds, none.StanceFrom));
     }
 
     [Fact]

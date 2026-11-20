@@ -384,7 +384,7 @@ public enum HrotCarryRole : byte
 /// DD-018 3.5c: <see cref="SeatIndex"/> is the seat slot of a man seated in a vehicle (<see cref="NoSeat"/> = none), <see cref="SeatExposed"/> whether he rides in the open,
 /// <see cref="SeatPose"/> the NAME of HROT's seat pose from the TKB seat ("" = unknown). <see cref="CarryRole"/> classifies the man by HROT's carriage rule;
 /// <see cref="CarryOther"/> is the network id of his holder (a man held by a person or seated in a vehicle) or of what he carries (the casualty or the load; 0 = none);
-/// DD-020 3.2: <see cref="StanceChangedAt"/> is the sim time the gateway first saw the current target stance and <see cref="StanceSeconds"/> HROT's blend time (0 = not stated); <see cref="StanceProgress"/> is 0 once a
+/// DD-020 9 Round 6: <see cref="StanceChangedAt"/> is the sim time HROT's muscle began the current blend (StanceStatus.TransitionStartedAt), <see cref="StanceSeconds"/> its duration (TransitionSeconds) and <see cref="StanceFrom"/> the stance it leaves (Unknown = not stated, no blend run); <see cref="StanceProgress"/> is 0 once a
 /// transition began and 1 when settled (never streamed in between). <see cref="LookTargetId"/> is the network id of the entity he looks at (0 = a point look or none); a look is reported only while his head is turned off
 /// his body, <see cref="HeadYaw"/> and <see cref="LookTarget"/> are the values at the time of sending (a change of either alone sends nothing).
 /// <see cref="Partner"/> the other man of a pair carrying one load (0 = none).
@@ -394,7 +394,7 @@ public readonly record struct HrotPersonDetail(
     HrotGesture Gesture, HrotAction Action, int ActionTarget, HrotActionState ActionState, double ActionStartedAt, int SeatVehicle, HrotSeatRole SeatRole,
     HrotCarryMode Carry, bool Burning = false, byte Fear = 0, byte Anger = 0, string CivilianMode = "", byte SeatIndex = HrotPersonDetail.NoSeat, bool SeatExposed = false,
     string SeatPose = "", HrotCarryRole CarryRole = HrotCarryRole.None, int CarryOther = 0, int Partner = 0, double StanceChangedAt = 0.0, float StanceSeconds = 0f,
-    int LookTargetId = 0) : IHrotToGatewayMessage
+    int LookTargetId = 0, HrotStance StanceFrom = HrotStance.Unknown) : IHrotToGatewayMessage
 {
     /// <summary><see cref="SeatIndex"/> of a person who is not in a vehicle seat.</summary>
     public const byte NoSeat = 255;
@@ -406,11 +406,12 @@ public readonly record struct HrotPersonDetail(
 /// side never decodes HROT's numbers (a value HROT appends or reorders cannot be silently mislabelled; a side maps the names it knows and treats any other as unknown).
 /// <paramref name="MunitionDis"/> is the munition's packed DIS entity type (0 = none), <paramref name="EffectType"/> the
 /// effect's template type. <paramref name="AnchorEntity"/> is the network id of the entity the effect hangs on (the shooter for a muzzle flash; 0 = placed at
-/// <paramref name="At"/>), <paramref name="AnchorMount"/> the weapon mount that fired. Local ENU metres, seconds.
+/// <paramref name="At"/>), <paramref name="AnchorMount"/> the weapon mount that fired. <paramref name="StartedAt"/> is the simulation time the effect began (HROT's
+/// <c>EffectSpec.StartedAt</c>; 0 = not stated). Local ENU metres, seconds.
 /// </summary>
 public readonly record struct HrotEffect(
     string Kind, string SizeClass, string Surface, ulong MunitionDis, long EffectType, HrotVec3 At, HrotQuat Rotation, int AnchorEntity, byte AnchorMount, float Lifetime,
-    float Size) : IHrotToGatewayMessage;
+    float Size, double StartedAt = 0.0) : IHrotToGatewayMessage;
 
 /// <summary>
 /// A person's resolved outfit from HROT's look library, sent once per person and again when it changes. Colours are 0xRRGGBBAA; the kinds are the names of HROT's own outfit

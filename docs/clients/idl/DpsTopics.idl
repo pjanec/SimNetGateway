@@ -144,6 +144,7 @@ module SimNetGateway {
                 int32 PartnerId;
                 double StanceChangedAt;
                 float StanceSeconds;
+                SimNetGateway::Protocol::DdsPlayer::Stance StanceFrom;
             };
 
             @topic

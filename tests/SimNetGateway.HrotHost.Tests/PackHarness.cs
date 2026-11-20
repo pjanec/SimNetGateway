@@ -164,6 +164,68 @@ public class PackHarness : IDisposable
         }
     }
 
+    private sealed class EffectSink : IIngressSink
+    {
+        public readonly List<HrotEffect> Effects = new();
+
+        public void Deliver<T>(in T message, double? receivedAt = null)
+        {
+            if (message is HrotEffect effect)
+            {
+                Effects.Add(effect);
+            }
+        }
+    }
+
+    /// <summary>The effect-state gather, called the way the gateway does (one path for live and replay): the effects of the effect entities not sent before.</summary>
+    public List<HrotEffect> GatherEffects(double simNow, bool replaying = false)
+    {
+        var inbound = new InMemoryInbound(new SourceId(99), "test");
+        Adapter.GatherEffects(World, inbound, simNow, replaying);
+        var sink = new EffectSink();
+        inbound.Drain(sink, int.MaxValue);
+        return sink.Effects;
+    }
+
+    /// <summary>
+    /// Makes an effect entity for every spec, as HROT's <c>EffectSpawnSystem.SpawnAll</c> does (transform, effect type, lifespan, anchor, cause); the specs come from HROT's own
+    /// rules (<c>EffectRules.ForShot</c> ...), so the entities are what the map would have made.
+    /// </summary>
+    public List<Entity> SpawnEffects(double now, Action<List<Hrot.Look.Effects.EffectSpec>> rule)
+    {
+        foreach (var register in new Action[]
+        {
+            () => { if (!World.IsComponentTypeRegistered<Hrot.Map.Common.Components.EffectCause>()) { World.RegisterComponent<Hrot.Map.Common.Components.EffectCause>(); } },
+        })
+        {
+            register();
+        }
+
+        var specs = new List<Hrot.Look.Effects.EffectSpec>();
+        rule(specs);
+        var made = new List<Entity>();
+        foreach (var spec in specs)
+        {
+            var e = World.CreateEntity();
+            World.AddComponent(e, new SimTransform { Position = spec.At, Rotation = spec.Rotation });
+            World.AddComponent(e, new TkbIdentity { TkbType = (Fdp.Core.TkbTypeId)spec.EffectType });
+            World.AddComponent(e, Fdp.Toolkit.Time.Lifespan.Starting(now, spec.Lifetime));
+            if (spec.Anchor is { } anchor)
+            {
+                World.AddComponent(e, anchor);
+            }
+
+            if (spec.Cause is { } cause)
+            {
+                World.AddComponent(e, cause);
+            }
+
+            made.Add(e);
+        }
+
+        return made;
+    }
+
     /// <summary>Decodes what the DIS socket sent since the last step into <see cref="DisSent"/> (a step does it; a test calls it after a teardown).</summary>
     public void Drain()
     {

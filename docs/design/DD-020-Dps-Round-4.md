@@ -194,3 +194,15 @@ T-037 was built in one round (protocol still 1.0, 35 topics). What waits for HRO
 
 1. A start time of a stance transition in `StanceIntent` or `StanceStatus` (today the gateway's first sight stands in).
 2. Nothing else is blocked: the aim target, the look target entity, the blend time, the spool and the opening rules are all in HROT's state on the producing node.
+
+### Round 6: the stance gap closed (HROT `c5f8c1971`)
+
+HROT's muscle now writes the blend's timing into the replicated, recorded `StanceStatus` (`TransitionStartedAt`, `FromStance`, `TransitionSeconds`, commit `0293ceea7`, CE-11014; one duration rule `StanceTiming.Effective`, R-11006; progress anywhere is `StanceTiming.ProgressAt`). The gateway reads it:
+
+- `PersonState.StanceChangedAt` = `TransitionStartedAt`, `StanceSeconds` = `TransitionSeconds` (so the blend's real duration, including the per-pair default 0.35 / 0.8 s that `StanceIntent.BlendTime` left at 0, no longer 0 = not stated). The first-seen approximation (`Book.LastTarget`, the sim time of the gather that saw a new target) is deleted, so a man first seen mid-transition, a late joiner and a replay seek get the real start.
+- **Appended `PersonState.StanceFrom`** (contract append, protocol still 1.0, committed IDL refreshed): `Stance` equals `TargetStance` in this contract (both are HROT's logical stance), so a client that first sees a man mid-blend could not know what to blend from. `StanceFrom` = `StanceStatus.FromStance`; equal to `TargetStance` when no blend is stated. `HrotPersonDetail` gained the appended `StanceFrom`.
+- A blend is reported only while it leaves another stance than the ordered one: the muscle writes the status a tick after the order, and in that tick the status still holds the previous blend (which leaves the stance now ordered), so it reads as none rather than as the old one.
+- Bodies with no `StanceStatus` blend (no muscle, `CanChangeStance` off) and a status with no blend run yet read 0 / 0 (not stated: the client uses its own clip length).
+- `StanceProgress` of the pivot message is unchanged (0 while `Phase` is Transitioning, 1 otherwise, never streamed).
+
+The "What waits for HROT" item 1 above is resolved. **Proof:** `PersonDetailGatherTests` (a man first seen mid-transition; a blend that leaves the ordered stance and no blend run), `DpsIntentRateTests.A_stance_change_sends_...`, and the plugin and protocol round trips of `StanceFrom`; mutation checked (the start read as 0 fails the first two; dropping the leaves-the-ordered-stance rule fails the stale-blend test).
