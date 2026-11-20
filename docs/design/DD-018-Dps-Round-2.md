@@ -152,6 +152,27 @@ Bullets without a look stay off the wire (`Fire` is enough).
 - **`VehicleLook.RotorSpeed`** filled from `VehicleLook.RotorSpeed` (0..1), sent on a change of 0.05 or more and when it reaches 0 or 1.
 - **`OpeningLook` appended `CrewExposed`** (`VehicleLook.CrewExposed` per opening id).
 
+### 3.5a Animals, riders and the aim (P-5a)
+
+HROT has animals (HROT `docs/designs/animals/DESIGN_Animals.md`): cattle, sheep, goats, pigs, horses (herd, riding, war), dogs,
+cats, rabbits, hens, birds and flocks. Ridden horses are carriers with seats like a motorcycle (a firing rider seat). A dragon
+(HROT CE-4634, open) is planned as the bird flight model scaled up with a rider seat and a flame breath on the shared flame.
+
+- **`Domain` gains `DomainAnimal`** (appended): today a DIS kind-3 animal (category 200 - 208) maps to `DomainPerson`, wrongly.
+- **`Animal`** (state, keyed by `EntityId`, for animals only): `Mode` (HROT's `AnimalMode` by name: Calm, Alert, Flee, Recover, Rest,
+  Guard, Crouch), `FearBand` (0..3), flags `Bolting`, `Dangerous`, `Calling`; and for a flock (one entity drawn as many birds) `FlockCount`,
+  `FlockInitialCount`, `FlockSeed`, `FlockMode` (Flying, Landed, Perched; count 0 = a single body). From HROT's `AnimalState` /
+  `FlockState`; the species is the type (`TkbType`). The client animates (gait from speed, grazing, lying when resting, the flock's
+  birds) by HROT's rules, linked in the client guide.
+- **Riders:** a rider's `PersonState` already names the carrier (`SeatVehicleId`) and the seat role; the seat's pose (ride astride)
+  and position come from the carrier's type data (`TkbType`: HROT's carrier seats with `SeatPose`). A dragon will be the same: an
+  animal carrier with a rider seat, its breath a `FlameJet` on its mount.
+- **The aim point is HROT's own:** `PersonState.AimPoint` is filled by HROT's one reading of the posture's aim
+  (`WeaponPostureOf.TryAimPoint`: the target's chest, 1 m above its position, or the aimed point). Round 1 sent the target's position
+  (its feet), so a client's upper body pitched too low. The client turns and pitches the upper body toward it from the shoulder,
+  within HROT's limits (twist 75 degrees, pitch 35 degrees, eased with a 0.12 s time constant; none when prone or dead), and turns
+  the head by `HeadYaw` less the drawn twist, within the neck - the rules are in the client guide.
+
 ### 3.6 Gizmo heights (P-6)
 
 The host gives 2-D primitives (box, text) the ground height at their point from HROT's terrain height query, so a client never sees
