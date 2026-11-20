@@ -541,7 +541,7 @@ public sealed class EcsHrotAdapter
     private static bool Changed(in HrotEntityState a, in HrotEntityState b)
     {
         if (a.Marking != b.Marking || a.Force != b.Force || a.TkbType != b.TkbType || a.HealthCurrent != b.HealthCurrent || a.HealthMax != b.HealthMax
-            || a.Stance != b.Stance || a.Weapon != b.Weapon || a.Injury != b.Injury || Math.Abs(a.Bank - b.Bank) * (180.0 / Math.PI) > OrientationEpsilonDeg || a.AimTargetId != b.AimTargetId || (b.Weapon == HrotWeaponPosture.Aimed && b.AimTargetId == 0 && Dist(a.AimPoint, b.AimPoint) > AimEpsilonM))
+            || a.Stance != b.Stance || a.Weapon != b.Weapon || a.Injury != b.Injury || Math.Abs(a.Bank - b.Bank) * (180.0 / Math.PI) > OrientationEpsilonDeg || a.AimTargetId != b.AimTargetId || (b.Weapon == HrotWeaponPosture.Aimed && Dist(a.AimPoint, b.AimPoint) > AimEpsilonM))
         {
             return true;
         }

@@ -70,10 +70,14 @@ public class LifeFormGatherTests
         Assert.Equal(expected.Y, p.Aim.Y, 1);
         Assert.Equal(expected.Z, p.Aim.Z, 1);
 
-        // the target moves: the shooter names it, the state is not re-sent for the chest (DD-020 3.2), so the stored point stays the first sample
+        // the target moves: the pivot's aim point follows its chest (entity sides publish it); only DPS uses the target id instead
         h.Move(target, new Vector3(60, 10, 0));
         h.Steps(5);
-        Assert.Equal(expected.X, Pivot(h, 2001).Aim.X, 1);
+        var follows = h.Frame.PointToEcef(new Vec3(60, 10, 1));
+        var now = Pivot(h, 2001).Aim;
+        Assert.Equal(follows.X, now.X, 1);
+        Assert.Equal(follows.Y, now.Y, 1);
+        Assert.Equal(follows.Z, now.Z, 1);
     }
 
     [Fact]

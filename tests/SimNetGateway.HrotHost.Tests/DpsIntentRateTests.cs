@@ -135,7 +135,7 @@ public class DpsIntentRateTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void An_aim_at_a_unit_names_it_and_the_moving_chest_is_no_new_state()
+    public void An_aim_at_a_unit_names_it_and_the_entity_state_still_follows_the_moving_chest()
     {
         using var h = Live();
         var target = h.AddHrotEntity(2002, new Vector3(40, 10, 0), tkb: 100);
@@ -145,11 +145,12 @@ public class DpsIntentRateTests(ITestOutputHelper output)
         var first = Assert.Single(Gather(h, 1.0).Of<HrotEntityState>(), s => s.Id == 2001);
         Assert.Equal((HrotWeaponPosture.Aimed, 2002, new HrotVec3(40, 10, 1)), (first.Weapon, first.AimTargetId, first.AimPoint));   // the chest stays as the fallback
 
-        // the target walks 20 m: the shooter's state is not sent again for that (the target's own is)
+        // the target walks 20 m: the shooter's entity state follows the chest (the entity sides - DIS, HLA and other gateways - publish the
+        // aim point and re-send it on a move); DPS takes the target id from it and does not stream the point (PersonAim, DD-020 3.2)
         h.Move(target, new Vector3(60, 10, 0));
-        Assert.DoesNotContain(Gather(h, 1.1).Of<HrotEntityState>(), s => s.Id == 2001);
-        h.Move(target, new Vector3(90, 10, 0));
-        Assert.DoesNotContain(Gather(h, 1.2).Of<HrotEntityState>(), s => s.Id == 2001);
+        var moved = Assert.Single(Gather(h, 1.1).Of<HrotEntityState>(), s => s.Id == 2001);
+        Assert.Equal((2002, new HrotVec3(60, 10, 1)), (moved.AimTargetId, moved.AimPoint));
+        Assert.DoesNotContain(Gather(h, 1.2).Of<HrotEntityState>(), s => s.Id == 2001);   // nothing moved: nothing re-sent
     }
 
     [Fact]
