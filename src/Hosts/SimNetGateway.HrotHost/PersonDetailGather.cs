@@ -5,6 +5,7 @@ using Fdp.Toolkit.Behavior;
 using Fdp.Toolkit.Behavior.Components;
 using Fdp.Toolkit.Combat;
 using Fdp.Toolkit.Combat.Components;
+using Fdp.Toolkit.Creatures;
 using Fdp.Toolkit.Perception.Look;
 using Fdp.Toolkit.Replication.Components;
 using Fdp.Toolkit.Tkb.Domain;
@@ -36,7 +37,7 @@ internal sealed class PersonDetailGather
     {
         Ensure<StanceStatus>(world);
         Ensure<LookState>(world);
-        Ensure<Gesture>(world);
+        Ensure<Demeanour>(world);   // the gesture is Demeanour.Kind (read through Gestures.Of)
         Ensure<InteractionChannel>(world);
         Ensure<IsEmbarkedTag>(world);
         Ensure<CarrierSeats>(world);

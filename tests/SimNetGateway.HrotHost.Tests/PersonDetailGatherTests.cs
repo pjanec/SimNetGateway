@@ -6,6 +6,7 @@ using Fdp.Toolkit.Behavior.Components;
 using Fdp.Toolkit.Behavior.Executors;
 using Fdp.Toolkit.Combat;
 using Fdp.Toolkit.Combat.Components;
+using Fdp.Toolkit.Creatures;
 using Fdp.Toolkit.Perception.Look;
 using Fdp.Toolkit.Tkb.Domain;
 using Hrot.MuscleCharacter.Animation.Components;
@@ -136,7 +137,7 @@ public class PersonDetailGatherTests
     {
         using var h = Live();
         var e = Soldier(h, 2001);
-        h.World.AddComponent(e, new Gesture { Kind = GestureKind.Waving });
+        h.World.AddComponent(e, new Demeanour { Kind = GestureKind.Waving });
 
         Assert.Equal(HrotGesture.Waving, Single(Gather(h, 1.0), 2001).Gesture);
     }
@@ -239,7 +240,7 @@ public class PersonDetailGatherTests
     {
         using var h = Live();
         var tank = h.AddHrotEntity(2100, new Vector3(3, 0, 0));
-        h.World.AddComponent(tank, new Gesture { Kind = GestureKind.Waving });
+        h.World.AddComponent(tank, new Demeanour { Kind = GestureKind.Waving });
         h.World.AddComponent(tank, new LookState { HasTarget = 1, Target = new Vector3(1, 2, 3) });
 
         Assert.Empty(Gather(h, 1.0));
@@ -250,13 +251,13 @@ public class PersonDetailGatherTests
     {
         using var h = Live();
         var e = Soldier(h, 2001);
-        h.World.AddComponent(e, new Gesture { Kind = GestureKind.HandsUp });
+        h.World.AddComponent(e, new Demeanour { Kind = GestureKind.HandsUp });
 
         Assert.Single(Gather(h, 1.0));
         Assert.Empty(Gather(h, 2.0));
         Assert.Empty(Gather(h, 3.0));
 
-        h.World.SetComponent(e, new Gesture { Kind = GestureKind.None });
+        h.World.SetComponent(e, new Demeanour { Kind = GestureKind.None });
         Assert.Equal(HrotGesture.None, Single(Gather(h, 4.0), 2001).Gesture);
     }
 

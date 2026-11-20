@@ -291,6 +291,12 @@ public sealed class EcsHrotAdapter
                 continue;
             }
 
+            // A flamethrower's fuel shot (~10/s) is a stream, not a gunshot: HROT's look rules give it no flash or blast, so no HrotFire.
+            if (Hrot.Look.Effects.EffectRules.IsFuelShot(CombatTkb.MountOf(world, f.Shooter, f.WeaponIndex)))
+            {
+                continue;
+            }
+
             TryHrotId(world, f.Target, out int target);
             var origin = f.Origin == Vector3.Zero && world.HasComponent<SimTransform>(f.Shooter) ? (Vector3)world.GetComponentRO<SimTransform>(f.Shooter).Position : f.Origin;
             inbound.Enqueue(new HrotFire(shooter, target, f.AmmoGuid, MunitionDis(tkb, f.AmmoGuid), V(origin), V(f.Velocity), Math.Max(1, f.Quantity)));

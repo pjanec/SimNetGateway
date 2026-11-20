@@ -114,6 +114,20 @@ public class LookGatherTests
     }
 
     [Fact]
+    public void A_fuel_shot_sends_no_fire_while_an_ordinary_shot_does()
+    {
+        using var h = new Stage();
+        var tank = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: TankType);
+        var flamer = h.AddHrotEntity(2002, new Vector3(5, 0, 3), tkb: Hrot.Core.Tkb.UrbanCombatTkbCatalog.TkbFlamethrowerSoldier);
+        h.PublishForNextFrame(new WeaponFireNotification { Shooter = flamer, Target = Entity.Null, WeaponIndex = 0, Quantity = 1 });
+        Assert.Empty(h.GatherEvents().Of<HrotFire>());
+
+        h.PublishForNextFrame(new WeaponFireNotification { Shooter = tank, Target = Entity.Null, WeaponIndex = 0, Quantity = 1 });
+        var fire = Assert.Single(h.GatherEvents().Of<HrotFire>());
+        Assert.Equal(2001, fire.ShooterId);
+    }
+
+    [Fact]
     public void A_frame_without_events_sends_no_effect()
     {
         using var h = new Stage();
@@ -262,7 +276,7 @@ public class LookGatherTests
     [Fact]
     public void The_look_enumerations_the_plugins_map_by_name_are_unchanged()
     {
-        Assert.Equal(["MuzzleFlash", "Explosion", "Decal", "Tracer", "Fire", "Smoke", "Flare", "Chaff"], Enum.GetNames<Fdp.Toolkit.Tkb.Domain.EffectKind>());
+        Assert.Equal(["MuzzleFlash", "Explosion", "Decal", "Tracer", "Fire", "Smoke", "Flare", "Chaff", "FlameJet"], Enum.GetNames<Fdp.Toolkit.Tkb.Domain.EffectKind>());
         Assert.Equal(["Small", "Medium", "Large", "Huge"], Enum.GetNames<Hrot.Core.Tkb.EffectTkbCatalog.CalibreClass>());
         Assert.Equal(["Ground", "Water", "Building", "Vehicle", "Person", "Air"], Enum.GetNames<Hrot.Look.Effects.EffectSurface>());
         Assert.Equal(["None", "KnockedOut", "BurntOut", "Catastrophic"], Enum.GetNames<DestructionKind>());
