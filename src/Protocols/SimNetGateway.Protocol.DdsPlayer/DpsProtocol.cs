@@ -18,6 +18,7 @@ public static class DpsProtocol
     public const string Fire = "DPS_Fire";
     public const string Detonation = "DPS_Detonation";
     public const string Effect = "DPS_Effect";
+    public const string Impact = "DPS_Impact";
     public const string VehicleLook = "DPS_VehicleLook";
     public const string Round = "DPS_Round";
     public const string MunitionLook = "DPS_MunitionLook";
@@ -34,6 +35,7 @@ public static class DpsProtocol
     public const string PlayerMessage = "DPS_PlayerMessage";
     public const string Status = "DPS_Status";
     public const string Exercise = "DPS_Exercise";
+    public const string View = "DPS_View";
     public const string PlayerSlot = "DPS_PlayerSlot";
     public const string OwnUnit = "DPS_OwnUnit";
     public const string JoinRequest = "DPS_JoinRequest";
@@ -45,10 +47,10 @@ public static class DpsProtocol
     /// <summary>Every topic name, in the order of DD-017 section 4.</summary>
     public static readonly IReadOnlyList<string> AllTopics =
     [
-        Session, Entity, EntityState, Articulation, PersonState, Appearance, Fire, Detonation, Effect, VehicleLook,
+        Session, Entity, EntityState, Articulation, PersonState, Appearance, Fire, Detonation, Effect, Impact, VehicleLook,
         Round, MunitionLook, FlameJet, FireSpots, GroundMarks,
         Animal, TkbType, BuildingDamage, Mover, MoverTracks, TrafficLights,
-        ManDowned, PlayerMessage, Status, Exercise,
+        ManDowned, PlayerMessage, Status, Exercise, View,
         PlayerSlot, OwnUnit, JoinRequest, ControlFrame, Leave, GizmoView, GizmoFrame,
     ];
 }

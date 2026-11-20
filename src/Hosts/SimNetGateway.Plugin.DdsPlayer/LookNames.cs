@@ -58,6 +58,15 @@ internal static class LookNames
         _ => D.EffectSurface.EffectSurfaceUnknown,
     };
 
+    /// <summary>HROT's impact kind (Entry, Exit, Stop) as the contract's Entered, Left, Stopped.</summary>
+    public static D.ImpactKind ImpactKindOf(string? name) => name switch
+    {
+        "Entry" => D.ImpactKind.ImpactKindEntered,
+        "Exit" => D.ImpactKind.ImpactKindLeft,
+        "Stop" => D.ImpactKind.ImpactKindStopped,
+        _ => D.ImpactKind.ImpactKindUnknown,
+    };
+
     /// <summary>HROT's destruction kind; an empty name is "not destroyed", an unknown one "destroyed, kind unknown".</summary>
     public static D.KillKind KillKindOf(string? name) => name switch
     {

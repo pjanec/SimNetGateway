@@ -559,7 +559,7 @@ Scenario: an infantry street fight with vehicles and aircraft (45 units) on a te
 
 Gaps found (follow-ups, not fixed in this round):
 
-- **No `Effect` in replay.** `EffectRules.ForFrame` reads the events of the simulation world; in replay HROT raises none there, so the
+- **No `Effect` in replay (fixed by DD-019 3.7, T-036).** `EffectRules.ForFrame` reads the events of the simulation world; in replay HROT raises none there, so the
   effects stop while fire and detonation still flow. A client can derive effects from `Fire` / `Detonation` meanwhile; the fix belongs in
   how the host feeds the look library in replay (or in HROT's replay).
 - **Doors as entities.** 3852 of the 3898 entities are doors (networked, with a door state in HROT); DPS sends them as `Entity` /

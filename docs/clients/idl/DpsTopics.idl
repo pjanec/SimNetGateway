@@ -1,0 +1,685 @@
+// DPS protocol 1.0, generated from SimNetGateway.Protocol.DdsPlayer - do not edit
+// Auto-generated IDL for DpsTopics by CycloneDDS C# Bindings
+#ifndef _CYCLONEDDS_GENERATED_DPSTOPICS_IDL_
+#define _CYCLONEDDS_GENERATED_DPSTOPICS_IDL_
+
+#include "DpsTypes.idl"
+
+module SimNetGateway {
+    module Protocol {
+        module DdsPlayer {
+            @appendable
+            struct Vec3d {
+                double X;
+                double Y;
+                double Z;
+            };
+
+            @appendable
+            struct Vec3f {
+                float X;
+                float Y;
+                float Z;
+            };
+
+            @appendable
+            struct Quat {
+                float X;
+                float Y;
+                float Z;
+                float W;
+            };
+
+            @appendable
+            struct DisType {
+                octet Kind;
+                octet Domain;
+                uint16 Country;
+                octet Category;
+                octet Subcategory;
+                octet Specific;
+                octet Extra;
+            };
+
+            @appendable
+            struct NameItem {
+                string<32> Name;
+            };
+
+            @topic
+            @appendable
+            struct Session {
+                int32 ProtocolMajor;
+                int32 ProtocolMinor;
+                SimNetGateway::Protocol::DdsPlayer::SessionMode Mode;
+                double SimTime;
+                double TimeScale;
+                uint32 WorldEpoch;
+                string<64> Terrain;
+                string<64> StationName;
+                int32 UtmZone;
+                boolean UtmNorthern;
+                double OriginEasting;
+                double OriginNorthing;
+            };
+
+            @topic
+            @appendable
+            struct Entity {
+                @key int32 EntityId;
+                int64 _TypeId;
+                SimNetGateway::Protocol::DdsPlayer::Domain Domain;
+                octet Side;
+                string<64> Name;
+                SimNetGateway::Protocol::DdsPlayer::DisType Dis;
+                boolean Playable;
+                int32 ParentId;
+            };
+
+            @topic
+            @appendable
+            struct EntityState {
+                @key int32 EntityId;
+                double SimTime;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d Position;
+                SimNetGateway::Protocol::DdsPlayer::Quat Orientation;
+                SimNetGateway::Protocol::DdsPlayer::Vec3f LinearVelocity;
+                SimNetGateway::Protocol::DdsPlayer::Vec3f AngularVelocity;
+                SimNetGateway::Protocol::DdsPlayer::Vec3f LinearAcceleration;
+                SimNetGateway::Protocol::DdsPlayer::Vec3f AngularAcceleration;
+                SimNetGateway::Protocol::DdsPlayer::PartCondition Damage;
+                float Bank;
+            };
+
+            @topic
+            @appendable
+            struct Articulation {
+                @key int32 EntityId;
+                @key int32 PartId;
+                string<32> Kind;
+                double SimTime;
+                float Azimuth;
+                float Elevation;
+                float Extension;
+                float Rate;
+            };
+
+            @topic
+            @appendable
+            struct PersonState {
+                @key int32 EntityId;
+                double SimTime;
+                SimNetGateway::Protocol::DdsPlayer::Stance Stance;
+                SimNetGateway::Protocol::DdsPlayer::Stance TargetStance;
+                float StanceProgress;
+                SimNetGateway::Protocol::DdsPlayer::WeaponPosture Posture;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d AimPoint;
+                octet ActiveSlot;
+                SimNetGateway::Protocol::DdsPlayer::HeldItem Held;
+                boolean HasLookTarget;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d LookTarget;
+                float HeadYaw;
+                SimNetGateway::Protocol::DdsPlayer::Gesture Gesture;
+                SimNetGateway::Protocol::DdsPlayer::Injury Injury;
+                SimNetGateway::Protocol::DdsPlayer::ActionKind Action;
+                int32 ActionTargetId;
+                SimNetGateway::Protocol::DdsPlayer::ActionState ActionState;
+                double ActionStartSimTime;
+                int32 SeatVehicleId;
+                SimNetGateway::Protocol::DdsPlayer::SeatRole SeatRole;
+                SimNetGateway::Protocol::DdsPlayer::CarryMode CarryMode;
+                int32 CarryOtherId;
+                boolean Burning;
+                octet Fear;
+                octet Anger;
+                SimNetGateway::Protocol::DdsPlayer::CivilianMode CivilianMode;
+                octet SeatIndex;
+                boolean SeatExposed;
+                SimNetGateway::Protocol::DdsPlayer::SeatPose SeatPose;
+                SimNetGateway::Protocol::DdsPlayer::CarryRole CarryRole;
+                int32 PartnerId;
+            };
+
+            @appendable
+            struct AppearanceSlot {
+                string<32> Slot;
+                string<32> Kind;
+                uint32 ColourRgba;
+            };
+
+            @appendable
+            struct EquipmentItem {
+                string<32> Slot;
+                string<32> Kind;
+                int32 _TypeId;
+                string<64> Attachments;
+            };
+
+            @topic
+            @appendable
+            struct Appearance {
+                @key int32 EntityId;
+                uint32 Seed;
+                octet Side;
+                sequence<SimNetGateway::Protocol::DdsPlayer::AppearanceSlot, 16> Slots;
+                string<32> Camouflage;
+                string<32> Hair;
+                string<64> FaceTraits;
+                SimNetGateway::Protocol::DdsPlayer::Sex Sex;
+                SimNetGateway::Protocol::DdsPlayer::AgeClass AgeClass;
+                boolean IsSoldier;
+                boolean IsChild;
+                boolean IsWoman;
+                boolean IsPolice;
+                sequence<SimNetGateway::Protocol::DdsPlayer::EquipmentItem, 16> Equipment;
+            };
+
+            @appendable
+            struct PartLook {
+                int32 PartId;
+                SimNetGateway::Protocol::DdsPlayer::PartCondition State;
+            };
+
+            @appendable
+            struct OpeningLook {
+                int32 OpeningId;
+                float Progress;
+                boolean CrewExposed;
+            };
+
+            @topic
+            @appendable
+            struct VehicleLook {
+                @key int32 EntityId;
+                sequence<SimNetGateway::Protocol::DdsPlayer::PartLook, 32> Parts;
+                SimNetGateway::Protocol::DdsPlayer::KillKind KillKind;
+                boolean TurretThrown;
+                boolean Burning;
+                boolean Smoking;
+                sequence<SimNetGateway::Protocol::DdsPlayer::OpeningLook, 16> Openings;
+                uint32 LightMask;
+                float RotorSpeed;
+                octet SmokeLaunchers;
+                boolean FlailActive;
+            };
+
+            @topic
+            @appendable
+            struct Round {
+                @key int32 EntityId;
+                int64 MunitionTypeId;
+                int32 ShooterId;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d Muzzle;
+                boolean Lying;
+                float FuzeLeftS;
+                boolean Stopped;
+                double LaunchedAt;
+                float BurnSeconds;
+            };
+
+            @topic
+            @appendable
+            struct MunitionLook {
+                @key int64 MunitionTypeId;
+                SimNetGateway::Protocol::DdsPlayer::MunitionShape Shape;
+                float Length;
+                float Diameter;
+                uint32 ColourRgba;
+                boolean SmokeTrail;
+                boolean Tracer;
+                uint32 TracerColourRgba;
+                boolean Sticks;
+                boolean Bolt;
+            };
+
+            @topic
+            @appendable
+            struct FlameJet {
+                @key int32 EntityId;
+                @key int32 Mount;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d AimPoint;
+                int32 TargetId;
+                float RangeM;
+                float HalfAngleRad;
+                float Intensity;
+                double BurstStartedAt;
+                float BurnSeconds;
+            };
+
+            @appendable
+            struct FireSpot {
+                SimNetGateway::Protocol::DdsPlayer::Vec3d Position;
+                float Radius;
+                float Intensity;
+                double Since;
+                float Seconds;
+            };
+
+            @topic
+            @appendable
+            struct FireSpots {
+                @key int32 EntityId;
+                sequence<SimNetGateway::Protocol::DdsPlayer::FireSpot, 8> Spots;
+            };
+
+            @appendable
+            struct GroundMark {
+                SimNetGateway::Protocol::DdsPlayer::HeatMarkKind Kind;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d Centre;
+                float Heading;
+                float Length;
+                float Width;
+                SimNetGateway::Protocol::DdsPlayer::HeatMarkEnd HotEnd;
+                double StandSince;
+                double LeftAt;
+            };
+
+            @topic
+            @appendable
+            struct GroundMarks {
+                @key int32 EntityId;
+                sequence<SimNetGateway::Protocol::DdsPlayer::GroundMark, 16> Marks;
+            };
+
+            @topic
+            @appendable
+            struct Animal {
+                @key int32 EntityId;
+                SimNetGateway::Protocol::DdsPlayer::AnimalMode Mode;
+                octet FearBand;
+                boolean Bolting;
+                boolean Dangerous;
+                boolean Calling;
+                int32 FlockCount;
+                int32 FlockInitialCount;
+                uint32 FlockSeed;
+                SimNetGateway::Protocol::DdsPlayer::FlockMode FlockMode;
+                boolean Airborne;
+            };
+
+            @topic
+            @appendable
+            struct TkbType {
+                @key int64 _TypeId;
+                string<64> Name;
+                string<128> CategoryPath;
+                string<64> DisType;
+                string<16> Schema;
+                uint64 ContentHash;
+                string Json;
+            };
+
+            @appendable
+            struct Breach {
+                int32 Panel;
+                float From;
+                float To;
+                float Bottom;
+                float Top;
+                SimNetGateway::Protocol::DdsPlayer::BreachKind Kind;
+            };
+
+            @appendable
+            struct WindowDamage {
+                int32 Panel;
+                int32 Opening;
+                octet Hits;
+                octet U0;
+                octet V0;
+                octet U1;
+                octet V1;
+            };
+
+            @topic
+            @appendable
+            struct BuildingDamage {
+                @key string<256> Building;
+                boolean Collapsed;
+                sequence<SimNetGateway::Protocol::DdsPlayer::Breach, 64> Breaches;
+                sequence<SimNetGateway::Protocol::DdsPlayer::WindowDamage, 256> Windows;
+            };
+
+            @topic
+            @appendable
+            struct Fire {
+                double SimTime;
+                int32 ShooterId;
+                int32 TargetId;
+                int64 MunitionTypeId;
+                SimNetGateway::Protocol::DdsPlayer::DisType MunitionDis;
+                octet WeaponSlot;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d Origin;
+                SimNetGateway::Protocol::DdsPlayer::Vec3f Velocity;
+                SimNetGateway::Protocol::DdsPlayer::WeaponCategory WeaponCategory;
+            };
+
+            @topic
+            @appendable
+            struct Detonation {
+                double SimTime;
+                int32 ShooterId;
+                int32 TargetId;
+                int64 MunitionTypeId;
+                SimNetGateway::Protocol::DdsPlayer::DisType MunitionDis;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d Position;
+                SimNetGateway::Protocol::DdsPlayer::Vec3f Velocity;
+                octet Result;
+            };
+
+            @topic
+            @appendable
+            struct Effect {
+                double SimTime;
+                SimNetGateway::Protocol::DdsPlayer::EffectKind Kind;
+                SimNetGateway::Protocol::DdsPlayer::EffectSize SizeClass;
+                SimNetGateway::Protocol::DdsPlayer::EffectSurface Surface;
+                SimNetGateway::Protocol::DdsPlayer::DisType MunitionDis;
+                int32 EffectType;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d Position;
+                SimNetGateway::Protocol::DdsPlayer::Quat Rotation;
+                int32 AnchorId;
+                octet AnchorWeaponSlot;
+                float LifetimeSeconds;
+                float Size;
+            };
+
+            @topic
+            @appendable
+            struct Impact {
+                double SimTime;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d Position;
+                SimNetGateway::Protocol::DdsPlayer::Vec3f Normal;
+                SimNetGateway::Protocol::DdsPlayer::EffectSurface Surface;
+                SimNetGateway::Protocol::DdsPlayer::ImpactKind Kind;
+                int64 MunitionTypeId;
+                int32 ShooterId;
+                string<32> Material;
+            };
+
+            @topic
+            @appendable
+            struct View {
+                SimNetGateway::Protocol::DdsPlayer::ViewSource Source;
+                SimNetGateway::Protocol::DdsPlayer::ViewMode Mode;
+                int32 TargetId;
+                float Distance;
+                float Side;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d Position;
+                SimNetGateway::Protocol::DdsPlayer::Quat Orientation;
+                float FovDeg;
+                uint32 CutSeq;
+                string<64> Shot;
+                double SimTime;
+            };
+
+            @appendable
+            struct Offer {
+                SimNetGateway::Protocol::DdsPlayer::OfferKind Kind;
+                int32 Id;
+                string<64> Name;
+                octet Side;
+                boolean Free;
+                int32 Count;
+                int32 Max;
+            };
+
+            @topic
+            @appendable
+            struct PlayerSlot {
+                SimNetGateway::Protocol::DdsPlayer::SlotState State;
+                int32 UnitId;
+                octet Side;
+                double RespawnAtSim;
+                string<64> Reason;
+                sequence<SimNetGateway::Protocol::DdsPlayer::Offer, 128> Offers;
+            };
+
+            @appendable
+            struct AmmoEntry {
+                octet Slot;
+                string<32> Weapon;
+                string<32> AmmoType;
+                int32 Rounds;
+                int32 Reserve;
+                int64 AmmoTypeId;
+                int32 Max;
+                int32 Magazine;
+                int32 LoadedRounds;
+                boolean Busy;
+                boolean Overheated;
+                int32 HeatPercent;
+            };
+
+            @topic
+            @appendable
+            struct OwnUnit {
+                int32 UnitId;
+                float Health;
+                float MaxHealth;
+                octet ActiveSlot;
+                sequence<SimNetGateway::Protocol::DdsPlayer::AmmoEntry, 16> Ammo;
+                boolean CanUse;
+                int32 UseTargetId;
+                octet UseVerb;
+                string<32> UseLabel;
+                SimNetGateway::Protocol::DdsPlayer::FireMode FireMode;
+                octet UseSeq;
+                SimNetGateway::Protocol::DdsPlayer::UseOutcome UseOutcome;
+                SimNetGateway::Protocol::DdsPlayer::UseReason UseReason;
+                float SpreadRad;
+                SimNetGateway::Protocol::DdsPlayer::RadarWarningLevel RadarWarning;
+                float RadarBearingDeg;
+                boolean MissileLaunch;
+                float MissileBearingDeg;
+                float MissileTimeToImpactS;
+                SimNetGateway::Protocol::DdsPlayer::MissileSeeker MissileSeeker;
+            };
+
+            @topic
+            @appendable
+            struct ManDowned {
+                double SimTime;
+                int32 VictimId;
+                int32 SourceId;
+                int32 OriginalSourceId;
+                SimNetGateway::Protocol::DdsPlayer::Injury State;
+                octet BodyPart;
+                octet VictimSide;
+            };
+
+            @topic
+            @appendable
+            struct PlayerMessage {
+                int32 MessageId;
+                int32 OriginNode;
+                SimNetGateway::Protocol::DdsPlayer::MessageAddress To;
+                int32 ToValue;
+                string<256> Text;
+                float Seconds;
+                octet Priority;
+                double SentAt;
+                int32 SourceId;
+            };
+
+            @topic
+            @appendable
+            struct Status {
+                @key int32 StatusId;
+                SimNetGateway::Protocol::DdsPlayer::ObjectiveRole Role;
+                SimNetGateway::Protocol::DdsPlayer::ObjectiveState State;
+                SimNetGateway::Protocol::DdsPlayer::TriggerState TriggerState;
+                boolean Closed;
+                octet Owner;
+                int32 ProgressCur;
+                int32 ProgressNeed;
+                float Value;
+                float Target;
+                float Score;
+                float Pass;
+                float Points;
+                double ChangedAt;
+                string<64> Reason;
+                string<64> Title;
+                string<32> Kind;
+                string<32> Group;
+                octet Phase;
+                boolean Required;
+                boolean Scored;
+                float Weight;
+                octet VisibleSides;
+                octet StepCur;
+                octet StepCount;
+                float HoldFor;
+                float Deadline;
+                double ExpectedAt;
+                boolean Capture;
+                octet Challenger;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d AreaCentre;
+                float AreaRadius;
+                boolean EndsExercise;
+                int32 SubjectId;
+                int32 ParentId;
+            };
+
+            @appendable
+            struct SideResult {
+                SimNetGateway::Protocol::DdsPlayer::SideOutcome Outcome;
+                float Points;
+                float Score;
+            };
+
+            @topic
+            @appendable
+            struct Exercise {
+                SimNetGateway::Protocol::DdsPlayer::ExercisePhase Phase;
+                double EndedAt;
+                string<64> Reason;
+                SimNetGateway::Protocol::DdsPlayer::SideResult Friendly;
+                SimNetGateway::Protocol::DdsPlayer::SideResult Opposing;
+                SimNetGateway::Protocol::DdsPlayer::SideResult Neutral;
+            };
+
+            @topic
+            @appendable
+            struct Mover {
+                @key int32 MoverId;
+                SimNetGateway::Protocol::DdsPlayer::MoverKind Kind;
+                int64 _TypeId;
+                uint32 ColourRgba;
+                uint32 Seed;
+                float Length;
+                float Width;
+                SimNetGateway::Protocol::DdsPlayer::MoverSource Source;
+            };
+
+            @appendable
+            struct MoverKnot {
+                int32 MoverId;
+                float Dt;
+                float X;
+                float Y;
+                float Z;
+                int16 HeadingCentiDeg;
+                int16 PitchCentiDeg;
+                float Speed;
+            };
+
+            @topic
+            @appendable
+            struct MoverTracks {
+                double SimTime;
+                sequence<SimNetGateway::Protocol::DdsPlayer::MoverKnot, 4096> Knots;
+            };
+
+            @topic
+            @appendable
+            struct TrafficLights {
+                @key int32 SignalId;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d Position;
+                float HeadingDeg;
+                SimNetGateway::Protocol::DdsPlayer::TrafficLightState State;
+            };
+
+            @topic
+            @appendable
+            struct JoinRequest {
+                uint32 RequestSeq;
+                SimNetGateway::Protocol::DdsPlayer::JoinKind Kind;
+                int32 UnitId;
+                string<64> Role;
+                octet Side;
+                octet Kit;
+                int32 AreaId;
+                @key uint64 ClientId;
+            };
+
+            @topic
+            @appendable
+            struct ControlFrame {
+                uint32 Seq;
+                float Forward;
+                float Lateral;
+                float Steer;
+                float Yaw;
+                float Vertical;
+                octet Gait;
+                octet Trigger;
+                octet Mount;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d AimPoint;
+                octet Stance;
+                octet ShotSeq;
+                octet CancelSeq;
+                octet AmmoSeq;
+                int32 ShotTarget;
+                octet UseSeq;
+                octet UseVerb;
+                int32 UseTarget;
+                octet Lean;
+                octet Binoculars;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d LookFrom;
+                SimNetGateway::Protocol::DdsPlayer::Vec3f LookDir;
+                octet FirePref;
+                @key uint64 ClientId;
+            };
+
+            @topic
+            @appendable
+            struct Leave {
+                uint32 Seq;
+                @key uint64 ClientId;
+            };
+
+            @topic
+            @appendable
+            struct GizmoView {
+                sequence<SimNetGateway::Protocol::DdsPlayer::NameItem, 64> Layers;
+                sequence<int32, 256> SelectedIds;
+                sequence<int32, 256> PinnedIds;
+                sequence<SimNetGateway::Protocol::DdsPlayer::NameItem, 32> PinnedFamilies;
+                float RateHz;
+                @key uint64 ClientId;
+            };
+
+            @appendable
+            struct GizmoPrimitive {
+                SimNetGateway::Protocol::DdsPlayer::GizmoShape Shape;
+                sequence<SimNetGateway::Protocol::DdsPlayer::Vec3d, 64> Points;
+                uint32 ColourRgba;
+                float Width;
+                string<64> Text;
+            };
+
+            @topic
+            @appendable
+            struct GizmoFrame {
+                @key string<64> Producer;
+                @key string<32> Layer;
+                double SimTime;
+                sequence<SimNetGateway::Protocol::DdsPlayer::GizmoPrimitive, 4096> Primitives;
+            };
+
+        };
+    };
+};
+
+#endif // _CYCLONEDDS_GENERATED_DPSTOPICS_IDL_

@@ -65,6 +65,8 @@ public sealed class EcsHrotAdapter
     private readonly TrafficGather _traffic = new();
     private readonly TkbGather _types = new();
     private readonly AnimalGather _animals = new();
+    private readonly ViewGather _view = new();
+    private readonly ImpactGather _impacts = new();
     private readonly BankTracker _banks = new();
     private readonly List<int> _scratch = new();
     private readonly List<(int Parent, int Part)> _scratchPoses = new();
@@ -120,6 +122,11 @@ public sealed class EcsHrotAdapter
         if (!world.Bus.IsRegistered<DetonationNotification>())
         {
             world.RegisterEvent<DetonationNotification>();
+        }
+
+        if (!world.Bus.IsRegistered<RoundImpactNotification>())
+        {
+            world.RegisterEvent<RoundImpactNotification>();
         }
 
         if (!world.Bus.IsRegistered<ManDownedEvent>())
@@ -201,7 +208,7 @@ public sealed class EcsHrotAdapter
                     inbound.Enqueue(in munitionLook);
                 }
 
-                if (_rounds.TryGather(world, e, id, state.TkbType, out var round))
+                if (_rounds.TryGather(world, tkb, e, id, state.TkbType, simTime, out var round))
                 {
                     inbound.Enqueue(in round);
                 }
@@ -262,6 +269,7 @@ public sealed class EcsHrotAdapter
         _hud.GatherState(world, inbound);
         _buildings.Gather(world, inbound);
         _traffic.Gather(world, inbound, simTime, _types);
+        _view.Gather(world, _services.SuggestedView, inbound, simTime);
         _types.Flush(tkb, inbound);
     }
 
@@ -341,6 +349,7 @@ public sealed class EcsHrotAdapter
         var tkb = _services.Tkb();
         _effects.Gather(world, tkb, inbound);   // HROT's look rules over the same events: flashes, explosions, marks
         _hud.GatherEvents(world, inbound, Fdp.Toolkit.Time.SimClock.TotalTimeOf(world));
+        _impacts.Gather(world, tkb, _types, inbound, Fdp.Toolkit.Time.SimClock.TotalTimeOf(world));
         var fires = world.ReadEvents<WeaponFireNotification>();
         for (int i = 0; i < fires.Length; i++)
         {
@@ -776,6 +785,9 @@ public sealed class EcsHrotAdapter
                 TryHrotId(world, burst.Shooter, out int shooter);
                 inbound.Enqueue(new HrotDetonation(shooter, 0, burst.Ammo, MunitionDis(tkb, burst.Ammo), V(burst.At), HrotVec3.Zero));
                 Counters.DetonationsSent++;
+                // HROT's own per-event rule over the recorded burst: the memory keeps no target and no damage, so the surface is Ground or Air and the size class follows the munition's explosive
+                _effects.GatherDetonation(new DetonationNotification { Shooter = burst.Shooter, Ammo = burst.Ammo, HitX = burst.At.X, HitY = burst.At.Y, HitZ = burst.At.Z, IsRemote = true },
+                    world, tkb, inbound);
             }
 
             _lastSerial = newest;
@@ -803,6 +815,9 @@ public sealed class EcsHrotAdapter
             var at = world.HasComponent<SimTransform>(anchor.Shooter) ? V(world.GetComponentRO<SimTransform>(anchor.Shooter).Position) : HrotVec3.Zero;
             inbound.Enqueue(new HrotFire(shooterId, 0, ammo, MunitionDis(tkb, ammo), at, HrotVec3.Zero, 1));
             Counters.FiresSent++;
+            // HROT's own per-event rule over the recorded shot (the flash entity names the shooter and the mount; the world holds no round or target of it)
+            _effects.GatherShot(new WeaponFireNotification { Shooter = anchor.Shooter, WeaponIndex = anchor.WeaponIndex, AmmoGuid = ammo, Quantity = 1, IsRemote = true },
+                world, tkb, inbound);
         }
 
         _flashesSeen.IntersectWith(_flashesNow);
@@ -857,6 +872,7 @@ public sealed class EcsHrotAdapter
         _traffic.Clear();
         _types.Clear();
         _animals.Clear();
+        _view.Clear();
         _banks.Clear();
         ForgetReplayEffects();
         SweepRoutedEntities(world);

@@ -102,6 +102,7 @@ public sealed class DpsTransport : IDisposable
             Fire = Add(new DpsChannel<Fire>(_participant));
             Detonation = Add(new DpsChannel<Detonation>(_participant));
             Effect = Add(new DpsChannel<Effect>(_participant));
+            Impact = Add(new DpsChannel<Impact>(_participant));
             VehicleLook = Add(new DpsChannel<VehicleLook>(_participant));
             Round = Add(new DpsChannel<Round>(_participant));
             MunitionLook = Add(new DpsChannel<MunitionLook>(_participant));
@@ -118,6 +119,7 @@ public sealed class DpsTransport : IDisposable
             PlayerMessage = Add(new DpsChannel<PlayerMessage>(_participant));
             Status = Add(new DpsChannel<Status>(_participant));
             Exercise = Add(new DpsChannel<Exercise>(_participant));
+            View = Add(new DpsChannel<View>(_participant));
             PlayerSlot = Add(new DpsChannel<PlayerSlot>(_participant));
             OwnUnit = Add(new DpsChannel<OwnUnit>(_participant));
             _inbound = new DpsInbound(_participant, settings, station, log ?? (_ => { }));
@@ -156,6 +158,8 @@ public sealed class DpsTransport : IDisposable
 
     internal DpsChannel<Effect> Effect { get; } = null!;
 
+    internal DpsChannel<Impact> Impact { get; } = null!;
+
     internal DpsChannel<VehicleLook> VehicleLook { get; } = null!;
 
     internal DpsChannel<Round> Round { get; } = null!;
@@ -187,6 +191,8 @@ public sealed class DpsTransport : IDisposable
     internal DpsChannel<Status> Status { get; } = null!;
 
     internal DpsChannel<Exercise> Exercise { get; } = null!;
+
+    internal DpsChannel<View> View { get; } = null!;
 
     internal DpsChannel<PlayerSlot> PlayerSlot { get; } = null!;
 

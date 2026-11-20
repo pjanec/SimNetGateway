@@ -194,6 +194,8 @@ public class TypeAnimalBankTests
         Assert.Equal(("Alert", (byte)1, false, false, true, 0, 0, string.Empty), (a.Mode, a.FearBand, a.Bolting, a.Dangerous, a.Calling, a.FlockCount, a.FlockInitialCount, a.FlockMode));
         var f = Assert.Single(first.Of<HrotAnimal>(), x => x.Id == 3002);
         Assert.Equal(("Flee", (byte)3, true, true, false, 12, 20, 777u, "Flying"), (f.Mode, f.FearBand, f.Bolting, f.Dangerous, f.Calling, f.FlockCount, f.FlockInitialCount, f.FlockSeed, f.FlockMode));
+        Assert.True(f.Airborne);   // HROT's flock mode Flying is its flying state
+        Assert.False(a.Airborne);   // a single body keeps no such state: false, never a height guess
         Assert.Equal(2, first.Of<HrotAnimal>().Count);   // the man is no animal
         Assert.Equal([1201], first.Of<HrotPersonDetail>().Select(d => d.Id).ToArray());   // and the animals are no persons
         Assert.Equal([1201], first.Of<HrotPersonAppearance>().Select(d => d.Id).ToArray());
@@ -203,6 +205,7 @@ public class TypeAnimalBankTests
         h.World.SetComponent(birds, new FlockState { Count = 11, InitialCount = 20, Seed = 777, Mode = FlockMode.Landed });   // a hit flock drops a bird and lands
         var changed = Assert.Single(h.Gather(3.0).Of<HrotAnimal>());
         Assert.Equal((3002, 11, "Landed"), (changed.Id, changed.FlockCount, changed.FlockMode));
+        Assert.False(changed.Airborne);
         h.World.SetComponent(cow, new AnimalState { Mode = AnimalMode.Calm, FearBand = 1, Flags = AnimalFlags.Calling });   // the mode alone
         Assert.Equal("Calm", Assert.Single(h.Gather(4.0).Of<HrotAnimal>()).Mode);
 

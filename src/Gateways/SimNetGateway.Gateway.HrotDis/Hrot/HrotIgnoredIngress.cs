@@ -36,6 +36,8 @@ public sealed class HrotIgnoredIngress : IGatewayModule
         Ignored<HrotMoverTracks>(),
         Ignored<HrotTrafficLight>(),
         Ignored<HrotTrafficLightRemoved>(),
+        Ignored<HrotView>(),
+        Ignored<HrotImpact>(),
     ];
 
     /// <summary>The message types this profile ignores on purpose.</summary>

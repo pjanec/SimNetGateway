@@ -16,7 +16,7 @@ Only public repositories are needed. Clone both side by side under one folder, b
 
 - **Layout:** `<root>/SimNetGateway` and `<root>/hrot`. Otherwise set `HROT_ROOT` or pass `-p:HrotRoot=<path>` ([HrotHost.csproj](https://github.com/pjanec/SimNetGateway/blob/main/src/Hosts/SimNetGateway.HrotHost/SimNetGateway.HrotHost.csproj)).
 - **Toolchain:** .NET SDK per each repository's `global.json`. FDP, the toolkit HROT runs on (ECS, possession, combat, look direction), is inside the HROT repository, so there are no further dependencies.
-- **The IDL:** generated, not committed. Run `dotnet build src/Protocols/SimNetGateway.Protocol.DdsPlayer` and take `DpsTopics.idl` and `DpsTypes.idl` from its build output. Feed them to `idlc` (CycloneDDS C) for the Unreal plugin. The C# sources the IDL comes from carry the field documentation: [DpsTopics.cs](https://github.com/pjanec/SimNetGateway/blob/main/src/Protocols/SimNetGateway.Protocol.DdsPlayer/DpsTopics.cs), [DpsTypes.cs](https://github.com/pjanec/SimNetGateway/blob/main/src/Protocols/SimNetGateway.Protocol.DdsPlayer/DpsTypes.cs), [DpsProtocol.cs](https://github.com/pjanec/SimNetGateway/blob/main/src/Protocols/SimNetGateway.Protocol.DdsPlayer/DpsProtocol.cs) (topic names, version, default lease).
+- **The IDL:** committed in [docs/clients/idl](https://github.com/pjanec/SimNetGateway/tree/main/docs/clients/idl) (`DpsTopics.idl`, `DpsTypes.idl`; the first line names the protocol version), and checked against the build by a test. It is generated from the C# contract; `bash scripts/refresh-dps-idl.sh` refreshes the copies. Feed them to `idlc` (CycloneDDS C) for the Unreal plugin. The C# sources the IDL comes from carry the field documentation: [DpsTopics.cs](https://github.com/pjanec/SimNetGateway/blob/main/src/Protocols/SimNetGateway.Protocol.DdsPlayer/DpsTopics.cs), [DpsTypes.cs](https://github.com/pjanec/SimNetGateway/blob/main/src/Protocols/SimNetGateway.Protocol.DdsPlayer/DpsTypes.cs), [DpsProtocol.cs](https://github.com/pjanec/SimNetGateway/blob/main/src/Protocols/SimNetGateway.Protocol.DdsPlayer/DpsProtocol.cs) (topic names, version, default lease).
 - **Terrain:** the client must render the terrain in the simulation's own local frame (metres, x east, y north, z up). The HROT-to-Unreal terrain importer belongs to the Unreal repository (DD-017 §7).
 
 ## How DPS works
@@ -25,7 +25,7 @@ The gateway runs inside a HROT node as a node extension. Its `dps` plugin publis
 
 - **One station = one node = one player** ([§3.1](https://github.com/pjanec/SimNetGateway/blob/main/docs/design/DD-017-Dds-Player-Station.md#31-one-station--one-simulation-node-p-1)). Today that is the HROT editor (offline node). Cluster player nodes (`-m player`) are step 2.
 - **One DDS partition per station** ([§3.2a](https://github.com/pjanec/SimNetGateway/blob/main/docs/design/DD-017-Dds-Player-Station.md#32a-one-partition-per-station-p-2a)). The client joins the station's domain and partition, both configured in the gateway's `dps` section. View-only clients use the same partition and write nothing.
-- **No handshake** ([§3.2](https://github.com/pjanec/SimNetGateway/blob/main/docs/design/DD-017-Dds-Player-Station.md#32-late-join-and-absence-without-a-handshake-p-2)). State topics are TRANSIENT\_LOCAL, so a late joiner gets the current picture. Event topics are VOLATILE. The client's presence is the DDS liveliness of its player writers.
+- **No handshake** ([§3.2](https://github.com/pjanec/SimNetGateway/blob/main/docs/design/DD-017-Dds-Player-Station.md#32-late-join-and-absence-without-a-handshake-p-2)). State topics are TRANSIENT\_LOCAL, so a late joiner gets the current picture. Event topics are VOLATILE with a history of 1024 samples. The client's presence is the DDS liveliness of its player writers.
 - **QoS is not in the IDL.** It is in the [§3.11 table](https://github.com/pjanec/SimNetGateway/blob/main/docs/design/DD-017-Dds-Player-Station.md#311-what-a-client-must-do) and on the C# types' `[DdsQos]` attributes. A mismatch fails the match silently. Player writers must offer AUTOMATIC liveliness with a lease of 2 s or less.
 - **Frames and units** ([§3.3](https://github.com/pjanec/SimNetGateway/blob/main/docs/design/DD-017-Dds-Player-Station.md#33-frames-units-and-identity-p-3)): metres, x east, y north, z up; quaternion orientation with body forward = +x; sim time in seconds. Convert to Unreal's centimetres and left-handed axes once, at the boundary.
 - **Motion** ([§3.4](https://github.com/pjanec/SimNetGateway/blob/main/docs/design/DD-017-Dds-Player-Station.md#34-motion-p-4)): `EntityState` is sent on change plus a 5 s heartbeat, with velocities and accelerations. The client dead-reckons. [DpsWorld.cs](https://github.com/pjanec/SimNetGateway/blob/main/src/Hosts/SimNetGateway.DpsClient/DpsWorld.cs) is a minimal sample.
@@ -428,6 +428,44 @@ Unreal needs facts about each entity type that the per-entity topics do not repe
 
 To browse what a type holds while developing, use a running HROT's `GET /tkb/types` and `GET /tkb/types/{tkbType}`.
 
+## Conventions a client must know
+
+**Articulation (turrets).** `Articulation` is keyed by `(EntityId, PartId)`. The gateway sends turrets only, with `Kind` = "Turret" and `PartId` = 2000 + the turret index; index 0 is the first turret of the type's turret suite (HROT's `TurretParts.FirstPartId`, [TurretParts.cs](https://github.com/pjanec/HROT/blob/coordinator/FDP/Toolkits/Fdp.Toolkits/Combat/TurretParts.cs)). `Azimuth` is the traverse in radians, counter-clockwise from the hull's forward, so it is relative to the hull. `Elevation` is the gun elevation in radians, up from the turret plane, so it is relative to the turret; each turret has its own elevation (one per turret). `Extension` and `Rate` are unused (0). A turret is sent when it moves by more than 0.5 degrees and at least once a second ([TurretPose.cs](https://github.com/pjanec/HROT/blob/coordinator/FDP/Toolkits/Fdp.Toolkits/Combat/Components/TurretPose.cs); the gateway's side is `EcsHrotAdapter.GatherTurrets`). A turret that is gone is disposed with its entity.
+
+**Angle conventions.**
+
+| Where | Unit | Zero and direction |
+|---|---|---|
+| `EntityState.Orientation` (quaternion), `Bank` | radians | body forward = +x (east); `Bank` is the right-hand roll about forward (top toward the right is positive; a left turn is negative) |
+| Yaw, heading, `Articulation.Azimuth`, `PersonState.HeadYaw` | radians | 0 = +x (east), counter-clockwise seen from above |
+| `Articulation.Elevation`, pitch | radians | positive = up |
+| `OwnUnit.RadarBearingDeg`, `OwnUnit.MissileBearingDeg` and a compass drawn from them | degrees | 0 = north, clockwise (the only compass-style angles in the contract) |
+| `MoverKnot.HeadingCentiDeg` | hundredths of a degree, -18000 .. 18000 | 0 = +x (east), counter-clockwise |
+| `MoverKnot.PitchCentiDeg` | hundredths of a degree | positive = nose up |
+| `TrafficLights.HeadingDeg` | degrees | the lane's direction of travel at the stop line (0 = +x, counter-clockwise; not a compass bearing) |
+
+Convert once at the boundary: a bearing of 90 degrees (east) is a heading of 0 radians.
+
+**Seats.** Unreal keeps its own seat placements, keyed by `(TypeId, SeatIndex)`. `PersonState.SeatIndex` is the index into the type's seat list in the TKB (`CarrierDefDto.Seats` in the `TkbType` JSON; 255 = no seat). It is stable while that type's `TkbType.ContentHash` is unchanged; when the hash changes, read the seat list again.
+
+**Engine level.** `VehicleLook.RotorSpeed` is HROT's engine level, 0 to 1, for every vehicle that has a power plant, not only aircraft: HROT's `VehicleLook.RotorSpeed` follows the engine's heat source (running = 1, idle = a low level, off or dead = 0, spin-up and spin-down by the type's seconds). The gateway fills it for every vehicle it publishes; a type without a power plant reads 0. Use it for the engine sound and the exhaust as well as for rotors.
+
+**The terrain importer.** Building labels, panel order, opening order and the glazed flag exist only in HROT's terrain and building templates, not in footprints extruded from a map. The importer must build from those templates so that `BuildingDamage` (keyed by the building label, with panel and opening indices) lands on the right wall and window; see HROT's [DESIGN\_Terrain\_Import\_UTM.md](https://github.com/pjanec/HROT/blob/coordinator/docs/DESIGN_Terrain_Import_UTM.md) and [DESIGN\_Terrain\_Authoring.md](https://github.com/pjanec/HROT/blob/coordinator/docs/DESIGN_Terrain_Authoring.md).
+
+**The suggested view (`View`, [DD-019 §3.1](https://github.com/pjanec/SimNetGateway/blob/main/docs/design/DD-019-Dps-Round-3.md)).** One keyless state instance: what HROT suggests the camera shows (the film director's shot, a follow camera, the operator's camera): `Source`, `Mode` (Free, Orbit, Eyes, Shoulder, Chase, Fixed), `TargetId`, `Distance` and `Side` (the over-the-shoulder continuum), the pose HROT computed (`Position`, `Orientation`, `FovDeg`), `Shot` and `SimTime`. The client owns its camera: follow it, follow only its binding with your own controller, or ignore it. `CutSeq` grows at every hard cut (a new source, mode, target or shot): blend between samples of one `CutSeq` and jump on a new one. `Source` None means HROT suggests nothing now. **HROT has no engine-level source of the suggested view yet** (its director and follow camera are in the presentation layer), so today the gateway sends no `View` and the topic has no instance; use your own default camera. It starts to flow when HROT publishes the view in an engine-level singleton.
+
+**Impacts (`Impact`, [DD-019 §3.2](https://github.com/pjanec/SimNetGateway/blob/main/docs/design/DD-019-Dps-Round-3.md)).** An event for each surface of the static world a round enters, leaves or stops on (`Kind` Entered, Left, Stopped), with `Position`, `Normal` (all 0 = not stated), `MunitionTypeId` and `ShooterId`. `Surface` is HROT's classification for the round's effect (Ground within 0.25 m of the terrain, else Building); Unknown when HROT draws no effect for it. `Material` is empty until HROT's impact event carries one. A strike on a unit is still a `Detonation` with a `TargetId`. The puff and the mark arrive as `Effect` as before. There are no `Impact` samples in a replay (HROT does not record the event).
+
+**Missile motor (`Round.LaunchedAt`, `Round.BurnSeconds`).** `LaunchedAt` is the simulation time the round was fired, `BurnSeconds` the motor's burn from the TKB (0 = no motor data). The trail is full while `now - LaunchedAt < BurnSeconds`, then fades over HROT's linger time (0.8 s, `ProjectileLayer.TrailLingerSeconds`); no extra sample is sent when the motor stops. For a replicated round with no ballistic record, `LaunchedAt` is the time the gateway first saw the round. Without a ballistic record there is also no exact launch frame: for a round first seen some frames after it was fired, `LaunchedAt` is the first-seen time minus the frames since its spawn at the delta of that frame.
+
+**Airborne animals (`Animal.Airborne`).** True for a flock whose mode is Flying (HROT's flock state). A single body has no flying state in HROT (a lone bird's motion model keeps none), so it reads false; do not infer it from height.
+
+**Event history.** `Fire`, `Detonation`, `Effect`, `Impact`, `ManDowned` and `PlayerMessage` are KEEP\_LAST 1024 (a minigun fires 50 to 100 rounds a second, one `Fire` per shot). Match that depth on the reader, or a burst between two reads loses samples.
+
+**Several channels (a cluster of render nodes).** Every channel subscribes as a view-only client (same domain and partition, no player writers); a station has one player, so at most one client sends `JoinRequest`. Keeping the cameras of the channels in step is the image generator's own cluster rendering (for example nDisplay), not DPS: DPS gives every channel the same world, and the suggested `View` is advice for the one camera that the cluster renders.
+
+**The committed IDL.** `docs/clients/idl/DpsTopics.idl` and `docs/clients/idl/DpsTypes.idl` are committed, with the protocol version in the first line, so a client needs no .NET build. A test fails when they differ from what the build generates; after a contract change run `bash scripts/refresh-dps-idl.sh`.
+
 ## Reference client and testing against HROT
 
 The reference client [SimNetGateway.DpsClient](https://github.com/pjanec/SimNetGateway/tree/main/src/Hosts/SimNetGateway.DpsClient) is a small working client: [DpsWorld.cs](https://github.com/pjanec/SimNetGateway/blob/main/src/Hosts/SimNetGateway.DpsClient/DpsWorld.cs) for subscriptions, caches, dead reckoning and player writers, and `DpsClientWindow.cs` for drawing and input. Read it before writing the Unreal plugin. Its headless mode makes a good scripted counterpart. Usage is in [DD-017 §10 Reference client](https://github.com/pjanec/SimNetGateway/blob/main/docs/design/DD-017-Dds-Player-Station.md#reference-client).
@@ -475,7 +513,7 @@ dotnet build SimNetGateway.sln
 dotnet test SimNetGateway.sln
 ```
 
-Run the whole suite. Do not use `--filter`: the xUnit adapter misreports filtered runs. The generated IDL for the Unreal plugin is in the build output of `src/Protocols/SimNetGateway.Protocol.DdsPlayer` (`DpsTopics.idl`, `DpsTypes.idl`). Regenerate the C or C++ bindings with `idlc` whenever the contract changes.
+Run the whole suite. Do not use `--filter`: the xUnit adapter misreports filtered runs. The IDL for the Unreal plugin is committed in `docs/clients/idl` (`DpsTopics.idl`, `DpsTypes.idl`); a contract change fails the IDL snapshot test until you run `bash scripts/refresh-dps-idl.sh` and commit the copies. Regenerate the C or C++ bindings with `idlc` whenever they change.
 
 **4. Deploy the gateway into HROT** (Git Bash on Windows):
 
@@ -510,8 +548,8 @@ dotnet Hrot.ClusterRunner.dll --mode editor
 
 **7. Load a scenario and make a unit playable.**
 
-- **Load** a scenario in the editor, or over HTTP with `POST /scenario/load/live` and `{"name": "<scenario>", "waitForReady": true}`. `GET /scenarios` lists them; terrains are under `hrot/assets/terrain`.
-- **Mark a unit playable:** in the editor's Details, tick Playable on a soldier and save. A client can join only units marked Playable; shipped scenarios may have none.
+- **Load the player-station showcase** over HTTP: `POST /scenario/load/live` with `{"name": "showcases/player-station", "waitForReady": true}`. It is HROT's test scenario for an external player station (generated by `scripts/gen-showcase-player-station.py`) and **lives on HROT's `ui` branch (commit fe2d6312f) until it is merged into `coordinator`**; check that branch out in `hrot` until then. It runs on the terrain demo-city (SUMO traffic, enterable houses with glazed windows) and loads live in about 6 s. Blue `Rifleman 1` and `Rifleman 2` are Playable (their AI holds a post until a client takes one); there is a Blue AI squad, a Red squad 150 m to the south that engages, an empty HMMWV, a motorcycle and a riding horse with free seats, a flamethrower at a timber shed, a timed 8 kg charge that breaches a timber hut's wall, civilians, a dog, cattle, birds and traffic. The rules give the objective "Hold the house", Blue tickets, a score and a welcome message (Blue only). Within 60 s there are dozens of shots, the breach and men down. **Known HROT limit (CE-1992):** in `--mode all` possession and the scenario's flamethrower do not work; use `--mode editor` as in step 6.
+- **Any other scenario:** load it in the editor, or over HTTP with the same call and its name. `GET /scenarios` lists them; terrains are under `hrot/assets/terrain`. To make a unit of another scenario playable, tick Playable on a soldier in the editor's Details and save: a client can join only units marked Playable, and shipped scenarios may have none.
 - **Let time run:** possession needs running time, so a join while paused times out after 10 s.
 
 **8. Run a client.** Use the same domain and partition. The reference client is a check that the station works before Unreal is involved:
@@ -534,12 +572,12 @@ Press J to join, WASD and the mouse to play, Esc to leave. `--headless --seconds
 
 ## Known gaps and open points
 
-DD-017 round 1 and DD-018 round 2 are built. The gateway owner hands the contract to Unreal once it settles, and protocol 1.0 stays open to additions until then. These items are not on the wire. Raise them with the gateway owner rather than working around them in the client.
+DD-017 round 1, DD-018 round 2 and DD-019 round 3 are built. The gateway owner hands the contract to Unreal once it settles, and protocol 1.0 stays open to additions until then. These items are not on the wire. Raise them with the gateway owner rather than working around them in the client.
 
 - **Map-only presentation rules.** Gait and limb swing, twist limits, rotor and wheel spin, tracer streams and the round streak and trail are still rules inside HROT's map; port them from the linked files. Long term they move into HROT's look library and onto the wire.
 - **Terrain changes:** door states (doors are entities without a state today, and most of the entity traffic), felled and damaged trees, ground patches (craters, road blockage), marking signs of a marked minefield.
-- **Replay:** no `Effect` samples in replay. Derive effects from `Fire` and `Detonation` meanwhile.
-- **The player station:** roles and respawn and cluster player nodes (DD-017 step 2), and the HROT station's extra keys (squad switch, seat switch, head out, lights, command wheel, designation). Clients join placed `Playable` units only for now; a test scenario with Playable units is being prepared in HROT.
+- **Replay:** `Effect` flows in replay: the gateway derives it from the recorded shots and bursts through HROT's own per-event rules, but a recorded burst keeps no target and no damage, so its surface is Ground or Air and its size follows the munition (a strike on a unit draws a ground mark that a live run would not), and a replay has no `Impact` and no `View` until HROT records them.
+- **The player station:** roles and respawn and cluster player nodes (DD-017 step 2), and the HROT station's extra keys (squad switch, seat switch, head out, lights, command wheel, designation). Clients join placed `Playable` units only for now; HROT has a test scenario with Playable units (step 7 of the runbook).
 - **Gizmos** have not been checked against a live HROT yet. Filled gizmo triangles arrive with z = 0 (boxes and text carry the ground height).
 - **The dragon** is not built in HROT. It will arrive as an animal carrier with a rider seat and a `FlameJet` breath.
 - **The Exercise topic** has no key, so it is not disposed per instance. It ends with its writer at a world boundary.

@@ -435,9 +435,11 @@ public readonly record struct HrotVehicleLook(
 /// <summary>
 /// A round with a look (HROT's lightweight round: tracer, shell, rocket, missile, grenade, bomb), beside its <see cref="HrotEntityState"/>. Sent on creation and when
 /// <see cref="Lying"/> or <see cref="Stopped"/> changes. <see cref="ShooterId"/> 0 = unknown. <see cref="Muzzle"/> is the launch point (the round's own position when
-/// this node does not know it). <see cref="FuzeLeftS"/> is negative without a time fuze. Removed with the entity (<see cref="HrotEntityRemoved"/>).
+/// this node does not know it). <see cref="FuzeLeftS"/> is negative without a time fuze. <see cref="LaunchedAt"/> is the sim time the round was fired (first seen for a round
+/// with no ballistic record, a replicated copy), <see cref="BurnSeconds"/> the missile motor's burn from the TKB (0 = no data). Removed with the entity (<see cref="HrotEntityRemoved"/>).
 /// </summary>
-public readonly record struct HrotRound(int Id, long MunitionTkb, int ShooterId, HrotVec3 Muzzle, bool Lying, float FuzeLeftS, bool Stopped) : IHrotToGatewayMessage;
+public readonly record struct HrotRound(
+    int Id, long MunitionTkb, int ShooterId, HrotVec3 Muzzle, bool Lying, float FuzeLeftS, bool Stopped, double LaunchedAt = 0.0, float BurnSeconds = 0f) : IHrotToGatewayMessage;
 
 /// <summary>
 /// How a munition type's round looks (HROT's resolved munition look, the built-in looks included), sent once per munition type per runtime. <paramref name="Shape"/> is
@@ -517,10 +519,11 @@ public readonly record struct HrotTypeRecord(long TypeId, string Name, string Ca
 
 /// <summary>
 /// An animal's state beside its <see cref="HrotEntityState"/>, sent when it changes. <paramref name="Mode"/> and <paramref name="FlockMode"/> are the NAMES of HROT's
-/// enumerations; <paramref name="FlockMode"/> is "" for a single body (<paramref name="FlockCount"/> 0).
+/// enumerations; <paramref name="FlockMode"/> is "" for a single body (<paramref name="FlockCount"/> 0). <paramref name="Airborne"/> is HROT's flying state: a flock whose mode is Flying.
 /// </summary>
 public readonly record struct HrotAnimal(
-    int Id, string Mode, byte FearBand, bool Bolting, bool Dangerous, bool Calling, int FlockCount, int FlockInitialCount, uint FlockSeed, string FlockMode) : IHrotToGatewayMessage;
+    int Id, string Mode, byte FearBand, bool Bolting, bool Dangerous, bool Calling, int FlockCount, int FlockInitialCount, uint FlockSeed, string FlockMode,
+    bool Airborne = false) : IHrotToGatewayMessage;
 
 // ---- DPS round 2 (DD-018 3.6a): building damage -------------------------------------------------------------------------
 
@@ -558,3 +561,22 @@ public readonly record struct HrotTrafficLight(int SignalId, HrotVec3 Position, 
 
 /// <summary>The signal head <see cref="SignalId"/> is gone.</summary>
 public readonly record struct HrotTrafficLightRemoved(int SignalId) : IHrotToGatewayMessage;
+
+// ---- DPS round 3 (DD-019): the suggested view and impacts on the static world --------------------------------------------
+
+/// <summary>
+/// What the simulation suggests the camera shows now (DD-019 3.1). <paramref name="Source"/> and <paramref name="Mode"/> are names ("None", "Director", "Follow",
+/// "Operator"; "Free", "Orbit", "Eyes", "Shoulder", "Chase", "Fixed"); <paramref name="TargetId"/> 0 = none; <paramref name="Distance"/> metres (0 = eyes, negative =
+/// ahead), <paramref name="Side"/> +1 right / -1 left; the pose is in local ENU metres with the camera's quaternion; <paramref name="FovDeg"/> 0 = not stated;
+/// <paramref name="Shot"/> is the take name. A source that stops suggesting sends one sample with Source "None".
+/// </summary>
+public readonly record struct HrotView(
+    string Source, string Mode, int TargetId, float Distance, float Side, HrotVec3 Position, HrotQuat Orientation, float FovDeg, string Shot, double SimTime) : IHrotToGatewayMessage;
+
+/// <summary>
+/// A round marked a surface of the static world (HROT's round-impact event). <paramref name="Kind"/> is the NAME of HROT's impact kind (Entry, Exit, Stop);
+/// <paramref name="Surface"/> is the NAME of HROT's effect surface by its own impact rule ("" when HROT draws no effect for the round); <paramref name="Normal"/> all 0
+/// = unknown; <paramref name="Material"/> is "" (HROT's event carries none). Ids are HROT network ids (0 = unknown).
+/// </summary>
+public readonly record struct HrotImpact(
+    double SimTime, HrotVec3 Position, HrotVec3 Normal, string Surface, string Kind, long MunitionTkb, int ShooterId, string Material) : IHrotToGatewayMessage;

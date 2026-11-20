@@ -7,7 +7,7 @@ namespace SimNetGateway.Protocol.DdsPlayer;
 // appended. Strings and sequences are bounded: names 64, kinds 32, colours as RGBA bytes.
 //
 // QoS: state topics Reliable + TransientLocal + KeepLast 1 (a late joiner gets every live instance); event topics Reliable +
-// Volatile + KeepLast 16; player topics (client to gateway) Reliable + Volatile + KeepLast 1 with automatic liveliness.
+// Volatile + KeepLast 1024 (MoverTracks 16); player topics (client to gateway) Reliable + Volatile + KeepLast 1 with automatic liveliness.
 
 #region Shared structs
 
@@ -257,6 +257,10 @@ public partial struct Round
     public float FuzeLeftS;
     /// <summary>Frozen where it hit a wall or the ground.</summary>
     public bool Stopped;
+    /// <summary>Simulation time the round was fired. For a round the simulation did not fire itself (a replicated copy, no ballistic record) it is the time the gateway first saw it.</summary>
+    public double LaunchedAt;
+    /// <summary>How long the missile's motor burns in seconds (the TKB missile record); 0 = no motor data. The trail is full while <c>now - LaunchedAt &lt; BurnSeconds</c>.</summary>
+    public float BurnSeconds;
 }
 
 /// <summary>How a munition type's round looks: the simulation's resolved look, built-in looks included. Sent once per munition type that is fired or seen.</summary>
@@ -368,6 +372,8 @@ public partial struct Animal
     public int FlockCount, FlockInitialCount;
     public uint FlockSeed;
     public FlockMode FlockMode;
+    /// <summary>The simulation's own flying state: a flock whose mode is Flying. A single body (a lone bird) has no such state in the simulation and reads false.</summary>
+    public bool Airborne;
 }
 
 /// <summary>
@@ -435,7 +441,7 @@ public partial struct BuildingDamage
 #region Events (gateway to client)
 
 [DdsTopic(DpsProtocol.Fire)]
-[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 16)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1024)]
 public partial struct Fire
 {
     public double SimTime;
@@ -450,7 +456,7 @@ public partial struct Fire
 }
 
 [DdsTopic(DpsProtocol.Detonation)]
-[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 16)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1024)]
 public partial struct Detonation
 {
     public double SimTime;
@@ -464,7 +470,7 @@ public partial struct Detonation
 
 /// <summary>An effect derived by HROT's effect rules (muzzle flash, explosion, ground mark, wreck flames / smoke).</summary>
 [DdsTopic(DpsProtocol.Effect)]
-[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 16)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1024)]
 public partial struct Effect
 {
     public double SimTime;
@@ -482,6 +488,63 @@ public partial struct Effect
     public byte AnchorWeaponSlot;
     public float LifetimeSeconds;
     public float Size;
+}
+
+/// <summary>
+/// A round marked a surface of the static world (DD-019 3.2): it entered or left a piece it passed through (a fence, a wall) or stopped on one (a wall, the
+/// ground). A strike on a unit stays a <see cref="Detonation"/> with a target. The derived puff and mark still arrive as <see cref="Effect"/>.
+/// </summary>
+[DdsTopic(DpsProtocol.Impact)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1024)]
+[DdsManaged]
+public partial struct Impact
+{
+    public double SimTime;
+    public Vec3d Position;
+    /// <summary>The outward normal of the face it met; all 0 = the simulation did not say.</summary>
+    public Vec3f Normal;
+    /// <summary>The surface class by the simulation's effect rule (Ground within 0.25 m of the terrain, else Building); Unknown when the simulation draws no effect for this round.</summary>
+    public EffectSurface Surface;
+    public ImpactKind Kind;
+    public long MunitionTypeId;
+    /// <summary>The entity that fired the round (0 = unknown).</summary>
+    public int ShooterId;
+    /// <summary>The terrain material name; empty when the simulation does not say (its impact event carries none).</summary>
+    [MaxLength(32)] public string Material;
+}
+
+#endregion
+
+#region Suggested view (gateway to client)
+
+/// <summary>
+/// What the simulation suggests the camera shows now (DD-019 3.1): the film director's shot, the follow camera on a unit, or the operator's own camera. One instance.
+/// The client owns its camera: it may follow this, follow only the binding (target, mode, distance) with its own controller, or ignore it. A client blends between
+/// samples of the same <see cref="CutSeq"/> and jumps on a new one. <see cref="Source"/> None = the simulation suggests nothing now.
+/// </summary>
+[DdsTopic(DpsProtocol.View)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+[DdsManaged]
+public partial struct View
+{
+    public ViewSource Source;
+    public ViewMode Mode;
+    /// <summary>The entity the camera is bound to (0 = none).</summary>
+    public int TargetId;
+    /// <summary>The continuum distance in metres: 0 = at the eyes, negative = ahead of the eyes.</summary>
+    public float Distance;
+    /// <summary>The shoulder side: +1 right, -1 left, 0 = none.</summary>
+    public float Side;
+    /// <summary>The camera pose the simulation computed (simulation frame), for a client that reproduces the shot exactly.</summary>
+    public Vec3d Position;
+    public Quat Orientation;
+    /// <summary>The vertical field of view in degrees; 0 = not stated.</summary>
+    public float FovDeg;
+    /// <summary>Grows at every hard cut (a new source, mode, target or shot).</summary>
+    public uint CutSeq;
+    /// <summary>The take or shot name, for display.</summary>
+    [MaxLength(64)] public string Shot;
+    public double SimTime;
 }
 
 #endregion
@@ -578,7 +641,7 @@ public partial struct OwnUnit
 
 /// <summary>A man went out of the fight (HROT's one kill authority); local and remote kills alike. Ids are entity ids, 0 = unknown.</summary>
 [DdsTopic(DpsProtocol.ManDowned)]
-[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 16)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1024)]
 public partial struct ManDowned
 {
     public double SimTime;
@@ -593,7 +656,7 @@ public partial struct ManDowned
 
 /// <summary>A message to the players with its addressing; the client filters (All, its side, its unit, its station; Instructor only for an instructor view).</summary>
 [DdsTopic(DpsProtocol.PlayerMessage)]
-[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 16)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1024)]
 [DdsManaged]
 public partial struct PlayerMessage
 {

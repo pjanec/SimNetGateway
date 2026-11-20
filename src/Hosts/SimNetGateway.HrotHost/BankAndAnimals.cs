@@ -104,6 +104,7 @@ internal sealed class AnimalGather
         int count = 0, initial = 0;
         uint seed = 0;
         string flockMode = string.Empty;
+        bool airborne = false;   // HROT's flying state exists for a flock only (FlockMode.Flying); a lone bird's motion model keeps none, and no height guess stands in for it
         if (world.IsComponentTypeRegistered<FlockState>() && world.HasComponent<FlockState>(e))
         {
             var flock = world.GetComponentRO<FlockState>(e);
@@ -111,10 +112,11 @@ internal sealed class AnimalGather
             initial = flock.InitialCount;
             seed = flock.Seed;
             flockMode = flock.Mode.ToString();
+            airborne = flock.Mode == FlockMode.Flying;
         }
 
         message = new HrotAnimal(id, state.Mode.ToString(), state.FearBand, (state.Flags & AnimalFlags.Bolting) != 0, (state.Flags & AnimalFlags.Dangerous) != 0,
-            (state.Flags & AnimalFlags.Calling) != 0, count, initial, seed, flockMode);
+            (state.Flags & AnimalFlags.Calling) != 0, count, initial, seed, flockMode, airborne);
         if (_sent.TryGetValue(id, out var previous) && previous.Equals(message))
         {
             return false;

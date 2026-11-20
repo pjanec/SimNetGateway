@@ -11,7 +11,7 @@ using Hrot.Core.Tkb;
 using SimNetGateway.Engine.InMemory;
 using SimNetGateway.Protocol.Hrot;
 
-// DPS round 2 (DD-018 3.3, 3.4): rounds with a look, the munition looks, flame jets, burning spots and ground heat marks. Every reading is HROT's own reader
+// DPS round 2 (DD-018 3.3, 3.4) and round 3 (DD-019 3.4): rounds with a look, the munition looks, flame jets, burning spots and ground heat marks. Every reading is HROT's own reader
 // (MunitionTkbCatalog.VisualOf, FlameJets.TryGet, FireState, GroundHeatMarks); these gathers copy the answers into pivot messages and send a change only.
 namespace SimNetGateway.HrotHost;
 
@@ -29,7 +29,7 @@ internal sealed class RoundGather
     public static bool IsRound(EntityRepository world, Entity e) =>
         world.IsComponentTypeRegistered<LightweightRound>() && world.HasComponent<LightweightRound>(e);
 
-    public bool TryGather(EntityRepository world, Entity e, int id, long munition, out HrotRound message)
+    public bool TryGather(EntityRepository world, ITkbDatabase? tkb, Entity e, int id, long munition, double simTime, out HrotRound message)
     {
         var position = (Vector3)world.GetComponentRO<SimTransform>(e).Position;
         int shooter = 0;
@@ -56,8 +56,11 @@ internal sealed class RoundGather
             lying = velocity.Length() < LyingSpeed;
         }
 
-        message = new HrotRound(id, munition, shooter, new HrotVec3(muzzle.X, muzzle.Y, muzzle.Z), lying, fuze, stopped);
-        if (_sent.TryGetValue(id, out var previous) && previous.Lying == lying && previous.Stopped == stopped && previous.MunitionTkb == munition)
+        // fixed at the first sight, so a later change of lying or stopped keeps the launch time
+        bool known = _sent.TryGetValue(id, out var previous);
+        double launched = known ? previous.LaunchedAt : LaunchTime(world, e, simTime);
+        message = new HrotRound(id, munition, shooter, new HrotVec3(muzzle.X, muzzle.Y, muzzle.Z), lying, fuze, stopped, launched, BurnOf(tkb, munition));
+        if (known && previous.Lying == lying && previous.Stopped == stopped && previous.MunitionTkb == munition)
         {
             return false;
         }
@@ -65,6 +68,30 @@ internal sealed class RoundGather
         _sent[id] = message;
         return true;
     }
+
+    /// <summary>
+    /// The sim time the round was fired. A round with a ballistic record carries the frame it spawned in (<c>SpawnTick</c>, HROT's <c>GlobalTime.FrameNumber</c>); HROT has no
+    /// conversion of a tick to a time, so it is taken as the frames since then times this frame's delta, back from the first-seen time (exact when the round is seen in its first
+    /// frames; a frame with no time delta, a pause, gives the first-seen time). A round with no record (a replicated copy) has no launch time: it is the first-seen time.
+    /// </summary>
+    private static double LaunchTime(EntityRepository world, Entity e, double simTime)
+    {
+        if (!world.IsComponentTypeRegistered<BallisticProjectile>() || !world.HasComponent<BallisticProjectile>(e) || !world.HasSingletonUnmanaged<GlobalTime>())
+        {
+            return simTime;
+        }
+
+        var clock = world.GetSingletonUnmanagedRO<GlobalTime>();
+        long frames = clock.FrameNumber - world.GetComponentRO<BallisticProjectile>(e).SpawnTick;
+        return frames > 0 ? simTime - frames * (double)clock.DeltaTime : simTime;
+    }
+
+    /// <summary>
+    /// How long a missile's motor burns: its TKB template's <c>MissileDto.BurnSeconds</c>, 0 = no data. A port of the one-line TKB read of HROT's <c>ProjectileLayer.BurnOf</c> (that class
+    /// is in <c>Hrot.Presentation</c>, which the host must not reference); a read of the data, not a presentation rule: the trail rule itself is the client's.
+    /// </summary>
+    internal static float BurnOf(ITkbDatabase? tkb, long ammo) =>
+        tkb != null && ammo != 0 && tkb.TryGetByType(ammo, out var t) && t.GetDescriptor<Fdp.Toolkit.Tkb.Domain.MissileDto>() is { BurnSeconds: > 0f } m ? m.BurnSeconds : 0f;
 }
 
 /// <summary>The resolved look of a munition type (<c>MunitionTkbCatalog.VisualOf</c>, built-in looks included), once per type per runtime. Main thread only.</summary>

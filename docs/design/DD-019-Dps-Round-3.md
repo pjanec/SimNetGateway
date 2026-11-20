@@ -167,4 +167,27 @@ P-1 .. P-7 are sections 3.1 .. 3.7, approved under R-134.
 
 ## 9. As-built
 
-(filled during T-036)
+T-036 was built in one round (protocol still 1.0). What waits for HROT is listed last.
+
+- **Contract:** new topics `View` (state, keyless, one instance) and `Impact` (event); enums `ViewSource`, `ViewMode`, `ImpactKind`; `Round` appended `LaunchedAt`, `BurnSeconds`; `Animal` appended `Airborne`; `Fire`, `Detonation`, `Effect`, `Impact`, `ManDowned`, `PlayerMessage` are KEEP_LAST 1024 (`MoverTracks` stays 16: not in the approved list). 34 topics.
+- **Pivot messages:** `HrotView`, `HrotImpact`; `HrotRound` and `HrotAnimal` appended fields with defaults; both new messages are in the one DIS ignore list (`HrotIgnoredIngress`).
+- **Plugin:** `DpsViewOutbound` (View change detection by the entity thresholds and the heartbeat; `CutSeq` starts at 1 and grows when source, mode, target or shot changes; a source that stops gives one sample with Source None; Impact mapping). Round and animal fields are mapped in the existing modules.
+- **Host:** `ISuggestedViewSource` seam on `HrotServices.SuggestedView` (no implementation; `ViewGather` sends nothing without one). HROT has no engine-level source: `ViewTelemetry` / `ViewControl` (`Hrot.UI.Common.Map3D`) are per canvas and live in `Hrot.Presentation`, as do the director and the follow camera, and no FDP or engine singleton holds a suggested view (`DESIGN_Agent_Shared_View.md` is about the debug API reading that canvas telemetry). `ImpactGather` reads `RoundImpactNotification` (registered in `EnsureRegistered` like the other events). `RoundGather` fills `LaunchedAt` and `BurnSeconds` (`RoundGather.BurnOf` is a port of the one-line TKB read of `ProjectileLayer.BurnOf`). `AnimalGather` sets `Airborne` from `FlockState.Mode == Flying`.
+- **Effects in replay (3.7):** `GatherReplayEffects` now also runs HROT's `EffectRules.ForShot` over a `WeaponFireNotification` rebuilt from each recorded muzzle-flash entity (shooter, mount index, the mount's ammo) and `EffectRules.ForDetonation` over a `DetonationNotification` rebuilt from each new `RecentDetonations` entry (position, ammo, shooter), so `Effect` flows in replay beside `Fire` and `Detonation`.
+- **Committed IDL (3.6):** `docs/clients/idl/DpsTopics.idl` and `DpsTypes.idl` with the first-line version header, `scripts/refresh-dps-idl.sh` to refresh them (it drops the generator's timestamp line), and a test (`DpsRoundThreeTests.The_committed_idl_equals_the_generated_one`) that ignores the header, the timestamp line and line endings.
+- **Guide:** articulation, angle table, seats, engine level, terrain importer dependency, View, Impact, motor, airborne, history depth, multi-channel, the committed IDL, runbook step 7 (HROT's `showcases/player-station`, on HROT's `ui` branch until merged); the replay gap reworded.
+
+**Deviations and limits**
+
+- `Impact.Surface` is read from the specs `EffectRules.ForImpact` returns (HROT keeps the ground-or-building rule inline in that function, not as a callable one), so it is Unknown when HROT draws no effect for the round. `Impact.Material` is always empty: `RoundImpactNotification` carries no material.
+- `LaunchedAt`: HROT has no tick-to-time conversion. The host takes `SpawnTick` (the frame counter of `GlobalTime`) as the frames since spawn times the delta of the first-seen frame, back from the first-seen time (exact when seen in the first frames; a paused frame gives the first-seen time). Fixed at first sight. A replicated round with no `BallisticProjectile` has `LaunchedAt` = first seen.
+- `Airborne` is true for flocks only: a single body has no flying state (`BirdFlightModel` writes no `FlightState`; `FlightState.Airborne` is kept by the aircraft models only), so it stays false.
+- Replay effects: `RecentBurst` has no target and no damage, so a replayed burst is judged as on the ground or in the air with the size from the munition's explosive, and a strike on a unit draws a ground mark that a live run does not. A replay still has no `Impact` (the event is not recorded) and no `View`. If HROT raised events in a replay world, an effect could be sent twice (the live path and the replay path); HROT raises none today.
+- The reference client (`DpsClient`) does not subscribe to `View` or `Impact` yet.
+
+**What waits for HROT (T-036 stays in-progress)**
+
+1. An engine-level suggested view: a singleton or reader in Hrot.Core or Fdp (source, mode, target network id, distance, side, pose, fov, shot) filled by the film director, the follow camera and the operator camera; the host then implements `ISuggestedViewSource` over it.
+2. A surface class and a terrain material name on `RoundImpactNotification` (or a callable `EffectRules` function for the impact surface), and recording of the event for replay.
+3. A target and the damage in `RecentBurst` (or recording of `DetonationNotification`), so replayed effects match live ones.
+4. A flying state for single bodies (a lone bird, the dragon later).

@@ -70,6 +70,7 @@ public sealed class DpsTypeCatalog : IGatewayModule
             FlockInitialCount = m.FlockInitialCount,
             FlockSeed = m.FlockSeed,
             FlockMode = LookNames.ByName<D.FlockMode>("FlockMode", m.FlockMode),
+            Airborne = m.Airborne,
         }));
     }
 

@@ -25,6 +25,9 @@ public sealed class HrotServices
     /// <summary>The TKB database, when loaded (it may arrive after composition).</summary>
     public Func<ITkbDatabase?> Tkb { get; init; } = () => null;
 
+    /// <summary>HROT's suggested camera view (DD-019 3.1); null = HROT has no engine-level source yet and the host emits no view.</summary>
+    public ISuggestedViewSource? SuggestedView { get; init; }
+
     /// <summary>The local node id (the replica's <c>NetworkAuthority.LocalNodeId</c>).</summary>
     public int LocalNodeId { get; init; }
 }

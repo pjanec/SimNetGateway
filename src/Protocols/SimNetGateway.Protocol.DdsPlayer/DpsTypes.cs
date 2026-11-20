@@ -169,3 +169,12 @@ public enum MoverSource : byte { MoverSourceUnknown = 0, MoverSourceSumo }
 
 /// <summary>A signal head's lamp (0 = off or unknown).</summary>
 public enum TrafficLightState : byte { TrafficLightStateOff = 0, TrafficLightStateRed, TrafficLightStateYellow, TrafficLightStateGreen }
+
+/// <summary>What a suggested camera view comes from: the film director's shot, the follow camera on a unit, or the operator's own camera. None = no suggestion.</summary>
+public enum ViewSource : byte { ViewSourceNone = 0, ViewSourceDirector, ViewSourceFollow, ViewSourceOperator }
+
+/// <summary>How the suggested camera sits: Free (no binding), Orbit (around a target), Eyes, Shoulder, Chase, Fixed (a scripted camera key); Unknown = a mode this contract does not name.</summary>
+public enum ViewMode : byte { ViewModeUnknown = 0, ViewModeFree, ViewModeOrbit, ViewModeEyes, ViewModeShoulder, ViewModeChase, ViewModeFixed }
+
+/// <summary>What a round did to a surface of the static world (HROT's impact kind, by name): it Entered a piece it passes through, Left it, or Stopped on it.</summary>
+public enum ImpactKind : byte { ImpactKindUnknown = 0, ImpactKindEntered, ImpactKindLeft, ImpactKindStopped }

@@ -20,6 +20,7 @@ internal sealed class DpsPorts
         Fire = b.RequireOutbound<DpsItem<Fire>>("dps.Fire");
         Detonation = b.RequireOutbound<DpsItem<Detonation>>("dps.Detonation");
         Effect = b.RequireOutbound<DpsItem<Effect>>("dps.Effect");
+        Impact = b.RequireOutbound<DpsItem<Impact>>("dps.Impact");
         VehicleLook = b.RequireOutbound<DpsItem<VehicleLook>>("dps.VehicleLook");
         Round = b.RequireOutbound<DpsItem<Round>>("dps.Round");
         MunitionLook = b.RequireOutbound<DpsItem<MunitionLook>>("dps.MunitionLook");
@@ -36,6 +37,7 @@ internal sealed class DpsPorts
         PlayerMessage = b.RequireOutbound<DpsItem<PlayerMessage>>("dps.PlayerMessage");
         Status = b.RequireOutbound<DpsItem<Status>>("dps.Status");
         Exercise = b.RequireOutbound<DpsItem<Exercise>>("dps.Exercise");
+        View = b.RequireOutbound<DpsItem<View>>("dps.View");
     }
 
     public IOutboundChannel<DpsItem<Session>> Session { get; }
@@ -55,6 +57,8 @@ internal sealed class DpsPorts
     public IOutboundChannel<DpsItem<Detonation>> Detonation { get; }
 
     public IOutboundChannel<DpsItem<Effect>> Effect { get; }
+
+    public IOutboundChannel<DpsItem<Impact>> Impact { get; }
 
     public IOutboundChannel<DpsItem<VehicleLook>> VehicleLook { get; }
 
@@ -88,6 +92,8 @@ internal sealed class DpsPorts
 
     public IOutboundChannel<DpsItem<Exercise>> Exercise { get; }
 
+    public IOutboundChannel<DpsItem<View>> View { get; }
+
     /// <summary>Declares (idempotently) every port on the builder.</summary>
     public static DpsPorts Require(GatewayBuilder builder) => new(builder);
 
@@ -103,6 +109,7 @@ internal sealed class DpsPorts
         b.BindOutbound<DpsItem<Fire>>("dps.Fire", t.Fire);
         b.BindOutbound<DpsItem<Detonation>>("dps.Detonation", t.Detonation);
         b.BindOutbound<DpsItem<Effect>>("dps.Effect", t.Effect);
+        b.BindOutbound<DpsItem<Impact>>("dps.Impact", t.Impact);
         b.BindOutbound<DpsItem<VehicleLook>>("dps.VehicleLook", t.VehicleLook);
         b.BindOutbound<DpsItem<Round>>("dps.Round", t.Round);
         b.BindOutbound<DpsItem<MunitionLook>>("dps.MunitionLook", t.MunitionLook);
@@ -119,5 +126,6 @@ internal sealed class DpsPorts
         b.BindOutbound<DpsItem<PlayerMessage>>("dps.PlayerMessage", t.PlayerMessage);
         b.BindOutbound<DpsItem<Status>>("dps.Status", t.Status);
         b.BindOutbound<DpsItem<Exercise>>("dps.Exercise", t.Exercise);
+        b.BindOutbound<DpsItem<View>>("dps.View", t.View);
     }
 }

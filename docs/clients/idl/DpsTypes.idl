@@ -1,0 +1,490 @@
+// DPS protocol 1.0, generated from SimNetGateway.Protocol.DdsPlayer - do not edit
+// Auto-generated IDL for DpsTypes by CycloneDDS C# Bindings
+#ifndef _CYCLONEDDS_GENERATED_DPSTYPES_IDL_
+#define _CYCLONEDDS_GENERATED_DPSTYPES_IDL_
+
+module SimNetGateway {
+    module Protocol {
+        module DdsPlayer {
+            @bit_bound(8)
+            enum Domain {
+                DomainOther,
+                DomainPerson,
+                DomainGround,
+                DomainAir,
+                DomainSurface,
+                DomainSubsurface,
+                DomainMunition,
+                DomainAnimal
+            };
+
+            @bit_bound(8)
+            enum SessionMode {
+                SessionModeLive,
+                SessionModePaused,
+                SessionModeReplay
+            };
+
+            @bit_bound(8)
+            enum Stance {
+                StanceStanding,
+                StanceCrouched,
+                StanceProne
+            };
+
+            @bit_bound(8)
+            enum WeaponPosture {
+                WeaponPostureAtEase,
+                WeaponPostureReady,
+                WeaponPostureAimed
+            };
+
+            @bit_bound(8)
+            enum HeldItem {
+                HeldItemNone,
+                HeldItemWeapon,
+                HeldItemThrowable,
+                HeldItemPhone,
+                HeldItemBinoculars
+            };
+
+            @bit_bound(8)
+            enum Gesture {
+                GestureNone,
+                GestureHandsUp,
+                GestureFistRaised,
+                GestureHoldSign,
+                GestureWaving,
+                GestureThrowing,
+                GestureWarning,
+                GestureIdleSmoking,
+                GestureIdleShiftWeight,
+                GestureIdleStretch,
+                GestureIdleLookAbout
+            };
+
+            @bit_bound(8)
+            enum Injury {
+                InjuryOk,
+                InjuryWounded,
+                InjuryIncapacitated,
+                InjuryDead
+            };
+
+            @bit_bound(8)
+            enum ActionKind {
+                ActionKindNone,
+                ActionKindEmbark,
+                ActionKindDisembark,
+                ActionKindOpenDoor,
+                ActionKindCloseDoor,
+                ActionKindLockDoor,
+                ActionKindUnlockDoor,
+                ActionKindBreachDoor,
+                ActionKindPickUpCasualty,
+                ActionKindPutDownCasualty,
+                ActionKindPickUpRound,
+                ActionKindEject
+            };
+
+            @bit_bound(8)
+            enum ActionState {
+                ActionStateNone,
+                ActionStateRunning,
+                ActionStateSuccess,
+                ActionStateFailure
+            };
+
+            @bit_bound(8)
+            enum SeatRole {
+                SeatRoleNone,
+                SeatRoleDriver,
+                SeatRoleGunner,
+                SeatRoleCommander,
+                SeatRolePassenger,
+                SeatRoleStation
+            };
+
+            @bit_bound(8)
+            enum CarryMode {
+                CarryModeNone,
+                CarryModeCarried,
+                CarryModeDragged,
+                CarryModeStretcher
+            };
+
+            @bit_bound(8)
+            enum SeatPose {
+                SeatPoseUnknown,
+                SeatPoseSit,
+                SeatPoseSitLegsOut,
+                SeatPoseStand,
+                SeatPoseKneel,
+                SeatPoseRide
+            };
+
+            @bit_bound(8)
+            enum CarryRole {
+                CarryRoleNone,
+                CarryRoleCarried,
+                CarryRoleDragged,
+                CarryRoleOnStretcher,
+                CarryRoleCarrying,
+                CarryRoleDragging,
+                CarryRoleStretcherFront,
+                CarryRoleStretcherRear,
+                CarryRoleTeamLoadFront,
+                CarryRoleTeamLoadRear
+            };
+
+            @bit_bound(8)
+            enum SlotState {
+                SlotStateWaiting,
+                SlotStateObserving,
+                SlotStateChoosing,
+                SlotStateRequesting,
+                SlotStateSpawning,
+                SlotStateTakingControl,
+                SlotStatePlaying,
+                SlotStateDead
+            };
+
+            @bit_bound(8)
+            enum JoinKind {
+                JoinKindObserve,
+                JoinKindUnit,
+                JoinKindRole
+            };
+
+            @bit_bound(8)
+            enum OfferKind {
+                OfferKindUnit,
+                OfferKindRole
+            };
+
+            @bit_bound(8)
+            enum GizmoShape {
+                GizmoShapeLineStrip,
+                GizmoShapeArrow,
+                GizmoShapeCircle,
+                GizmoShapePolygon,
+                GizmoShapeBox,
+                GizmoShapeText,
+                GizmoShapeIcon
+            };
+
+            @bit_bound(8)
+            enum PartCondition {
+                PartConditionIntact,
+                PartConditionDamaged,
+                PartConditionDestroyed
+            };
+
+            @bit_bound(8)
+            enum KillKind {
+                KillKindNone,
+                KillKindKnockedOut,
+                KillKindBurntOut,
+                KillKindCatastrophic,
+                KillKindUnknown
+            };
+
+            @bit_bound(8)
+            enum EffectKind {
+                EffectKindNone,
+                EffectKindMuzzleFlash,
+                EffectKindExplosion,
+                EffectKindGroundMark,
+                EffectKindWreckFlame,
+                EffectKindWreckSmoke
+            };
+
+            @bit_bound(8)
+            enum EffectSize {
+                EffectSizeUnknown,
+                EffectSizeSmall,
+                EffectSizeMedium,
+                EffectSizeLarge
+            };
+
+            @bit_bound(8)
+            enum EffectSurface {
+                EffectSurfaceUnknown,
+                EffectSurfaceGround,
+                EffectSurfaceWater,
+                EffectSurfaceBuilding,
+                EffectSurfaceVehicle,
+                EffectSurfacePerson,
+                EffectSurfaceAir
+            };
+
+            @bit_bound(8)
+            enum Sex {
+                SexUnknown,
+                SexMale,
+                SexFemale
+            };
+
+            @bit_bound(8)
+            enum AgeClass {
+                AgeClassUnknown,
+                AgeClassChild,
+                AgeClassAdult,
+                AgeClassElder
+            };
+
+            @bit_bound(8)
+            enum CivilianMode {
+                CivilianModeUnknown,
+                CivilianModeRoutine,
+                CivilianModeAlarmed,
+                CivilianModePanic,
+                CivilianModeShelter,
+                CivilianModeInside,
+                CivilianModeCower,
+                CivilianModeCasualty,
+                CivilianModeProtest,
+                CivilianModeRiot,
+                CivilianModeDispersing,
+                CivilianModeArmedHostile,
+                CivilianModeGather,
+                CivilianModeSurrender,
+                CivilianModeWatch
+            };
+
+            @bit_bound(8)
+            enum WeaponCategory {
+                WeaponCategoryUnknown,
+                WeaponCategorySmallArms,
+                WeaponCategoryMachineGun,
+                WeaponCategoryAutocannon,
+                WeaponCategoryTankGun,
+                WeaponCategoryAtgm,
+                WeaponCategoryMortar,
+                WeaponCategoryGrenade,
+                WeaponCategoryBomb,
+                WeaponCategoryRocket,
+                WeaponCategoryHowitzer,
+                WeaponCategorySam,
+                WeaponCategoryCountermeasure,
+                WeaponCategoryAirToAir,
+                WeaponCategoryBow,
+                WeaponCategorySmokeDischarger,
+                WeaponCategoryFlamethrower
+            };
+
+            @bit_bound(8)
+            enum MunitionShape {
+                MunitionShapeUnknown,
+                MunitionShapeGrenade,
+                MunitionShapeBomb,
+                MunitionShapeShell,
+                MunitionShapeRocket,
+                MunitionShapeMissile,
+                MunitionShapeBullet,
+                MunitionShapeAxe,
+                MunitionShapeSpear,
+                MunitionShapeStar,
+                MunitionShapeArrow
+            };
+
+            @bit_bound(8)
+            enum HeatMarkKind {
+                HeatMarkKindUnknown,
+                HeatMarkKindVehicleStand,
+                HeatMarkKindBurnedArea,
+                HeatMarkKindBodyImprint
+            };
+
+            @bit_bound(8)
+            enum HeatMarkEnd {
+                HeatMarkEndUnknown,
+                HeatMarkEndFront,
+                HeatMarkEndRear
+            };
+
+            @bit_bound(8)
+            enum FireMode {
+                FireModeSight,
+                FireModeLock
+            };
+
+            @bit_bound(8)
+            enum UseOutcome {
+                UseOutcomeNone,
+                UseOutcomeRunning,
+                UseOutcomeDone,
+                UseOutcomeRefused
+            };
+
+            @bit_bound(8)
+            enum UseReason {
+                UseReasonUnknown,
+                UseReasonOk,
+                UseReasonOutOfReach,
+                UseReasonLocked,
+                UseReasonDoorRefuses,
+                UseReasonNotDown,
+                UseReasonSeatTaken,
+                UseReasonUnfit,
+                UseReasonCarrying,
+                UseReasonNothingToDo,
+                UseReasonFailed,
+                UseReasonOtherSide
+            };
+
+            @bit_bound(8)
+            enum RadarWarningLevel {
+                RadarWarningLevelNone,
+                RadarWarningLevelSearched,
+                RadarWarningLevelTracked
+            };
+
+            @bit_bound(8)
+            enum MissileSeeker {
+                MissileSeekerUnknown,
+                MissileSeekerUnguided,
+                MissileSeekerCommand,
+                MissileSeekerFireAndForget,
+                MissileSeekerInfraRed,
+                MissileSeekerRadar
+            };
+
+            @bit_bound(8)
+            enum MessageAddress {
+                MessageAddressUnknown,
+                MessageAddressAll,
+                MessageAddressSide,
+                MessageAddressStation,
+                MessageAddressUnit,
+                MessageAddressInstructor
+            };
+
+            @bit_bound(8)
+            enum ObjectiveRole {
+                ObjectiveRoleUnknown,
+                ObjectiveRoleObjective,
+                ObjectiveRoleMeasure,
+                ObjectiveRoleTrigger
+            };
+
+            @bit_bound(8)
+            enum ObjectiveState {
+                ObjectiveStateUnknown,
+                ObjectiveStatePending,
+                ObjectiveStateActive,
+                ObjectiveStateAchieved,
+                ObjectiveStateFailed,
+                ObjectiveStateInactive,
+                ObjectiveStateSkipped
+            };
+
+            @bit_bound(8)
+            enum TriggerState {
+                TriggerStateUnknown,
+                TriggerStateDisarmed,
+                TriggerStateArmed,
+                TriggerStateHolding,
+                TriggerStateWaiting,
+                TriggerStateActing,
+                TriggerStateFired,
+                TriggerStateCooldown,
+                TriggerStateDone
+            };
+
+            @bit_bound(8)
+            enum ExercisePhase {
+                ExercisePhaseUnknown,
+                ExercisePhaseRunning,
+                ExercisePhaseClosing,
+                ExercisePhaseEnded
+            };
+
+            @bit_bound(8)
+            enum SideOutcome {
+                SideOutcomeNone,
+                SideOutcomeWin,
+                SideOutcomeLose,
+                SideOutcomeDraw
+            };
+
+            @bit_bound(8)
+            enum AnimalMode {
+                AnimalModeUnknown,
+                AnimalModeCalm,
+                AnimalModeAlert,
+                AnimalModeFlee,
+                AnimalModeRecover,
+                AnimalModeRest,
+                AnimalModeGuard,
+                AnimalModeCrouch
+            };
+
+            @bit_bound(8)
+            enum FlockMode {
+                FlockModeUnknown,
+                FlockModeFlying,
+                FlockModeLanded,
+                FlockModePerched
+            };
+
+            @bit_bound(8)
+            enum BreachKind {
+                BreachKindUnknown,
+                BreachKindHole,
+                BreachKindPassage
+            };
+
+            @bit_bound(8)
+            enum MoverKind {
+                MoverKindUnknown,
+                MoverKindCar,
+                MoverKindPedestrian
+            };
+
+            @bit_bound(8)
+            enum MoverSource {
+                MoverSourceUnknown,
+                MoverSourceSumo
+            };
+
+            @bit_bound(8)
+            enum TrafficLightState {
+                TrafficLightStateOff,
+                TrafficLightStateRed,
+                TrafficLightStateYellow,
+                TrafficLightStateGreen
+            };
+
+            @bit_bound(8)
+            enum ViewSource {
+                ViewSourceNone,
+                ViewSourceDirector,
+                ViewSourceFollow,
+                ViewSourceOperator
+            };
+
+            @bit_bound(8)
+            enum ViewMode {
+                ViewModeUnknown,
+                ViewModeFree,
+                ViewModeOrbit,
+                ViewModeEyes,
+                ViewModeShoulder,
+                ViewModeChase,
+                ViewModeFixed
+            };
+
+            @bit_bound(8)
+            enum ImpactKind {
+                ImpactKindUnknown,
+                ImpactKindEntered,
+                ImpactKindLeft,
+                ImpactKindStopped
+            };
+
+        };
+    };
+};
+
+#endif // _CYCLONEDDS_GENERATED_DPSTYPES_IDL_

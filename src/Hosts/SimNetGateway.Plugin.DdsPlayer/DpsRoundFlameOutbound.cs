@@ -51,6 +51,8 @@ public sealed class DpsRoundFlameOutbound : IGatewayModule
             Lying = m.Lying,
             FuzeLeftS = m.FuzeLeftS,
             Stopped = m.Stopped,
+            LaunchedAt = double.IsFinite(m.LaunchedAt) ? m.LaunchedAt : 0.0,
+            BurnSeconds = float.IsFinite(m.BurnSeconds) ? m.BurnSeconds : 0f,
         }));
     }
 

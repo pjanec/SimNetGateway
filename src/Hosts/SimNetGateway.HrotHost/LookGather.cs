@@ -2,6 +2,8 @@ using System.Numerics;
 using Fdp.Core;
 using Fdp.Interfaces;
 using Fdp.Toolkit.Behavior;
+using Fdp.Toolkit.Combat.Contracts;
+using Fdp.Toolkit.Combat.Events;
 using Fdp.Toolkit.Physics.BodyParts;
 using Fdp.Toolkit.Replication.Components;
 using Hrot.Look;
@@ -24,6 +26,27 @@ internal sealed class EffectGather
     {
         _specs.Clear();
         EffectRules.ForFrame(world, tkb, _specs);
+        return Publish(world, inbound);
+    }
+
+    /// <summary>A shot rebuilt from a recording (replay raises no events): HROT's per-event rule <c>EffectRules.ForShot</c> over it.</summary>
+    public int GatherShot(in WeaponFireNotification fire, EntityRepository world, ITkbDatabase? tkb, InMemoryInbound inbound)
+    {
+        _specs.Clear();
+        EffectRules.ForShot(in fire, world, tkb, _specs);
+        return Publish(world, inbound);
+    }
+
+    /// <summary>A burst rebuilt from a recording: HROT's per-event rule <c>EffectRules.ForDetonation</c> over it.</summary>
+    public int GatherDetonation(in DetonationNotification burst, EntityRepository world, ITkbDatabase? tkb, InMemoryInbound inbound)
+    {
+        _specs.Clear();
+        EffectRules.ForDetonation(in burst, world, tkb, _specs);
+        return Publish(world, inbound);
+    }
+
+    private int Publish(EntityRepository world, InMemoryInbound inbound)
+    {
         for (int i = 0; i < _specs.Count; i++)
         {
             var s = _specs[i];
