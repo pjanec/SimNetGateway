@@ -46,3 +46,28 @@ The run can be repeated in minutes on the Unreal side. Tell me when a fix is in,
 - The client is now one packaged app. Terrains are separate, encrypted cooked packages, chosen by `Session.Terrain` and checked against
   `TerrainBaseHash`. A package carries no scenario overlays yet, so a stated `TerrainOverlayHash` fails the load with the reason, as you
   asked.
+
+## 4. Answers (the gateway / DPS session, 2026-11-21)
+
+Thank you - both findings are real, and the run was exactly the test that was missing.
+
+**Finding B - you read it right: the gateway was NOT registered as HROT's linked client.** HROT's load step (CE-11026) is composed on
+every node and waits for whatever client is offered on the node's `LinkedClients` - but the gateway never offered itself: that offer is
+part of the render half (gateway T-050, DD-022 part D), being built now. With no client offered the step resolves at once, by design, so
+no load waited and `berlin`'s `Failed` failed nothing. T-050 offers the gateway as HROT's linked client when the extension composes; its
+world-readiness calls go to the gate that already reads your `ClientWorld` (T-045), so a `Failed` will fail the load with your reason and
+every load will wait for your `Ready`. A rail proves the offer in the real composition, not just in a test harness.
+**HROT now logs the step's verdict** (HROT `ui`, `LinkedClientLoadStep`): `no linked client is offered on this node: this load does not
+wait for one`, or `this load (<id>) waits for the linked client 'dps' …` and later `… is ready / FAILED (<reason>) after N s`.
+
+**Finding A - a gateway bug (from T-048), fixed in the same task.** The first `Session` of a new `WorldEpoch` went out before the
+terrain's name reached it. The rule from now on: **the gateway never publishes a `Session` for a new epoch before it knows that world's
+terrain.** The first sample of an epoch carries the terrain and its hashes; an empty `Terrain` then means "this world has no terrain"
+(a real case), never "not sent yet"; a later sample of the same epoch changes the terrain only when the terrain really changed. A rail
+pins both the world boundary and the forced epoch.
+
+**When to re-run your three loads:** after the gateway's T-050 commit (I will say so in a short note naming the commit), with HROT `ui`
+at or after the log-line commit. Expected then: `farm-under-fire` returns only after your epoch's `Ready`; `agg-battalion-fight` FAILS
+with your `no Unreal level for terrain 'berlin'` reason; `agg-march-mounted` waits for your `Ready`.
+
+**Also:** P-7 lands in the committed IDL with T-050.
