@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | in review (rev 1) - the route approved by the owner (the Unreal note `NOTE-2026-11-21-Unreal-Labels-Via-Gizmos.md`: *"yes"*, send labels through the gizmos); P-1 .. P-4 await approval |
+| **Status** | approved rev 2 (R-144): P-1, P-3, P-4 approved; P-2 (the cutoff on the wire) REJECTED - *"why distance cutoff that is each IG's choice isnt it? otherwise approved"* |
 | **Tasks** | T-052 (re-scoped from Entity fields to this design) |
 | **Rulings honoured** | R-143 (the three modes, rule A, the swarm exception), R-133 (append-only), R-135 (producer-neutral), R-140 (seats) |
 | **Related** | DD-017 3.11 (the gizmo protocol: `GizmoView`, `GizmoFrame`), DD-023 (one gizmo view per seat), HROT `docs/DESIGN_Map_3D_Mode.md` §6am (cards hidden behind terrain), HROT `docs/UX/DESIGN_Unit_Symbols.md` (the symbol in the card) |
@@ -35,16 +35,16 @@ dropping a primitive kind; the client only lays out and occludes.
 
 - D-1 **Append to `GizmoPrimitive`, no new topic.** Fields (all appended, R-133): `Space` (new enum `GizmoSpace` { World = 0, EntityCard = 1 }),
   `AnchorId` (the DPS entity id the card belongs to; 0 in World space), `Row` (byte, 0 = card-wide: frame and symbol cell), `CardX`, `CardY`,
-  `CardW`, `CardH` (floats in the card's layout units, below), `FillRgba`, `MaxMetresPerPixel` (0 = no cutoff). Rejected: a new `EntityCard`
+  `CardW`, `CardH` (floats in the card's layout units, below), `FillRgba`. Rejected: a new `EntityCard`
   topic (a second gizmo channel beside `GizmoFrame`, with its own layers and views - the same concept twice).
 - D-2 **Card-space shapes reuse the existing `GizmoShape` values:** `Text` (CardX = x px from the row's left, Width = font px, Text),
   `Box` (a bar or tick: CardX = centre as a fraction of the card width, CardW = half-width fraction, CardH = height px; `FillRgba` its fill),
   `Icon` (the symbol: Text = the symbol code, HROT's `SymbolCode` wire form, a 2525C SIDC with the producer's extension after `|`;
   CardH = height px; row 0 = the left cell spanning the rows), and the frame as a row-0 `Box` (fill = the background, `ColourRgba` = the
   outline). The exact mapping of each HROT row helper (`Frame`, `Bar`, `Tick`, `Text`, `Symbol`) is the build's, read from `EntityCards.cs`.
-- D-3 **The distance cutoff travels with the primitive** (`MaxMetresPerPixel`, HROT's own per-rule number: card 1, name 2, aircraft name 0 =
+- D-3 *(rev 2: REJECTED by the owner, R-144 - each client chooses its own distances; the paragraph below stays as the record)* ~~**The distance cutoff travels with the primitive** (`MaxMetresPerPixel`, HROT's own per-rule number: card 1, name 2, aircraft name 0 =
   none). The gateway has no camera (`GizmoView` carries none), so the client applies it with its own camera:
-  `m/px = 2 * d * tan(fovV / 2) / viewportHeight`. Rejected: a camera on `GizmoView` (per-frame traffic for a client-side test).
+  `m/px = 2 * d * tan(fovV / 2) / viewportHeight`. Rejected: a camera on `GizmoView` (per-frame traffic for a client-side test).~~ ⭐ **Rev 2:** nothing on the wire; HROT's numbers (card 1 m/px, name 2 m/px, aircraft name none) are a suggestion in the client guide; rule A (R-143) is the client's: it does not cut a card whose anchor `Entity.Domain` is Air (HROT's projectors still decide which aircraft get a card - the swarm exception, D-6).
 - D-4 **Views: one per seat** (DD-023, built in T-047) answers the Unreal note's G-2 - each seat's client has its own `GizmoView` and gets its
   own `GizmoFrame`s; a second display needing other layers takes a seat (seats are configured, cheap). Rejected: several views inside one
   seat (the one-player-per-seat rule would need a view table per client for one partition).
@@ -72,7 +72,6 @@ classDiagram
         +float CardW
         +float CardH
         +uint FillRgba
-        +float MaxMetresPerPixel
     }
     class GizmoSpace { <<enum, new>> World EntityCard }
     class HrotGizmoHost { <<existing>> +Convert(DebugPrimitive) GizmoPrimitiveData }
@@ -93,7 +92,7 @@ sequenceDiagram
     G->>H: run the projectors of those layers
     H-->>G: card primitives (EntityCard, AnchorIndex, ZIndex)
     G-->>U: GizmoFrame UnitCards and UnitSymbols with Space EntityCard, AnchorId, Row
-    U->>U: group by AnchorId, stack rows, place above the body (or +2 m), depth test, drop rows past MaxMetresPerPixel
+    U->>U: group by AnchorId, stack rows, place above the body (or +2 m), depth test, its own distance rule
 ```
 
 ## 6. Edge cases
@@ -109,18 +108,17 @@ sequenceDiagram
 - Card primitives of each helper (frame, bar, tick, text, symbol) arrive with Space EntityCard, the right AnchorId (the DPS id of the anchor),
   Row, card fields and MaxMetresPerPixel; World-space primitives are unchanged (existing gizmo suites green).
 - Mode subscription: a view with only `UnitCards` + `UnitSymbols` gets no man's card; adding `Labels` adds them.
-- An aircraft's name row carries MaxMetresPerPixel 0; a man's name 2; a card 1.
 - Contract: appended fields last, IDL added lines only.
-- Mutations: cards still dropped; AnchorId = the network id unmapped; Row lost; the cutoff not carried.
+- Mutations: cards still dropped; AnchorId = the network id unmapped; Row lost; a World-space primitive turned into a card.
 
 ## 8. Proposals awaiting approval
 
 | # | Proposal | Lean |
 |---|---|---|
-| P-1 | Card primitives in `GizmoFrame` by appended `GizmoPrimitive` fields (D-1, D-2) | yes - one gizmo channel |
-| P-2 | The cutoff carried per primitive, applied by the client (D-3) | yes |
-| P-3 | Views per seat; a second display takes a seat (D-4) | yes - built already |
-| P-4 | Keep `IsUnit`; do not build `ParentId` / `Symbol` now (D-5); the swarm exception in HROT (D-6) | yes |
+| P-1 | Card primitives in `GizmoFrame` by appended `GizmoPrimitive` fields (D-1, D-2) | ✅ approved (R-144) |
+| P-2 | The cutoff carried per primitive, applied by the client (D-3) | ⛔ REJECTED (R-144) - each client's choice |
+| P-3 | Views per seat; a second display takes a seat (D-4) | ✅ approved (R-144) |
+| P-4 | Keep `IsUnit`; do not build `ParentId` / `Symbol` now (D-5); the swarm exception in HROT (D-6) | ✅ approved (R-144) |
 
 ## 9. As-built notes
 
