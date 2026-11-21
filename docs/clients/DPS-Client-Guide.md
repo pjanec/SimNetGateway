@@ -116,6 +116,7 @@ Gizmos are HROT's diagnostic drawings: paths, vision cones, contacts, action sta
   - `SelectedIds`: entities whose gizmos of every family are drawn.
   - `PinnedIds` with `PinnedFamilies`: entities drawn for the named families only; `*` means every family.
   - `RateHz`: default 10, at most 60.
+- **Family layers need a selection.** HROT draws a unit's FAMILY gizmos (paths, contacts, brain state …) only for units in `GizmoView.SelectedIds`, or with the family pinned (`PinnedIds` / `PinnedFamilies`; a brain family: pinned only) - HROT's one rule, `GizmoFamilyVisibilityPolicy` (CE-3120). An empty selection gives empty family frames. The card layers (`Labels`, `UnitCards`, `UnitSymbols`) need none.
 - **`GizmoFrame`** (gateway to client, keyed by `Producer` + `Layer`, state QoS): the complete picture of one layer. Each sample replaces the previous one, and a disposed instance means the layer was turned off. `Producer` is the station's partition. `SimTime` is 0 for now.
 - **`GizmoPrimitive`**: `Shape`, `Points` (world coordinates, the simulation frame), `ColourRgba` (0xRRGGBBAA), `Width`, `Text`. Appended fields (DD-024): `Space` (`GizmoSpaceWorld`, the default, or `GizmoSpaceEntityCard`), `AnchorId`, `Row`, `CardX`, `CardY`, `CardW`, `CardH`, `FillRgba`. They apply only in card space, see Entity cards below; a world primitive leaves them 0.
 

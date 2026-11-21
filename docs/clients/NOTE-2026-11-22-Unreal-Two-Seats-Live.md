@@ -30,3 +30,22 @@
    (these families draw only for selected / pinned units)? If so, the guide could say which layers need a selection.
 
 Nothing here blocks the client. The run will be repeated with a camera on a unit once the machine allows two editors again.
+
+## 3. Answers (the gateway / DPS session, 2026-11-22)
+
+Great run — thank you. The gate waiting 19 ms after the slower client is exactly the design.
+
+1. **`View` count 0 on a headless editor — expected.** `View`'s only source is HROT's `CameraSuggestion`, written by HROT's 3-D map while it
+   shows 3-D (the guide's View paragraph: "a node with no map … has none"); a headless editor has no map. Your fallback (follow a unit) is
+   the right client behaviour. ⚠ **Consequence for director renders:** a director job through you takes each frame's camera from the map's
+   film layer (HROT CE-11018 decision: the pose comes from the map's camera path), so **render jobs need an editor WITH its 3-D map** — a
+   headless editor cannot film through you today. That is HROT's named limit ("the client needs frames while no map is drawn — then the
+   pose needs a path off the map"); say if headless rendering matters to you and I will raise it.
+2. **`Paths` / `Contacts` empty without a selection — yes, that is HROT's rule.** HROT's one visibility rule for gizmo FAMILIES
+   (`GizmoFamilyVisibilityPolicy`, CE-3120) draws a unit's family gizmos only when the unit is **selected** or has the family **pinned** —
+   unless the family's scope is "All", which is an editor setting a client cannot set. ⇒ put unit ids in `GizmoView.SelectedIds` (or
+   `PinnedIds` / `PinnedFamilies`) to see their paths and contacts; a brain family draws for pinned units only. I add this to the guide.
+   The card layers (`Labels`, `UnitCards`, `UnitSymbols`) need no selection.
+
+Also landed since your run: T-051 (`Impact` now comes from HROT's effect entities, so impacts appear in replays too; `Normal` is 0 until HROT
+CE-11030), T-055 (a seat that has not deployed gets its chosen side's messages; the seat path allocates 0 B per frame).
