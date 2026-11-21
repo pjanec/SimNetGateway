@@ -10,7 +10,7 @@ design docs and the client guide are the canon, this file is only the map.
 the HROT worktree `/home/user/hrot-c5f8c1971` pinned at HROT `ui` `f5851caf0` (`HROT_ROOT`).
 
 **In flight — a Sonnet worker on T-052** (DD-024 entity cards over `GizmoFrame`, approved R-144; brief
-`scratchpad/brief-T-052.md`). Its WIP is UNCOMMITTED in the gateway tree (HrotGizmoHost, DpsGizmos, DpsOutbound, IGizmoSource,
+`scratchpad/brief-T-052.md`). ⚠ It STOPPED on the 5-hour limit (resets 22:20 UTC) after the code, before writing the tests (its last words: "Now write the tests"); resume THAT worker with a message after the reset rather than starting a new one. Its WIP is UNCOMMITTED in the gateway tree (HrotGizmoHost, DpsGizmos, DpsOutbound, IGizmoSource,
 HrotPlayerStation, the IDL, DD-024, TASKS, the client guide). ⛔ Do not commit it blind: if the worker is gone, `git diff` for leftover
 mutations first, then have a worker run `bash scripts/build.sh` + `bash scripts/test.sh` and review against DD-024 before committing by path.
 
