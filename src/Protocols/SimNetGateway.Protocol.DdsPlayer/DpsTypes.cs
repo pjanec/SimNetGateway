@@ -203,3 +203,29 @@ public enum StanceRequest : byte { StanceRequestNone = 0, StanceRequestStanding,
 
 /// <summary>What kind of movable part an <see cref="Articulation"/> is; Unknown = a kind this contract does not name.</summary>
 public enum ArticulationKind : byte { ArticulationKindUnknown = 0, ArticulationKindTurret }
+
+// ---- DD-022 3h: round 7 (clock, steps, client world, rendering) ---------------------------------------------------------------------------------------------
+
+/// <summary>How the simulation clock runs: Continuous (a formula over wall time) or Stepped (held, moved only by steps; paused = Stepped with no steps).</summary>
+public enum ClockMode : byte { ClockModeUnknown = 0, ClockModeContinuous, ClockModeStepped }
+
+/// <summary>A client's state with respect to the world the station presents.</summary>
+public enum ClientWorldState : byte { ClientWorldStateUnknown = 0, ClientWorldStateLoading, ClientWorldStateReady, ClientWorldStateFailed }
+
+/// <summary>What a render job produces: a Movie (every frame of a reel) or Stills (single frames).</summary>
+public enum RenderKind : byte { RenderKindUnknown = 0, RenderKindMovie, RenderKindStills }
+
+/// <summary>The state of a render job.</summary>
+public enum RenderState : byte { RenderStateUnknown = 0, RenderStateStarting, RenderStateRunning, RenderStateDone, RenderStateFailed, RenderStateCancelled }
+
+/// <summary>What a film frame is: a Scene to render, or Silence (a title card; silence in the soundtrack).</summary>
+public enum FrameKind : byte { FrameKindUnknown = 0, FrameKindScene, FrameKindSilence }
+
+/// <summary>The outcome of a frame or of a job's result.</summary>
+public enum FrameStatus : byte { FrameStatusUnknown = 0, FrameStatusWritten, FrameStatusFailed }
+
+/// <summary>Where a frame's subtitle sits.</summary>
+public enum SubtitlePosition : byte { SubtitlePositionUnknown = 0, SubtitlePositionBottom, SubtitlePositionTop, SubtitlePositionCentre }
+
+/// <summary>What a <see cref="FilmGraphic"/> draws: a Ring, an Arrow, a Route, an Area or a Label.</summary>
+public enum FilmGraphicKind : byte { FilmGraphicKindUnknown = 0, FilmGraphicKindRing, FilmGraphicKindArrow, FilmGraphicKindRoute, FilmGraphicKindArea, FilmGraphicKindLabel }

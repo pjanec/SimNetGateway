@@ -540,6 +540,70 @@ module SimNetGateway {
                 ArticulationKindTurret
             };
 
+            @bit_bound(8)
+            enum ClockMode {
+                ClockModeUnknown,
+                ClockModeContinuous,
+                ClockModeStepped
+            };
+
+            @bit_bound(8)
+            enum ClientWorldState {
+                ClientWorldStateUnknown,
+                ClientWorldStateLoading,
+                ClientWorldStateReady,
+                ClientWorldStateFailed
+            };
+
+            @bit_bound(8)
+            enum RenderKind {
+                RenderKindUnknown,
+                RenderKindMovie,
+                RenderKindStills
+            };
+
+            @bit_bound(8)
+            enum RenderState {
+                RenderStateUnknown,
+                RenderStateStarting,
+                RenderStateRunning,
+                RenderStateDone,
+                RenderStateFailed,
+                RenderStateCancelled
+            };
+
+            @bit_bound(8)
+            enum FrameKind {
+                FrameKindUnknown,
+                FrameKindScene,
+                FrameKindSilence
+            };
+
+            @bit_bound(8)
+            enum FrameStatus {
+                FrameStatusUnknown,
+                FrameStatusWritten,
+                FrameStatusFailed
+            };
+
+            @bit_bound(8)
+            enum SubtitlePosition {
+                SubtitlePositionUnknown,
+                SubtitlePositionBottom,
+                SubtitlePositionTop,
+                SubtitlePositionCentre
+            };
+
+            @bit_bound(8)
+            enum FilmGraphicKind {
+                FilmGraphicKindUnknown,
+                FilmGraphicKindRing,
+                FilmGraphicKindArrow,
+                FilmGraphicKindRoute,
+                FilmGraphicKindArea,
+                FilmGraphicKindLabel
+            };
+
         };
     };
 };

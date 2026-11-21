@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using CycloneDDS.Runtime;
 using CycloneDDS.Schema;
 using SimNetGateway.Protocol.DdsPlayer;
@@ -567,7 +568,7 @@ public class DpsTopicTests
             var type = topic["DPS_".Length..];
             Assert.Contains($"struct {type} ", idl);
         }
-        Assert.Equal(35, DpsProtocol.AllTopics.Count);
+        Assert.Equal(46, DpsProtocol.AllTopics.Count);
         foreach (var name in new[] { "Mover", "MoverTracks", "TrafficLights" })
         {
             Assert.Contains("DPS_" + name, DpsProtocol.AllTopics);
@@ -617,5 +618,178 @@ public class DpsTopicTests
         Assert.Contains("int64 MunitionTypeId;", idl);
         Assert.Equal("DPS_GizmoFrame", DdsTopicName.Of<GizmoFrame>());
         Assert.Equal("DPS_Session", DdsTopicName.Of<Session>());
+    }
+
+    // ---- round 7 (DD-022 3h): clock, steps, client world, rendering -----------------------------------------------------------------
+
+    private static string Full(int length) => new string('x', length - 1) + "y";
+
+    [Fact]
+    public void The_round_7_topics_round_trip_every_field_at_full_bounds()
+    {
+        var clock = RoundTrip(new SimClock
+        {
+            Mode = ClockMode.ClockModeStepped, AnchorWallTicks = 639_000_000_000_000_001L, AnchorSimTime = 123.456789, TimeScale = 2.5f, FixedDelta = 0.05f, StepSeq = 9_000_000_001L,
+            TimelineEpoch = 4_000_000_002L, Seq = 4_000_000_003u,
+        }, "t7-clock");
+        Assert.Equal((ClockMode.ClockModeStepped, 639_000_000_000_000_001L, 123.456789, 2.5f, 0.05f, 9_000_000_001L, 4_000_000_002L, 4_000_000_003u),
+            (clock.Mode, clock.AnchorWallTicks, clock.AnchorSimTime, clock.TimeScale, clock.FixedDelta, clock.StepSeq, clock.TimelineEpoch, clock.Seq));
+
+        var probe = RoundTrip(new ClockProbe { ClientId = 0xFEDCBA9876543210UL, ClientSendTicks = 639_000_000_000_000_002L }, "t7-probe");
+        Assert.Equal((0xFEDCBA9876543210UL, 639_000_000_000_000_002L), (probe.ClientId, probe.ClientSendTicks));
+
+        var echo = RoundTrip(new ClockEcho { ClientId = 7, ClientSendTicks = 11, StationReceiveTicks = 22, StationTransmitTicks = 33 }, "t7-echo");
+        Assert.Equal((7UL, 11L, 22L, 33L), (echo.ClientId, echo.ClientSendTicks, echo.StationReceiveTicks, echo.StationTransmitTicks));
+
+        var step = RoundTrip(new ClockStep { StepSeq = 77, FixedDelta = 0.1f, TargetSimTime = 8.25, TimeScale = 0.5f, TimelineEpoch = 3, AckRequired = true, Samples = 4_000_000_004u }, "t7-step");
+        Assert.Equal((77L, 0.1f, 8.25, 0.5f, 3L, true, 4_000_000_004u), (step.StepSeq, step.FixedDelta, step.TargetSimTime, step.TimeScale, step.TimelineEpoch, step.AckRequired, step.Samples));
+
+        var ack = RoundTrip(new StepAck { ClientId = 8, StepSeq = 78, Checksum = -123456 }, "t7-ack");
+        Assert.Equal((8UL, 78L, -123456), (ack.ClientId, ack.StepSeq, ack.Checksum));
+
+        var world = RoundTrip(new ClientWorld { ClientId = 9, WorldEpoch = 4_000_000_005u, State = ClientWorldState.ClientWorldStateFailed, Step = Full(64), Reason = Full(256), WaitForMe = true }, "t7-world");
+        Assert.Equal((9UL, 4_000_000_005u, ClientWorldState.ClientWorldStateFailed, Full(64), Full(256), true), (world.ClientId, world.WorldEpoch, world.State, world.Step, world.Reason, world.WaitForMe));
+
+        var client = RoundTrip(new RenderClient
+        {
+            ClientId = 10, Name = Full(64), Ready = true, MaxWidth = 7680, MaxHeight = 4320, MaxSupersample = 4, Formats = 1, AudioFormats = 3, MaxSampleRate = 96000, ReadyJobId = Full(32),
+        }, "t7-client");
+        Assert.Equal((10UL, Full(64), true, 7680, 4320, (byte)4, 1u, 3u, 96000, Full(32)),
+            (client.ClientId, client.Name, client.Ready, client.MaxWidth, client.MaxHeight, client.MaxSupersample, client.Formats, client.AudioFormats, client.MaxSampleRate, client.ReadyJobId));
+
+        var job = RoundTrip(new RenderJob
+        {
+            JobId = Full(32), ClientId = 11, Kind = RenderKind.RenderKindStills, What = Full(128), Fps = 60, Width = 3840, Height = 2160, Supersample = 2, Dir = Full(256), Audio = true,
+            SampleRate = 48000, Channels = 2, State = RenderState.RenderStateCancelled, Reason = Full(256),
+        }, "t7-job");
+        Assert.Equal((Full(32), 11UL, RenderKind.RenderKindStills, Full(128), 60, 3840, 2160, (byte)2, Full(256), true, 48000, (byte)2, RenderState.RenderStateCancelled, Full(256)),
+            (job.JobId, job.ClientId, job.Kind, job.What, job.Fps, job.Width, job.Height, job.Supersample, job.Dir, job.Audio, job.SampleRate, job.Channels, job.State, job.Reason));
+
+        var request = new FrameRequest
+        {
+            JobId = Full(32), FrameIndex = 123456, Kind = FrameKind.FrameKindSilence, StepSeq = 5_000_000_006L, SimTime = 321.125, FilmRate = 0.25f,
+            Position = new Vec3d { X = 1.5, Y = -2.5, Z = 3.5 }, Orientation = new Quat { X = 0.1f, Y = 0.2f, Z = 0.3f, W = 0.4f }, FovDeg = 47.5f, Width = 1920, Height = 1080, Supersample = 3,
+            File = Full(256), Subtitle = Full(512), SubtitlePosition = SubtitlePosition.SubtitlePositionCentre, SubtitleAlpha = 0.75f,
+            Graphics = Enumerable.Range(0, 64).Select(i => new FilmGraphic
+            {
+                Kind = FilmGraphicKind.FilmGraphicKindLabel, Points = Enumerable.Range(0, 64).Select(j => new Vec3d { X = i, Y = j, Z = i + j / 2.0 }).ToList(), Radius = 10f + i, Text = Full(64),
+                ColourRgb = 0xFF8040u + (uint)i, Alpha = 0.5f,
+            }).ToList(),
+            LayersOn = Enumerable.Range(0, 32).Select(i => new LayerName { Name = i == 31 ? Full(64) : "on" + i }).ToList(),
+            LayersOff = Enumerable.Range(0, 32).Select(i => new LayerName { Name = i == 31 ? Full(64) : "off" + i }).ToList(),
+        };
+        var frame = RoundTrip(request, "t7-frame");
+        Assert.Equal((Full(32), 123456, FrameKind.FrameKindSilence, 5_000_000_006L, 321.125, 0.25f, 47.5f, 1920, 1080, (byte)3, Full(256), Full(512), SubtitlePosition.SubtitlePositionCentre, 0.75f),
+            (frame.JobId, frame.FrameIndex, frame.Kind, frame.StepSeq, frame.SimTime, frame.FilmRate, frame.FovDeg, frame.Width, frame.Height, frame.Supersample, frame.File, frame.Subtitle, frame.SubtitlePosition, frame.SubtitleAlpha));
+        Assert.Equal((1.5, -2.5, 3.5, 0.1f, 0.2f, 0.3f, 0.4f), (frame.Position.X, frame.Position.Y, frame.Position.Z, frame.Orientation.X, frame.Orientation.Y, frame.Orientation.Z, frame.Orientation.W));
+        Assert.Equal(64, frame.Graphics.Count);
+        for (int i = 0; i < 64; i++)
+        {
+            var got = frame.Graphics[i];
+            Assert.Equal((FilmGraphicKind.FilmGraphicKindLabel, 10f + i, Full(64), 0xFF8040u + (uint)i, 0.5f, 64), (got.Kind, got.Radius, got.Text, got.ColourRgb, got.Alpha, got.Points.Count));
+            for (int j = 0; j < 64; j++)
+            {
+                Assert.Equal((double)i, got.Points[j].X);
+                Assert.Equal((double)j, got.Points[j].Y);
+                Assert.Equal(i + j / 2.0, got.Points[j].Z);
+            }
+        }
+
+        Assert.Equal(request.LayersOn.Select(l => l.Name), frame.LayersOn.Select(l => l.Name));
+        Assert.Equal(request.LayersOff.Select(l => l.Name), frame.LayersOff.Select(l => l.Name));
+        Assert.Equal(32, frame.LayersOn.Count);
+        Assert.Equal(Full(64), frame.LayersOff[31].Name);
+
+        var done = RoundTrip(new FrameDone
+        {
+            ClientId = 12, JobId = Full(32), FrameIndex = 99, StepSeq = 5_000_000_007L, Status = FrameStatus.FrameStatusFailed, File = Full(256), AudioSamples = 1600, Reason = Full(256), RenderMs = 28000.5f,
+        }, "t7-done");
+        Assert.Equal((12UL, Full(32), 99, 5_000_000_007L, FrameStatus.FrameStatusFailed, Full(256), 1600, Full(256), 28000.5f),
+            (done.ClientId, done.JobId, done.FrameIndex, done.StepSeq, done.Status, done.File, done.AudioSamples, done.Reason, done.RenderMs));
+
+        var result = RoundTrip(new RenderJobResult { ClientId = 13, JobId = Full(32), Status = FrameStatus.FrameStatusWritten, TrackFile = Full(256), TrackSamples = 9_000_000_008L, Reason = Full(256) }, "t7-result");
+        Assert.Equal((13UL, Full(32), FrameStatus.FrameStatusWritten, Full(256), 9_000_000_008L, Full(256)),
+            (result.ClientId, result.JobId, result.Status, result.TrackFile, result.TrackSamples, result.Reason));
+
+        var view = RoundTrip(new View
+        {
+            Shot = "s", Velocity = new Vec3f { X = 1, Y = 2, Z = 3 }, Acceleration = new Vec3f { X = 4, Y = 5, Z = 6 }, AngularVelocity = new Vec3f { X = 7, Y = 8, Z = 9 }, FovRate = -1.5f,
+        }, "t7-view");
+        Assert.Equal((1f, 2f, 3f, 4f, 5f, 6f, 7f, 8f, 9f, -1.5f),
+            (view.Velocity.X, view.Velocity.Y, view.Velocity.Z, view.Acceleration.X, view.Acceleration.Y, view.Acceleration.Z, view.AngularVelocity.X, view.AngularVelocity.Y, view.AngularVelocity.Z, view.FovRate));
+    }
+
+    // topic type, reliable (all), transient local, history depth, liveliness (automatic with the default lease for the player topics)
+    public static TheoryData<Type, DdsDurability, int, bool> Round7Qos => new()
+    {
+        { typeof(SimClock), DdsDurability.TransientLocal, 1, false },
+        { typeof(ClockProbe), DdsDurability.Volatile, 16, false },
+        { typeof(ClockEcho), DdsDurability.Volatile, 16, false },
+        { typeof(ClockStep), DdsDurability.Volatile, 1024, false },
+        { typeof(StepAck), DdsDurability.Volatile, 16, false },
+        { typeof(ClientWorld), DdsDurability.Volatile, 1, true },
+        { typeof(RenderClient), DdsDurability.Volatile, 1, true },
+        { typeof(RenderJob), DdsDurability.TransientLocal, 1, false },
+        { typeof(FrameRequest), DdsDurability.Volatile, 1024, false },
+        { typeof(FrameDone), DdsDurability.Volatile, 1024, false },
+        { typeof(RenderJobResult), DdsDurability.Volatile, 16, false },
+    };
+
+    [Theory]
+    [MemberData(nameof(Round7Qos))]
+    public void The_round_7_topics_carry_the_qos_of_the_frozen_table(Type type, DdsDurability durability, int depth, bool player)
+    {
+        var qos = type.GetCustomAttribute<DdsQosAttribute>()!;
+        Assert.Equal(DdsReliability.Reliable, qos.Reliability);
+        Assert.Equal(durability, qos.Durability);
+        Assert.Equal(DdsHistoryKind.KeepLast, qos.HistoryKind);
+        Assert.Equal(depth, qos.HistoryDepth);
+        var unset = new DdsQosAttribute();   // no liveliness stated = the attribute's defaults
+        Assert.Equal(player ? DdsLivelinessKind.Automatic : unset.LivelinessKind, qos.LivelinessKind);
+        Assert.Equal(player ? DpsProtocol.DefaultLeaseMs : unset.LivelinessLeaseDurationMs, qos.LivelinessLeaseDurationMs);
+        Assert.NotNull(type.GetCustomAttribute<DdsTopicAttribute>());
+    }
+
+    [Fact]
+    public void The_round_7_topics_have_the_frozen_rate_classes_and_keys()
+    {
+        var rates = new Dictionary<Type, DpsRateClass>
+        {
+            [typeof(SimClock)] = DpsRateClass.Discrete, [typeof(ClockProbe)] = DpsRateClass.Event, [typeof(ClockEcho)] = DpsRateClass.Event, [typeof(ClockStep)] = DpsRateClass.Event,
+            [typeof(StepAck)] = DpsRateClass.Event, [typeof(ClientWorld)] = DpsRateClass.Discrete, [typeof(RenderClient)] = DpsRateClass.Discrete, [typeof(RenderJob)] = DpsRateClass.Discrete,
+            [typeof(FrameRequest)] = DpsRateClass.Event, [typeof(FrameDone)] = DpsRateClass.Event, [typeof(RenderJobResult)] = DpsRateClass.Event, [typeof(View)] = DpsRateClass.Continuous,
+        };
+        foreach (var (type, rate) in rates)
+        {
+            Assert.Equal(rate, type.GetCustomAttribute<DpsRateAttribute>()!.RateClass);
+        }
+
+        var keys = new Dictionary<Type, string?>
+        {
+            [typeof(SimClock)] = null, [typeof(ClockProbe)] = "ClientId", [typeof(ClockEcho)] = "ClientId", [typeof(ClockStep)] = null, [typeof(StepAck)] = "ClientId", [typeof(ClientWorld)] = "ClientId",
+            [typeof(RenderClient)] = "ClientId", [typeof(RenderJob)] = "JobId", [typeof(FrameRequest)] = null, [typeof(FrameDone)] = null, [typeof(RenderJobResult)] = null,
+        };
+        foreach (var (type, key) in keys)
+        {
+            var keyed = type.GetFields().Where(f => f.GetCustomAttribute<DdsKeyAttribute>() is not null).Select(f => f.Name).ToList();
+            Assert.Equal(key is null ? [] : [key], keyed);
+        }
+    }
+
+    [Fact]
+    public void Every_enum_of_the_contract_prefixes_its_enumerators_with_its_name_and_the_round_7_enums_start_at_unknown()
+    {
+        foreach (var type in typeof(DpsProtocol).Assembly.GetTypes().Where(t => t.IsEnum && t.Namespace == typeof(DpsProtocol).Namespace && t != typeof(DpsRateClass)))
+        {
+            foreach (var name in Enum.GetNames(type))
+            {
+                Assert.StartsWith(type.Name, name, StringComparison.Ordinal);
+            }
+        }
+
+        foreach (var type in new[] { typeof(ClockMode), typeof(ClientWorldState), typeof(RenderKind), typeof(RenderState), typeof(FrameKind), typeof(FrameStatus), typeof(SubtitlePosition), typeof(FilmGraphicKind) })
+        {
+            Assert.Equal(type.Name + "Unknown", Enum.GetName(type, Enum.ToObject(type, 0)));
+        }
     }
 }

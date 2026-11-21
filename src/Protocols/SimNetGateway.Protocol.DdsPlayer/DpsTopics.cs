@@ -622,8 +622,10 @@ public partial struct Impact
 /// What the simulation suggests the camera shows now (DD-019 3.1): the film director's shot, the follow camera on a unit, or the operator's own camera. One instance.
 /// The client owns its camera: it may follow this, follow only the binding (target, mode, distance) with its own controller, or ignore it. A client blends between
 /// samples of the same <see cref="CutSeq"/> and jumps on a new one. <see cref="Source"/> None = the simulation suggests nothing now.
+/// Round 7: the camera is dead-reckoned like an entity (the rates below), so the topic is Continuous: sent when the client's prediction would miss by more than
+/// a threshold, plus a heartbeat.
 /// </summary>
-[DpsRate(DpsRateClass.Discrete)]
+[DpsRate(DpsRateClass.Continuous)]
 [DdsTopic(DpsProtocol.View)]
 [DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
 [DdsManaged]
@@ -647,6 +649,14 @@ public partial struct View
     /// <summary>The take or shot name, for display.</summary>
     [MaxLength(64)] public string Shot;
     public double SimTime;
+    /// <summary>The camera's linear velocity in the simulation frame (m/s), for the client's dead reckoning between samples.</summary>
+    public Vec3f Velocity;
+    /// <summary>The camera's linear acceleration in the simulation frame (m/s^2).</summary>
+    public Vec3f Acceleration;
+    /// <summary>The camera's angular velocity in its body frame (rad/s).</summary>
+    public Vec3f AngularVelocity;
+    /// <summary>The rate of change of <see cref="FovDeg"/> (degrees per second).</summary>
+    public float FovRate;
 }
 
 #endregion
@@ -1051,6 +1061,289 @@ public partial struct GizmoFrame
     [DdsKey, MaxLength(32)] public string Layer;
     public double SimTime;
     [DdsBound(4096)] public List<GizmoPrimitive> Primitives;
+}
+
+#endregion
+
+#region Round 7: clock, steps, client world, rendering
+
+// The simulation clock is an anchor and a formula (DD-022 3b): the client's simulation time in Continuous mode is AnchorSimTime + (stationNow - AnchorWallTicks) / 10^7 x
+// TimeScale, in Stepped mode AnchorSimTime held. Wall ticks are 100 ns since 0001-01-01 UTC (the epoch and unit of .NET DateTime.Ticks). A station's tick is monotonic but
+// is not the client's own UTC now: the client takes the offset from the ClockProbe / ClockEcho handshake and elapsed time from its own monotonic clock.
+
+/// <summary>
+/// The simulation clock's anchor: sent at every anchor (pause, resume, seek, jump, boot), at every step and at a time-scale change; no periodic sample. One instance.
+/// </summary>
+[DpsRate(DpsRateClass.Discrete)]
+[DdsTopic(DpsProtocol.SimClock)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+[DdsManaged]
+public partial struct SimClock
+{
+    /// <summary>Continuous or Stepped (paused = Stepped with no steps).</summary>
+    public ClockMode Mode;
+    /// <summary>The station's wall tick the anchor's time belongs to (100 ns since 0001-01-01 UTC).</summary>
+    public long AnchorWallTicks;
+    /// <summary>The simulation time at <see cref="AnchorWallTicks"/> (in Stepped mode: the time to hold), seconds.</summary>
+    public double AnchorSimTime;
+    /// <summary>Simulation seconds per wall second while Continuous.</summary>
+    public float TimeScale;
+    /// <summary>The step size the station uses, seconds.</summary>
+    public float FixedDelta;
+    /// <summary>The id of the last step (see <see cref="ClockStep"/>).</summary>
+    public long StepSeq;
+    /// <summary>Grows at every discontinuity of the timeline (seek, branch, load, stop): the client jumps instead of easing.</summary>
+    public long TimelineEpoch;
+    /// <summary>Grows with every sample.</summary>
+    public uint Seq;
+}
+
+/// <summary>The client's clock probe (an NTP-style handshake); answered by <see cref="ClockEcho"/>. The client probes about once a second.</summary>
+[DpsRate(DpsRateClass.Event)]
+[DdsTopic(DpsProtocol.ClockProbe)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 16)]
+[DdsManaged]
+public partial struct ClockProbe
+{
+    /// <summary>The client's identity and the key (see <see cref="JoinRequest.ClientId"/>).</summary>
+    [DdsKey] public ulong ClientId;
+    /// <summary>The client's own tick when it sent the probe (echoed back unchanged).</summary>
+    public long ClientSendTicks;
+}
+
+/// <summary>The station's answer to a <see cref="ClockProbe"/>: the client computes the round trip and the offset of the station's wall ticks from its own.</summary>
+[DpsRate(DpsRateClass.Event)]
+[DdsTopic(DpsProtocol.ClockEcho)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 16)]
+[DdsManaged]
+public partial struct ClockEcho
+{
+    /// <summary>The client the answer is for (the key).</summary>
+    [DdsKey] public ulong ClientId;
+    /// <summary>The probe's <see cref="ClockProbe.ClientSendTicks"/>, unchanged.</summary>
+    public long ClientSendTicks;
+    /// <summary>The station's wall tick when the probe arrived.</summary>
+    public long StationReceiveTicks;
+    /// <summary>The station's wall tick when the answer left.</summary>
+    public long StationTransmitTicks;
+}
+
+/// <summary>
+/// One simulation step in a stepped clock, written after the step's state and events are published. A step the client must acknowledge (<see cref="AckRequired"/>)
+/// carries the number of world samples the step wrote, so the client can present the step once it holds all of them.
+/// </summary>
+[DpsRate(DpsRateClass.Event)]
+[DdsTopic(DpsProtocol.ClockStep)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1024)]
+[DdsManaged]
+public partial struct ClockStep
+{
+    /// <summary>The step's id; grows with every step.</summary>
+    public long StepSeq;
+    /// <summary>The step size, seconds.</summary>
+    public float FixedDelta;
+    /// <summary>The simulation time the step reaches, seconds.</summary>
+    public double TargetSimTime;
+    public float TimeScale;
+    /// <summary>The timeline epoch of the step (see <see cref="SimClock.TimelineEpoch"/>).</summary>
+    public long TimelineEpoch;
+    /// <summary>True when the station waits for a <see cref="StepAck"/> of this step.</summary>
+    public bool AckRequired;
+    /// <summary>The number of world samples written in the step's gather (state and events); 0 = not stated; filled only when <see cref="AckRequired"/>.</summary>
+    public uint Samples;
+}
+
+/// <summary>A client's acknowledgement that it presented a step.</summary>
+[DpsRate(DpsRateClass.Event)]
+[DdsTopic(DpsProtocol.StepAck)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 16)]
+[DdsManaged]
+public partial struct StepAck
+{
+    /// <summary>The client's identity and the key (see <see cref="JoinRequest.ClientId"/>).</summary>
+    [DdsKey] public ulong ClientId;
+    /// <summary>The acknowledged <see cref="ClockStep.StepSeq"/>.</summary>
+    public long StepSeq;
+    /// <summary>A checksum of what the client presented; 0 = none.</summary>
+    public int Checksum;
+}
+
+/// <summary>
+/// A client's readiness for the world the station presents: written by any client the station may wait for while a world loads. The station's load step is resolved when
+/// every client with <see cref="WaitForMe"/> reports Ready for the current world epoch; Failed fails the load with its reason; a client whose liveliness is lost is no longer waited for.
+/// </summary>
+[DpsRate(DpsRateClass.Discrete)]
+[DdsTopic(DpsProtocol.ClientWorld)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1,
+        LivelinessKind = DdsLivelinessKind.Automatic, LivelinessLeaseDurationMs = DpsProtocol.DefaultLeaseMs)]
+[DdsManaged]
+public partial struct ClientWorld
+{
+    /// <summary>The client's identity and the key (see <see cref="JoinRequest.ClientId"/>).</summary>
+    [DdsKey] public ulong ClientId;
+    /// <summary>The <see cref="Session.WorldEpoch"/> the client is presenting or loading.</summary>
+    public uint WorldEpoch;
+    public ClientWorldState State;
+    /// <summary>What the client is doing now, for display (e.g. "terrain city-battle").</summary>
+    [MaxLength(64)] public string Step;
+    /// <summary>Why the load failed, when <see cref="State"/> is Failed.</summary>
+    [MaxLength(256)] public string Reason;
+    /// <summary>False = a passive viewer the station never waits for.</summary>
+    public bool WaitForMe;
+}
+
+/// <summary>A client that renders films: what it can do and whether it is ready. One render client per station.</summary>
+[DpsRate(DpsRateClass.Discrete)]
+[DdsTopic(DpsProtocol.RenderClient)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1,
+        LivelinessKind = DdsLivelinessKind.Automatic, LivelinessLeaseDurationMs = DpsProtocol.DefaultLeaseMs)]
+[DdsManaged]
+public partial struct RenderClient
+{
+    /// <summary>The client's identity and the key (see <see cref="JoinRequest.ClientId"/>).</summary>
+    [DdsKey] public ulong ClientId;
+    [MaxLength(64)] public string Name;
+    /// <summary>True when the client can take a job now.</summary>
+    public bool Ready;
+    /// <summary>The largest frame the client renders, pixels.</summary>
+    public int MaxWidth, MaxHeight;
+    public byte MaxSupersample;
+    /// <summary>Image formats as bits: 1 = PNG.</summary>
+    public uint Formats;
+    /// <summary>Audio formats as bits: 1 = WAV PCM16, 2 = WAV float32.</summary>
+    public uint AudioFormats;
+    /// <summary>The highest audio sample rate the client builds, Hz.</summary>
+    public int MaxSampleRate;
+    /// <summary>The id of the job the client has finished warming up for; empty = none.</summary>
+    [MaxLength(32)] public string ReadyJobId;
+}
+
+/// <summary>One render job: a state instance per job. The job's frames follow as <see cref="FrameRequest"/>s.</summary>
+[DpsRate(DpsRateClass.Discrete)]
+[DdsTopic(DpsProtocol.RenderJob)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+[DdsManaged]
+public partial struct RenderJob
+{
+    /// <summary>The job's id and the key.</summary>
+    [DdsKey, MaxLength(32)] public string JobId;
+    /// <summary>The render client the job is for.</summary>
+    public ulong ClientId;
+    public RenderKind Kind;
+    /// <summary>What is rendered, for display.</summary>
+    [MaxLength(128)] public string What;
+    public int Fps;
+    public int Width, Height;
+    public byte Supersample;
+    /// <summary>The job's folder, relative to the render root (the client refuses ".." and absolute paths).</summary>
+    [MaxLength(256)] public string Dir;
+    /// <summary>True when the client builds a soundtrack for the job.</summary>
+    public bool Audio;
+    /// <summary>The soundtrack's sample rate, Hz.</summary>
+    public int SampleRate;
+    /// <summary>The soundtrack's channel count.</summary>
+    public byte Channels;
+    public RenderState State;
+    /// <summary>Why the job failed or was cancelled.</summary>
+    [MaxLength(256)] public string Reason;
+}
+
+/// <summary>A name of at most 64 characters (a layer name in a sequence).</summary>
+[DdsStruct]
+[DdsManaged]
+public partial struct LayerName
+{
+    [MaxLength(64)] public string Name;
+}
+
+/// <summary>One graphic drawn over a film frame (world-space points are projected through the frame's camera).</summary>
+[DdsStruct]
+[DdsManaged]
+public partial struct FilmGraphic
+{
+    public FilmGraphicKind Kind;
+    /// <summary>World points (simulation frame), resolved for the frame.</summary>
+    [DdsBound(64)] public List<Vec3d> Points;
+    /// <summary>A radius in metres (a ring or an area's rounding); 0 = not used.</summary>
+    public float Radius;
+    [MaxLength(64)] public string Text;
+    /// <summary>Colour as 0xRRGGBB.</summary>
+    public uint ColourRgb;
+    /// <summary>Opacity 0..1.</summary>
+    public float Alpha;
+}
+
+/// <summary>One film frame to render: the simulation time, the exact camera and the overlay. A frame is a step; the client answers with <see cref="FrameDone"/>.</summary>
+[DpsRate(DpsRateClass.Event)]
+[DdsTopic(DpsProtocol.FrameRequest)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1024)]
+[DdsManaged]
+public partial struct FrameRequest
+{
+    [MaxLength(32)] public string JobId;
+    public int FrameIndex;
+    public FrameKind Kind;
+    /// <summary>The step this frame is (see <see cref="ClockStep.StepSeq"/>).</summary>
+    public long StepSeq;
+    /// <summary>The simulation time of the frame, seconds.</summary>
+    public double SimTime;
+    /// <summary>Simulation seconds per film second.</summary>
+    public float FilmRate;
+    /// <summary>The camera pose (simulation frame).</summary>
+    public Vec3d Position;
+    public Quat Orientation;
+    public float FovDeg;
+    public int Width, Height;
+    public byte Supersample;
+    /// <summary>The frame's image file, relative to the render root.</summary>
+    [MaxLength(256)] public string File;
+    [MaxLength(512)] public string Subtitle;
+    public SubtitlePosition SubtitlePosition;
+    /// <summary>Opacity 0..1.</summary>
+    public float SubtitleAlpha;
+    [DdsBound(64)] public List<FilmGraphic> Graphics;
+    /// <summary>Layers to switch on for this frame.</summary>
+    [DdsBound(32)] public List<LayerName> LayersOn;
+    /// <summary>Layers to switch off for this frame.</summary>
+    [DdsBound(32)] public List<LayerName> LayersOff;
+}
+
+/// <summary>The client's answer to a <see cref="FrameRequest"/>: the frame is written, or failed.</summary>
+[DpsRate(DpsRateClass.Event)]
+[DdsTopic(DpsProtocol.FrameDone)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1024)]
+[DdsManaged]
+public partial struct FrameDone
+{
+    public ulong ClientId;
+    [MaxLength(32)] public string JobId;
+    public int FrameIndex;
+    public long StepSeq;
+    public FrameStatus Status;
+    [MaxLength(256)] public string File;
+    /// <summary>The audio samples the frame added to the track (informational: the track is checked by its total).</summary>
+    public int AudioSamples;
+    [MaxLength(256)] public string Reason;
+    /// <summary>How long the client took for the frame, milliseconds (warm-up frames included).</summary>
+    public float RenderMs;
+}
+
+/// <summary>The end of a job on the client: the soundtrack is closed. Written after the job's state is Done.</summary>
+[DpsRate(DpsRateClass.Event)]
+[DdsTopic(DpsProtocol.RenderJobResult)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 16)]
+[DdsManaged]
+public partial struct RenderJobResult
+{
+    public ulong ClientId;
+    [MaxLength(32)] public string JobId;
+    /// <summary>Written or Failed.</summary>
+    public FrameStatus Status;
+    /// <summary>The soundtrack file, relative to the render root; empty = none.</summary>
+    [MaxLength(256)] public string TrackFile;
+    /// <summary>The track's total sample count.</summary>
+    public long TrackSamples;
+    [MaxLength(256)] public string Reason;
 }
 
 #endregion

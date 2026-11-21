@@ -44,6 +44,17 @@ public static class DpsProtocol
     public const string Leave = "DPS_Leave";
     public const string GizmoView = "DPS_GizmoView";
     public const string GizmoFrame = "DPS_GizmoFrame";
+    public const string SimClock = "DPS_SimClock";
+    public const string ClockProbe = "DPS_ClockProbe";
+    public const string ClockEcho = "DPS_ClockEcho";
+    public const string ClockStep = "DPS_ClockStep";
+    public const string StepAck = "DPS_StepAck";
+    public const string ClientWorld = "DPS_ClientWorld";
+    public const string RenderClient = "DPS_RenderClient";
+    public const string RenderJob = "DPS_RenderJob";
+    public const string FrameRequest = "DPS_FrameRequest";
+    public const string FrameDone = "DPS_FrameDone";
+    public const string RenderJobResult = "DPS_RenderJobResult";
 
     /// <summary>Every topic name, in the order of DD-017 section 4.</summary>
     public static readonly IReadOnlyList<string> AllTopics =
@@ -53,6 +64,7 @@ public static class DpsProtocol
         Animal, TkbType, BuildingDamage, Mover, MoverTracks, TrafficLights,
         ManDowned, PlayerMessage, Status, Exercise, View,
         PlayerSlot, OwnUnit, JoinRequest, ControlFrame, Leave, GizmoView, GizmoFrame,
+        SimClock, ClockProbe, ClockEcho, ClockStep, StepAck, ClientWorld, RenderClient, RenderJob, FrameRequest, FrameDone, RenderJobResult,
     ];
 }
 

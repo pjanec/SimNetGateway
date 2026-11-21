@@ -72,6 +72,7 @@ public class DpsRoundFourTests
         Assert.Equal(DpsRateClass.Discrete, rates[DpsProtocol.PersonState]);
         Assert.Equal(DpsRateClass.Event, rates[DpsProtocol.Fire]);
         Assert.Equal(DpsRateClass.Fixed, rates[DpsProtocol.Entity]);
+        Assert.Equal(DpsRateClass.Continuous, rates[DpsProtocol.View]);   // round 7: the camera is dead-reckoned
     }
 
     [Fact]

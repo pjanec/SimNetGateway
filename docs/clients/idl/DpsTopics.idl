@@ -437,6 +437,10 @@ module SimNetGateway {
                 uint32 CutSeq;
                 string<64> Shot;
                 double SimTime;
+                SimNetGateway::Protocol::DdsPlayer::Vec3f Velocity;
+                SimNetGateway::Protocol::DdsPlayer::Vec3f Acceleration;
+                SimNetGateway::Protocol::DdsPlayer::Vec3f AngularVelocity;
+                float FovRate;
             };
 
             @appendable
@@ -708,6 +712,164 @@ module SimNetGateway {
                 @key string<32> Layer;
                 double SimTime;
                 sequence<SimNetGateway::Protocol::DdsPlayer::GizmoPrimitive, 4096> Primitives;
+            };
+
+            @topic
+            @appendable
+            struct SimClock {
+                SimNetGateway::Protocol::DdsPlayer::ClockMode Mode;
+                int64 AnchorWallTicks;
+                double AnchorSimTime;
+                float TimeScale;
+                float FixedDelta;
+                int64 StepSeq;
+                int64 TimelineEpoch;
+                uint32 Seq;
+            };
+
+            @topic
+            @appendable
+            struct ClockProbe {
+                @key uint64 ClientId;
+                int64 ClientSendTicks;
+            };
+
+            @topic
+            @appendable
+            struct ClockEcho {
+                @key uint64 ClientId;
+                int64 ClientSendTicks;
+                int64 StationReceiveTicks;
+                int64 StationTransmitTicks;
+            };
+
+            @topic
+            @appendable
+            struct ClockStep {
+                int64 StepSeq;
+                float FixedDelta;
+                double TargetSimTime;
+                float TimeScale;
+                int64 TimelineEpoch;
+                boolean AckRequired;
+                uint32 Samples;
+            };
+
+            @topic
+            @appendable
+            struct StepAck {
+                @key uint64 ClientId;
+                int64 StepSeq;
+                int32 Checksum;
+            };
+
+            @topic
+            @appendable
+            struct ClientWorld {
+                @key uint64 ClientId;
+                uint32 WorldEpoch;
+                SimNetGateway::Protocol::DdsPlayer::ClientWorldState State;
+                string<64> Step;
+                string<256> Reason;
+                boolean WaitForMe;
+            };
+
+            @topic
+            @appendable
+            struct RenderClient {
+                @key uint64 ClientId;
+                string<64> Name;
+                boolean Ready;
+                int32 MaxWidth;
+                int32 MaxHeight;
+                octet MaxSupersample;
+                uint32 Formats;
+                uint32 AudioFormats;
+                int32 MaxSampleRate;
+                string<32> ReadyJobId;
+            };
+
+            @topic
+            @appendable
+            struct RenderJob {
+                @key string<32> JobId;
+                uint64 ClientId;
+                SimNetGateway::Protocol::DdsPlayer::RenderKind Kind;
+                string<128> What;
+                int32 Fps;
+                int32 Width;
+                int32 Height;
+                octet Supersample;
+                string<256> Dir;
+                boolean Audio;
+                int32 SampleRate;
+                octet Channels;
+                SimNetGateway::Protocol::DdsPlayer::RenderState State;
+                string<256> Reason;
+            };
+
+            @appendable
+            struct LayerName {
+                string<64> Name;
+            };
+
+            @appendable
+            struct FilmGraphic {
+                SimNetGateway::Protocol::DdsPlayer::FilmGraphicKind Kind;
+                sequence<SimNetGateway::Protocol::DdsPlayer::Vec3d, 64> Points;
+                float Radius;
+                string<64> Text;
+                uint32 ColourRgb;
+                float Alpha;
+            };
+
+            @topic
+            @appendable
+            struct FrameRequest {
+                string<32> JobId;
+                int32 FrameIndex;
+                SimNetGateway::Protocol::DdsPlayer::FrameKind Kind;
+                int64 StepSeq;
+                double SimTime;
+                float FilmRate;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d Position;
+                SimNetGateway::Protocol::DdsPlayer::Quat Orientation;
+                float FovDeg;
+                int32 Width;
+                int32 Height;
+                octet Supersample;
+                string<256> File;
+                string<512> Subtitle;
+                SimNetGateway::Protocol::DdsPlayer::SubtitlePosition SubtitlePosition;
+                float SubtitleAlpha;
+                sequence<SimNetGateway::Protocol::DdsPlayer::FilmGraphic, 64> Graphics;
+                sequence<SimNetGateway::Protocol::DdsPlayer::LayerName, 32> LayersOn;
+                sequence<SimNetGateway::Protocol::DdsPlayer::LayerName, 32> LayersOff;
+            };
+
+            @topic
+            @appendable
+            struct FrameDone {
+                uint64 ClientId;
+                string<32> JobId;
+                int32 FrameIndex;
+                int64 StepSeq;
+                SimNetGateway::Protocol::DdsPlayer::FrameStatus Status;
+                string<256> File;
+                int32 AudioSamples;
+                string<256> Reason;
+                float RenderMs;
+            };
+
+            @topic
+            @appendable
+            struct RenderJobResult {
+                uint64 ClientId;
+                string<32> JobId;
+                SimNetGateway::Protocol::DdsPlayer::FrameStatus Status;
+                string<256> TrackFile;
+                int64 TrackSamples;
+                string<256> Reason;
             };
 
         };
