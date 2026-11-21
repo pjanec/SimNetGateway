@@ -2,6 +2,7 @@ using System.Numerics;
 using Fdp.Core;
 using Fdp.Interfaces;
 using Fdp.Toolkit.Behavior;
+using Fdp.Toolkit.Combat;
 using Fdp.Toolkit.Combat.Contracts;
 using Fdp.Toolkit.Combat.Events;
 using Fdp.Toolkit.Physics.BodyParts;
@@ -29,9 +30,12 @@ internal sealed class EffectGather
     private readonly HashSet<(Entity Entity, double BornAt)> _present = new();
     private EntityQuery? _query;
     private EntityRepository? _queryWorld;
+    private readonly List<(double BornAt, Entity Shooter, long Ammo, byte Impact, Vector3 At)> _impacts = new();
     private bool _synced;
     private bool _replaying;
     private double _time;
+
+    private const float SameImpactM = 0.25f;
 
     /// <summary>Effects sent since the last <see cref="Clear"/>.</summary>
     public long Sent { get; private set; }
@@ -46,7 +50,7 @@ internal sealed class EffectGather
         Sent = 0;
     }
 
-    public int Gather(EntityRepository world, ITkbDatabase? tkb, InMemoryInbound inbound, double simNow, bool replaying, double jumpSeconds)
+    public int Gather(EntityRepository world, ITkbDatabase? tkb, InMemoryInbound inbound, double simNow, bool replaying, double jumpSeconds, TkbGather? types = null)
     {
         if (!world.IsComponentTypeRegistered<Lifespan>() || !world.IsComponentTypeRegistered<TkbIdentity>() || !world.IsComponentTypeRegistered<SimTransform>())
         {
@@ -64,12 +68,25 @@ internal sealed class EffectGather
         _replaying = replaying;
         _time = simNow;
         _present.Clear();
+        _impacts.Clear();
         int sent = 0;
+        bool hasCause = world.IsComponentTypeRegistered<Hrot.Map.Common.Components.EffectCause>();
         foreach (var e in _query!)
         {
             var key = (e, (double)world.GetComponentRO<Lifespan>(e).BornAtSimSeconds);
             _present.Add(key);
-            if (!_seen.Add(key) || baseline || !EffectRules.SpecOf(world, e, tkb, out var spec))
+            if (!_seen.Add(key) || baseline)
+            {
+                continue;
+            }
+
+            // a round's impact is read from what the entity says (T-051, HROT CE-11024 / R-11007): the SAME entity that gives the puff and the mark gives the Impact, once, live or restored
+            if (hasCause)
+            {
+                PublishImpact(world, e, key.Item2, inbound, types, _impacts);
+            }
+
+            if (!EffectRules.SpecOf(world, e, tkb, out var spec))
             {
                 continue;
             }
@@ -82,6 +99,44 @@ internal sealed class EffectGather
         Sent += sent;
         return sent;
     }
+
+    /// <summary>
+    /// One <see cref="HrotImpact"/> for an effect entity whose <c>EffectCause.Impact</c> is not 0 (kind = Impact - 1, HROT's <c>ImpactKind</c>; 0 = a detonation or a shot: no Impact). Position and time are the effect's own, the surface,
+    /// material, munition and shooter are what the cause says; the normal is not on the entity (all 0 = unknown).
+    /// </summary>
+    private static void PublishImpact(EntityRepository world, Entity e, double bornAt, InMemoryInbound inbound, TkbGather? types, List<(double BornAt, Entity Shooter, long Ammo, byte Impact, Vector3 At)> done)
+    {
+        if (!world.HasComponent<Hrot.Map.Common.Components.EffectCause>(e))
+        {
+            return;
+        }
+
+        var cause = world.GetComponentRO<Hrot.Map.Common.Components.EffectCause>(e);
+        if (cause.Impact == 0)
+        {
+            return;
+        }
+
+        var at = (Vector3)world.GetComponentRO<SimTransform>(e).Position;
+        // HROT makes a puff AND a mark of one round's impact, each stamped with the same cause: they are ONE impact (same birth time, shooter, round and kind, within a quarter metre of each other)
+        for (int i = 0; i < done.Count; i++)
+        {
+            var d = done[i];
+            if (d.BornAt == bornAt && d.Shooter == cause.Shooter && d.Ammo == cause.Ammo && d.Impact == cause.Impact && Vector3.DistanceSquared(d.At, at) <= SameImpactM * SameImpactM)
+            {
+                return;
+            }
+        }
+
+        done.Add((bornAt, cause.Shooter, cause.Ammo, cause.Impact, at));
+        types?.Reference(cause.Ammo);
+        inbound.Enqueue(new HrotImpact(bornAt, new HrotVec3(at.X, at.Y, at.Z), HrotVec3.Zero, ((EffectSurface)cause.Surface).ToString(), ((ImpactKind)(cause.Impact - 1)).ToString(), cause.Ammo,
+            LookIds.NetworkIdOf(world, cause.Shooter), MaterialOf(cause.Material)));
+    }
+
+    /// <summary>The name of HROT's impact material ("" for Unknown and for a value HROT does not define).</summary>
+    internal static string MaterialOf(byte material) =>
+        material != 0 && Enum.IsDefined(typeof(ImpactMaterial), material) ? ((ImpactMaterial)material).ToString() : string.Empty;
 
     private static void Publish(EntityRepository world, in EffectSpec s, InMemoryInbound inbound)
     {

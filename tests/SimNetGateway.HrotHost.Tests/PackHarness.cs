@@ -183,6 +183,7 @@ public class PackHarness : IDisposable
     private sealed class EffectSink : IIngressSink
     {
         public readonly List<HrotEffect> Effects = new();
+        public readonly List<HrotImpact> Impacts = new();
 
         public void Deliver<T>(in T message, double? receivedAt = null)
         {
@@ -190,8 +191,15 @@ public class PackHarness : IDisposable
             {
                 Effects.Add(effect);
             }
+            else if (message is HrotImpact impact)
+            {
+                Impacts.Add(impact);
+            }
         }
     }
+
+    /// <summary>The impacts the last <see cref="GatherEffects"/> made (T-051: an impact is read from its effect entity).</summary>
+    public List<HrotImpact> GatheredImpacts { get; private set; } = new();
 
     /// <summary>The effect-state gather, called the way the gateway does (one path for live and replay): the effects of the effect entities not sent before.</summary>
     public List<HrotEffect> GatherEffects(double simNow, bool replaying = false)
@@ -200,6 +208,7 @@ public class PackHarness : IDisposable
         Adapter.GatherEffects(World, inbound, simNow, replaying);
         var sink = new EffectSink();
         inbound.Drain(sink, int.MaxValue);
+        GatheredImpacts = sink.Impacts;
         return sink.Effects;
     }
 

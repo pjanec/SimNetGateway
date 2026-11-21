@@ -158,42 +158,136 @@ public class RoundThreeGatherTests
 
     // ---- impacts (3.2) ----------------------------------------------------------------------------------------------------------------------
 
+    private static RoundImpactNotification Hit(Entity shooter, long ammo, ImpactKind kind, float x = 5, float y = 6, float z = 0.1f, ImpactMaterial material = ImpactMaterial.Unknown) =>
+        new() { Shooter = shooter, X = x, Y = y, Z = z, NormalZ = 1f, Ammo = ammo, Kind = (byte)kind, Material = (byte)material };
+
+    /// <summary>
+    /// T-051 (HROT R-11007, CE-11024): an impact is read from the EFFECT ENTITY HROT's spawner made of it - one <c>Impact</c> per entity with a non-zero <c>EffectCause.Impact</c>, kind = Impact - 1, the effect's own position and
+    /// birth time, the shooter mapped to its network id, the surface / material / munition as the cause says; the normal is not on the entity (0 = unknown). Mutations: kind off by one; shooter unmapped.
+    /// </summary>
     [Fact]
-    public void A_round_impact_is_published_with_its_kind_surface_and_position()
+    public void A_round_impact_is_one_Impact_from_its_effect_entity_with_kind_shooter_surface_and_position()
     {
         using var h = new Stage();
         var shooter = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: ShooterTkb);
         long ammo = h.MunitionWithEffects();
-        h.SetClock(12.5, 0.05f, 100);
-        h.World.Bus.Publish(new RoundImpactNotification { Shooter = shooter, X = 5, Y = 6, Z = 0.1f, NormalZ = 1f, Ammo = ammo, Kind = (byte)ImpactKind.Stop });
-        h.World.Bus.Publish(new RoundImpactNotification { Shooter = shooter, X = 7, Y = 8, Z = 5f, NormalX = -1f, Ammo = ammo, Kind = (byte)ImpactKind.Entry, Material = (byte)ImpactMaterial.Concrete });
-        h.World.Bus.Publish(new RoundImpactNotification { Shooter = Entity.Null, X = 9, Y = 8, Z = 5f, Ammo = ammo, Kind = (byte)ImpactKind.Exit });
-        h.World.Bus.SwapBuffers();
+        h.GatherEffects(10.0);   // the baseline
+        var stop = Hit(shooter, ammo, ImpactKind.Stop);
+        var entry = Hit(shooter, ammo, ImpactKind.Entry, 7, 8, 5f, ImpactMaterial.Concrete);
+        var exit = Hit(Entity.Null, ammo, ImpactKind.Exit, 9, 8, 5f);
+        foreach (var hit in new[] { stop, entry, exit })
+        {
+            var captured = hit;
+            h.SpawnEffects(10.1, specs => Hrot.Look.Effects.EffectRules.ForImpact(in captured, h.World, h.TestTkb, specs));
+        }
 
-        var impacts = h.GatherEvents().Of<HrotImpact>();
+        var effects = h.GatherEffects(10.2);
+        var impacts = h.GatheredImpacts;
 
+        Assert.NotEmpty(effects);   // the derived puff and mark still arrive as Effect
         Assert.Equal(3, impacts.Count);
-        Assert.Equal(("Stop", "Ground", 2001, ammo, new HrotVec3(5, 6, 0.1f), new HrotVec3(0, 0, 1), 12.5), (impacts[0].Kind, impacts[0].Surface, impacts[0].ShooterId, impacts[0].MunitionTkb, impacts[0].Position, impacts[0].Normal, impacts[0].SimTime));
-        Assert.Equal(("Entry", "Building", "Concrete"), (impacts[1].Kind, impacts[1].Surface, impacts[1].Material));   // the name of the ImpactMaterial HROT stamped on the event
-        Assert.Equal(string.Empty, impacts[0].Material);   // Unknown (0) is no name
-        Assert.Equal(("Exit", 0, new HrotVec3(0, 0, 0)), (impacts[2].Kind, impacts[2].ShooterId, impacts[2].Normal));   // no shooter, no normal: unknown
-        h.World.Bus.SwapBuffers();
-        Assert.Empty(h.GatherEvents().Of<HrotImpact>());   // the next frame has none
+        var byKind = impacts.ToDictionary(i => i.Kind);
+        Assert.Equal(("Ground", 2001, ammo, new HrotVec3(5, 6, 0.1), 10.1), (byKind["Stop"].Surface, byKind["Stop"].ShooterId, byKind["Stop"].MunitionTkb, byKind["Stop"].Position with { Z = 0.1 }, byKind["Stop"].SimTime));   // the puff, just off the face: the mark of the same impact makes no second one
+        Assert.Equal(("Building", "Concrete"), (byKind["Entry"].Surface, byKind["Entry"].Material));
+        Assert.Equal(string.Empty, byKind["Stop"].Material);
+        Assert.Equal((0, new HrotVec3(0, 0, 0)), (byKind["Exit"].ShooterId, byKind["Exit"].Normal));   // no shooter, no normal: unknown
+        h.GatherEffects(10.3);
+        Assert.Empty(h.GatheredImpacts);   // never sent again
     }
 
+    /// <summary>A recording shown (or a state restored) holds the same effect entities: the same Impact comes out, once, in a replay.</summary>
     [Fact]
-    public void An_impact_is_also_an_effect_through_the_effect_entities_HROT_made_of_it()
+    public void A_restored_effect_entity_in_a_replay_gives_the_same_Impact_as_live()
+    {
+        long ammo;
+        HrotImpact live, replayed;
+        using (var h = new Stage())
+        {
+            var shooter = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: ShooterTkb);
+            ammo = h.MunitionWithEffects();
+            h.GatherEffects(10.0);
+            var hit = Hit(shooter, ammo, ImpactKind.Stop);
+            h.SpawnEffects(10.1, specs => Hrot.Look.Effects.EffectRules.ForImpact(in hit, h.World, h.TestTkb, specs));
+            h.GatherEffects(10.2);
+            live = Assert.Single(h.GatheredImpacts);
+        }
+
+        using (var h = new Stage())
+        {
+            var shooter = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: ShooterTkb);
+            h.MunitionWithEffects();
+            h.GatherEffects(10.0, replaying: true);   // entering the replay: what is there is "already sent"
+            var hit = Hit(shooter, ammo, ImpactKind.Stop);
+            h.SpawnEffects(10.1, specs => Hrot.Look.Effects.EffectRules.ForImpact(in hit, h.World, h.TestTkb, specs));   // the recording's next effect entity appears
+            h.GatherEffects(10.2, replaying: true);
+            replayed = Assert.Single(h.GatheredImpacts);
+        }
+
+        Assert.Equal(live, replayed);
+    }
+
+    /// <summary>A detonation's effect carries Impact 0 (not a round's impact): it makes an Effect and NO Impact.</summary>
+    [Fact]
+    public void A_detonations_effect_gives_no_Impact()
     {
         using var h = new Stage();
+        var shooter = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: ShooterTkb);
         h.GatherEffects(10.0);
-        var hit = new RoundImpactNotification { X = 5, Y = 6, Z = 0.1f, NormalZ = 1f, Ammo = h.MunitionWithEffects(), Kind = (byte)ImpactKind.Stop };
+        var burst = new DetonationNotification { Shooter = shooter, Target = Entity.Null, Ammo = h.MunitionWithEffects(), HitX = 5, HitY = 6, HitZ = 0.1f, Damage = 10f };
+        h.SpawnEffects(10.1, specs => Hrot.Look.Effects.EffectRules.ForDetonation(in burst, h.World, h.TestTkb, specs));
+
+        Assert.NotEmpty(h.GatherEffects(10.2));
+        Assert.Empty(h.GatheredImpacts);
+    }
+
+    /// <summary>ONE path: the effect entity. HROT's round-impact EVENT is no longer read, so an impact that has both an event and an entity is sent once (a replay re-sends no event, an entity is what both live and replay hold). Mutation: the event path read again.</summary>
+    [Fact]
+    public void An_impact_with_both_an_event_and_an_entity_is_sent_once()
+    {
+        using var h = new Stage();
+        var shooter = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: ShooterTkb);
+        h.GatherEffects(10.0);
+        var hit = Hit(shooter, h.MunitionWithEffects(), ImpactKind.Stop);
         h.SpawnEffects(10.1, specs => Hrot.Look.Effects.EffectRules.ForImpact(in hit, h.World, h.TestTkb, specs));
         h.PublishForNextFrame(hit);
 
-        var got = h.GatherEvents();
+        int fromEvents = h.GatherEvents().Of<HrotImpact>().Count;
+        h.GatherEffects(10.2);
 
-        Assert.Single(got.Of<HrotImpact>());
-        Assert.NotEmpty(h.GatherEffects(10.2));   // the derived puff and mark still arrive as Effect (HROT's SpecOf over the entities)
+        Assert.Equal(1, fromEvents + h.GatheredImpacts.Count);
+    }
+
+    /// <summary>HOT path: with effect entities alive and already sent, a steady frame of the effect gather (Impact included) allocates nothing.</summary>
+    [Fact]
+    public void A_steady_effect_gather_with_impact_entities_allocates_nothing()
+    {
+        using var h = new Stage();
+        var shooter = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: ShooterTkb);
+        long ammo = h.MunitionWithEffects();
+        h.GatherEffects(10.0);
+        var hit = Hit(shooter, ammo, ImpactKind.Stop);
+        h.SpawnEffects(10.1, specs => Hrot.Look.Effects.EffectRules.ForImpact(in hit, h.World, h.TestTkb, specs));
+        Assert.Single(h.GatheredImpacts.Concat(Collect(h, 10.2)));
+        var inbound = new SimNetGateway.Engine.InMemory.InMemoryInbound(new SimNetGateway.Engine.SourceId(99), "test");
+        double t = 10.3;
+        for (int i = 0; i < 20; i++, t += 0.016)
+        {
+            h.Adapter.GatherEffects(h.World, inbound, t, false);
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 300; i++, t += 0.016)
+        {
+            h.Adapter.GatherEffects(h.World, inbound, t, false);
+        }
+
+        Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);
+    }
+
+    private static List<HrotImpact> Collect(Stage h, double t)
+    {
+        h.GatherEffects(t);
+        return h.GatheredImpacts;
     }
 
     // ---- a round's launch time and motor (3.4) ----------------------------------------------------------------------------------------

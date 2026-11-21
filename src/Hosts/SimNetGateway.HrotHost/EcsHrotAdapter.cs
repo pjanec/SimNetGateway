@@ -66,7 +66,6 @@ public sealed class EcsHrotAdapter
     private readonly TkbGather _types = new();
     private readonly AnimalGather _animals = new();
     private readonly ViewGather _view = new();
-    private readonly ImpactGather _impacts = new();
     private readonly BankTracker _banks = new();
     private readonly List<int> _scratch = new();
     private readonly List<(int Parent, int Part)> _scratchPoses = new();
@@ -348,7 +347,6 @@ public sealed class EcsHrotAdapter
     {
         var tkb = _services.Tkb();
         _hud.GatherEvents(world, inbound, Fdp.Toolkit.Time.SimClock.TotalTimeOf(world));
-        _impacts.Gather(world, tkb, _types, inbound, Fdp.Toolkit.Time.SimClock.TotalTimeOf(world));
         var fires = world.ReadEvents<WeaponFireNotification>();
         for (int i = 0; i < fires.Length; i++)
         {
@@ -825,7 +823,7 @@ public sealed class EcsHrotAdapter
     /// </summary>
     public void GatherEffects(EntityRepository world, InMemoryInbound inbound, double simNow, bool replaying)
     {
-        _effects.Gather(world, _services.Tkb(), inbound, simNow, replaying, ReplayJumpS);
+        _effects.Gather(world, _services.Tkb(), inbound, simNow, replaying, ReplayJumpS, _types);
         if (_effects.Sent > 0 || _warnedNoSpawner || Counters.FiresSent == 0)
         {
             return;
