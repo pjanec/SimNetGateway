@@ -611,7 +611,7 @@ HROT side: in HROT's design for H-1 .. H-8.
 | P-4 | The render topics, a film frame = an acknowledged step (3e) | yes; a warm-up timeout apart from the frame timeout, a per-job ready | folded (3e rev 4) - awaits the owner |
 | P-5 | The soundtrack built on sim time (3f) | S-1 through the engine's non-real-time mixer, on a client started for rendering; checked by its total at the end | folded (D-F2) - awaits the owner |
 | P-6 | HROT requests H-1 .. H-8 as one prompt to the HROT session | yes | after the owner's approval |
-| P-7 | *(rev 7, 2026-11-21 - HROT's film contract as built, CE-11018)* append `FrameKindRepeat` to `FrameKind` (slow motion past one frame per step repeats the last scene: no image, the client advances its track one frame) and `FrameRequest.Fade` (float 0..1, the dip to black over the picture); the camera arrives as forward + up and the gateway converts it to the wire's `Orientation` | - | proposed - awaits the owner |
+| P-7 | *(rev 7, 2026-11-21 - HROT's film contract as built, CE-11018)* append `FrameKindRepeat` to `FrameKind` (slow motion past one frame per step repeats the last scene: no image, the client advances its track one frame) and `FrameRequest.Fade` (float 0..1, the dip to black over the picture); the camera arrives as forward + up and the gateway converts it to the wire's `Orientation` | - | ✅ approved (R-142) |
 
 | | Question | Answer *(Unreal, rev 4)* |
 |---|---|---|
