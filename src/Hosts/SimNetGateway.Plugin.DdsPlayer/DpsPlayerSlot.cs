@@ -48,10 +48,10 @@ internal sealed class DpsPlayerSlot
             _version = slot.Version;
             _reason = reason;
             _offers = [.. offers];
-            byte side = 0;
+            byte side = slot.Side;
             foreach (var o in offers)
             {
-                if (o.UnitId == slot.UnitId && slot.UnitId != 0)
+                if (side == 0 && o.UnitId == slot.UnitId && slot.UnitId != 0)
                 {
                     side = (byte)Math.Clamp(o.Force, 0, 255);
                 }
@@ -64,16 +64,7 @@ internal sealed class DpsPlayerSlot
                 Side = side,
                 RespawnAtSim = slot.RespawnAt,
                 Reason = reason,
-                Offers = [.. offers.Take(128).Select(o => new D.Offer
-                {
-                    Kind = D.OfferKind.OfferKindUnit,
-                    Id = o.UnitId,
-                    Name = o.Role is { Length: > 64 } r ? r[..64] : o.Role ?? string.Empty,
-                    Side = (byte)Math.Clamp(o.Force, 0, 255),
-                    Free = true,
-                    Kits = [],      // filled from HROT's deploy offers once seats have the deploy flow (HROT Q114, T-049)
-                    Outline = [],
-                })],
+                Offers = [.. offers.Take(128).Select(OfferOf)],
             });
         }
 
@@ -126,6 +117,20 @@ internal sealed class DpsPlayerSlot
             _unit.Write(unit);
         }
     }
+
+    /// <summary>One seam offer as the wire's <c>Offer</c> (T-053): kind, role count / max, free, the role's kits (<= 8 names of 32) and an area's outline (<= 32 points).</summary>
+    private static D.Offer OfferOf(PlayerOffer o) => new()
+    {
+        Kind = o.Kind switch { PlayerOfferKind.Role => D.OfferKind.OfferKindRole, PlayerOfferKind.Area => D.OfferKind.OfferKindArea, _ => D.OfferKind.OfferKindUnit },
+        Id = o.UnitId,
+        Name = o.Role is { Length: > 64 } r ? r[..64] : o.Role ?? string.Empty,
+        Side = (byte)Math.Clamp(o.Force, 0, 255),
+        Free = o.Free,
+        Count = o.Count,
+        Max = o.Max,
+        Kits = o.Kits is null ? [] : [.. o.Kits.Take(8).Select(k => new D.NameItem { Name = Cut(k, 32) })],
+        Outline = o.Outline is null ? [] : [.. o.Outline.Take(32).Select(p => new D.Vec3d { X = p.X, Y = p.Y, Z = p.Z })],
+    };
 
     private static string Cut(string? s, int max) => s is null ? string.Empty : s.Length <= max ? s : s[..max];
 

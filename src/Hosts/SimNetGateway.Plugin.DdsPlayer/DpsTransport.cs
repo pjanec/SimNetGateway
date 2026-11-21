@@ -514,6 +514,11 @@ public sealed class DpsTransport : IDisposable
             var offers = station.Offers;
             for (int i = 0; i < offers.Count; i++)
             {
+                if (offers[i].Kind != PlayerOfferKind.Unit)
+                {
+                    continue;   // a role or a spawn area is an entity of the world but no unit to take: Playable is for placed units
+                }
+
                 int id = offers[i].UnitId;
                 if (_offerable.Add(id))
                 {

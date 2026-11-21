@@ -259,6 +259,27 @@ public class DpsOutboundTests
         Assert.True(watch.Until(w => !w.Alive["1201"].Playable && w.Alive["1202"].Playable));
     }
 
+    /// <summary>T-053: a role or a spawn area is an entity of the world (its id is a network id) but no unit to take: <c>Entity.Playable</c> is for the placed units of the offers only.</summary>
+    [Fact]
+    public void Playable_ignores_role_and_area_offers()
+    {
+        uint domain = NewDomain();
+        var station = new FakeStation();
+        station.OfferList.Add(new PlayerOffer(1201, "Rifleman", 1));
+        station.OfferList.Add(new PlayerOffer(1202, "Role", 1, PlayerOfferKind.Role));
+        station.OfferList.Add(new PlayerOffer(1203, "Area", 1, PlayerOfferKind.Area));
+        using var watch = new Watch<D.Entity>(domain, "station-1", e => Id(e.EntityId));
+        using var rig = new Rig(domain, station: station);
+
+        rig.Send(State(1201, dis: PersonDis));
+        rig.Send(State(1202, dis: PersonDis));
+        rig.Send(State(1203, dis: PersonDis));
+        Assert.True(watch.Until(w => w.Alive.Count == 3));
+        Assert.True(watch.Alive["1201"].Playable);
+        Assert.False(watch.Alive["1202"].Playable);
+        Assert.False(watch.Alive["1203"].Playable);
+    }
+
     [Fact]
     public void Pose_is_sent_on_threshold_and_heartbeat_not_on_noise()
     {

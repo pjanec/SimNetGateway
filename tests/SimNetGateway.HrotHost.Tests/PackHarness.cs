@@ -94,7 +94,7 @@ public class PackHarness : IDisposable
         var allocator = new NodeIdAllocator(() => _nextId++);
         HostServices = new HostServices(Plugins, Config, line => Log.Add(line));
         System = new DisGatewaySystem(services, Config, seats, stations => GatewayRuntime.Create(Config, allocator, Plugins, HostServices, GatewayClock, munitionName, line => Log.Add(line), stations[0], playerSeats: stations),
-            line => Errors.Add(line), () => HostServices.Pump(line => Log.Add(line)));
+            line => Errors.Add(line), () => HostServices.Pump(line => Log.Add(line)), log: line => Log.Add(line));
     }
 
     /// <summary>The node's template database as the gateway reads it (empty: tests register the templates whose DIS type they need).</summary>
@@ -163,7 +163,13 @@ public class PackHarness : IDisposable
         World.SetSingleton(new GlobalTime { TotalTime = SimTime, DeltaTime = (float)advance, TimeScale = 1f, FrameNumber = ++_frame });
         System.Execute(World, dt);
         World.Bus.SwapBuffers();
+        AfterSystem(dt);
         Drain();
+    }
+
+    /// <summary>Runs after the gateway system and the bus swap of every <see cref="Step"/>: a derived harness ticks the systems it stands in for (HROT's deploy server, its possession system).</summary>
+    protected virtual void AfterSystem(float dt)
+    {
     }
 
     public void Steps(int count, float dt = 1f / 60f)

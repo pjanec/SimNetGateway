@@ -17,8 +17,9 @@ using IGizmoSource = SimNetGateway.Gateway.HrotDis.IGizmoSource;
 namespace SimNetGateway.HrotHost;
 
 /// <summary>
-/// Where the slot comes from (DD-017 3.2b): step 1 derives it from possession of placed playable units on this node; step 2 swaps in HROT's deploy flow on a
-/// player node. The station facade owns the version, the control frames and the unit status; a flow owns the state machine and the offers.
+/// Where the slot comes from (DD-017 3.2b): step 1 derives it from possession of placed playable units on this node (<see cref="PossessionFlow"/>, where no deploy server runs); step 2
+/// is HROT's deploy flow over the node's deploy server (<see cref="DeployFlowPlayerFlow"/>, T-053). The station facade owns the version, the control frames and the unit status; a flow owns the
+/// state machine and the offers.
 /// </summary>
 internal interface IPlayerFlow
 {
@@ -29,6 +30,15 @@ internal interface IPlayerFlow
     double RespawnAt { get; }
 
     IReadOnlyList<PlayerOffer> Offers { get; }
+
+    /// <summary>HROT's own text for the last refused join or timeout of this seat (empty = none); cleared by the next join.</summary>
+    string Reason { get; }
+
+    /// <summary>The DIS force of the side the seat plays while it holds a unit (0 = not stated; the slot then derives it from the offer of the unit).</summary>
+    byte Side { get; }
+
+    /// <summary>Wall milliseconds; tests replace it to move the timeouts.</summary>
+    Func<long> NowMs { get; set; }
 
     /// <summary>Called once per frame on the main thread; <paramref name="live"/> = a scenario runs, <paramref name="replaying"/> = a recording is shown.</summary>
     void Frame(EntityRepository world, bool live, bool replaying);
@@ -49,7 +59,11 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
 {
     private readonly HrotGizmoHost _gizmos = new();
     private readonly HrotServices _services;
-    private readonly PossessionFlow _flow;
+    private readonly Action<string>? _log;
+    private IPlayerFlow _flow;
+    private Func<long>? _nowMs;
+    private bool _choose = true;
+    private bool? _logged;
     private EntityRepository? _world;
     private EntityOrders? _orders;
     private PlayerSlotSnapshot _slot = new(PlayerSlotState.Waiting, 0, 0.0, 0);
@@ -63,8 +77,10 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
 
     /// <param name="services">What the station reads from the node.</param>
     /// <param name="station">The station this seat possesses as (<see cref="StationOf"/>): the one number every "is this mine" check and the orders' <c>Station</c> use.</param>
-    public HrotPlayerStation(HrotServices services, int station)
+    /// <param name="log">Where the one-line decision of the seat's flow goes (null = nowhere).</param>
+    public HrotPlayerStation(HrotServices services, int station, Action<string>? log = null)
     {
+        _log = log;
         _services = services ?? throw new ArgumentNullException(nameof(services));
         Station = station;
         _flow = new PossessionFlow(services, () => Orders, station);
@@ -92,8 +108,15 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
     internal Func<long> NowMs
     {
         get => _flow.NowMs;
-        set => _flow.NowMs = value;
+        set
+        {
+            _nowMs = value;
+            _flow.NowMs = value;
+        }
     }
+
+    /// <summary>The seat's flow (tests read it): <see cref="DeployFlowPlayerFlow"/> where the node serves the deploy flow, else today's <see cref="PossessionFlow"/>.</summary>
+    internal IPlayerFlow Flow => _flow;
 
     private EntityOrders? Orders => _orders;
 
@@ -112,6 +135,12 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
             var map = _services.EntityMap;
             _orders = map is null ? null : new EntityOrders(world, map, null) { Station = Station };
             _flow.Boundary();
+            _choose = true;
+        }
+
+        if (_choose)
+        {
+            ChooseFlow(world);
         }
 
         _flow.Frame(world, live, replaying);
@@ -120,10 +149,38 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         Refresh();
     }
 
+    /// <summary>
+    /// THE decision point of the seat's flow (T-053, once per world and after every boundary, logged once): the deploy flow when the node composed the deploy server over its in-process hub
+    /// (the editor, HROT Q114-B), else today's placed-unit possession. The flow it replaces is ended first (its client end closes; a deploy flow frees the seat's slot on the server).
+    /// </summary>
+    private void ChooseFlow(EntityRepository world)
+    {
+        _choose = false;
+        bool deploy = _services.EntityMap is not null && DeployServer.Exists(world);
+        if (deploy != _flow is DeployFlowPlayerFlow)
+        {
+            _flow.Boundary();
+            _flow = deploy ? new DeployFlowPlayerFlow(_services, () => Orders, Station) : new PossessionFlow(_services, () => Orders, Station);
+            if (_nowMs is not null)
+            {
+                _flow.NowMs = _nowMs;
+            }
+        }
+
+        if (_logged is { } said && said == deploy)
+        {
+            return;   // the same decision as the one already logged (a boundary that changes nothing says nothing)
+        }
+
+        _logged = deploy;
+        _log?.Invoke($"player seat {Station}: {(deploy ? "the deploy flow of HROT's deploy server" : "possession of placed playable units (no deploy server on this node)")}");
+    }
+
     /// <summary>The world boundary: the slot starts over and the gizmo view ends (its client re-sends it to the next runtime, DD-017 3.11).</summary>
     internal void Boundary()
     {
         _flow.Boundary();
+        _choose = true;
         _gizmos.SetView(null);
         _useTarget = 0;
         _mount = 0;
@@ -235,9 +292,10 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
     private void Refresh()
     {
         string reason = _flow.Reason;
-        if (_slot.State != _flow.State || _slot.UnitId != _flow.UnitId || _slot.RespawnAt != _flow.RespawnAt || (_slot.Reason ?? string.Empty) != reason)
+        byte side = _flow.Side;
+        if (_slot.State != _flow.State || _slot.UnitId != _flow.UnitId || _slot.RespawnAt != _flow.RespawnAt || (_slot.Reason ?? string.Empty) != reason || _slot.Side != side)
         {
-            _slot = new PlayerSlotSnapshot(_flow.State, _flow.UnitId, _flow.RespawnAt, _slot.Version + 1, reason);
+            _slot = new PlayerSlotSnapshot(_flow.State, _flow.UnitId, _flow.RespawnAt, _slot.Version + 1, reason, side);
         }
     }
 
@@ -385,6 +443,9 @@ internal sealed class PossessionFlow : IPlayerFlow
     }
 
     public Func<long> NowMs { get; set; }
+
+    /// <summary>The seat's side is not tracked here: the slot derives it from the offer of the held unit.</summary>
+    public byte Side => 0;
 
     public PlayerSlotState State { get; private set; } = PlayerSlotState.Waiting;
 

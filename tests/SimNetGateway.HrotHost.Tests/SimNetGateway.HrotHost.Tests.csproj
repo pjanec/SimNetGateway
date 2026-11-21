@@ -16,6 +16,7 @@
     <ProjectReference Include="../../src/Engine/SimNetGateway.Engine.InMemory/SimNetGateway.Engine.InMemory.csproj" />
     <ProjectReference Include="$(HrotRoot)Hrot/Engine/Hrot.Common/Hrot.Common.csproj" />
     <ProjectReference Include="$(HrotRoot)Hrot/Engine/Hrot.Core/Hrot.Core.csproj" />
+    <ProjectReference Include="$(HrotRoot)Hrot/Engine/Hrot.Gameplay/Hrot.Gameplay.csproj" />
     <ProjectReference Include="$(HrotRoot)Hrot/Engine/Hrot.Look/Hrot.Look.csproj" />
     <ProjectReference Include="$(HrotRoot)Hrot/Engine/Hrot.Traffic/Hrot.Traffic.csproj" />
     <ProjectReference Include="$(HrotRoot)FDP/Engine/Fdp.Core/Fdp.Core.csproj" />

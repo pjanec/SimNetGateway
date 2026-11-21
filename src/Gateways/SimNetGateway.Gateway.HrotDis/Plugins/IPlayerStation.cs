@@ -47,17 +47,60 @@ public enum PlayerJoinKind : byte
     Role,
 }
 
-/// <summary>A join request: a placed unit by id, a role by name, or observe.</summary>
-public readonly record struct PlayerJoin(PlayerJoinKind Kind, int UnitId, string? Role);
+/// <summary>
+/// A join request: a placed unit by id, a role by name (or by the id of its offer), or observe. Appended with the deploy flow (T-053): <see cref="Side"/> is the DIS force the
+/// player wants (0 = not stated), <see cref="Kit"/> the role's kit by index (0 = the role's own), <see cref="AreaId"/> the spawn area chosen (an area offer's id; 0 = any of the side).
+/// </summary>
+public readonly record struct PlayerJoin(PlayerJoinKind Kind, int UnitId, string? Role, byte Side = 0, byte Kit = 0, int AreaId = 0);
 
 /// <summary>
 /// The slot as of <see cref="Version"/>; <see cref="RespawnAt"/> is the simulation time it returns to choosing after death (0 = never); <see cref="Reason"/> is the host's
-/// text for the last refused join (HROT's own refusal text; empty or null = none), shown to the client as <c>PlayerSlot.Reason</c>.
+/// text for the last refused join (HROT's own refusal text; empty or null = none), shown to the client as <c>PlayerSlot.Reason</c>; <see cref="Side"/> is the DIS force of the side the seat plays
+/// while it holds a unit (0 = not stated: the slot derives it from the offer of the unit).
 /// </summary>
-public readonly record struct PlayerSlotSnapshot(PlayerSlotState State, int UnitId, double RespawnAt, int Version, string? Reason = null);
+public readonly record struct PlayerSlotSnapshot(PlayerSlotState State, int UnitId, double RespawnAt, int Version, string? Reason = null, byte Side = 0);
 
-/// <summary>One playable unit (<see cref="Role"/> is its slot name) and the side (DIS force numbering) it belongs to.</summary>
-public readonly record struct PlayerOffer(int UnitId, string? Role, int Force);
+/// <summary>What a <see cref="PlayerOffer"/> offers (T-053): a placed unit, a role (a man is spawned for the player) or a spawn area.</summary>
+public enum PlayerOfferKind : byte
+{
+    Unit = 0,
+    Role,
+    Area,
+}
+
+/// <summary>
+/// One playable unit (<see cref="Role"/> is its slot name) and the side (DIS force numbering) it belongs to. Appended with the deploy flow (T-053): <see cref="Kind"/>; for a role
+/// <see cref="Count"/> men alive of at most <see cref="Max"/> (0 = unlimited) and its <see cref="Kits"/> (names by kit index, "" = unset; null = none); <see cref="Free"/> = no
+/// station holds it; for an area <see cref="Outline"/> is its outline in world metres (null = none). Equality compares the lists by value.
+/// </summary>
+public readonly record struct PlayerOffer(int UnitId, string? Role, int Force, PlayerOfferKind Kind = PlayerOfferKind.Unit, int Count = 0, int Max = 0, bool Free = true,
+    IReadOnlyList<string>? Kits = null, IReadOnlyList<HrotVec3>? Outline = null) : IEquatable<PlayerOffer>
+{
+    public bool Equals(PlayerOffer other) =>
+        UnitId == other.UnitId && Role == other.Role && Force == other.Force && Kind == other.Kind && Count == other.Count && Max == other.Max && Free == other.Free
+        && SameList(Kits, other.Kits) && SameList(Outline, other.Outline);
+
+    public override int GetHashCode() => HashCode.Combine(UnitId, Role, Force, Kind, Count, Max, Free);
+
+    private static bool SameList<T>(IReadOnlyList<T>? a, IReadOnlyList<T>? b)
+    {
+        int na = a?.Count ?? 0, nb = b?.Count ?? 0;
+        if (na != nb)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < na; i++)
+        {
+            if (!EqualityComparer<T>.Default.Equals(a![i], b![i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+}
 
 /// <summary>
 /// One weapon mount of the player's unit as the HUD shows it. <see cref="Weapon"/> is the mount's kind as HROT's HUD names it (RIFLE, MG, CANNON, HANDS ...) and

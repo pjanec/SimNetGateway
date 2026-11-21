@@ -67,7 +67,8 @@ public sealed class GatewayCapability : INodeCapability, IDisposable
             _config,
             _plugins.SeatsFor(_config),
             seats => GatewayRuntime.Create(_config, allocator, _plugins, Services, playerStation: seats[0], playerSeats: seats, stationTicks: services.WallTicks, munitionName: tkb => services.Tkb?.Invoke() is { } db && db.TryGetByType(tkb, out var template) ? template.Name : null, log: _log),
-            beforeFrame: () => Services.Pump(_log));
+            beforeFrame: () => Services.Pump(_log),
+            log: _log);
         // NOT in `input`: that list ends in a togglable group HROT disables for a whole replay, and the gateway runs in a replay. It is a node global
         // system instead (Register), executed every frame on the main thread in the Input phase.
     }

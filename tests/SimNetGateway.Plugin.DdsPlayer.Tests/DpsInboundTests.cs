@@ -60,8 +60,8 @@ public class DpsInboundTests
             _view = new DdsWriter<D.GizmoView>(_participant);
         }
 
-        public void Join(uint seq, int unit, D.JoinKind kind = D.JoinKind.JoinKindUnit, string role = "") =>
-            _join.Write(new D.JoinRequest { RequestSeq = seq, Kind = kind, UnitId = unit, Role = role, ClientId = _id });
+        public void Join(uint seq, int unit, D.JoinKind kind = D.JoinKind.JoinKindUnit, string role = "", byte side = 0, byte kit = 0, int areaId = 0) =>
+            _join.Write(new D.JoinRequest { RequestSeq = seq, Kind = kind, UnitId = unit, Role = role, Side = side, Kit = kit, AreaId = areaId, ClientId = _id });
 
         public void Control(D.ControlFrame frame)
         {
@@ -129,6 +129,21 @@ public class DpsInboundTests
         client.Join(3, 0, D.JoinKind.JoinKindObserve);
         Assert.True(Until(rig, () => station.Joins.Count == 3));
         Assert.Equal(PlayerJoinKind.Observe, station.Joins[2].Kind);
+    }
+
+    /// <summary>T-053: the join's Side, Kit and AreaId reach the seam (the deploy flow asks the server with them). Mutation: any of the three dropped from <c>DpsInbound</c>.</summary>
+    [Fact]
+    public void Join_carries_side_kit_and_area_to_the_seam()
+    {
+        uint domain = Watch.NewDomain();
+        var station = new RecordingStation();
+        using var rig = new Rig(domain, station: station);
+        using var client = new Client(domain);
+
+        client.Join(1, 900, D.JoinKind.JoinKindRole, "Rifleman", side: 2, kit: 3, areaId: 911);
+
+        Assert.True(Until(rig, () => station.Joins.Count == 1));
+        Assert.Equal(new PlayerJoin(PlayerJoinKind.Role, 900, "Rifleman", Side: 2, Kit: 3, AreaId: 911), station.Joins[0]);
     }
 
     [Fact]
@@ -312,6 +327,41 @@ public class DpsInboundTests
         Frames(rig);
         Assert.Equal(3, rig.Transport.PlayerSlot.Written);
         Assert.True(slots.Until(w => w.Alive["slot"].Offers.Count == 1));
+    }
+
+    /// <summary>
+    /// T-053: an offer's kind, role count / max, free, kits and an area's outline reach the client as the seam states them; the wire's bounds hold (8 kits of 32 characters, 32 outline points), the slot's side is the
+    /// seam's. Mutations: the outline written empty for an area; Kind / Free / Count / Max dropped.
+    /// </summary>
+    [Fact]
+    public void Offers_carry_kind_count_max_free_kits_and_the_outline_and_the_slot_its_side()
+    {
+        uint domain = Watch.NewDomain();
+        var station = new RecordingStation { Slot = new PlayerSlotSnapshot(PlayerSlotState.Playing, 5000, 0.0, 1, null, Side: 2) };
+        station.OfferList.Add(new PlayerOffer(2001, "Gunner", 2, Free: false));
+        station.OfferList.Add(new PlayerOffer(900, "Rifleman", 1, PlayerOfferKind.Role, Count: 2, Max: 3, Free: true, Kits: ["Rifleman", "Medic", new string('x', 40)]));
+        station.OfferList.Add(new PlayerOffer(910, "Area 910", 1, PlayerOfferKind.Area, Outline: [new HrotVec3(90, 190, 5), new HrotVec3(110, 190, 5), new HrotVec3(100, 215, 5)]));
+        station.OfferList.Add(new PlayerOffer(911, "Big", 1, PlayerOfferKind.Area, Outline: [.. Enumerable.Range(0, 40).Select(i => new HrotVec3(i, 0, 0))]));
+        station.OfferList.Add(new PlayerOffer(901, "Kitted", 1, PlayerOfferKind.Role, Kits: [.. Enumerable.Range(0, 12).Select(i => "k" + i)]));
+        using var slots = new Watch.Watch<D.PlayerSlot>(domain, "station-1", s => "slot");
+        using var rig = new Rig(domain, station: station);
+
+        Frames(rig);
+        Assert.True(slots.Until(w => w.Alive.ContainsKey("slot")));
+        var slot = slots.Alive["slot"];
+        Assert.Equal((byte)2, slot.Side);   // the seam's side, although the held unit (5000) is no offer
+        var unit = slot.Offers.Single(o => o.Id == 2001);
+        Assert.Equal((D.OfferKind.OfferKindUnit, false, "Gunner"), (unit.Kind, unit.Free, unit.Name));
+        Assert.Empty(unit.Kits);
+        Assert.Empty(unit.Outline);
+        var role = slot.Offers.Single(o => o.Id == 900);
+        Assert.Equal((D.OfferKind.OfferKindRole, true, 2, 3), (role.Kind, role.Free, role.Count, role.Max));
+        Assert.Equal(["Rifleman", "Medic", new string('x', 32)], role.Kits.Select(k => k.Name).ToArray());
+        var area = slot.Offers.Single(o => o.Id == 910);
+        Assert.Equal(D.OfferKind.OfferKindArea, area.Kind);
+        Assert.Equal([(90.0, 190.0, 5.0), (110.0, 190.0, 5.0), (100.0, 215.0, 5.0)], area.Outline.Select(p => (p.X, p.Y, p.Z)).ToArray());
+        Assert.Equal(32, slot.Offers.Single(o => o.Id == 911).Outline.Count);
+        Assert.Equal(8, slot.Offers.Single(o => o.Id == 901).Kits.Count);
     }
 
     private static PlayerWeapon Weapon(byte mount, long type, int rounds, string kind, string name) =>

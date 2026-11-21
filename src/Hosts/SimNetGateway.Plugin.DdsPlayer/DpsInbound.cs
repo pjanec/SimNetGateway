@@ -172,7 +172,7 @@ internal sealed class DpsInbound : IDisposable
                 D.JoinKind.JoinKindRole => PlayerJoinKind.Role,
                 _ => PlayerJoinKind.Observe,
             };
-            bool accepted = _station!.Join(new PlayerJoin(kind, request.UnitId, string.IsNullOrEmpty(request.Role) ? null : request.Role));
+            bool accepted = _station!.Join(new PlayerJoin(kind, request.UnitId, string.IsNullOrEmpty(request.Role) ? null : request.Role, request.Side, request.Kit, request.AreaId));
             if (_owner == request.ClientId)
             {
                 _hasJoinSeq = true;

@@ -62,7 +62,7 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
     /// detached like the one was; the factory gets all of them in seat order.
     /// </summary>
     public DisGatewaySystem(HrotServices services, Gateway.HrotDis.GatewayConfiguration config, int seats, Func<IReadOnlyList<Gateway.HrotDis.IPlayerStation>, GatewayRuntime> factory,
-        Action<string>? error = null, Action? beforeFrame = null)
+        Action<string>? error = null, Action? beforeFrame = null, Action<string>? log = null)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
@@ -70,7 +70,7 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
         var stations = new HrotPlayerStation[seats];
         for (int i = 0; i < seats; i++)
         {
-            stations[i] = new HrotPlayerStation(services, HrotPlayerStation.StationOf(services.LocalNodeId, i + 1));
+            stations[i] = new HrotPlayerStation(services, HrotPlayerStation.StationOf(services.LocalNodeId, i + 1), log);
         }
 
         PlayerSeats = stations;
