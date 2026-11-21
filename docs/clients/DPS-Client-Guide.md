@@ -59,7 +59,7 @@ The station writes four topics: `JoinRequest`, `ControlFrame`, `Leave` and `Gizm
 | Field | Meaning | How HROT's station computes it |
 | --- | --- | --- |
 | `Seq` | Grows each frame; the newest wins | `++seq` |
-| `Forward`, `Lateral` | -1..1, in the BODY's frame (forward, right) | W/S, D/A. In the shoulder view the keys are camera-relative and are turned into the body frame by `Wrap(yaw - bodyYaw)` |
+| `Forward`, `Lateral` | -1..1, in the BODY's frame: forward +, **lateral + = LEFT** (HROT `ManualMotion`: "lateral + = left") | W/S, A/D: A = +1, D = -1 (HROT `EmbodiedKeys` MoveSide). In the shoulder view the keys are camera-relative and are turned into the body frame by `Wrap(yaw - bodyYaw)` |
 | `Yaw` | The body heading the sim should turn to (radians, world frame, 0 = +x, counter-clockwise) | The body yaw, not the camera yaw. Shoulder view: the body lags the look, dragged past 45° when standing (`ShoulderLag`) and turned at 540°/s when moving (`BodyTurnRate`). Free look (V): the neck limit, `DragBody`. Flyer: own heading led by 0.8 rad while A/D are held, else held |
 | `Steer` | Vehicles and animals: A/D | Lateral is 0 for them |
 | `Vertical` | Flyers: climb (Q/Space) or descend (Z/C) | 0 otherwise |

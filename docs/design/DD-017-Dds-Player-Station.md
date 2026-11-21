@@ -300,7 +300,7 @@ request) or losing its liveliness is "client lost": the gateway releases the uni
 Kind Unit and the offer's id, `RequestSeq` growing per request; the slot goes TakingControl, then Playing with the unit id. `JoinKind` 0 is
 Observe, and an accepted Observe makes that client the station's player as well, so a client that only watches writes no player topic at
 all. While Playing, write one `ControlFrame` per client frame with a growing `Seq` (the newest wins, older ones are dropped).
-`Forward` / `Lateral` are body-relative (-1..1: forward, lateral right). `AimPoint`, `LookFrom` and `LookDir` are required on every
+`Forward` / `Lateral` are body-relative (-1..1: forward +, lateral + = LEFT - HROT `ManualMotion`; corrected 2026-11-21, the Unreal session's U-18m finding). `AimPoint`, `LookFrom` and `LookDir` are required on every
 frame: the simulation fires at the aim point along the look ray, and a frame without them never fires. The press counters (`ShotSeq`,
 `CancelSeq`, `AmmoSeq`, `UseSeq`) count presses and wrap; a change is a press. In replay the slot is Observing and joins are refused. A
 join while the simulation is paused stays TakingControl and returns to Choosing after 10 s (possession needs running time).
