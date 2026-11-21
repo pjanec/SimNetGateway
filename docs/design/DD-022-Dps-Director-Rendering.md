@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Status** | draft - for the Unreal session's feedback, then the owner's approval (not built) |
+| **Status** | draft rev 4 - the Unreal session agreed P-1 .. P-6 with refinements ([its answers](../clients/NOTE-2026-11-21-Unreal-Answers-DD-022.md), `5e63786`), folded in; awaiting the owner's approval (not built) |
 | **Tasks** | T-039 |
 | **Rulings honoured** | R-132, R-133 (contract open, append-only), R-134 (the client owns its camera; HROT's rules live in HROT), R-135 (rate classes, producer-neutral), R-136, R-137 |
-| **Date** | 2026-11-21 (rev 3: HROT's time sync measured in code - no pulse; the audio track reworked; the Unreal session's findings) |
+| **Date** | 2026-11-21 (rev 3: HROT's time sync measured in code - no pulse; the audio track reworked; the Unreal session's findings. Rev 4: the Unreal session's answers - the tick epoch, the per-step sample barrier, the binding kept, warm-up, S-1 through Unreal's non-real-time mixer) |
 
 ## 1. Context and goals
 
@@ -24,6 +24,8 @@ The owner (2026-11-21):
 - Rev 3 (2026-11-21): *"I think the pulse is no longer in use"* - measured, confirmed (1a). *"we cannot simply measure what goes through
   the audio output because the sounds, they are played continuously ... it would need some more sophisticated approach, like that the
   Unreal will actually create the soundtrack somehow"* - 3f.
+- Rev 4: the Unreal session answered section 8 ([note](../clients/NOTE-2026-11-21-Unreal-Answers-DD-022.md)); every answer is folded into the
+  section it changes and marked *(Unreal, rev 4)*; section 8 keeps the questions with their answers.
 
 | Part | Section | What |
 |---|---|---|
@@ -138,7 +140,7 @@ reliable, transient local, keep last 1; one instance):
 | Field | Meaning | HROT counterpart |
 |---|---|---|
 | `Mode` | `ClockModeContinuous`, `ClockModeStepped` (paused = Stepped with no steps) | `TargetMode` |
-| `AnchorWallTicks` | the station's wall tick the anchor's time belongs to (HROT's UTC ticks, 100 ns) | `BarrierWallTicks` |
+| `AnchorWallTicks` | the station's wall tick the anchor's time belongs to: HROT's `HighResUtcClock` ticks - 100 ns since 0001-01-01 UTC, the epoch and unit of .NET `DateTime.Ticks` and Unreal's `FDateTime::Ticks` | `BarrierWallTicks` |
 | `AnchorSimTime` | the simulation time at `AnchorWallTicks` (in Stepped: the time to hold) | `SimTimeSnapshot` |
 | `TimeScale` | sim seconds per wall second while Continuous | `TimeScale` |
 | `FixedDelta` | the step size the station uses | `FixedDelta` |
@@ -158,8 +160,13 @@ The client's clock, **the same formula as `SlaveSyncController`**:
 
 **New topics `ClockProbe` / `ClockEcho`** (Event class) - HROT's NTP handshake: `ClockProbe` { `ClientId`, `ClientSendTicks` },
 `ClockEcho` { `ClientId`, `ClientSendTicks`, `StationReceiveTicks`, `StationTransmitTicks` }. The client probes every second, drops
-RTTs over 200 ms, hard-snaps the first or a > 1 s change and otherwise steers by 10 % - HROT's own constants (`TimeConfig`). On one
-machine the offset is near 0 but is still measured (the two processes may read different clocks).
+RTTs over 200 ms, hard-snaps the first or a > 1 s change and otherwise steers by 10 % - HROT's own constants (`TimeConfig`).
+
+⭐ **The probe is needed on one machine too** (measured, HROT `Fdp.Toolkits/Time/HighResUtcClock.cs`): HROT's tick is the UTC time read
+**once at process start** plus a monotonic stopwatch since then - monotonic, but not the system's UTC now: it keeps the start's UTC and the
+stopwatch's drift, and each process has its own start. So a client must not compare `AnchorWallTicks` with its own `UtcNow`. *(Unreal, rev 4)*
+The client takes elapsed time from its monotonic clock (`FPlatformTime::Seconds`) and the offset only from the probe; its clock
+`FHrotDpsClock` is already the anchor formula (fed from samples today), so it changes its feed, not its shape.
 
 Decisions:
 
@@ -186,10 +193,15 @@ Decisions:
 
 - D-B1 **A film frame is a step** (R-137 *"those will be reused for the film taking"*): `FrameRequest` names its `StepSeq`; `FrameDone`
   acknowledges it. Rejected: a separate frame clock - two lockstep mechanisms for one concept.
-- D-B2 **The client is not in HROT's expected slave set** in normal stepping (it would hold the editor); Q-2 asks whether a "wait for
-  the renderer" mode is wanted outside films.
-- D-B3 **Order within a step:** state and events first, then `ClockStep`; the client presents a step after the poll that brought its
-  `ClockStep`. DDS does not order across topics: Q-6.
+- D-B2 **The client is not in HROT's expected slave set** in normal stepping. *(Unreal, rev 4, Q-2: "present the step, never hold" - a live
+  viewer runs at 20-30 fps.)* The lock is for film frames only.
+- D-B3 **Order within a step:** state and events first, then `ClockStep`. Live stepping: the client presents after the poll that brought
+  the `ClockStep` (at worst a state one step late, unseen).
+- D-B4 **A stated barrier for render jobs** *(Unreal, rev 4, Q-6: a film frame could keep a unit one step old for good)*: a `ClockStep`
+  with `AckRequired` carries **`Samples`** - the number of world samples the gateway wrote in that step's gather, over every world topic
+  (state and events; not `SimClock`, `ClockStep`, `ClockEcho`, the render topics or `GizmoFrame`). The client presents the step once it
+  holds that many samples whose `SimTime` lies in (the previous target, `TargetSimTime`]. In lockstep a keep-last-1 state instance cannot
+  be overwritten before it is read (the next step waits), so the count is exact. Every world sample already carries `SimTime`.
 
 ### 3d. Part C - the camera, dead-reckoned like an entity
 
@@ -199,6 +211,10 @@ would miss by more than the position or angle threshold, plus the heartbeat. The
 (Hermite between samples, second-order dead reckoning past the newest, 0.25 s correction blend) on **the clock of 3b**; a new `CutSeq` is
 a hard cut (jump, never blend).
 
+- D-C0 **The binding stays and wins when bound** *(Unreal, rev 4, Q-3)*: while `View` is bound to a unit (`TargetId`, `Mode`, `Distance`,
+  `Side`), the client places the camera from the binding against **its own** predicted pose of that unit, so camera and unit share one
+  prediction and the unit does not shake in the frame; the rates serve unbound shots (free, fixed key, director flights). In a render job
+  both are exact (the barrier D-B4 gives the world of the frame, `FrameRequest` the camera).
 - D-C1 The gateway derives the rates from the per-frame camera on sim time (smoothed). Later, if noisy: HROT states them (a request).
 - D-C2 In a render job the frame's camera is exact (`FrameRequest`, H-3); dead reckoning is for the live view only.
 - Binding at the eyes (1b): the look follows `PersonAim`'s look intent, not the body heading - the client's to-do.
@@ -207,10 +223,26 @@ a hard cut (jump, never blend).
 
 | Topic | Direction | Class | Content |
 |---|---|---|---|
-| `RenderClient` | client -> gateway | Discrete, player QoS with liveliness | `ClientId`, `Name`, `Ready`, `MaxWidth`, `MaxHeight`, `MaxSupersample`, `Formats` (`RenderFormatPng`), `AudioFormats` (`AudioFormatWavPcm16`, `WavFloat32`), `MaxSampleRate` |
+| `RenderClient` | client -> gateway | Discrete, player QoS with liveliness | `ClientId`, `Name`, `Ready`, `MaxWidth`, `MaxHeight`, `MaxSupersample`, `Formats` (`RenderFormatPng`), `AudioFormats` (`AudioFormatWavPcm16`, `WavFloat32`), `MaxSampleRate`, `ReadyJobId` (rev 4: the job it has warmed up for) |
 | `RenderJob` | gateway -> client | Discrete, state per `JobId` | `JobId`, `ClientId`, `Kind` (Movie, Stills), `What`, `Fps`, `Width`, `Height`, `Supersample`, `Dir`, `Audio` (bool), `SampleRate`, `Channels`, `State` (Starting, Running, Done, Failed, Cancelled), `Reason` |
 | `FrameRequest` | gateway -> client | Event, keep last 1024 | `JobId`, `FrameIndex`, `Kind` (`FrameKindScene`, `FrameKindSilence`), `StepSeq`, `SimTime`, `FilmRate` (sim s per film s), `Position`, `Orientation`, `FovDeg`, `Width`, `Height`, `Supersample`, `File`, `Subtitle`, `SubtitlePosition`, `SubtitleAlpha`, `Graphics` (<= 64: kind Ring / Arrow / Route / Area / Label, <= 64 world points, radius, text, colour, alpha), `LayersOn`, `LayersOff` |
-| `FrameDone` | client -> gateway | Event, keep last 1024 | `ClientId`, `JobId`, `FrameIndex`, `StepSeq`, `Status` (Written, Failed), `File`, `AudioSamples`, `Reason`, `RenderMs` |
+| `FrameDone` | client -> gateway | Event, keep last 1024 | `ClientId`, `JobId`, `FrameIndex`, `StepSeq`, `Status` (Written, Failed), `File`, `AudioSamples` (informational, rev 4), `Reason`, `RenderMs` |
+| `RenderJobResult` | client -> gateway | Event | `ClientId`, `JobId`, `Status`, `TrackFile`, `TrackSamples`, `Reason` - after `RenderJob` Done, the track closed (rev 4) |
+
+Rev 4 additions *(Unreal, rev 4, Q-4, Q-5, Q-8)*:
+
+- **Warm-up and a per-job ready.** `RenderClient` gets `ReadyJobId`: the job the client has finished warming up for. The runner's first
+  `Frame` of a job waits for it; timeouts: **180 s** from `RenderJob` Starting to `ReadyJobId` (the first frame after a rebuild hitched 28 s:
+  shaders, streaming), **30 s** per frame after that.
+- **Warm-up at cuts is the client's own:** after a `CutSeq` or either epoch change inside a job the client renders warm-up frames itself
+  at the frame's sim time and camera, unrequested and unstepped (anti-aliasing history, texture streaming); the time shows in `RenderMs`.
+- **The overlay** is drawn by the client's one HUD drawing code (`HrotDpsHud`) into the capture: (a) the UI screenshot path (proved,
+  U-18m; the viewport's size, no supersampling), or (b) a scene capture into a render target with the canvas drawn onto it (supersampling,
+  no global screenshot request) - (a) first, (b) when `Supersample > 1`. World-space graphics are projected through the frame's camera.
+- **The render root:** one folder configured on each side (same machine today); `RenderJob.Dir` and `FrameRequest.File` are relative to
+  it; the client refuses `..` and absolute paths.
+- **The render client is its own process** (3f): a live IG and a render client may both be on the station; the render client is
+  view-only (no player writers), the one `RenderClient` of the station (D-7).
 
 Decisions: lockstep (= D-B1); the camera in the request (D-2); the overlay as data, drawn by the client **into the captured image** -
 not as canvas HUD, which Unreal's capture omits (1b) (D-3); title cards HROT's (D-4); files in a shared render root, HROT encodes (D-5);
@@ -240,8 +272,9 @@ Two ways for Unreal to build it - both keyed on sim time, the choice is Unreal's
 
 Common rules (either way):
 
-1. One track per job: `Dir/<JobId>.wav`, the job's `SampleRate` and `Channels`; `FrameDone.AudioSamples` reports the samples written for
-   each frame (S-1) or 0 (S-2, reported at the end in `RenderJob`); HROT checks the total against `round(frames x SampleRate / Fps)`.
+1. One track per job: `Dir/<JobId>.wav`, the job's `SampleRate` and `Channels`; the client reports the track's total samples with
+   `RenderJob` Done (a new `RenderJobResult` event: `JobId`, `TrackFile`, `TrackSamples`, `Status`, `Reason`); HROT checks it against `round(frames x SampleRate / Fps)` within the
+   mixer's latency (rev 4).
 2. Title card frames (`FrameKindSilence`, HROT's cards) are silence in the track.
 3. A reel item boundary (`WorldEpoch` or `TimelineEpoch` change inside the job): voices in flight fade out over a short time (Q-10); the
    next item starts silent.
@@ -251,7 +284,20 @@ Common rules (either way):
 - D-F1 **The client builds the soundtrack from sim-time causes** (S-1 or S-2). Rejected: recording the live output during the job (the
   owner's objection: stepped, slower than real time); rejected: HROT's mixer log (*"the sounds in HROT are not good"*), kept only as the
   map render's sound (`sound: hrot`).
-- D-F2 Lean **S-1** if Unreal's mixer can be advanced by an external clock; otherwise S-2. Unreal decides (Q-7).
+- D-F2 **S-1, through Unreal's non-real-time mixer** *(Unreal, rev 4, Q-7; engine source read, not run)*: UE 5.8 ships it
+  (`NonRealtimeAudioRenderer`, `FMixerPlatformNonRealtime::RenderAudio(seconds)`); Movie Render Queue already calls it once per film frame
+  with exactly `1 / fps` seconds and records the master submix to WAV (`MovieGraphDefaultAudioRenderer.cpp:176-237`). The client does the
+  same per `FrameRequest`. Consequences:
+  - **A render client is a separate Unreal process** started with the non-real-time device (MRQ's `-deterministicaudio`); it is silent
+    live, so it is not the live IG switching mode.
+  - **The audio is checked by its total at `End`**, not per frame: the mixer's latency compensation drops a head and drains a tail, so
+    `FrameDone.AudioSamples` is informational; `RenderJob` Done carries the track's total samples and HROT compares it with
+    `round(frames x SampleRate / Fps)`.
+  - The client's sound delays move from the wall clock to sim time (`HrotShotRenderer.cpp:48` today reads real time) - the client's work.
+  - Format: **48 000 Hz, stereo, PCM16** (float32 possible).
+  - Slow motion (Q-9): each voice starts at its film time and plays at natural speed - S-1 gives it by itself; pitching could be a later
+    per-job option. Reel item boundary (Q-10): voices fade out over **0.25 s**.
+  - S-2 stays the documented fallback if the non-real-time device proves unusable in practice.
 
 ## 4. Class diagram
 
@@ -263,7 +309,7 @@ classDiagram
     }
     class ClockStep {
         <<topic, NEW>>
-        StepSeq FixedDelta TargetSimTime TimeScale TimelineEpoch AckRequired
+        StepSeq FixedDelta TargetSimTime TimeScale TimelineEpoch AckRequired Samples
     }
     class StepAck {
         <<topic, NEW>>
@@ -294,9 +340,13 @@ classDiagram
         <<topic, NEW>>
         JobId FrameIndex StepSeq Status File AudioSamples
     }
+    class RenderJobResult {
+        <<topic, NEW rev 4>>
+        JobId Status TrackFile TrackSamples
+    }
     class RenderClient {
         <<topic, NEW>>
-        ClientId Name Ready limits Formats AudioFormats
+        ClientId Name Ready limits Formats AudioFormats ReadyJobId
     }
     class DpsClockModule {
         <<NEW, dps plugin>>
@@ -334,6 +384,7 @@ classDiagram
     DpsRenderModule ..> FrameRequest
     DpsRenderModule ..> FrameDone
     DpsRenderModule ..> RenderClient
+    DpsRenderModule ..> RenderJobResult
     FrameRequest --> ClockStep : same StepSeq
     FrameDone --> StepAck : acknowledges the step
 ```
@@ -466,7 +517,11 @@ Gateway side (xUnit, `ManualClock`, an in-process fake client; properties checke
   never blended; a steady move needs fewer samples than today.
 - **Render lockstep (property):** over a seeded job with random answer delays, every `Frame` gives exactly one `FrameRequest`, its task
   completes exactly on its own `FrameDone`, indices 0..N-1 without gaps, `StepSeq` equals the step's.
-- **Audio accounting:** the sum of `AudioSamples` equals `round(N x SampleRate / Fps)`; fewer fails the job with both numbers.
+- **Audio accounting:** the reported total equals `round(N x SampleRate / Fps)` within the stated latency tolerance; outside it the job
+  fails with both numbers.
+- **Barrier (property):** for a seeded random step, `ClockStep.Samples` equals the number of world samples the fake transport saw written
+  in that gather, and a fake client that withholds one sample never presents the step.
+- **Warm-up:** the first frame waits for `ReadyJobId`; 180 s then fails with the reason; later frames use 30 s.
 - **Failures:** timeout, `FrameStatusFailed`, liveliness lost - each faults the pending frame with its reason.
 - **Contract rules:** the new topics in the committed IDL, enumerators prefixed, 0 = unknown, rate classes stated, no producer names.
 - **Live check:** the reference client gets `--clock` (prints its sim time against `EntityState.SimTime` while the editor runs, pauses,
@@ -475,29 +530,33 @@ Gateway side (xUnit, `ManualClock`, an in-process fake client; properties checke
 
 HROT side: in HROT's design for H-1 .. H-8.
 
-## 8. Proposals awaiting approval, and questions for the Unreal session
+## 8. Proposals, and the Unreal session's answers (rev 4)
 
-| | Proposal | Lean |
+| | Proposal | Unreal (rev 4) | Status |
+|---|---|---|---|
+| P-1 | `SimClock` mirroring HROT's anchor + `ClockProbe` / `ClockEcho` (3b) | yes; state the tick epoch | folded (3b) - awaits the owner |
+| P-2 | `ClockStep` / `StepAck`; no wait in normal stepping, a wait in render jobs (3c) | yes; plus the per-step `Samples` barrier for render jobs | folded (D-B4) - awaits the owner |
+| P-3 | `View` with rates, Continuous, by the entity rule; cuts jump (3d) | yes, keeping the binding fields | folded (D-C0) - awaits the owner |
+| P-4 | The render topics, a film frame = an acknowledged step (3e) | yes; a warm-up timeout apart from the frame timeout, a per-job ready | folded (3e rev 4) - awaits the owner |
+| P-5 | The soundtrack built on sim time (3f) | S-1 through the engine's non-real-time mixer, on a client started for rendering; checked by its total at the end | folded (D-F2) - awaits the owner |
+| P-6 | HROT requests H-1 .. H-8 as one prompt to the HROT session | yes | after the owner's approval |
+
+| | Question | Answer *(Unreal, rev 4)* |
 |---|---|---|
-| P-1 | `SimClock` mirroring HROT's anchor (no pulse) + `ClockProbe` / `ClockEcho` (HROT's NTP handshake and constants) (3b) | yes |
-| P-2 | `ClockStep` / `StepAck` as HROT's lockstep; no wait in normal stepping, a wait in render jobs (3c) | yes |
-| P-3 | `View` with rates, Continuous, sent and predicted by the entity rule; cuts jump (3d) | yes |
-| P-4 | The render topics, a film frame = an acknowledged step, the overlay drawn into the captured image (3e) | yes |
-| P-5 | The soundtrack built by the client from sim-time causes, S-1 or S-2 by Unreal's choice, one WAV per job, HROT muxes (3f) | yes, S-1 if possible |
-| P-6 | HROT requests H-1 .. H-8 go to the HROT session as one prompt after approval | yes |
+| Q-1 | clock as the slave formula; same machine? | yes; one PC today; client elapsed time from its monotonic clock, the offset from the probe (needed even locally, 3b) |
+| Q-2 | "wait for the renderer" outside films? | no - present the step, never hold |
+| Q-3 | rates, or binding + pose? | both: the binding for bound shots (placed from the client's own prediction of the unit), rates for unbound |
+| Q-4 | frame time, timeout, warm-up | a live high-res shot 0.5-1 s; 30 s per frame, 180 s for the job's warm-up; warm-up frames after every cut, by the client |
+| Q-5 | overlay in the captured image? | yes: the UI-screenshot path first, a render-target capture when supersampling |
+| Q-6 | barrier? | live: not needed; render jobs: `Samples` per step (D-B4) |
+| Q-7 | S-1 or S-2? | S-1 via the non-real-time mixer (as Movie Render Queue does), a separate render process; 48 kHz stereo PCM16; total checked at the end |
+| Q-8 | render root | same machine, a local folder; relative paths only |
+| Q-9 | slow motion | normal speed from the onset |
+| Q-10 | fade at a reel boundary | 0.25 s |
 
-| | Question for the Unreal session |
-|---|---|
-| Q-1 | Can your clock run as HROT's slave formula (anchor + offset), and are you on the same machine as HROT? |
-| Q-2 | Outside films, do you want a "wait for the renderer" stepped mode (ack required), or is "present the step, never hold" right? |
-| Q-3 | Is the camera with velocity, acceleration and angular velocity enough for your rig, or do you prefer only the binding plus the pose? |
-| Q-4 | One high-quality frame at 1280x720 and 1920x1080 - how long? Is 30 s a sane timeout? Warm-up frames needed (anti-aliasing history, texture streaming)? |
-| Q-5 | Your capture path omits the canvas HUD (U-18m): can the film overlay (world-space rings, arrows, routes, areas, labels; a subtitle) be drawn into the captured image in HROT's colours and alpha? |
-| Q-6 | Does presenting a step after the poll that brought its `ClockStep` give a consistent world, or do you want a stated barrier now? |
-| Q-7 | The soundtrack: can your audio mixer be advanced by an external clock, one film frame of samples at a time (S-1)? If not, can you log cues and render them offline through your own sounds (S-2)? Sample rate and channel layout? |
-| Q-8 | Shared render root: same machine, or which network share? |
-| Q-9 | Slow motion (`FilmRate` < 1): sounds time-stretched, pitched down, or at normal speed from their onset? |
-| Q-10 | At a reel item boundary inside one movie: how long a fade for voices still sounding? |
+**Client-side work it implies** (HROT `unreal-ig`, not the gateway's): `FHrotDpsClock` fed from `SimClock` and the probe, a job clock in
+render jobs; sound delays on sim time; read `View`, bound cameras from the client's own prediction; a render mode (fixed step, UI hidden,
+warm-up at cuts, the overlay in the capture, PNG, `FrameDone`); a render process with the non-real-time mixer recording `<JobId>.wav`.
 
 ## 9. As-built notes
 
