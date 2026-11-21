@@ -37,6 +37,9 @@ internal interface IPlayerFlow
     /// <summary>The DIS force of the side the seat plays while it holds a unit (0 = not stated; the slot then derives it from the offer of the unit).</summary>
     byte Side { get; }
 
+    /// <summary>The DIS force of the side the seat last asked for (joined or observed), also before it holds a unit (0 = none asked; a flow with no such notion says 0).</summary>
+    byte RequestedSide { get; }
+
     /// <summary>Wall milliseconds; tests replace it to move the timeouts.</summary>
     Func<long> NowMs { get; set; }
 
@@ -71,6 +74,8 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
     private int _useTarget;
     private byte _mount, _firePref;
     private bool _detached;
+    private readonly List<PlayerWeapon> _ammo = new();
+    private readonly UseAction[] _actions = new UseAction[OperatorUseActions.MaxActions];
 
     /// <summary>The station number of seat <paramref name="seat"/> (1 ..) of the node <paramref name="node"/> (DD-023 D-11): the node in the low 16 bits, the seat in the high 16; seat 0 is the node itself (the editor's own user).</summary>
     public static int StationOf(int node, int seat) => node | (seat << 16);
@@ -216,7 +221,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
     internal HrotGizmoHost Gizmos => _gizmos;
 
     /// <inheritdoc />
-    /// <remarks>HROT's one addressing rule (<c>PlayerMessageAddressing.Addressed</c>) over this seat's viewer: the unit it holds (Playing), its side and its station. No second filter here: the only work is the contract's DIS force back to HROT's force id.</remarks>
+    /// <remarks>HROT's one addressing rule (<c>PlayerMessageAddressing.Addressed</c>) over this seat's viewer: the unit it holds (Playing), its side (the held unit's, else the side the seat asked for, else Neutral) and its station. No second filter here: the only work is the contract's DIS force back to HROT's force id.</remarks>
     public bool Addressed(string kind, int value)
     {
         int unit = _flow.State == PlayerSlotState.Playing ? _flow.UnitId : 0;
@@ -231,6 +236,11 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
                     dis = (byte)offers[i].Force;
                 }
             }
+        }
+
+        if (dis == 0)
+        {
+            dis = _flow.RequestedSide;   // a seat that has not deployed: the side it chose (T-055)
         }
 
         var side = dis switch { 1 => ForceId.Friend, 2 => ForceId.Hostile, _ => ForceId.Neutral };
@@ -306,6 +316,23 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         });
     }
 
+    private static readonly string[] FireModeNames = BuildNames();
+
+    private static string[] BuildNames()
+    {
+        var values = Enum.GetValues<OperatorFireMode>();
+        var names = new string[values.Max(v => (int)v) + 1];
+        foreach (var v in values)
+        {
+            names[(int)v] = v.ToString();
+        }
+
+        return names;
+    }
+
+    /// <summary>The name of a fire mode without the string an enum's <c>ToString</c> makes every call (hot path).</summary>
+    private static string NameOf(OperatorFireMode mode) => (int)mode >= 0 && (int)mode < FireModeNames.Length && FireModeNames[(int)mode] is { } n ? n : mode.ToString();
+
     private static Vector3 V(HrotVec3 v) => new((float)v.X, (float)v.Y, (float)v.Z);
 
     /// <summary>
@@ -344,7 +371,8 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         }
 
         double now = SimClock.TotalTimeOf(world);
-        var ammo = new List<PlayerWeapon>();
+        var ammo = _ammo;   // reused: the consumer copies what it keeps (hot path: no allocation per frame)
+        ammo.Clear();
         if (world.IsComponentTypeRegistered<WeaponAmmo>() && world.HasComponent<WeaponAmmo>(unit))
         {
             var a = world.GetComponentRO<WeaponAmmo>(unit);
@@ -368,8 +396,10 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
             map.TryGetEntity(_useTarget, out target);
         }
 
-        foreach (var action in OperatorUseActions.For(world, unit, target))
+        int actions = OperatorUseActions.For(world, unit, target, _actions);   // the span overload, into a reused buffer
+        for (int i = 0; i < actions; i++)
         {
+            var action = _actions[i];
             if (action.Available)
             {
                 verb = (byte)action.Verb;
@@ -390,7 +420,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         if (!holder.IsNull && world.IsAlive(holder))
         {
             var mount = CombatTkb.MountOf(world, holder, local);
-            fireMode = OperatorFireModes.Of(world, holder, mount, 0L, _firePref).ToString();
+            fireMode = NameOf(OperatorFireModes.Of(world, holder, mount, 0L, _firePref));
             spread = HitModel.Sigma(world, holder, mount, now);
         }
 
@@ -473,6 +503,8 @@ internal sealed class PossessionFlow : IPlayerFlow
 
     /// <summary>The seat's side is not tracked here: the slot derives it from the offer of the held unit.</summary>
     public byte Side => 0;
+
+    public byte RequestedSide => 0;
 
     public PlayerSlotState State { get; private set; } = PlayerSlotState.Waiting;
 

@@ -19,6 +19,10 @@ internal sealed class DpsPlayerSlot
     private PlayerOffer[]? _offers;
     private bool _wroteUnit;
     private D.OwnUnit _lastUnit;
+    private PlayerUnitStatus _lastStatus;
+    private int _lastUnitId;
+    private PlayerWeapon[] _lastAmmo = Array.Empty<PlayerWeapon>();
+    private int _lastAmmoCount;
 
     public DpsPlayerSlot(IPlayerStation? station, DpsChannel<D.PlayerSlot> slot, DpsChannel<D.OwnUnit> unit)
     {
@@ -43,7 +47,7 @@ internal sealed class DpsPlayerSlot
         var slot = _station.Slot;
         var offers = _station.Offers;
         string reason = slot.Reason is { Length: > 64 } r ? r[..64] : slot.Reason ?? string.Empty;
-        if (slot.Version != _version || _offers is null || !offers.SequenceEqual(_offers) || reason != _reason)
+        if (slot.Version != _version || _offers is null || !SameOffers(offers, _offers) || reason != _reason)
         {
             _version = slot.Version;
             _reason = reason;
@@ -69,9 +73,28 @@ internal sealed class DpsPlayerSlot
         }
 
         var status = _station.Unit;
+        int unitId = slot.State is PlayerSlotState.Playing or PlayerSlotState.Dead ? slot.UnitId : 0;
+        if (_wroteUnit && unitId == _lastUnitId && SameStatus(in status))
+        {
+            return;   // nothing the client sees changed: no wire value is built (steady frame: 0 B)
+        }
+
+        _lastUnitId = unitId;
+        _lastStatus = status;
+        _lastAmmoCount = Math.Min(status.Ammo.Count, 16);
+        if (_lastAmmo.Length < _lastAmmoCount)
+        {
+            _lastAmmo = new PlayerWeapon[_lastAmmoCount];
+        }
+
+        for (int i = 0; i < _lastAmmoCount; i++)
+        {
+            _lastAmmo[i] = status.Ammo[i];
+        }
+
         var unit = new D.OwnUnit
         {
-            UnitId = slot.State is PlayerSlotState.Playing or PlayerSlotState.Dead ? slot.UnitId : 0,
+            UnitId = unitId,
             Health = (float)status.Health,
             MaxHealth = (float)status.HealthMax,
             ActiveSlot = status.ActiveMount,
@@ -131,6 +154,57 @@ internal sealed class DpsPlayerSlot
         Kits = o.Kits is null ? [] : [.. o.Kits.Take(8).Select(k => new D.NameItem { Name = Cut(k, 32) })],
         Outline = o.Outline is null ? [] : [.. o.Outline.Take(32).Select(p => new D.Vec3d { X = p.X, Y = p.Y, Z = p.Z })],
     };
+
+    /// <summary>Index loops, no enumerator (a frame with no change costs nothing).</summary>
+    private static bool SameOffers(IReadOnlyList<PlayerOffer> a, PlayerOffer[] b)
+    {
+        if (a.Count != b.Length)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < b.Length; i++)
+        {
+            if (!a[i].Equals(b[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the status is, for the client, the one last written: every field the wire carries equal, the time to impact within a second (the client counts down from the sample it has), the first 16 ammo entries equal.
+    /// The inputs are compared (not the built wire value), so an unchanged frame builds nothing.
+    /// </summary>
+    private bool SameStatus(in PlayerUnitStatus b)
+    {
+        var a = _lastStatus;
+        if (a.Health != b.Health || a.HealthMax != b.HealthMax || a.UseVerb != b.UseVerb || a.UseTarget != b.UseTarget || a.ActiveMount != b.ActiveMount || a.FireMode != b.FireMode
+            || a.UseLabel != b.UseLabel || a.UseSeq != b.UseSeq || a.UseOutcome != b.UseOutcome || a.UseReason != b.UseReason || a.SpreadRad != b.SpreadRad || a.RadarWarning != b.RadarWarning
+            || a.RadarBearingDeg != b.RadarBearingDeg || a.MissileLaunch != b.MissileLaunch || a.MissileBearingDeg != b.MissileBearingDeg || a.MissileSeeker != b.MissileSeeker
+            || a.UseVerbName != b.UseVerbName || MathF.Abs(a.MissileTimeToImpactS - b.MissileTimeToImpactS) >= MissileRefreshS)
+        {
+            return false;
+        }
+
+        int count = Math.Min(b.Ammo.Count, 16);
+        if (count != _lastAmmoCount)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < count; i++)
+        {
+            if (_lastAmmo[i] != b.Ammo[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     private static string Cut(string? s, int max) => s is null ? string.Empty : s.Length <= max ? s : s[..max];
 

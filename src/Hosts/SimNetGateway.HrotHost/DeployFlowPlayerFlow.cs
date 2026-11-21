@@ -93,6 +93,9 @@ internal sealed class DeployFlowPlayerFlow : IPlayerFlow
 
     public byte Side => UnitId == 0 || _flow is null ? (byte)0 : DisForce(_flow.Side);
 
+    /// <summary>The side of the seat's last request or observe (0 = none yet: the flow's side is Neutral until it asked).</summary>
+    public byte RequestedSide => _flow is null || _flow.Side == ForceId.Neutral ? (byte)0 : DisForce(_flow.Side);
+
     public IReadOnlyList<PlayerOffer> Offers => _offers;
 
     public void Frame(EntityRepository world, bool live, bool replaying)

@@ -823,6 +823,40 @@ public class DpsOutboundTests
         Assert.All(stations, st => Assert.Empty(st.Asked));
     }
 
+    /// <summary>
+    /// T-055 (b), HOT path: a whole steady engine tick of three PLAYING seats (slots, offers, own-unit status with ammo, the inbound reads) allocates nothing of the gateway's own. Measured source of the old ~1.4 KB a frame:
+    /// <c>DpsPlayerSlot.Pump</c> (offers compared through <c>SequenceEqual</c>, the own unit rebuilt with LINQ every frame). What is left is the CycloneDDS binding: each <c>DdsReader.Take</c> allocates 16 bytes even when empty, and
+    /// <c>DpsInbound.Pump</c> reads three topics per seat per frame, so the tick may allocate at most 3 seats x 3 reads x 16 B = 144 B (exactly that is measured). Mutation: the own unit built every frame again.
+    /// </summary>
+    [Fact]
+    public void A_steady_engine_tick_of_three_playing_seats_allocates_only_the_ddsreader_floor()
+    {
+        uint domain = NewDomain();
+        var stations = new AddressedStation[3];
+        for (int i = 0; i < 3; i++)
+        {
+            stations[i] = new AddressedStation { Slot = new PlayerSlotSnapshot(PlayerSlotState.Playing, 1201 + i, 0.0, 2, null, 1) };
+            stations[i].OfferList.Add(new PlayerOffer(1201 + i, "Rifleman", 1));
+            stations[i].OfferList.Add(new PlayerOffer(900, "Role", 1, PlayerOfferKind.Role, 1, 2, true, ["a", "b"]));
+            stations[i].Unit = new PlayerUnitStatus(80.0, 100.0, [new PlayerWeapon(0, "RIFLE", "5.56", 5L, 20, 30, -1, -1, false, false, 0), new PlayerWeapon(1, "MG", "7.62", 6L, 100, 200, -1, -1, false, false, 0)], 0, 0);
+        }
+
+        using var rig = new Rig(domain, seats: 3, stations: stations.Cast<IPlayerStation>().ToArray());
+        for (int i = 0; i < 50; i++)
+        {
+            rig.Step();
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 500; i++)
+        {
+            rig.Step();
+        }
+
+        long perTick = (GC.GetAllocatedBytesForCurrentThread() - before) / 500;
+        Assert.True(perTick <= 3 * 3 * 16, $"{perTick} B per steady tick");
+    }
+
     [Fact]
     public void The_side_reads_and_writes_its_section()
     {

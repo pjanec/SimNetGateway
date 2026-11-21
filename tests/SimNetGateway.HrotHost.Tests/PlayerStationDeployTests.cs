@@ -542,6 +542,31 @@ public class PlayerStationDeployTests
         Assert.Same(((DeployFlowPlayerFlow)h.Seat(1).Flow).Flow, HG.DeployFlowSystem.Of(h.World, h.Seat(1).Station));
     }
 
+    // ---- T-055: the chosen side addresses a seat that has not deployed ---------------------------------------------------------------
+
+    /// <summary>
+    /// T-055: a seat with no unit is addressed by the side it CHOSE (observed, or asked for and was refused), by HROT's own rule; before it asked it is Neutral. Mutation: the requested side ignored.
+    /// </summary>
+    [Fact]
+    public void A_seat_that_has_not_deployed_is_addressed_by_the_side_it_asked_for()
+    {
+        using var h = new Deploy(seats: 3);
+        h.AddPlaced(PlacedId, ForceId.Friend, "Rifleman");
+        h.Run(() => h.Seat(1).Offers.Count == 1, "offers");
+        Assert.True(h.Seat(1).Join(new PlayerJoin(PlayerJoinKind.Observe, 0, null, Side: 2)));
+        Assert.True(h.Seat(2).Join(new PlayerJoin(PlayerJoinKind.Unit, PlacedId, null, Side: 2)));   // a Friend unit asked for as Hostile: refused
+        h.Run(() => h.Seat(1).Slot.State == PlayerSlotState.Observing && h.Seat(2).Slot.State == PlayerSlotState.Choosing && h.Seat(2).Slot.Reason == "WrongSide", "observing; refused");
+
+        foreach (int n in new[] { 1, 2 })
+        {
+            Assert.Equal((0, true, false), (h.Seat(n).Slot.UnitId, h.Seat(n).Addressed("Side", 2), h.Seat(n).Addressed("Side", 1)));   // Hostile yes, Friend no
+        }
+
+        Assert.False(h.Seat(3).Addressed("Side", 2));   // asked nothing: Neutral (DIS 3)
+        Assert.True(h.Seat(3).Addressed("Side", 3));
+        Assert.True(h.Seat(3).Addressed("All", 0));
+    }
+
     // ---- (g) 0 B ---------------------------------------------------------------------------------------------------------------------
 
     /// <summary>(g) With three seats Playing, the seat flows' per-frame path allocates nothing in the steady state (HOT PATH rule): the flows' Frame over 300 frames (about 5 s of run time, so the 1 s server polls are in it).</summary>
@@ -583,6 +608,48 @@ public class PlayerStationDeployTests
 
         Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);
         Assert.All(new[] { 1, 2, 3 }, n => Assert.Equal(PlayerSlotState.Playing, h.Seat(n).Slot.State));
+    }
+
+    /// <summary>
+    /// T-055 (b), HOT path: the station's whole frame (flow, gizmos, the held unit's status, the slot) of three PLAYING seats allocates nothing in the steady state. Found and removed: <c>ReadUnit</c> built a list, an iterator and an
+    /// enum name string per seat per frame (about 370 B a seat). Mutation: the use actions read through the allocating overload again.
+    /// </summary>
+    [Fact]
+    public void Three_playing_seats_allocate_0_bytes_in_the_stations_whole_frame()
+    {
+        using var h = new Deploy(seats: 3);
+        h.AddRole(RoleId, ForceId.Friend, "Rifleman", max: 0);
+        h.AddArea(AreaA, ForceId.Friend, new Vector3(0, 0, 0), Deploy.Square(30));
+        h.Run(() => h.Seat(1).Offers.Any(o => o.Kind == PlayerOfferKind.Role), "offers");
+        for (int n = 1; n <= 3; n++)
+        {
+            h.Seat(n).Join(new PlayerJoin(PlayerJoinKind.Role, RoleId, null, Side: 1));
+        }
+
+        h.Run(() => Enumerable.Range(1, 3).All(n => h.Seat(n).Slot.State == PlayerSlotState.Playing), "all play");
+        h.RunSteps(150);
+        var seats = new[] { h.Seat(1), h.Seat(2), h.Seat(3) };
+        for (int i = 0; i < 20; i++)
+        {
+            h.AdvanceMs(17);
+            foreach (var seat in seats)
+            {
+                seat.Frame(h.World, true, false);
+            }
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 300; i++)
+        {
+            h.AdvanceMs(17);
+            for (int k = 0; k < seats.Length; k++)
+            {
+                seats[k].Frame(h.World, true, false);
+            }
+        }
+
+        Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.All(seats, seat => Assert.Equal(PlayerSlotState.Playing, seat.Slot.State));
     }
 
     // ---- replay ----------------------------------------------------------------------------------------------------------------------
