@@ -119,8 +119,8 @@ flowchart LR
 
 ### 3a. What HROT has to provide (requests to the HROT session)
 
-HROT's design for these: [DESIGN_External_Renderer_Director.md](https://github.com/pjanec/HROT/blob/ui/docs/designs/IG/DESIGN_External_Renderer_Director.md) and its
-[Architect_Question_113](https://github.com/pjanec/HROT/blob/ui/docs/blueprints/Architect_Question_113_External_Renderer_For_The_Director.md) (HROT `ui`, CE-11017 .. CE-11022).
+HROT's design for these: [DESIGN_Linked_Client_Director.md](https://github.com/pjanec/HROT/blob/ui/docs/designs/IG/DESIGN_Linked_Client_Director.md) and its
+[Architect_Question_113](https://github.com/pjanec/HROT/blob/ui/docs/blueprints/Architect_Question_113_Linked_Client_For_The_Director.md) (HROT `ui`, CE-11017 .. CE-11025; approved there as R-11009: HROT calls this side a *linked client* - it never knows what is behind the gateway).
 
 | Id | HROT change | Why |
 |---|---|---|
@@ -501,7 +501,7 @@ A timeout and a `FrameStatusFailed` take the same path. No fallback to the map i
 | `StepAck` from a client that is not the job's | ignored |
 | Request larger than the client's limits | the job fails before frame 0 with the limit named |
 | No client ready at job start | the map renders with HROT's sound (D-9, `sound: hrot`) |
-| A reel item loads the next scenario or recording (often another terrain: HROT's cluster loads it first, the client must load its level too) | epochs change inside the job; the client keeps the job and its track (3f rule 3), sets `RenderClient.Ready` false while it loads the new world and true again for the new `WorldEpoch`; HROT's cluster load phase waits for that in an external-renderer load step on the station node (per node, like the filming node's 3-D map; HROT Q113-I), so the node is not play-ready and no frame request goes to a client still loading |
+| A reel item loads the next scenario or recording (often another terrain: HROT's cluster loads it first, the client must load its level too) | epochs change inside the job; the client keeps the job and its track (3f rule 3), sets `RenderClient.Ready` false while it loads the new world and true again for the new `WorldEpoch`; HROT's cluster load phase waits for that in a linked-client load step on the station node (HROT `LinkedClientLoadStep`, beside its 3-D map step) (per node, like the filming node's 3-D map; HROT Q113-I), so the node is not play-ready and no frame request goes to a client still loading |
 | Audio total differs from frames x samples per frame | HROT fails the job with both numbers |
 | Path outside the render root | the gateway never writes one; the client refuses it |
 
