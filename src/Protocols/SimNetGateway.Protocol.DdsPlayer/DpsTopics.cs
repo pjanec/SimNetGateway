@@ -71,6 +71,10 @@ public partial struct Session
     [MaxLength(32)] public string Vocabulary;
     /// <summary>The format of the terrain export that <see cref="BuildingDamage.Building"/> keys refer to, as "name/version" (e.g. "hrot-terrain/1"); empty = no such export.</summary>
     [MaxLength(32)] public string TerrainFormat;
+    /// <summary>The content hash of the BASE terrain the exercise runs on; empty = not stated. With <see cref="Terrain"/> and <see cref="TerrainOverlayHash"/> a client picks its terrain bundle and fails its <c>ClientWorld</c> with a reason when it has none (T-048).</summary>
+    [MaxLength(64)] public string TerrainBaseHash;
+    /// <summary>The content hash of the overlay merged into the resident terrain; empty = no overlay.</summary>
+    [MaxLength(64)] public string TerrainOverlayHash;
 }
 
 [DpsRate(DpsRateClass.Fixed)]
@@ -675,6 +679,10 @@ public partial struct Offer
     /// <summary>A unit or role is free to take.</summary>
     public bool Free;
     public int Count, Max;
+    /// <summary>The role's kit names, in the order <see cref="JoinRequest.Kit"/> picks by index; empty = none offered (T-049).</summary>
+    [DdsBound(8)] public List<NameItem> Kits;
+    /// <summary>An <see cref="OfferKind.OfferKindArea"/> offer's outline in world metres (the frame of <c>EntityState.Position</c>); empty for every other kind.</summary>
+    [DdsBound(32)] public List<Vec3d> Outline;
 }
 
 [DpsRate(DpsRateClass.Discrete)]

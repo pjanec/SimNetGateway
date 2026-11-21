@@ -108,6 +108,12 @@ public readonly record struct HrotOrigin(
 public readonly record struct HrotSession(ClusterPhase Phase, bool Advancing, double TimeScale, double SimTime) : IHrotToGatewayMessage;
 
 /// <summary>
+/// The terrain resident in the HROT world (T-048): its name and the content hashes of the base terrain and of the overlay merged into it (all empty = none). Sent when any of them
+/// changes and again at a world boundary, so a client can pick its terrain bundle.
+/// </summary>
+public readonly record struct HrotTerrain(string Name, string BaseHash, string OverlayHash) : IHrotToGatewayMessage;
+
+/// <summary>
 /// An anchor of the simulation clock (DD-022 3b), a copy of HROT's time-mode switch (the master's anchor): <paramref name="Stepped"/> false = Continuous, true = Deterministic
 /// (paused, or stepped). <paramref name="AnchorWallTicks"/> is the station's wall tick (100 ns since 0001-01-01 UTC) the anchor's <paramref name="AnchorSimTime"/> belongs to;
 /// the simulation time while Continuous is <c>AnchorSimTime + (wall - AnchorWallTicks) / 10^7 x TimeScale</c>. <paramref name="TimelineEpoch"/> grows at every discontinuity.

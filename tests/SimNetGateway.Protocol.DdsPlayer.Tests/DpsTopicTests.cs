@@ -792,4 +792,55 @@ public class DpsTopicTests
             Assert.Equal(type.Name + "Unknown", Enum.GetName(type, Enum.ToObject(type, 0)));
         }
     }
+
+    // ---- T-048 / T-049: the appended fields (R-133, R-141) --------------------------------------------------------------------------
+
+    [Fact]
+    public void Session_carries_the_terrain_name_and_both_content_hashes_at_full_bounds()
+    {
+        string hash = new('a', 64);
+        var session = RoundTrip(new Session { Terrain = new string('t', 64), StationName = "s", TerrainBaseHash = hash, TerrainOverlayHash = new string('b', 64) }, "t48-session");
+        Assert.Equal((new string('t', 64), hash, new string('b', 64)), (session.Terrain, session.TerrainBaseHash, session.TerrainOverlayHash));
+
+        var none = RoundTrip(new Session { Terrain = string.Empty, StationName = string.Empty, TerrainBaseHash = string.Empty, TerrainOverlayHash = string.Empty }, "t48-none");
+        Assert.Equal((string.Empty, string.Empty, string.Empty), (none.Terrain, none.TerrainBaseHash, none.TerrainOverlayHash));
+    }
+
+    [Fact]
+    public void Offer_carries_kits_and_an_area_outline_at_full_bounds_and_old_offers_stay_valid()
+    {
+        var kits = Enumerable.Range(0, 8).Select(i => new NameItem { Name = new string((char)('A' + i), 32) }).ToList();
+        var outline = Enumerable.Range(0, 32).Select(i => new Vec3d { X = i, Y = -i * 2.5, Z = 100 + i }).ToList();
+        var slot = RoundTrip(new PlayerSlot
+        {
+            State = SlotState.SlotStateChoosing, Reason = string.Empty,
+            Offers =
+            [
+                new Offer { Kind = OfferKind.OfferKindRole, Id = 5, Name = "Rifleman", Side = 1, Free = true, Count = 1, Max = 3, Kits = kits, Outline = [] },
+                new Offer { Kind = OfferKind.OfferKindArea, Id = 9, Name = "North field", Side = 1, Free = true, Kits = [], Outline = outline },
+                new Offer { Kind = OfferKind.OfferKindUnit, Id = 12, Name = "Rifleman 1", Side = 1, Free = true, Kits = [], Outline = [] },
+            ],
+        }, "t49-slot");
+
+        Assert.Equal(8, slot.Offers[0].Kits.Count);
+        Assert.Equal(new string('H', 32), slot.Offers[0].Kits[7].Name);
+        Assert.Empty(slot.Offers[0].Outline);
+        Assert.Equal(OfferKind.OfferKindArea, slot.Offers[1].Kind);
+        Assert.Equal(32, slot.Offers[1].Outline.Count);
+        Assert.Equal(new Vec3d { X = 31, Y = -77.5, Z = 131 }, slot.Offers[1].Outline[31]);
+        Assert.Empty(slot.Offers[1].Kits);
+        Assert.Empty(slot.Offers[2].Kits);
+        Assert.Equal((byte)2, (byte)OfferKind.OfferKindArea);   // appended after Unit = 0, Role = 1: the old values do not move
+        Assert.Equal((byte)0, (byte)OfferKind.OfferKindUnit);
+        Assert.Equal((byte)1, (byte)OfferKind.OfferKindRole);
+    }
+
+    [Fact]
+    public void The_appended_fields_are_declared_last_so_nothing_before_them_moves()
+    {
+        static string Last<T>() => typeof(T).GetFields().Select(f => f.Name).Last();
+        Assert.Equal("TerrainOverlayHash", Last<Session>());
+        Assert.Equal(["Count", "Max", "Kits", "Outline"], typeof(Offer).GetFields().Select(f => f.Name).TakeLast(4).ToArray());
+        Assert.Equal(["TerrainFormat", "TerrainBaseHash", "TerrainOverlayHash"], typeof(Session).GetFields().Select(f => f.Name).TakeLast(3).ToArray());
+    }
 }

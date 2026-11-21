@@ -52,7 +52,8 @@ public enum SlotState : byte { SlotStateWaiting = 0, SlotStateObserving, SlotSta
 /// <summary>What a <see cref="JoinRequest"/> asks for. Role is answered in a later delivery step (DD-017 3.2b).</summary>
 public enum JoinKind : byte { JoinKindObserve = 0, JoinKindUnit, JoinKindRole }
 
-public enum OfferKind : byte { OfferKindUnit = 0, OfferKindRole }
+/// <summary>What an <see cref="Offer"/> is: a placed unit, a role, or (T-049) an area a player may spawn in.</summary>
+public enum OfferKind : byte { OfferKindUnit = 0, OfferKindRole, OfferKindArea }
 
 public enum GizmoShape : byte { GizmoShapeLineStrip = 0, GizmoShapeArrow, GizmoShapeCircle, GizmoShapePolygon, GizmoShapeBox, GizmoShapeText, GizmoShapeIcon }
 

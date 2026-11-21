@@ -71,6 +71,8 @@ internal sealed class DpsPlayerSlot
                     Name = o.Role is { Length: > 64 } r ? r[..64] : o.Role ?? string.Empty,
                     Side = (byte)Math.Clamp(o.Force, 0, 255),
                     Free = true,
+                    Kits = [],      // filled from HROT's deploy offers once seats have the deploy flow (HROT Q114, T-049)
+                    Outline = [],
                 })],
             });
         }

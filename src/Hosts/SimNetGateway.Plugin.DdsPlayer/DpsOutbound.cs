@@ -46,6 +46,7 @@ public sealed class DpsOutbound : IGatewayModule
     private readonly Dictionary<int, Book> _books = new();
     private HrotOrigin? _origin;
     private HrotSession? _session;
+    private HrotTerrain _terrain;
     private double _simTime;
 
     internal DpsOutbound(DpsSettings settings, DpsPorts ports)
@@ -60,6 +61,7 @@ public sealed class DpsOutbound : IGatewayModule
     {
         setup.OnMessage<HrotOrigin>(OnOrigin);
         setup.OnMessage<HrotSession>(OnSession);
+        setup.OnMessage<HrotTerrain>(OnTerrain);
         setup.OnMessage<HrotEntityState>(OnState);
         setup.OnMessage<HrotEntityRemoved>(OnRemoved);
         setup.OnMessage<HrotTurretPose>(OnTurret);
@@ -90,6 +92,17 @@ public sealed class DpsOutbound : IGatewayModule
         PublishSession();
     }
 
+    private void OnTerrain(in HrotTerrain t, IngressContext ctx)
+    {
+        if (t == _terrain)
+        {
+            return;
+        }
+
+        _terrain = t;
+        PublishSession();   // a changed terrain is a changed Session
+    }
+
     private void PublishSession()
     {
         if (_session is not { } s)
@@ -105,7 +118,9 @@ public sealed class DpsOutbound : IGatewayModule
             Mode = mode,
             SimTime = s.SimTime,
             TimeScale = s.TimeScale,
-            Terrain = string.Empty,
+            Terrain = Truncate(_terrain.Name ?? string.Empty, 64),
+            TerrainBaseHash = Truncate(_terrain.BaseHash ?? string.Empty, 64),
+            TerrainOverlayHash = Truncate(_terrain.OverlayHash ?? string.Empty, 64),
             StationName = string.Empty,
             Vocabulary = Vocabulary,
             TerrainFormat = TerrainFormat,

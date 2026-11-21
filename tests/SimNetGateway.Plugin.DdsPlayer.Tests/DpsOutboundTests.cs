@@ -618,6 +618,71 @@ public class DpsOutboundTests
         Assert.Equal(["station-1-1", "station-1-2"], rig.Transport.Seats.Select(x => x.Partition).ToArray());
     }
 
+    // ---- T-048: the terrain in Session ----------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void The_terrain_name_and_both_hashes_reach_session_and_a_change_sends_it_again()
+    {
+        uint domain = NewDomain();
+        using var watch = new Watch<D.Session>(domain, "station-1", _ => "s");
+        using var rig = new Rig(domain);
+
+        rig.Send(new HrotSession(ClusterPhase.Live, true, 1.0, 5.0));
+        Assert.True(watch.Until(w => w.Events.Count >= 1));
+        Assert.Equal((string.Empty, string.Empty, string.Empty), (watch.Events[^1].Terrain, watch.Events[^1].TerrainBaseHash, watch.Events[^1].TerrainOverlayHash));   // no terrain: empty strings
+
+        rig.Send(new HrotTerrain("city-1", "basehash-aaa", "overlayhash-bbb"));
+        Assert.True(watch.Until(w => w.Events[^1].Terrain == "city-1"));
+        Assert.Equal(("city-1", "basehash-aaa", "overlayhash-bbb"), (watch.Events[^1].Terrain, watch.Events[^1].TerrainBaseHash, watch.Events[^1].TerrainOverlayHash));
+
+        rig.Send(new HrotTerrain("city-1", "basehash-aaa", "overlayhash-ccc"));   // only the overlay changed
+        Assert.True(watch.Until(w => w.Events[^1].TerrainOverlayHash == "overlayhash-ccc"));
+        Assert.Equal(("city-1", "basehash-aaa"), (watch.Events[^1].Terrain, watch.Events[^1].TerrainBaseHash));
+
+        rig.Send(new HrotTerrain(string.Empty, string.Empty, string.Empty));   // the terrain went away
+        Assert.True(watch.Until(w => w.Events[^1].Terrain.Length == 0));
+        Assert.Equal((string.Empty, string.Empty), (watch.Events[^1].TerrainBaseHash, watch.Events[^1].TerrainOverlayHash));
+    }
+
+    [Fact]
+    public void An_unchanged_terrain_does_not_send_session_again_and_a_terrain_before_the_first_session_waits_for_it()
+    {
+        uint domain = NewDomain();
+        using var rig = new Rig(domain);
+        var sessions = new List<D.Session>();
+        rig.Transport.Session.Tap = sessions.Add;
+
+        rig.Send(new HrotTerrain("city-1", "b", "o"));
+        Assert.Empty(sessions);   // there is no session yet to put it in
+
+        rig.Send(new HrotSession(ClusterPhase.Live, true, 1.0, 5.0));
+        Assert.Equal(("city-1", "b", "o"), (sessions[^1].Terrain, sessions[^1].TerrainBaseHash, sessions[^1].TerrainOverlayHash));
+        int count = sessions.Count;
+        rig.Send(new HrotTerrain("city-1", "b", "o"));
+        rig.Send(new HrotTerrain("city-1", "b", "o"));
+        Assert.Equal(count, sessions.Count);
+    }
+
+    [Fact]
+    public void A_placed_unit_offer_has_empty_kits_and_outline()
+    {
+        uint domain = NewDomain();
+        var station = Offering(1001);
+        station.Slot = new PlayerSlotSnapshot(PlayerSlotState.Choosing, 0, 0.0, 1);
+        using var watch = new Watch<D.PlayerSlot>(domain, "station-1", _ => "slot");
+        using var rig = new Rig(domain, station: station);
+
+        Assert.True(watch.Until(w =>
+        {
+            rig.Step();
+            return w.Alive.ContainsKey("slot");
+        }));
+        var offer = Assert.Single(watch.Alive["slot"].Offers);
+        Assert.Equal(D.OfferKind.OfferKindUnit, offer.Kind);
+        Assert.Empty(offer.Kits);
+        Assert.Empty(offer.Outline);
+    }
+
     /// <summary>(DD-023 g, HOT path) The per-frame Playable computation of three seats allocates nothing in the steady state.</summary>
     [Fact]
     public void The_playable_computation_of_three_seats_allocates_nothing_in_the_steady_state()

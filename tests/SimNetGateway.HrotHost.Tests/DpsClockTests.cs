@@ -270,4 +270,50 @@ public class DpsClockTests
         Assert.Same(controller, services.TimeController());
         Assert.Equal(Fdp.Toolkit.Time.HighResUtcClock.GetTicks, services.WallTicks);
     }
+
+    // ---- T-048: the resident terrain as Session.Terrain ---------------------------------------------------------------------------------
+
+    /// <summary>The host reads HROT's managed TerrainDefinition singleton (ResolvedName, ResolvedBaseHash, ResolvedOverlayHash), sends it on change and again at a world boundary.</summary>
+    [Fact]
+    public void The_resident_terrain_reaches_session_on_change_and_again_at_a_world_boundary()
+    {
+        var sessions = new List<D.Session>();
+        var plugin = new CountingDdsPlugin { OnBound = t => t.Session.Tap = sessions.Add };
+        using var h = new PackHarness(dis: false, plugins: [plugin], configure: c => c.WithSide(DpsSide.SideKey, new DpsSettings { Domain = Domain, Partition = "terrain-1" }));
+        h.Steps(3);
+        Assert.NotEmpty(sessions);
+        Assert.Equal((string.Empty, string.Empty, string.Empty), (sessions[^1].Terrain, sessions[^1].TerrainBaseHash, sessions[^1].TerrainOverlayHash));   // no terrain loaded
+
+        var terrain = new Fdp.Toolkit.Terrain.TerrainDefinition { ResolvedName = "city-1", ResolvedBaseHash = "base-1", ResolvedOverlayHash = "overlay-1" };
+        h.World.SetSingletonManaged(terrain);
+        h.Steps(2);
+        Assert.Equal(("city-1", "base-1", "overlay-1"), (sessions[^1].Terrain, sessions[^1].TerrainBaseHash, sessions[^1].TerrainOverlayHash));
+
+        int count = sessions.Count;
+        h.Steps(3);
+        Assert.Equal(count, sessions.Count);   // nothing changed: nothing sent
+
+        terrain.ResolvedOverlayHash = "overlay-2";   // the loader commits another overlay
+        h.Steps(2);
+        Assert.Equal(("city-1", "base-1", "overlay-2"), (sessions[^1].Terrain, sessions[^1].TerrainBaseHash, sessions[^1].TerrainOverlayHash));
+
+        // a world boundary rebuilds the runtime: its first Session already names the terrain
+        sessions.Clear();
+        Fdp.Toolkit.Replication.Services.WorldEpoch.Restored(h.World);
+        h.Steps(3);
+        Assert.NotEmpty(sessions);
+        Assert.Equal(("city-1", "base-1", "overlay-2"), (sessions[^1].Terrain, sessions[^1].TerrainBaseHash, sessions[^1].TerrainOverlayHash));
+    }
+
+    [Fact]
+    public void A_terrain_that_resolved_no_name_is_no_terrain()
+    {
+        var sessions = new List<D.Session>();
+        var plugin = new CountingDdsPlugin { OnBound = t => t.Session.Tap = sessions.Add };
+        using var h = new PackHarness(dis: false, plugins: [plugin], configure: c => c.WithSide(DpsSide.SideKey, new DpsSettings { Domain = Domain, Partition = "terrain-2" }));
+        h.World.SetSingletonManaged(new Fdp.Toolkit.Terrain.TerrainDefinition { ResolvedBaseHash = "orphan" });   // nothing committed it by name
+        h.Steps(3);
+
+        Assert.Equal((string.Empty, string.Empty, string.Empty), (sessions[^1].Terrain, sessions[^1].TerrainBaseHash, sessions[^1].TerrainOverlayHash));
+    }
 }

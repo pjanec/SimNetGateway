@@ -16,6 +16,7 @@ public sealed class HrotIgnoredIngress : IGatewayModule
         Ignored<HrotPersonDetail>(),
         Ignored<HrotClockAnchor>(),   // the simulation clock goes to the dps side (DD-022); DIS keeps its own
         Ignored<HrotStep>(),
+        Ignored<HrotTerrain>(),   // the resident terrain goes to the dps side (Session.Terrain, T-048); DIS has no place for it
         Ignored<HrotEffect>(),
         Ignored<HrotPersonAppearance>(),
         Ignored<HrotVehicleLook>(),

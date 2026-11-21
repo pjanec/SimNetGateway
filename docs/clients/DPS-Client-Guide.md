@@ -455,6 +455,10 @@ The wire is standalone, but part of its vocabulary comes from the simulation tha
 | `GizmoView` layers and families, `GizmoFrame.Layer` | HROT's gizmo projectors (see Gizmos) |
 | `ControlFrame.Verb`, `OwnUnit.Verb`, `ManDowned.Part`, `Gait`, `StanceRequest`, `ArticulationKind` | Contract enumerations (neutral); the gateway maps HROT's `UseVerbKind` and its person parts (`PersonPart`: Head, Torso, UpperArmL, ForearmL, UpperArmR, ForearmR, ThighL, ShinL, ThighR, ShinR) by name, an unknown name is the enumeration's value 0 |
 
+**The terrain a client must have.** `Session.Terrain` is the name of the terrain resident in the simulation, `Session.TerrainBaseHash` the content hash of the base terrain and `Session.TerrainOverlayHash` the content hash of the overlay merged into it (all three empty = the simulation states none). A client that loads terrain bundles picks the bundle whose name and hashes match; when it has none, it reports `ClientWorld` state Failed with a reason that names the terrain and the hashes it lacks. `Session` is sent again whenever any of them changes, and with a new `WorldEpoch` at a world boundary.
+
+**Deployment offers.** `OfferKindArea` offers carry the spawn area's `Outline` (world metres, up to 32 points); a role offer carries its `Kits` (up to 8 names; `JoinRequest.Kit` is the index). Both are empty for today's placed-unit offers.
+
 **Producer-specific extensions, optional for a client:** `TkbType` (its `Json` is tagged by `Schema`, `hrot/1`) and `BuildingDamage` (keyed by the HROT terrain export, `Session.TerrainFormat`). A client that renders another terrain, or does not need the type data, ignores both topics.
 
 **The old fields stay.** Where a raw number became an enumeration (`ControlFrame.Gait`, `Stance`, `UseVerb`, `OwnUnit.UseVerb`, `ManDowned.BodyPart`, `Articulation.Kind`), the new field is appended and the old one stays equal to it and is superseded. On the way in, a new enumeration that is set wins and a new enumeration at 0 falls back to the old byte, so a client may fill either or both.

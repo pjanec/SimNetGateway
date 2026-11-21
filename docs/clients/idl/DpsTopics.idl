@@ -63,6 +63,8 @@ module SimNetGateway {
                 double OriginNorthing;
                 string<32> Vocabulary;
                 string<32> TerrainFormat;
+                string<64> TerrainBaseHash;
+                string<64> TerrainOverlayHash;
             };
 
             @topic
@@ -452,6 +454,8 @@ module SimNetGateway {
                 boolean Free;
                 int32 Count;
                 int32 Max;
+                sequence<SimNetGateway::Protocol::DdsPlayer::NameItem, 8> Kits;
+                sequence<SimNetGateway::Protocol::DdsPlayer::Vec3d, 32> Outline;
             };
 
             @topic

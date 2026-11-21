@@ -43,6 +43,7 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
     private bool _sentAdvancing;
     private double _lastGather = double.NegativeInfinity;
     private readonly HrotClockGather _clockGather;
+    private HrotTerrain _sentTerrain;
 
     public DisGatewaySystem(HrotServices services, Gateway.HrotDis.GatewayConfiguration config, Func<GatewayRuntime> factory, Action<string>? error = null, Action? beforeFrame = null)
         : this(services, config, factory is null ? throw new ArgumentNullException(nameof(factory)) : _ => factory(), error, beforeFrame)
@@ -185,6 +186,7 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
         var clock = SimClock.Of(world);
         PublishFrame(runtime, phase, clock, _services.GeoReference());
         _clockGather.Read(runtime.HrotIn);
+        GatherTerrain(world, runtime.HrotIn);
         double now = runtime.Clock.Now;
         if (phase != ClusterPhase.Idle)
         {
@@ -232,6 +234,17 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
         }
     }
 
+    /// <summary>The resident terrain (name and the two content hashes) goes to the gateway when it differs from what this runtime was told; no terrain says nothing until there was one.</summary>
+    private void GatherTerrain(EntityRepository world, SimNetGateway.Engine.InMemory.InMemoryInbound hrotIn)
+    {
+        var terrain = HrotTerrainGather.Read(world);
+        if (terrain != _sentTerrain)
+        {
+            _sentTerrain = terrain;
+            hrotIn.Enqueue(terrain);
+        }
+    }
+
     private void PublishFrame(GatewayRuntime runtime, ClusterPhase phase, ISimClock clock, HrotGeoRef? geoRef)
     {
         // (0, 0, 0) with a frame is the pre-frame "not set" of a bare transform: not sent unless allowed
@@ -268,6 +281,7 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
             _sentPhase = null;
             _lastGather = double.NegativeInfinity;
             _clockGather.Reset();
+            _sentTerrain = default;   // a new runtime (a world boundary) says the terrain again, when there is one
             return true;
         }
         catch (Exception ex)

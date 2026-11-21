@@ -159,7 +159,8 @@ module SimNetGateway {
             @bit_bound(8)
             enum OfferKind {
                 OfferKindUnit,
-                OfferKindRole
+                OfferKindRole,
+                OfferKindArea
             };
 
             @bit_bound(8)
