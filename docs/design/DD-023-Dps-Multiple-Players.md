@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | rev 2 (2026-11-21): an independent review folded in (section 3b; it overturns rev 1's D-1 topic split, D-6 and section 6's "no seat sees no world"); the user approved P-1 .. P-6 subject to that review; HROT's half is HROT `Architect_Question_114` |
+| **Status** | rev 2 (2026-11-21): an independent review folded in (section 3b; it overturns rev 1's D-1 topic split, D-6 and section 6's "no seat sees no world"); approved by the user (R-140: P-1 .. P-7); HROT's half is HROT `Architect_Question_114` |
 | **Tasks** | T-046 (this design) |
 | **Rulings honoured** | R-139, R-132 (amended: one player per station stays, a station is now a seat), R-133 (append-only), R-135, R-012, R-002 |
 | **Related** | DD-017 (the station, the partition, the join flow - its section 3.1 *"rejected: one gateway serving many players"* is superseded by this design for the editor host); DD-022 (the clock, the steps, `ClientWorld` - shared by every seat); HROT [`DESIGN_Player_Join.md`](https://github.com/pjanec/HROT/blob/ui/docs/DESIGN_Player_Join.md) (owns the deploy server and the deploy flow reused here); HROT `docs/blueprints/Architect_Question_114_Seats_On_One_Node.md` (owns `StationId`, the deploy server in the editor, the local gameplay channel) |
