@@ -25,6 +25,10 @@ internal sealed class DpsGizmos : IDisposable
     private readonly DdsReader<D.GizmoView> _reader;
     private readonly ConcurrentQueue<Liveliness> _liveliness = new();
     private readonly HashSet<string> _published = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _truncated = new(StringComparer.Ordinal);
+
+    /// <summary>The most primitives one <c>GizmoFrame</c> holds (the topic's <c>DdsBound</c>).</summary>
+    internal const int MaxPrimitives = 4096;
     private readonly HashSet<ulong> _warned = new();
     private ulong _viewer;
     private long _viewerHandle;
@@ -171,12 +175,44 @@ internal sealed class DpsGizmos : IDisposable
         return new GizmoViewRequest(layers, selected, pinned, v.RateHz);
     }
 
-    private D.GizmoFrame ToFrame(GizmoLayerFrame frame) => new()
+    /// <summary>
+    /// How many primitives of the layer go into the one frame: all of them up to <see cref="MaxPrimitives"/>; past it the frame is cut at the end of a WHOLE entity card (never in the middle of one, which would show a half
+    /// card) and the cut is said once per layer (T-058: it was silent). Lossless delivery of more needs the contract's choice (DD-024 section 9).
+    /// </summary>
+    internal static int Fit(IReadOnlyList<GizmoPrimitiveData> primitives)
+    {
+        int n = primitives.Count;
+        if (n <= MaxPrimitives)
+        {
+            return n;
+        }
+
+        int cut = MaxPrimitives;
+        while (cut > 0 && primitives[cut].Space == GizmoPrimitiveSpace.EntityCard && primitives[cut].AnchorId == primitives[cut - 1].AnchorId)
+        {
+            cut--;   // the card of the primitive at the cut starts earlier: leave all of it out
+        }
+
+        return cut > 0 ? cut : MaxPrimitives;
+    }
+
+    private D.GizmoFrame ToFrame(GizmoLayerFrame frame)
+    {
+        int fit = Fit(frame.Primitives);
+        if (fit < frame.Primitives.Count && _truncated.Add(frame.Layer))
+        {
+            _log($"dps: gizmo layer '{frame.Layer}' has {frame.Primitives.Count} primitives; one GizmoFrame holds {MaxPrimitives}, so {frame.Primitives.Count - fit} (whole cards at the end of the layer) are not sent (DD-024 section 9)");
+        }
+
+        return Build(frame, fit);
+    }
+
+    private D.GizmoFrame Build(GizmoLayerFrame frame, int fit) => new()
     {
         Producer = _producer,
         Layer = frame.Layer.Length > 32 ? frame.Layer[..32] : frame.Layer,
         SimTime = 0.0,
-        Primitives = [.. frame.Primitives.Take(4096).Select(p => new D.GizmoPrimitive
+        Primitives = [.. frame.Primitives.Take(fit).Select(p => new D.GizmoPrimitive
         {
             Shape = (D.GizmoShape)(byte)p.Shape,
             Points = [.. p.Points.Take(64).Select(x => new D.Vec3d { X = x.X, Y = x.Y, Z = x.Z })],

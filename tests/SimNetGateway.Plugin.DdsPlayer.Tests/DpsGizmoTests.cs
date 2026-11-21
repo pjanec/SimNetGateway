@@ -229,4 +229,32 @@ public class DpsGizmoTests
 
         Assert.Null(source.Views[^1]);
     }
+
+    private static GizmoPrimitiveData CardPrim(int anchor, byte row) =>
+        new(GizmoPrimitiveShape.Box, [], 0xFFu, 1f, string.Empty, GizmoPrimitiveSpace.EntityCard, anchor, row);
+
+    /// <summary>
+    /// T-058: past the frame's 4096 primitives the frame is cut at the end of a WHOLE entity card (five primitives each: no half card), a frame within the bound is untouched, and world primitives are cut at the bound.
+    /// (Lossless delivery of more is the contract's choice, DD-024 section 9.) Mutation: the cut falls in the middle of a card.
+    /// </summary>
+    [Fact]
+    public void A_layer_past_the_frame_bound_is_cut_at_a_whole_card()
+    {
+        var cards = new List<GizmoPrimitiveData>();
+        for (int a = 1; a <= 1000; a++)
+        {
+            for (byte row = 0; row < 5; row++)
+            {
+                cards.Add(CardPrim(a, row));
+            }
+        }
+
+        int fit = DpsGizmos.Fit(cards);
+        Assert.Equal(4095, fit);   // 819 cards of 5; the 820th does not fit and is left out whole
+        Assert.Equal(0, fit % 5);
+        Assert.Equal(819, cards.Take(fit).Select(p => p.AnchorId).Distinct().Count());
+        Assert.Equal(300, DpsGizmos.Fit(cards.Take(300).ToList()));   // within the bound: all of it
+        var world = Enumerable.Range(0, 5000).Select(_ => new GizmoPrimitiveData(GizmoPrimitiveShape.Box, [], 1u, 1f, string.Empty)).ToList();
+        Assert.Equal(4096, DpsGizmos.Fit(world));
+    }
 }

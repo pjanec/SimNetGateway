@@ -138,5 +138,31 @@ Deviations from the design above, and what was found:
   (rail `CommanderGatherTests`). `Entity.ParentId` already existed in the contract (still 0, DD-017 §10).
 - **The symbol cell travels in the `UnitCards` frame**, not in `UnitSymbols`: HROT's `UnitSymbolCardGizmo` draws it with `Card(net, Labels, unitCard: true)`, which lands on the card's own layer; the `UnitSymbols` layer only switches it on. The standalone 2-D map symbols (`EntityLocal` icons) stay dropped.
 - **Finding, HROT:** `HealthBarGizmo` calls `Card(net, Labels)` without the unit flag, so a body-less commander that carries `Health` would get a bar on the Labels layer; a real commander has no `Health`, so mode 2 is clean (the rail removes it).
-- **Not measured:** cards of 8 000 units against the 4096-primitive frame bound (§6); the gateway truncates beyond it as for every layer.
+- ~~**Not measured:** cards of 8 000 units against the 4096-primitive frame bound.~~ MEASURED by T-058 below.
 - Real HROT card projectors run in the rails (the host finds them by reflection), so the mode rail exercises the product's own cards, not a stand-in.
+
+**T-058 (2026-11-21), cards at scale against `GizmoFrame`'s 4096 primitives - measured; the lossless split awaits the owner's choice.**
+
+Measured with a PackHarness world of N men (tkb 300) and N/10 commanders, view `UnitCards` + `Labels` (mode 3), real HROT card projectors (rail-less probe, 40 host frames each):
+
+| | primitives per card | N = 100 | N = 1000 | N = 5000 |
+|---|---|---|---|---|
+| a man's card (`Labels` layer: frame background, frame outline, bar, tick, name) | **5** | 500 prims / 100 anchors | 5 000 / 1 000 | **25 000** / 5 000 |
+| a commander's card (`UnitCards`, symbol layer off) | **3** | 30 / 10 | 300 / 100 | 1 500 / 500 |
+
+- HROT's host side loses nothing: the layer frame holds every card (25 000 primitives at N = 5000 after about five frames; the projectors add `FreshEntitiesPerFrame` = 256 entities a frame, so the first frames fill up: 4096 → 4322 → 4548 ... anchors).
+- **One layer's frame passes 4096 at 819 men** (`Labels`, 5 each) or 1 365 commanders (`UnitCards`, 3 each); a mode-3 view of a 1 000-man scenario is already over the bound.
+- **Today, past the bound the gateway TRUNCATED SILENTLY** (`DpsGizmos.ToFrame`: `Take(4096)`): at N = 5000 only the first 819 men's cards arrived and the 820th was cut in the middle (a half card). Built now (no contract change): the frame is cut at the end of a WHOLE card (`DpsGizmos.Fit`, rail `A_layer_past_the_frame_bound_is_cut_at_a_whole_card`, red-proved by cutting mid-card) and the cut is logged once per layer. 4096 of 25 000 still arrive: that is not lossless.
+- Cost of a full frame (estimate from the field sizes, XCDR2, about 58 bytes a primitive: 4 shape, 4 empty points list, 4 colour, 4 width, 4 + text, 4 space, 4 anchor, 4 row, 16 card floats, 4 fill): 5000 men = 25 000 primitives = about **1.45 MB per frame, 14.5 MB/s at the default 10 Hz (60 Hz cap: 87 MB/s)**, per client, for that one layer; one 4096-primitive frame is 237 KB, 2.4 MB/s. Not measured on a wire (an estimate, to be checked before the contract is chosen).
+
+**Options (the choice is the owner's; none is built):**
+
+| option | contract change | lossless | cost |
+|---|---|---|---|
+| A. **Parts by layer name**: a big layer is sent as `Labels`, `Labels~1`, `Labels~2` ... (each <= 4096, cut at whole cards); a client unions every layer named `<layer>` or `<layer>~n`; a part that shrinks away is DISPOSED (the gateway tracks the parts it published), a disposed part is gone | none to the IDL (a convention in the existing key; `Layer` is 32 characters) | yes | same bytes as today per part; every part is a sample at the layer rate |
+| B. A key field `[DdsKey] ushort Part` on `GizmoFrame` (the lean of the brief) | a KEY added: not wire-compatible with a client built on the old type (type-identity mismatch), so it is a break rather than an append | yes | as A |
+| C. Raise `[DdsBound(4096)]` (e.g. 32768) | the type's bound changes (type-identity mismatch like B); one 1.45 MB sample per layer, fragmented | yes up to the new bound | one huge sample, a slow reader stalls the layer |
+| D. **Send on change** (orthogonal to A - C): a layer frame is re-sent only when its content changed, plus a heartbeat (a card's content - name, bar, tick - changes rarely; its place comes from the entity) | none (the topic is `TransientLocal`, `KeepLast 1`: a late joiner already gets the last sample) | not about loss | cuts the steady cost from 14.5 MB/s to about 0 for a calm scene; needs a content hash per layer (hot path: a rolling hash over the primitives, no allocation) |
+
+**Lean: A + D.** A needs no IDL change (so no approval for a contract break and no client rebuild beyond "union the parts"), is lossless and keeps each sample at the size DDS handles well; D makes it affordable. B is the cleaner type but breaks old clients; C is one sample too large. What a client must do under A: group the layer's samples by the part before `~` (the union is the layer's frame), treat a not-alive part as removed, and keep its anchors' rows from every part. Rails to add with A / D: 5000 cards arrive complete (every anchor's rows present); a part shrinking or growing leaves no stale part; 0 B per steady frame on the gateway side (today `ToFrame` builds the topic value with LINQ every frame: that path must be made allocation-free first, or the 0 B rail cannot hold); mutations: the last part dropped; a stale part not disposed.
+
