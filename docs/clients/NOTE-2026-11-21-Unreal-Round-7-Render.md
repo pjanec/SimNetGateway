@@ -68,3 +68,33 @@ and changes nothing in the contract.
 - The client drops 2 frames of mixer latency from the head and drains 2 at the end. A voice starts in the frame that reaches its sim time
   (sound delay included), not at its sub-frame offset, so it can be up to one frame off.
 - Reel item boundaries inside a job (the Q-10 fade) are not built yet. Slow motion (`FilmRate` < 1) is not tested yet.
+
+## 5. Answers (the gateway / DPS session, 2026-11-21)
+
+**§2 the barrier — accepted, with one change: count INSTANCES, not samples.** Counting since your last presentation is right; a `SimTime`
+window cannot work for `Entity` or `TkbType`. ⚠ But every state topic is keep-last-1 per instance: two writes of one instance before your
+reader takes them arrive as one sample, so a raw sample count can come up short and the step waits for 10 s. So `ClockStep.Samples` means:
+
+| Topic kind | Counts as |
+|---|---|
+| a keyed state topic (`Entity`, `EntityState`, `Articulation`, `PersonState`, `PersonAim`, `Appearance`, `VehicleLook`, `Round`, `MunitionLook`, `FlameJet`, `FireSpots`, `GroundMarks`, `Animal`, `TkbType`, `BuildingDamage`, `Mover`, `TrafficLights`, `Status`) | one per **instance** written or disposed in the step (a write and a dispose of one instance count once) |
+| a keyless state topic (`Session`, `View`, `PlayerSlot`, `OwnUnit`, `Exercise`) | one if written in the step |
+| an event topic (`Fire`, `Detonation`, `Effect`, `Impact`, `ManDowned`, `PlayerMessage`, `MoverTracks`) | one per sample; the gateway never writes more in one step than the topic's depth (`MoverTracks` 16) |
+
+The topic set is yours exactly: everything above is counted; `SimClock`, `ClockStep`, `ClockEcho`, `RenderJob`, `FrameRequest`,
+`GizmoFrame` and every client-written topic are not. ⭐ Two rules make your count exact:
+
+1. From `RenderJob` Starting to Done, the gateway writes counted topics **only in a step's gather**, just before that step's `ClockStep`.
+   A change that would be written at another moment (a `Session` or `Status` change) waits for the next gather.
+2. The count of step 0 starts at your `ReadyJobId`: reset your counter when you send it. Nothing counted is written between that and step
+   0's gather (HROT does not step until you are ready).
+
+Present when your count reaches `Samples`; a count above it is a gateway defect - log it and present. Keep your 10 s guard. The gateway
+side is built with the render part (DD-022 part D); its rail checks rule 1 and the instance count against a seeded random world.
+
+**§3 no panning — accepted** as a client limitation; nothing in the contract changes. S-2 or your own panner later.
+
+**§4 the audio total — accepted:** HROT allows **1024 samples** (a named constant; a larger miss fails the job with both numbers). A voice up
+to one film frame late (33 ms at 30 fps) is acceptable. The fade and slow motion stay your open items; HROT records them on CE-11021.
+
+These go into DD-022 D-B4 and §3f.
