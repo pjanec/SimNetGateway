@@ -30,12 +30,9 @@ internal sealed class EffectGather
     private readonly HashSet<(Entity Entity, double BornAt)> _present = new();
     private EntityQuery? _query;
     private EntityRepository? _queryWorld;
-    private readonly List<(double BornAt, Entity Shooter, long Ammo, byte Impact, Vector3 At)> _impacts = new();
     private bool _synced;
     private bool _replaying;
     private double _time;
-
-    private const float SameImpactM = 0.25f;
 
     /// <summary>Effects sent since the last <see cref="Clear"/>.</summary>
     public long Sent { get; private set; }
@@ -68,7 +65,6 @@ internal sealed class EffectGather
         _replaying = replaying;
         _time = simNow;
         _present.Clear();
-        _impacts.Clear();
         int sent = 0;
         bool hasCause = world.IsComponentTypeRegistered<Hrot.Map.Common.Components.EffectCause>();
         foreach (var e in _query!)
@@ -83,7 +79,7 @@ internal sealed class EffectGather
             // a round's impact is read from what the entity says (T-051, HROT CE-11024 / R-11007): the SAME entity that gives the puff and the mark gives the Impact, once, live or restored
             if (hasCause)
             {
-                PublishImpact(world, e, key.Item2, inbound, types, _impacts);
+                PublishImpact(world, e, key.Item2, inbound, types);
             }
 
             if (!EffectRules.SpecOf(world, e, tkb, out var spec))
@@ -102,9 +98,9 @@ internal sealed class EffectGather
 
     /// <summary>
     /// One <see cref="HrotImpact"/> for an effect entity whose <c>EffectCause.Impact</c> is not 0 (kind = Impact - 1, HROT's <c>ImpactKind</c>; 0 = a detonation or a shot: no Impact). Position and time are the effect's own, the surface,
-    /// material, munition and shooter are what the cause says; the normal is not on the entity (all 0 = unknown).
+    /// material, munition and shooter are what the cause says; the normal is the cause's (HROT CE-11030; all 0 = not stated). HROT stamps ONE effect of a round's impact (its puff) with a non-zero Impact, so there is no folding here (T-057).
     /// </summary>
-    private static void PublishImpact(EntityRepository world, Entity e, double bornAt, InMemoryInbound inbound, TkbGather? types, List<(double BornAt, Entity Shooter, long Ammo, byte Impact, Vector3 At)> done)
+    private static void PublishImpact(EntityRepository world, Entity e, double bornAt, InMemoryInbound inbound, TkbGather? types)
     {
         if (!world.HasComponent<Hrot.Map.Common.Components.EffectCause>(e))
         {
@@ -118,19 +114,8 @@ internal sealed class EffectGather
         }
 
         var at = (Vector3)world.GetComponentRO<SimTransform>(e).Position;
-        // HROT makes a puff AND a mark of one round's impact, each stamped with the same cause: they are ONE impact (same birth time, shooter, round and kind, within a quarter metre of each other)
-        for (int i = 0; i < done.Count; i++)
-        {
-            var d = done[i];
-            if (d.BornAt == bornAt && d.Shooter == cause.Shooter && d.Ammo == cause.Ammo && d.Impact == cause.Impact && Vector3.DistanceSquared(d.At, at) <= SameImpactM * SameImpactM)
-            {
-                return;
-            }
-        }
-
-        done.Add((bornAt, cause.Shooter, cause.Ammo, cause.Impact, at));
         types?.Reference(cause.Ammo);
-        inbound.Enqueue(new HrotImpact(bornAt, new HrotVec3(at.X, at.Y, at.Z), HrotVec3.Zero, ((EffectSurface)cause.Surface).ToString(), ((ImpactKind)(cause.Impact - 1)).ToString(), cause.Ammo,
+        inbound.Enqueue(new HrotImpact(bornAt, new HrotVec3(at.X, at.Y, at.Z), new HrotVec3(cause.Normal.X, cause.Normal.Y, cause.Normal.Z), ((EffectSurface)cause.Surface).ToString(), ((ImpactKind)(cause.Impact - 1)).ToString(), cause.Ammo,
             LookIds.NetworkIdOf(world, cause.Shooter), MaterialOf(cause.Material)));
     }
 

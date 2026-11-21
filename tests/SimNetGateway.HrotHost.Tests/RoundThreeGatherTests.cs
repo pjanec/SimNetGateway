@@ -187,12 +187,36 @@ public class RoundThreeGatherTests
         Assert.NotEmpty(effects);   // the derived puff and mark still arrive as Effect
         Assert.Equal(3, impacts.Count);
         var byKind = impacts.ToDictionary(i => i.Kind);
-        Assert.Equal(("Ground", 2001, ammo, new HrotVec3(5, 6, 0.1), 10.1), (byKind["Stop"].Surface, byKind["Stop"].ShooterId, byKind["Stop"].MunitionTkb, byKind["Stop"].Position with { Z = 0.1 }, byKind["Stop"].SimTime));   // the puff, just off the face: the mark of the same impact makes no second one
+        Assert.Equal(("Ground", 2001, ammo, new HrotVec3(5, 6, 0.1), 10.1), (byKind["Stop"].Surface, byKind["Stop"].ShooterId, byKind["Stop"].MunitionTkb, byKind["Stop"].Position with { Z = 0.1 }, byKind["Stop"].SimTime));   // the puff, just off the face; HROT stamps ONLY the puff, the mark carries Impact 0 (CE-11030)
         Assert.Equal(("Building", "Concrete"), (byKind["Entry"].Surface, byKind["Entry"].Material));
         Assert.Equal(string.Empty, byKind["Stop"].Material);
-        Assert.Equal((0, new HrotVec3(0, 0, 0)), (byKind["Exit"].ShooterId, byKind["Exit"].Normal));   // no shooter, no normal: unknown
+        Assert.Equal((0, new HrotVec3(0, 0, 1)), (byKind["Exit"].ShooterId, byKind["Exit"].Normal));   // no shooter; the normal is the notification's, through the cause (T-057)
+        bool mark = false;
+        foreach (var e in h.World.Query().With<Hrot.Map.Common.Components.EffectCause>().Build())
+        {
+            mark |= h.World.GetComponentRO<Hrot.Map.Common.Components.EffectCause>(e).Impact == 0;
+        }
+
+        Assert.True(mark, "HROT's marks exist (Impact 0) and make no Impact");
         h.GatherEffects(10.3);
         Assert.Empty(h.GatheredImpacts);   // never sent again
+    }
+
+    /// <summary>T-057: no fold - one Impact per effect entity with a non-zero Impact, whatever its neighbours. (HROT stamps one per round impact since CE-11030; an entity stamped twice would be two impacts.) Mutation: the fold reintroduced.</summary>
+    [Fact]
+    public void Every_effect_entity_with_an_Impact_makes_one_Impact_and_none_is_folded()
+    {
+        using var h = new Stage();
+        var shooter = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: ShooterTkb);
+        long ammo = h.MunitionWithEffects();
+        h.GatherEffects(10.0);
+        var hit = Hit(shooter, ammo, ImpactKind.Stop);
+        var specs = new List<Hrot.Look.Effects.EffectSpec>();
+        Hrot.Look.Effects.EffectRules.ForImpact(in hit, h.World, h.TestTkb, specs);
+        Assert.True(specs.Count >= 2);
+        h.SpawnEffects(10.1, list => { foreach (var sp in specs) { var c = sp; c.Cause = c.Cause!.Value with { Impact = 3 }; list.Add(c); } });   // both stamped, as an older recording or a rule that stamped both would
+        h.GatherEffects(10.2);
+        Assert.Equal(specs.Count, h.GatheredImpacts.Count);
     }
 
     /// <summary>A recording shown (or a state restored) holds the same effect entities: the same Impact comes out, once, in a replay.</summary>
