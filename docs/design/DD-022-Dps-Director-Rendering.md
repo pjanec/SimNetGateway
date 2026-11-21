@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | approved rev 4 (R-138, 2026-11-21) - the Unreal session agreed P-1 .. P-6 ([its answers](../clients/NOTE-2026-11-21-Unreal-Answers-DD-022.md), `5e63786`); not built |
+| **Status** | approved rev 4 (R-138, 2026-11-21); rev 5 freezes the contract (3g `ClientWorld`, 3h the field-level table) - the Unreal session agreed P-1 .. P-6 ([its answers](../clients/NOTE-2026-11-21-Unreal-Answers-DD-022.md), `5e63786`); not built |
 | **Tasks** | T-039 |
 | **Rulings honoured** | R-132, R-133 (contract open, append-only), R-134 (the client owns its camera; HROT's rules live in HROT), R-135 (rate classes, producer-neutral), R-136, R-137, R-138 (approval) |
 | **Date** | 2026-11-21 (rev 3: HROT's time sync measured in code - no pulse; the audio track reworked; the Unreal session's findings. Rev 4: the Unreal session's answers - the tick epoch, the per-step sample barrier, the binding kept, warm-up, S-1 through Unreal's non-real-time mixer) |
@@ -301,6 +301,57 @@ Common rules (either way):
   - Slow motion (Q-9): each voice starts at its film time and plays at natural speed - S-1 gives it by itself; pitching could be a later
     per-job option. Reel item boundary (Q-10): voices fade out over **0.25 s**.
   - S-2 stays the documented fallback if the non-real-time device proves unusable in practice.
+
+### 3g. World readiness for EVERY load - `ClientWorld` (rev 5, `2026-11-21`)
+
+HROT's ruling (R-11009 there, Q113-I/J): while the gateway is connected, **every** world-changing load - live, replay, from the start screen or
+the director - waits in a load step until the linked client has loaded the new world (its terrain). A live viewer that never renders must load
+the terrain too, so readiness is not a render-job matter: a small generic topic, written by any client that wants the station to wait for it.
+
+- **`ClientWorld`** (client -> gateway; Discrete; player QoS with liveliness; keyed by `ClientId`): `WorldEpoch` (the `Session.WorldEpoch` the
+  client is presenting or loading), `State` (`ClientWorldStateLoading`, `ClientWorldStateReady`, `ClientWorldStateFailed`), `Step` (bounded 64,
+  e.g. "terrain city-battle", shown on HROT's heartbeat), `Reason` (bounded 256, on Failed), `WaitForMe` (bool: false = a passive viewer the
+  station never waits for).
+- HROT's load step is resolved when **every** live `ClientWorld` with `WaitForMe` reports `Ready` for the station's current `WorldEpoch`; a
+  `Failed` fails the load with its reason; a client whose liveliness is lost stops being waited for (the load goes on without it).
+- `RenderClient.ReadyJobId` stays for the render job's warm-up (3e); world readiness is `ClientWorld`'s alone.
+
+### 3h. The round-7 contract, frozen (rev 5, `2026-11-21`)
+
+Appended to protocol 1.0 (R-133: append-only; existing topics only gain fields at their end). Conventions as round 1-6: enumerators prefixed
+with their enum's name, 0 = unknown / none, bounded strings and sequences, `ClientId` = the client's random nonzero `ulong`, simulation frame
+(metres, x east, y north, z up), sim time in seconds (double), wall ticks = 100 ns since 0001-01-01 UTC (`long`).
+
+| Topic | Dir | Rate class | QoS | Key | Fields (in order) |
+|---|---|---|---|---|---|
+| `SimClock` | gw -> client | Discrete | reliable, transient local, keep last 1 | - | `Mode` (`ClockMode`), `AnchorWallTicks` (long), `AnchorSimTime` (double), `TimeScale` (float), `FixedDelta` (float), `StepSeq` (long), `TimelineEpoch` (long), `Seq` (uint) |
+| `ClockProbe` | client -> gw | Event | reliable, volatile, keep last 16 | `ClientId` | `ClientId` (ulong), `ClientSendTicks` (long) |
+| `ClockEcho` | gw -> client | Event | reliable, volatile, keep last 16 | `ClientId` | `ClientId`, `ClientSendTicks`, `StationReceiveTicks`, `StationTransmitTicks` (long) |
+| `ClockStep` | gw -> client | Event | reliable, volatile, keep last 1024 | - | `StepSeq` (long), `FixedDelta` (float), `TargetSimTime` (double), `TimeScale` (float), `TimelineEpoch` (long), `AckRequired` (bool), `Samples` (uint, the world samples written in the step's gather; 0 = not stated, only filled when `AckRequired`) |
+| `StepAck` | client -> gw | Event | reliable, volatile, keep last 16 | `ClientId` | `ClientId`, `StepSeq` (long), `Checksum` (int, 0 = none) |
+| `ClientWorld` | client -> gw | Discrete | player QoS (reliable, volatile, keep last 1, AUTOMATIC liveliness, lease `DefaultLeaseMs`) | `ClientId` | `ClientId`, `WorldEpoch` (uint), `State` (`ClientWorldState`), `Step` (64), `Reason` (256), `WaitForMe` (bool) |
+| `RenderClient` | client -> gw | Discrete | player QoS | `ClientId` | `ClientId`, `Name` (64), `Ready` (bool), `MaxWidth`, `MaxHeight` (int), `MaxSupersample` (byte), `Formats` (uint bits: 1 = PNG), `AudioFormats` (uint bits: 1 = WAV PCM16, 2 = WAV float32), `MaxSampleRate` (int), `ReadyJobId` (32) |
+| `RenderJob` | gw -> client | Discrete | reliable, transient local, keep last 1 | `JobId` | `JobId` (32), `ClientId`, `Kind` (`RenderKind`), `What` (128), `Fps` (int), `Width`, `Height` (int), `Supersample` (byte), `Dir` (256, relative to the render root), `Audio` (bool), `SampleRate` (int), `Channels` (byte), `State` (`RenderState`), `Reason` (256) |
+| `FrameRequest` | gw -> client | Event | reliable, volatile, keep last 1024 | - | `JobId` (32), `FrameIndex` (int), `Kind` (`FrameKind`), `StepSeq` (long), `SimTime` (double), `FilmRate` (float), `Position` (Vec3d), `Orientation` (Quat), `FovDeg` (float), `Width`, `Height` (int), `Supersample` (byte), `File` (256), `Subtitle` (512), `SubtitlePosition` (`SubtitlePosition`), `SubtitleAlpha` (float), `Graphics` (<= 64 `FilmGraphic`), `LayersOn`, `LayersOff` (<= 32 names of 64) |
+| `FrameDone` | client -> gw | Event | reliable, volatile, keep last 1024 | - | `ClientId`, `JobId` (32), `FrameIndex` (int), `StepSeq` (long), `Status` (`FrameStatus`), `File` (256), `AudioSamples` (int, informational), `Reason` (256), `RenderMs` (float) |
+| `RenderJobResult` | client -> gw | Event | reliable, volatile, keep last 16 | - | `ClientId`, `JobId` (32), `Status` (`FrameStatus`), `TrackFile` (256), `TrackSamples` (long), `Reason` (256) |
+| `View` (grown) | gw -> client | **Continuous** (was Discrete) | unchanged | - | ... existing fields, then **`Velocity` (Vec3f), `Acceleration` (Vec3f), `AngularVelocity` (Vec3f, body frame), `FovRate` (float)** |
+
+`FilmGraphic` (struct): `Kind` (`FilmGraphicKind`), `Points` (<= 64 Vec3d, world, resolved for the frame), `Radius` (float), `Text` (64),
+`ColourRgb` (uint 0xRRGGBB), `Alpha` (float).
+
+Enums: `ClockMode` { `ClockModeUnknown`, `ClockModeContinuous`, `ClockModeStepped` } · `ClientWorldState` { `ClientWorldStateUnknown`,
+`ClientWorldStateLoading`, `ClientWorldStateReady`, `ClientWorldStateFailed` } · `RenderKind` { `RenderKindUnknown`, `RenderKindMovie`,
+`RenderKindStills` } · `RenderState` { `RenderStateUnknown`, `RenderStateStarting`, `RenderStateRunning`, `RenderStateDone`,
+`RenderStateFailed`, `RenderStateCancelled` } · `FrameKind` { `FrameKindUnknown`, `FrameKindScene`, `FrameKindSilence` } · `FrameStatus`
+{ `FrameStatusUnknown`, `FrameStatusWritten`, `FrameStatusFailed` } · `SubtitlePosition` { `SubtitlePositionUnknown`, `SubtitlePositionBottom`,
+`SubtitlePositionTop`, `SubtitlePositionCentre` } · `FilmGraphicKind` { `FilmGraphicKindUnknown`, `FilmGraphicKindRing`, `FilmGraphicKindArrow`,
+`FilmGraphicKindRoute`, `FilmGraphicKindArea`, `FilmGraphicKindLabel` }.
+
+**What a client may build now** (no HROT change needed, the gateway publishes it from what HROT has): `SimClock`, `ClockProbe` / `ClockEcho`,
+`ClockStep` / `StepAck` in normal stepping, `View` with rates, `ClientWorld` (the gateway reads it; HROT's load step waits on it once HROT
+CE-11018 lands). **What arrives with HROT's linked-client seam** (HROT CE-11018, CE-11021): `RenderClient`, `RenderJob`, `FrameRequest`,
+`FrameDone`, `RenderJobResult` are in the IDL at once, so a client can build and test against a fake publisher before HROT drives them.
 
 ## 4. Class diagram
 

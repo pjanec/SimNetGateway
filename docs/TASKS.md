@@ -69,3 +69,4 @@ progress and done.
 | **T-041** | todo | Blocked shot in `OwnUnit` (`HasBlocked`, `BlockedAt` from HROT's `BlockedShot`; the barrel direction for the barrel circle) | - (next DPS round) | NOTE-2026-11-21 item 2 |
 | **T-042** | todo | Kill cam: `PlayerSlot.KilledById` / `KilledFrom` while Dead (ManDowned's order against the slot is not guaranteed) | - (next DPS round) | NOTE-2026-11-21 item 3 |
 | **T-043** | todo | Station keys on the control frame: next seat (G) and head out (H) first, then J/T/I/M and designation | DD-017 3.2b (step 2) | NOTE-2026-11-21 item 4 |
+| **T-044** | in-progress | DPS round 7 contract (DD-022 3h): the C# types, enums and QoS of SimClock, ClockProbe, ClockEcho, ClockStep, StepAck, ClientWorld, RenderClient, RenderJob, FrameRequest, FrameDone, RenderJobResult, FilmGraphic and View's rates; the committed IDL refreshed; contract rails. Types only - nothing published yet | DD-022 | R-138; frozen so the Unreal lane can build against the IDL |
