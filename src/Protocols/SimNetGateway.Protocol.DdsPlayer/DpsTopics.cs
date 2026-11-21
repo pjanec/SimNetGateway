@@ -93,6 +93,8 @@ public partial struct Entity
     /// <summary>The unit a player can take (the simulation says so).</summary>
     public bool Playable;
     public int ParentId;
+    /// <summary>A body-less commander (a squad, a platoon: an organisation with a position, the centroid of its members, and no body): the entity has no person, appearance or vehicle topics and a client must not give it a stand-in body. Its card (DD-024) is drawn at its position.</summary>
+    public bool IsUnit;
 }
 
 [DpsRate(DpsRateClass.Continuous)]
@@ -1056,6 +1058,22 @@ public partial struct GizmoPrimitive
     public uint ColourRgba;
     public float Width;
     [MaxLength(64)] public string Text;
+    /// <summary>World (the default): <see cref="Points"/> are local metres. EntityCard: the primitive is a part of an entity's card (DD-024) and the card fields below apply; <see cref="Points"/> is empty.</summary>
+    public GizmoSpace Space;
+    /// <summary>EntityCard only: the EntityId of the entity the card belongs to (0 in World space). A client groups the primitives of a frame by it.</summary>
+    public int AnchorId;
+    /// <summary>EntityCard only: the row, stacked top-down in ascending order; 0 is card-wide (the frame and the symbol cell).</summary>
+    public byte Row;
+    /// <summary>EntityCard only. Text: x in pixels from the row's left. Box: the centre as a fraction of the card's width.</summary>
+    public float CardX;
+    /// <summary>EntityCard only. Text: y in pixels from the row's top (0). Box: the centre's offset below the row's top in pixels.</summary>
+    public float CardY;
+    /// <summary>EntityCard only. Box: the half-width as a fraction of the card's width.</summary>
+    public float CardW;
+    /// <summary>EntityCard only. Box: the half-height in pixels. Icon: the symbol's height in pixels (Text is the symbol code).</summary>
+    public float CardH;
+    /// <summary>EntityCard only: a Box's fill as 0xRRGGBBAA (0 = no fill: <see cref="ColourRgba"/> is then an outline of <see cref="Width"/> pixels).</summary>
+    public uint FillRgba;
 }
 
 /// <summary>The complete primitives of one layer of one producer for the latest gizmo frame; each sample replaces the previous.</summary>

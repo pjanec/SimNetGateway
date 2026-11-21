@@ -861,4 +861,50 @@ public class DpsTopicTests
         Assert.Contains("FrameKindRepeat", File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "DpsTypes.idl")));
         Assert.Contains("float Fade", File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "DpsTopics.idl")));
     }
+
+    // ---- T-052: entity cards in GizmoFrame (DD-024) and Entity.IsUnit ---------------------------------------------------------------
+
+    [Fact]
+    public void The_card_fields_and_IsUnit_are_appended_last_and_the_old_values_do_not_move()
+    {
+        Assert.Equal(["Space", "AnchorId", "Row", "CardX", "CardY", "CardW", "CardH", "FillRgba"], typeof(GizmoPrimitive).GetFields().Select(f => f.Name).TakeLast(8).ToArray());
+        Assert.Equal(["Shape", "Points", "ColourRgba", "Width", "Text"], typeof(GizmoPrimitive).GetFields().Select(f => f.Name).Take(5).ToArray());
+        Assert.Equal("IsUnit", typeof(Entity).GetFields().Select(f => f.Name).Last());
+        Assert.Equal("ParentId", typeof(Entity).GetFields().Select(f => f.Name).SkipLast(1).Last());
+        Assert.Equal((byte)0, (byte)GizmoSpace.GizmoSpaceWorld);   // a primitive that sets none of the new fields is a world primitive
+        Assert.Equal((byte)1, (byte)GizmoSpace.GizmoSpaceEntityCard);
+        Assert.Equal((byte)6, (byte)GizmoShape.GizmoShapeIcon);   // the shapes a card reuses did not move
+        string topics = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "DpsTopics.idl"));
+        Assert.Contains("uint32 FillRgba", topics);
+        Assert.Contains("boolean IsUnit", topics);
+        Assert.Contains("GizmoSpaceEntityCard", File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "DpsTypes.idl")));
+    }
+
+    [Fact]
+    public void A_card_primitive_and_a_world_primitive_round_trip_and_IsUnit_travels_on_Entity()
+    {
+        var frame = RoundTrip(new GizmoFrame
+        {
+            Producer = "p", Layer = "UnitCards", SimTime = 0,
+            Primitives =
+            [
+                new GizmoPrimitive { Shape = GizmoShape.GizmoShapeBox, Points = [], ColourRgba = 0xAABBCCDD, Width = 1f, Text = string.Empty, Space = GizmoSpace.GizmoSpaceEntityCard, AnchorId = 1043, Row = 10, CardX = 0.35f, CardY = 2f, CardW = 0.35f, CardH = 2f, FillRgba = 0x00FF00FF },
+                new GizmoPrimitive { Shape = GizmoShape.GizmoShapeText, Points = [], ColourRgba = 0xFFFFFFFF, Width = 13f, Text = new string('t', 31), Space = GizmoSpace.GizmoSpaceEntityCard, AnchorId = int.MaxValue, Row = 255, CardX = 3f },
+                new GizmoPrimitive { Shape = GizmoShape.GizmoShapeIcon, Points = [], Text = "SFGPUCI-------|A", Space = GizmoSpace.GizmoSpaceEntityCard, AnchorId = 7, CardH = 22f },
+                new GizmoPrimitive { Shape = GizmoShape.GizmoShapeText, Points = [new Vec3d { X = 1, Y = 2, Z = 3 }], ColourRgba = 1, Text = "world" },
+            ],
+        }, "t52-card");
+
+        var box = frame.Primitives[0];
+        Assert.Equal((GizmoSpace.GizmoSpaceEntityCard, 1043, (byte)10, 0.35f, 2f, 0.35f, 2f, 0x00FF00FFu), (box.Space, box.AnchorId, box.Row, box.CardX, box.CardY, box.CardW, box.CardH, box.FillRgba));
+        Assert.Equal((int.MaxValue, (byte)255, new string('t', 31)), (frame.Primitives[1].AnchorId, frame.Primitives[1].Row, frame.Primitives[1].Text));
+        Assert.Equal(("SFGPUCI-------|A", 22f), (frame.Primitives[2].Text, frame.Primitives[2].CardH));
+        var world = frame.Primitives[3];
+        Assert.Equal((GizmoSpace.GizmoSpaceWorld, 0, (byte)0, 0u), (world.Space, world.AnchorId, world.Row, world.FillRgba));
+        Assert.Equal(new Vec3d { X = 1, Y = 2, Z = 3 }, Assert.Single(world.Points));
+
+        var commander = RoundTrip(new Entity { EntityId = 5, Name = "Alpha squad", IsUnit = true }, "t52-unit");
+        Assert.True(commander.IsUnit);
+        Assert.False(RoundTrip(new Entity { EntityId = 6, Name = "Rifleman" }, "t52-man").IsUnit);
+    }
 }

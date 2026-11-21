@@ -122,4 +122,21 @@ sequenceDiagram
 
 ## 9. As-built notes
 
-Not built.
+Built (T-052). Files: the contract (`DpsTypes.cs` `GizmoSpace`; `DpsTopics.cs` the eight appended `GizmoPrimitive` fields and `Entity.IsUnit`), the committed IDL (added lines only), `IGizmoSource.cs` (`GizmoPrimitiveData` carries the same fields, all
+defaulted), `HrotGizmoHost.cs` (`Convert` branches on `CoordinateSpace.EntityCard` first), `HrotPlayerStation.cs` (the anchor check), `DpsGizmos.cs` (the mapping to the topic), `DpsOutbound.cs` (`IsUnit`), the client guide's "Entity cards" section.
+
+Deviations from the design above, and what was found:
+
+- **D-2's field mapping, exact.** Text: `CardX` / `CardY` = the product's `TextX` / `TextY`, `Width` = the font size in WHOLE pixels (the product keeps it in `ThicknessU16`, not tenths). Box: `CardX` / `CardY` / `CardW` / `CardH` = the product's centre x (fraction of the card), centre y (px below the row's top),
+  half-width (fraction) and half-height (px) - the half-height, not the height D-2 says, so nothing is converted and a client reads what HROT's renderer reads; `ColourRgba` = the outline, `Width` its pixels, `FillRgba` the fill. Icon: `Text` = the symbol code, `CardH` = its height px.
+  The frame is two Boxes on row 0 (background with fill, outline without).
+- **Card text is read from the inline content**, never from the intern hash: for a card primitive the product's `StringHash` shares four bytes with `AnchorIndex`, so the world path's `StringHash != 0` test would misread every card text.
+- **The anchor check is liveness, not translation.** The DPS entity id IS the network id (`DpsOutbound` writes `EntityId = s.Id`, the adapter's `NetworkIdentity`), so `AnchorId` equals the product's `AnchorIndex`. "Unmapped" = not an entity the gateway publishes: no id, not in the node's entity map, not alive, or a replica
+  (`ReplicationRoute`). Such a primitive is dropped and counted (`HrotGizmoHost.UnmappedCardPrimitives`).
+- **`IsUnit` is derived from the DIS kind** (11, the host's unit kind, `DrWire.UnitKind`) in `DpsOutbound`: the pivot `HrotEntityState` carries no flag and none was added. HROT's `CompositeUnitTkbTranslator` stamps `UnitEntity` from a TKB composite and `UnitDis` gives every unit kind 11, so the two agree.
+- **Commanders already are DPS entities.** The adapter's selection (`SimTransform` + `TkbIdentity` + `NetworkIdentity`, no `ReplicationRoute`) takes a commander at its `UnitCentroidSystem` position. Its DIS kind is neither life form (3) nor platform (1), so no person, appearance or vehicle-look message is gathered
+  (rail `CommanderGatherTests`). `Entity.ParentId` already existed in the contract (still 0, DD-017 §10).
+- **The symbol cell travels in the `UnitCards` frame**, not in `UnitSymbols`: HROT's `UnitSymbolCardGizmo` draws it with `Card(net, Labels, unitCard: true)`, which lands on the card's own layer; the `UnitSymbols` layer only switches it on. The standalone 2-D map symbols (`EntityLocal` icons) stay dropped.
+- **Finding, HROT:** `HealthBarGizmo` calls `Card(net, Labels)` without the unit flag, so a body-less commander that carries `Health` would get a bar on the Labels layer; a real commander has no `Health`, so mode 2 is clean (the rail removes it).
+- **Not measured:** cards of 8 000 units against the 4096-primitive frame bound (§6); the gateway truncates beyond it as for every layer.
+- Real HROT card projectors run in the rails (the host finds them by reflection), so the mode rail exercises the product's own cards, not a stand-in.

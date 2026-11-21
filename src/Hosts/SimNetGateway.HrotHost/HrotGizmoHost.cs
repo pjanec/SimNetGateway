@@ -192,7 +192,12 @@ internal sealed class HrotGizmoHost : IGizmoSource
 
     internal GizmoPrimitiveData? Convert(in DebugPrimitive p)
     {
-        uint colour = ((uint)p.Color.R << 24) | ((uint)p.Color.G << 16) | ((uint)p.Color.B << 8) | p.Color.A;
+        uint colour = Rgba(p.Color);
+        if (p.Space == CoordinateSpace.EntityCard)
+        {
+            return ConvertCard(in p, colour);
+        }
+
         switch (p.Shape)
         {
             case DebugPrimitiveShape.Line:
@@ -212,6 +217,46 @@ internal sealed class HrotGizmoHost : IGizmoSource
                 return new GizmoPrimitiveData(GizmoPrimitiveShape.Text, [new HrotVec3(p.TextX, p.TextY, GroundAt(p.TextX, p.TextY))], colour, 0f, text);
             default:
                 return null;   // meta primitives (bindings, masks) and shapes a client cannot draw from a point list
+        }
+    }
+
+    private static uint Rgba(Rgba32 c) => ((uint)c.R << 24) | ((uint)c.G << 16) | ((uint)c.B << 8) | c.A;
+
+    /// <summary>How many card primitives were dropped because their anchor is no DPS entity (tests and diagnostics).</summary>
+    public int UnmappedCardPrimitives { get; private set; }
+
+    /// <summary>
+    /// Whether a network id is a DPS entity id of this station (DPS publishes every entity under its network id, so the id is the same number); null = every non-zero id.
+    /// The station sets it from the node's entity map.
+    /// </summary>
+    internal Func<int, bool>? AnchorMapped { get; set; }
+
+    /// <summary>
+    /// A card primitive (DD-024), never a world one: the card's fields as the product set them, no decision about content. An anchor that is no DPS entity drops the primitive (counted);
+    /// a shape a card does not use is dropped too. The text of a card comes from its inline content (the intern hash shares the anchor's four bytes for card primitives).
+    /// </summary>
+    private GizmoPrimitiveData? ConvertCard(in DebugPrimitive p, uint colour)
+    {
+        int anchor = p.AnchorIndex;
+        if (anchor == 0 || !(AnchorMapped?.Invoke(anchor) ?? true))
+        {
+            UnmappedCardPrimitives++;
+            return null;
+        }
+
+        switch (p.Shape)
+        {
+            case DebugPrimitiveShape.Text:
+                return new GizmoPrimitiveData(GizmoPrimitiveShape.Text, [], colour, p.ThicknessU16, p.TextContent.ToString(),   // a card text's size is in whole pixels, not tenths
+                    GizmoPrimitiveSpace.EntityCard, anchor, p.ZIndex, p.TextX, p.TextY);
+            case DebugPrimitiveShape.Box2D:
+                return new GizmoPrimitiveData(GizmoPrimitiveShape.Box, [], colour, p.Thickness, string.Empty,
+                    GizmoPrimitiveSpace.EntityCard, anchor, p.ZIndex, p.BoxCenterX, p.BoxCenterY, p.BoxExtentX, p.BoxExtentY, Rgba(p.FillColor));
+            case DebugPrimitiveShape.Icon:
+                return new GizmoPrimitiveData(GizmoPrimitiveShape.Icon, [], colour, 0f, p.TextContent.ToString(),
+                    GizmoPrimitiveSpace.EntityCard, anchor, p.ZIndex, CardH: p.Thickness);
+            default:
+                return null;
         }
     }
 

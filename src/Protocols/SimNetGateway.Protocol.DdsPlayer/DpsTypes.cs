@@ -57,6 +57,9 @@ public enum OfferKind : byte { OfferKindUnit = 0, OfferKindRole, OfferKindArea }
 
 public enum GizmoShape : byte { GizmoShapeLineStrip = 0, GizmoShapeArrow, GizmoShapeCircle, GizmoShapePolygon, GizmoShapeBox, GizmoShapeText, GizmoShapeIcon }
 
+/// <summary>Where a gizmo primitive is drawn: in the world (its points are local metres) or on an entity's card (a small screen-space canvas above the entity, DD-024).</summary>
+public enum GizmoSpace : byte { GizmoSpaceWorld = 0, GizmoSpaceEntityCard }
+
 /// <summary>The condition of a vehicle part (intact, damaged or destroyed).</summary>
 public enum PartCondition : byte { PartConditionIntact = 0, PartConditionDamaged, PartConditionDestroyed }
 

@@ -78,6 +78,7 @@ module SimNetGateway {
                 SimNetGateway::Protocol::DdsPlayer::DisType Dis;
                 boolean Playable;
                 int32 ParentId;
+                boolean IsUnit;
             };
 
             @topic
@@ -707,6 +708,14 @@ module SimNetGateway {
                 uint32 ColourRgba;
                 float Width;
                 string<64> Text;
+                SimNetGateway::Protocol::DdsPlayer::GizmoSpace Space;
+                int32 AnchorId;
+                octet Row;
+                float CardX;
+                float CardY;
+                float CardW;
+                float CardH;
+                uint32 FillRgba;
             };
 
             @topic

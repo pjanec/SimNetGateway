@@ -117,7 +117,7 @@ Gizmos are HROT's diagnostic drawings: paths, vision cones, contacts, action sta
   - `PinnedIds` with `PinnedFamilies`: entities drawn for the named families only; `*` means every family.
   - `RateHz`: default 10, at most 60.
 - **`GizmoFrame`** (gateway to client, keyed by `Producer` + `Layer`, state QoS): the complete picture of one layer. Each sample replaces the previous one, and a disposed instance means the layer was turned off. `Producer` is the station's partition. `SimTime` is 0 for now.
-- **`GizmoPrimitive`**: `Shape`, `Points` (world coordinates, the simulation frame), `ColourRgba` (0xRRGGBBAA), `Width`, `Text`.
+- **`GizmoPrimitive`**: `Shape`, `Points` (world coordinates, the simulation frame), `ColourRgba` (0xRRGGBBAA), `Width`, `Text`. Appended fields (DD-024): `Space` (`GizmoSpaceWorld`, the default, or `GizmoSpaceEntityCard`), `AnchorId`, `Row`, `CardX`, `CardY`, `CardW`, `CardH`, `FillRgba`. They apply only in card space, see Entity cards below; a world primitive leaves them 0.
 
 | `Shape` | `Points` | `Width` |
 | --- | --- | --- |
@@ -127,7 +127,7 @@ Gizmos are HROT's diagnostic drawings: paths, vision cones, contacts, action sta
 | Polygon | the vertices of a filled triangle | thickness |
 | Box | centre (x, y, z = 0), then (extent x, extent y, angle in degrees) | outline thickness |
 | Text | position (x, y, z = 0); the string is in `Text` | not used |
-| Icon | reserved, not sent yet |  |
+| Icon | none; sent only on an entity card (see Entity cards) |  |
 
 Box and Text come from HROT's 2-D primitives. The gateway gives them the ground height under their point, so they arrive on the terrain. Filled triangles (Polygon) still carry z = 0.
 
@@ -148,6 +148,39 @@ Box and Text come from HROT's 2-D primitives. The gateway gives them the ground 
 **HROT side:** the projectors are the classes with `[GizmoProjector]` in HROT (for example under [Fdp.Toolkits/Diagnostics/Gizmos](https://github.com/pjanec/HROT/tree/coordinator/FDP/Toolkits/Fdp.Toolkits/Diagnostics/Gizmos) and `Hrot.Presentation/Gizmos`). Reading one shows what a layer draws and in which colors.
 
 The reference client draws gizmos too: G toggles Paths and Contacts for the picked unit, in [DpsClientWindow.cs](https://github.com/pjanec/SimNetGateway/blob/main/src/Hosts/SimNetGateway.DpsClient/DpsClientWindow.cs). Gizmos have not been checked live yet (DD-017 §10), so expect fixes there.
+
+## Entity cards (3-D labels, DD-024)
+
+HROT's 3-D labels are gizmos too: small cards of rows above an entity (name, side frame, health or strength bar, the unit's NATO symbol, a BOUNTY mark and whatever HROT adds later). HROT's projectors decide what a card shows and who gets one. The client only DRAWS: group, stack, place, occlude. It rebuilds nothing from `Entity` fields. The design is [DD-024](https://github.com/pjanec/SimNetGateway/blob/main/docs/design/DD-024-Dps-Entity-Cards.md), HROT's card API is [EntityCards.cs](https://github.com/pjanec/HROT/blob/coordinator/FDP/Diagnostics/Fdp.Diagnostics.Contracts/EntityCards.cs) and its renderer [EntityCardRenderer.cs](https://github.com/pjanec/HROT/blob/coordinator/FDP/ExtDeps/GizmoMap/GizmoMap.Presentation/Rendering/EntityCardRenderer.cs) (the reference layout).
+
+**The fields.** A card primitive is a `GizmoPrimitive` with `Space = GizmoSpaceEntityCard` and an empty `Points`. A card is the set of primitives of one frame that share an `AnchorId`.
+
+| Field | In card space |
+| --- | --- |
+| `AnchorId` | the `EntityId` of the entity the card belongs to (a primitive whose anchor the gateway does not publish is dropped by the gateway and counted) |
+| `Row` | the row, stacked top-down in ascending order; **0 is card-wide**: the frame and the symbol cell |
+| `Shape` Text | `CardX` = x in pixels from the row's left, `CardY` = y in pixels from the row's top (0), `Width` = the font size in pixels, `Text` = the line (at most 31 characters), `ColourRgba` its colour |
+| `Shape` Box | a bar, a tick or the frame: `CardX` / `CardW` = the centre and half-width as fractions of the card's width; `CardY` / `CardH` = the centre's offset below the row's top and the half-height, in pixels; `FillRgba` = the fill (0 = none), `ColourRgba` = the outline of `Width` pixels (0 = none) |
+| `Shape` Icon | the unit's NATO symbol: `Text` = the symbol code (a 2525C SIDC, optionally followed by `\|` and the producer's extension; the part after the first `\|` may be ignored), `CardH` = the symbol's height in pixels. It is on row 0: the card's left cell, spanning the rows |
+
+Colours are 0xRRGGBBAA, as everywhere.
+
+**The layout** (what HROT's renderer does):
+1. Group the frame's primitives by `AnchorId`. A card whose `Entity` has not arrived yet is skipped until it does.
+2. Sort each group by `Row` (stable). The `Row` 0 primitives are card-wide: the background and outline boxes span the whole card, the symbol is the left cell.
+3. The rows are the runs of one `Row` value after row 0. A row is as high as its tallest primitive (a Box's `2 * CardH`, a Text's font size, a symbol's height) with a small gap between rows. The card is as wide as its widest text (measured at its font size) plus the symbol cell and the padding, at least a minimum width.
+4. Place the card above the body (a billboard of constant pixel size, centred on the entity's head). A body-less commander (`Entity.IsUnit`) has no body: place its card at its position plus 2 m up.
+5. Occlusion: depth-test the billboard against the scene, so terrain and buildings hide it.
+
+**The three modes are layer subscriptions** in the client's `GizmoView` (they are HROT's own switches): mode 1 = no card layers; mode 2 = `UnitCards` + `UnitSymbols` (the commanders' cards with their symbol cell); mode 3 = those plus `Labels` (the men's and vehicles' cards). The symbol cell arrives inside the `UnitCards` frame, and only while `UnitSymbols` is subscribed too. The `UnitSymbols` frame itself carries the standalone map symbols of the 2-D map, which are not card primitives and are not sent.
+
+**Distance is the client's choice.** Nothing about distance is on the wire. HROT's numbers are a suggestion, in metres per pixel (`2 * d * tan(fovV / 2) / viewportHeight`): the card (frame, bars, symbol) up to 1 m/px, the name up to 2 m/px, an aircraft's name at any distance. **Rule A (R-143): never cut a card whose anchor `Entity.Domain` is `DomainAir`.** Which aircraft get a card at all (a swarm is shown by its commander's card instead) is HROT's decision in its projectors.
+
+**Commanders.** `Entity.IsUnit` is true for a body-less commander (a squad, a platoon: an organisation with a position, the centroid of its live members). It arrives as an entity with its `EntityState`, a unit DIS kind (11) in `Dis`, `Domain` Other and NO person, appearance or vehicle topic: do not give it a stand-in body. Its card (frame, strength bar, info line, symbol cell) is how it is seen.
+
+**Views are per seat** (DD-023): each seat's client has its own `GizmoView` and receives its own `GizmoFrame` instances, so a second display that needs other layers takes a seat.
+
+**Limits.** A frame holds at most 4096 primitives; a card is about 6 to 10 primitives (an estimate), so one layer carries roughly 400 to 600 cards. Beyond that the gateway keeps the first 4096 (cards of 8 000 units at once have not been measured, see DD-024 §9).
 
 ## Camera controllers to build
 

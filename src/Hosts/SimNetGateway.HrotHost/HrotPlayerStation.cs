@@ -68,6 +68,21 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         _services = services ?? throw new ArgumentNullException(nameof(services));
         Station = station;
         _flow = new PossessionFlow(services, () => Orders, station);
+        _gizmos.AnchorMapped = IsPublishedEntity;
+    }
+
+    /// <summary>A card's anchor is an entity of the node's map that is alive and not a replica: those are the entities the gateway publishes to DPS under their network id.</summary>
+    private bool IsPublishedEntity(int id)
+    {
+        var map = _services.EntityMap;
+        var world = _world;
+        if (map is null || world is null)
+        {
+            return id != 0;
+        }
+
+        return map.TryGetEntity(id, out var e) && world.IsAlive(e)
+            && !(world.IsComponentTypeRegistered<ReplicationRoute>() && world.HasComponent<ReplicationRoute>(e));
     }
 
     /// <summary>The station number of this seat.</summary>

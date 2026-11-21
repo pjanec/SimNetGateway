@@ -79,6 +79,42 @@ public class DpsGizmoTests
     }
 
     [Fact]
+    public void Card_primitives_are_published_with_their_card_fields_and_world_primitives_without()
+    {
+        uint domain = Watch.NewDomain();
+        var source = new FakeGizmos();
+        source.Drawn["UnitCards"] =
+        [
+            new GizmoPrimitiveData(GizmoPrimitiveShape.Box, [], 0x11223344, 1f, string.Empty, GizmoPrimitiveSpace.EntityCard, 2001, 10, 0.35f, 2f, 0.3f, 2.5f, 0x00FF00FF),
+            new GizmoPrimitiveData(GizmoPrimitiveShape.Text, [], 0xFFFFFFFF, 13f, "Alpha squad #2001", GizmoPrimitiveSpace.EntityCard, 2001, 20, 3f),
+            new GizmoPrimitiveData(GizmoPrimitiveShape.Icon, [], 0xFFFFFFFF, 0f, "SFGPUCI-------", GizmoPrimitiveSpace.EntityCard, 2001, 0, CardH: 22f),
+            Line(),
+        ];
+        using var frames = new Watch.Watch<D.GizmoFrame>(domain, "station-1", Key);
+        using var rig = new Rig(domain, partition: "station-1", gizmoSource: source);
+        using var client = new Client(domain);
+        client.View(["UnitCards"]);
+
+        Assert.True(frames.Until(w =>
+        {
+            rig.Step();
+            return w.Alive.ContainsKey("station-1/UnitCards");
+        }));
+
+        var primitives = frames.Alive["station-1/UnitCards"].Primitives;
+        Assert.Equal(4, primitives.Count);
+        var box = primitives[0];
+        Assert.Equal((D.GizmoShape.GizmoShapeBox, D.GizmoSpace.GizmoSpaceEntityCard, 2001, (byte)10), (box.Shape, box.Space, box.AnchorId, box.Row));
+        Assert.Equal((0.35f, 2f, 0.3f, 2.5f, 0x00FF00FFu, 0x11223344u, 1f), (box.CardX, box.CardY, box.CardW, box.CardH, box.FillRgba, box.ColourRgba, box.Width));
+        Assert.Empty(box.Points);
+        Assert.Equal(("Alpha squad #2001", 3f, 13f, (byte)20), (primitives[1].Text, primitives[1].CardX, primitives[1].Width, primitives[1].Row));
+        Assert.Equal((D.GizmoShape.GizmoShapeIcon, "SFGPUCI-------", 22f, (byte)0), (primitives[2].Shape, primitives[2].Text, primitives[2].CardH, primitives[2].Row));
+        var line = primitives[3];
+        Assert.Equal((D.GizmoSpace.GizmoSpaceWorld, 0, (byte)0, 0u), (line.Space, line.AnchorId, line.Row, line.FillRgba));   // a world primitive carries no card field
+        Assert.Equal(2, line.Points.Count);
+    }
+
+    [Fact]
     public void Layer_off_is_disposed()
     {
         uint domain = Watch.NewDomain();

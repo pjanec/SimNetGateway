@@ -207,6 +207,37 @@ public class DpsOutboundTests
     }
 
     [Fact]
+    public void A_commander_is_an_entity_with_IsUnit_and_gets_no_body_topic_while_men_and_vehicles_are_not_units()
+    {
+        uint domain = NewDomain();
+        long unitDis = new DisTypeCode(11, 1, 225, 1, 2, 1, 0).Pack();   // the host's unit kind: a squad
+        using var entities = new Watch<D.Entity>(domain, "station-1", e => Id(e.EntityId));
+        using var states = new Watch<D.EntityState>(domain, "station-1", e => Id(e.EntityId));
+        using var persons = new Watch<D.PersonState>(domain, "station-1", e => Id(e.EntityId));
+        using var looks = new Watch<D.VehicleLook>(domain, "station-1", e => Id(e.EntityId));
+        using var appearances = new Watch<D.Appearance>(domain, "station-1", e => Id(e.EntityId));
+        using var rig = new Rig(domain);
+
+        rig.Send(State(3001, dis: unitDis, marking: "Alpha squad", at: new HrotVec3(50, 60, 0)));
+        rig.Send(State(1201, dis: PersonDis, marking: "Rifleman 1"));
+        rig.Send(State(2001));
+
+        Assert.True(entities.Until(w => w.Alive.Count == 3));
+        Assert.True(entities.Alive["3001"].IsUnit);
+        Assert.False(entities.Alive["1201"].IsUnit);
+        Assert.False(entities.Alive["2001"].IsUnit);
+        Assert.Equal(D.Domain.DomainOther, entities.Alive["3001"].Domain);
+        Assert.True(states.Until(w => w.Alive.ContainsKey("3001")));
+        Assert.Equal(50.0, states.Alive["3001"].Position.X);   // at its centroid
+        persons.Pump();
+        looks.Pump();
+        appearances.Pump();
+        Assert.DoesNotContain("3001", persons.Alive.Keys);   // no body topic for a commander
+        Assert.DoesNotContain("3001", looks.Alive.Keys);
+        Assert.DoesNotContain("3001", appearances.Alive.Keys);
+    }
+
+    [Fact]
     public void Playable_follows_the_player_station_offers()
     {
         uint domain = NewDomain();

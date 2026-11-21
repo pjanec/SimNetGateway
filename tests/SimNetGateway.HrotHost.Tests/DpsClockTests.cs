@@ -335,7 +335,7 @@ public class DpsClockTests
         h.Steps(3);
         Assert.NotEmpty(sessions);
         Assert.All(sessions, s => Assert.Equal("farm", s.Terrain));
-        Assert.Equal(1, sessions.Select(s => s.WorldEpoch).Distinct().Count());   // all of one epoch, the first sample included
+        Assert.Single(sessions.Select(s => s.WorldEpoch).Distinct());   // all of one epoch, the first sample included
     }
 
     [Fact]

@@ -183,6 +183,14 @@ internal sealed class DpsGizmos : IDisposable
             ColourRgba = p.ColourRgba,
             Width = p.Width,
             Text = p.Text.Length > 64 ? p.Text[..64] : p.Text,
+            Space = (D.GizmoSpace)(byte)p.Space,
+            AnchorId = p.AnchorId,
+            Row = p.Row,
+            CardX = p.CardX,
+            CardY = p.CardY,
+            CardW = p.CardW,
+            CardH = p.CardH,
+            FillRgba = p.FillRgba,
         })],
     };
 

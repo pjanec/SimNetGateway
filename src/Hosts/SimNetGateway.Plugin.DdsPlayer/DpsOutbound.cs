@@ -164,6 +164,7 @@ public sealed class DpsOutbound : IGatewayModule
                 Side = (byte)Math.Clamp(s.Force, 0, 255),
                 Name = Truncate(s.Marking, 64),
                 Dis = ToDis(dis),
+                IsUnit = dis.Kind == UnitKind,
             }));
         }
 
@@ -506,6 +507,9 @@ public sealed class DpsOutbound : IGatewayModule
     }
 
     // ---- helpers ----------------------------------------------------------------------------------------------------
+
+    /// <summary>The DIS entity kind of a body-less unit (a commander): the gateway's <c>DrWire.UnitKind</c>, the host's own kind for an organisation.</summary>
+    private const int UnitKind = 11;
 
     private static D.Domain DomainOf(DisTypeCode t) => t.Kind switch
     {

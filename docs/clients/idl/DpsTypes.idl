@@ -175,6 +175,12 @@ module SimNetGateway {
             };
 
             @bit_bound(8)
+            enum GizmoSpace {
+                GizmoSpaceWorld,
+                GizmoSpaceEntityCard
+            };
+
+            @bit_bound(8)
             enum PartCondition {
                 PartConditionIntact,
                 PartConditionDamaged,

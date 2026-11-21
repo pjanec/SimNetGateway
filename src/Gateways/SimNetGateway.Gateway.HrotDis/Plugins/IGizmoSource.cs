@@ -42,4 +42,18 @@ public enum GizmoPrimitiveShape : byte
 /// Polygon: the corners; Box: the centre and a second point (extent x, extent y, angle in degrees); Text: one point and <see cref="Text"/>. Otherwise
 /// <see cref="Width"/> is the line width.
 /// </summary>
-public readonly record struct GizmoPrimitiveData(GizmoPrimitiveShape Shape, IReadOnlyList<HrotVec3> Points, uint ColourRgba, float Width, string Text);
+/// <remarks>
+/// A card primitive (DD-024: <see cref="Space"/> = EntityCard) has no points: <see cref="AnchorId"/> is the DPS entity id of its card's entity, <see cref="Row"/> its row (0 = card-wide).
+/// Text: <see cref="CardX"/>/<see cref="CardY"/> in pixels from the row's left and top, <see cref="Width"/> the font size in pixels. Box: <see cref="CardX"/>/<see cref="CardW"/> the centre and
+/// half-width as fractions of the card, <see cref="CardY"/>/<see cref="CardH"/> the centre offset and half-height in pixels, <see cref="FillRgba"/> the fill, <see cref="ColourRgba"/> the outline
+/// of <see cref="Width"/> pixels. Icon: <see cref="Text"/> the symbol code, <see cref="CardH"/> its height in pixels.
+/// </remarks>
+public readonly record struct GizmoPrimitiveData(GizmoPrimitiveShape Shape, IReadOnlyList<HrotVec3> Points, uint ColourRgba, float Width, string Text,
+    GizmoPrimitiveSpace Space = GizmoPrimitiveSpace.World, int AnchorId = 0, byte Row = 0, float CardX = 0f, float CardY = 0f, float CardW = 0f, float CardH = 0f, uint FillRgba = 0u);
+
+/// <summary>Where a primitive is drawn (the order of the DPS spaces).</summary>
+public enum GizmoPrimitiveSpace : byte
+{
+    World = 0,
+    EntityCard,
+}
