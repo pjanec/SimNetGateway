@@ -4,6 +4,35 @@ State of 2026-11-20, for the next session that continues the DPS (DDS Player Sta
 gateway side or the client side. Everything needed is in two public repositories. Read this first, then the documents it names; the
 design docs and the client guide are the canon, this file is only the map.
 
+## 0. ⭐ RESUME HERE — state at the token-cap pause (2026-11-21, late)
+
+**Branches:** gateway `ccr-458b1360-afzl8f` (pushed through `2deaf89`); HROT `ui` (pushed through `7611c0a84`); the gateway builds against
+the HROT worktree `/home/user/hrot-c5f8c1971` pinned at HROT `ui` `f5851caf0` (`HROT_ROOT`).
+
+**In flight — a Sonnet worker on T-052** (DD-024 entity cards over `GizmoFrame`, approved R-144; brief
+`scratchpad/brief-T-052.md`). Its WIP is UNCOMMITTED in the gateway tree (HrotGizmoHost, DpsGizmos, DpsOutbound, IGizmoSource,
+HrotPlayerStation, the IDL, DD-024, TASKS, the client guide). ⛔ Do not commit it blind: if the worker is gone, `git diff` for leftover
+mutations first, then have a worker run `bash scripts/build.sh` + `bash scripts/test.sh` and review against DD-024 before committing by path.
+
+**Done today (gateway):** T-045 clock/steps/View rates/ClientWorld gate · T-047 seats (DD-023) · T-048 terrain name + hashes in `Session` ·
+T-049 contract half (OfferKindArea, Offer.Kits/Outline) · T-050 render half — the gateway is HROT's linked client `dps` (DD-022 part D,
+P-7 Repeat/Fade) + the first-Session-has-terrain fix · notes to Unreal: render answers, live-run answers (§4), re-run request
+(`NOTE-…-Gateway-Rerun-Linked-Load.md`), labels (`NOTE-…-Gateway-Entity-Labels.md`).
+**Done today (HROT ui):** CE-11026 linked client in every load (+ verdict log) · CE-11027 S12-1..S12-4 seats on one node (StationId,
+IGameplayWire + LocalGameplayHub, Leave/ReleaseStation, the editor serves; design `DESIGN_Player_Join.md` §12 BUILT) · backend's batch
+merged (CE-11018 director through the linked client, CE-11019/22, CE-11023, CE-11024, CE-11025) · CE-11028 (director scenario, tracked)
+· CE-11029 (the swarm exception, tracked).
+
+**Waiting on the Unreal lane:** the re-run of the three linked loads against gateway `5c5117a`+ (expected: wait, fail with reason, wait);
+it started on the rendering part; it builds the card renderer for DD-024.
+
+**Next, in order (gateway):** ① review + commit T-052 · ② seat deploy wiring: one `DeployFlowSystem` per seat over HROT's
+`LocalGameplayHub.Of(world)` (DD-023 D-3/D-14; a seat deploys only on a running clock), T-049's kits/outlines filled · ③ per-seat
+`PlayerMessage` via HROT's `PlayerMessageAddressing` (Hrot.Common) · ④ T-051 `Impact` from effect entities (HROT CE-11024) · ⑤ HROT
+CE-11029 (the swarm exception) and CE-11021 (the encode muxes the client's track, 1024-sample tolerance) on HROT `ui`.
+
+**Rulings today:** gateway R-139 .. R-144; HROT R-11010, R-11011.
+
 ## 1. Where things stand
 
 | | |
