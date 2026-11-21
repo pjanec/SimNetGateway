@@ -401,4 +401,25 @@ public class DpsWorldTests
         Assert.Equal(2, DpsClientProgram.Run(["--bogus"], new StringWriter(), error));
         Assert.NotEqual(string.Empty, error.ToString());
     }
+
+    /// <summary>T-040: the wire follows HROT, lateral + = LEFT: A alone sends +1, D alone -1 (the first version of the client had them the other way round).</summary>
+    [Theory]
+    [InlineData(false, false, 0f)]
+    [InlineData(true, false, 1f)]
+    [InlineData(false, true, -1f)]
+    [InlineData(true, true, 0f)]
+    public void Move_keys_lateral_is_plus_one_for_A_left_and_minus_one_for_D_right(bool a, bool d, float expected)
+    {
+        Assert.Equal(expected, DpsMoveKeys.Lateral(a, d));
+    }
+
+    [Theory]
+    [InlineData(false, false, 0f)]
+    [InlineData(true, false, 1f)]
+    [InlineData(false, true, -1f)]
+    [InlineData(true, true, 0f)]
+    public void Move_keys_forward_is_plus_one_for_W_and_minus_one_for_S(bool w, bool s, float expected)
+    {
+        Assert.Equal(expected, DpsMoveKeys.Forward(w, s));
+    }
 }

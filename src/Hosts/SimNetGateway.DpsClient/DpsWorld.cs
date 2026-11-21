@@ -508,7 +508,7 @@ public sealed class DpsWorld : IDisposable
         _leave.Write(new D.Leave { Seq = ++_leaveSeq, ClientId = ClientId });
     }
 
-    /// <summary>Body-relative movement, each -1..1 (forward, lateral right).</summary>
+    /// <summary>Body-relative movement, each -1..1 (forward +, lateral + = LEFT, as HROT's ManualMotion; A = +1, D = -1).</summary>
     public void SetMove(float forward, float lateral)
     {
         _frame.Forward = forward;

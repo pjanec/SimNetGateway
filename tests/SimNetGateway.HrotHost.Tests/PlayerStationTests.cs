@@ -1,5 +1,9 @@
 using System.Numerics;
 using Fdp.Core;
+using CarKinem.Core;
+using CarKinem.Spatial;
+using CarKinem.Systems;
+using CarKinem.Trajectory;
 using Fdp.Toolkit.Behavior.Possession;
 using Fdp.Toolkit.Combat.Components;
 using Fdp.Toolkit.Replication.Components;
@@ -208,6 +212,60 @@ public class PlayerStationTests
         Assert.Equal(new Vector3(1, 2, 3), f.LookFrom);
         Assert.Equal(new Vector3(0, 1, 0), f.LookDir);
         Assert.Equal((byte)2, f.FirePref);
+    }
+
+    /// <summary>
+    /// T-040 end to end: a DPS control frame's Lateral reaches HROT's <c>OperatorControlFrameEvent</c> bit for bit and, through HROT's own person integrator
+    /// (<c>CarKinematicsSystem</c> / <c>ManualMotion</c>), moves the possessed man to his LEFT for + and to his RIGHT for - (ENU: x east, y north, yaw counter-clockwise;
+    /// body-left = heading + 90 degrees). Station -> event is the gateway's code; event -> <c>ManualDrive</c> is HROT's <c>PossessionSystem</c> (event to <c>OperatorInput</c>) and
+    /// <c>OperatorControlBehavior.ManualControl</c> (<c>OperatorInput</c> to <c>ManualDrive</c>), two field-for-field copies that live in the behaviour layer (Hrot.AI.Behaviors,
+    /// not referenced by these tests) and are done by hand here; the integrator itself is HROT's real system.
+    /// </summary>
+    [Theory]
+    [InlineData(1f, 0.7f)]
+    [InlineData(-1f, 0.7f)]
+    [InlineData(1f, -2.2f)]
+    [InlineData(-1f, -2.2f)]
+    [InlineData(0.5f, 0f)]
+    public void Control_frame_lateral_plus_moves_the_man_to_his_left_minus_to_his_right(float lateral, float heading)
+    {
+        using var h = new Stage();
+        var e = h.Play();
+        h.World.RegisterComponent<VehicleState>();
+        h.World.RegisterComponent<VehicleParams>();
+        h.World.RegisterComponent<NavState>();
+        h.World.RegisterComponent<SpatialGridData>();
+        h.World.RegisterComponent<Fdp.Toolkit.Navigation.ManualDrive>();
+        h.World.SetComponent(e, new SimTransform { Position = Vector3.Zero, Rotation = SimMath.FromYaw(heading) });
+        h.World.SetAuthority<SimTransform>(e, true);
+        h.World.AddComponent(e, new VehicleState());
+        h.World.AddComponent(e, VehiclePresets.GetPreset(VehicleClass.Pedestrian));
+        h.World.AddComponent(e, new NavState { Mode = KinematicsMode.Manual });
+        h.World.AddComponent(e, new Fdp.Toolkit.Navigation.ManualDrive());
+        var spatial = new SpatialHashSystem();
+        var kin = new CarKinematicsSystem(new TrajectoryPoolManager());
+        h.Events<OperatorControlFrameEvent>();   // drain
+
+        for (uint seq = 1; seq <= 120; seq++)
+        {
+            h.Station.Control(Frame() with { Seq = seq, Forward = 0f, Lateral = lateral, Steer = 0f, Yaw = heading, Gait = 0 });
+            var ev = Assert.Single(h.Events<OperatorControlFrameEvent>());
+            Assert.Equal(BitConverter.SingleToInt32Bits(lateral), BitConverter.SingleToInt32Bits(ev.Lateral));   // the sign and the value reach HROT untouched
+            Assert.Equal(heading, ev.Yaw);
+            h.World.SetComponent(e, new Fdp.Toolkit.Navigation.ManualDrive { Forward = ev.Forward, Lateral = ev.Lateral, Steer = ev.Steer, Yaw = ev.Yaw, Vertical = ev.Vertical, Gait = ev.Gait, Seq = ev.Seq });
+            spatial.Execute(h.World, 1f / 60f);
+            kin.Execute(h.World, 1f / 60f);
+        }
+
+        var pos = h.World.GetComponent<SimTransform>(e).Position;
+        var fwd = Vector3.Transform(Vector3.UnitX, h.World.GetComponent<SimTransform>(e).Rotation);
+        float yaw = MathF.Atan2(fwd.Y, fwd.X);
+        var left = new Vector2(-MathF.Sin(heading), MathF.Cos(heading));   // heading + 90 degrees
+        float toLeft = pos.X * left.X + pos.Y * left.Y;
+        float along = pos.X * MathF.Cos(heading) + pos.Y * MathF.Sin(heading);
+        Assert.True(MathF.Sign(toLeft) == MathF.Sign(lateral) && MathF.Abs(toLeft) > 0.5f * MathF.Abs(lateral), $"displaced {toLeft:F2} m to his left for lateral {lateral} (at {pos})");
+        Assert.InRange(MathF.Abs(along), 0f, 0.05f);                                                      // not forward or back
+        Assert.InRange(MathF.Abs(MathF.IEEERemainder(yaw - heading, 2f * MathF.PI)), 0f, 0.01f);         // the heading did not change
     }
 
     [Fact]

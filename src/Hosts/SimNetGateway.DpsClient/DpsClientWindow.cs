@@ -82,8 +82,8 @@ internal static class DpsClientWindow
 
             if (playing)
             {
-                float forward = (Raylib.IsKeyDown(KeyboardKey.W) ? 1f : 0f) - (Raylib.IsKeyDown(KeyboardKey.S) ? 1f : 0f);
-                float lateral = (Raylib.IsKeyDown(KeyboardKey.D) ? 1f : 0f) - (Raylib.IsKeyDown(KeyboardKey.A) ? 1f : 0f);
+                float forward = DpsMoveKeys.Forward(Raylib.IsKeyDown(KeyboardKey.W), Raylib.IsKeyDown(KeyboardKey.S));
+                float lateral = DpsMoveKeys.Lateral(Raylib.IsKeyDown(KeyboardKey.A), Raylib.IsKeyDown(KeyboardKey.D));   // + = left (HROT)
                 world.SetMove(forward, lateral);
                 world.SetAim(mouseWorld.X, mouseWorld.Y);
                 world.SetTrigger(Raylib.IsMouseButtonDown(MouseButton.Left));
