@@ -1,0 +1,268 @@
+# DD-023: Several players behind one gateway (the editor as the server)
+
+| | |
+|---|---|
+| **Status** | in review (rev 1) - the direction approved by the user (R-139); P-1 .. P-6 await approval; HROT's half is HROT `Architect_Question_114` |
+| **Tasks** | T-046 (this design) |
+| **Rulings honoured** | R-139, R-132 (amended: one player per station stays, a station is now a seat), R-133 (append-only), R-135, R-012, R-002 |
+| **Related** | DD-017 (the station, the partition, the join flow - its section 3.1 *"rejected: one gateway serving many players"* is superseded by this design for the editor host); DD-022 (the clock, the steps, `ClientWorld` - shared by every seat); HROT [`DESIGN_Player_Join.md`](https://github.com/pjanec/HROT/blob/ui/docs/DESIGN_Player_Join.md) (owns the deploy server and the deploy flow reused here); HROT `docs/blueprints/Architect_Question_114_Seats_On_One_Node.md` (owns `StationId`, the deploy server in the editor, the local gameplay channel) |
+| **Date** | 2026-11-21 |
+
+## 1. Context and goals
+
+The user (R-139): one HROT editor runs as the all-in-one, networkless server; the gateway in it serves **several** external clients, each one
+player. Today a station is a node (HROT C-8) and the gateway admits one player (DD-017 3.1, `DpsInbound.cs:12`).
+
+Goals:
+- N **seats** in one gateway; each seat is one player with its own unit, slot, view, HUD and gizmo view.
+- Every client stays **unchanged**: it is configured with its seat's partition and sees exactly today's contract.
+- The player's deployment (side, placed unit or role, kit, spawn area, death, respawn) is **HROT's own** deploy server and deploy flow, not a
+  gateway copy.
+- Every world load waits for every seat's client (DD-022 3g, unchanged).
+
+Out of scope: the editor's CPU with many players (user: *"an independent story"*); cluster player nodes (DD-017's model stays, as seat 0);
+a lobby or seat discovery; voice.
+
+## 2. Block diagram
+
+```mermaid
+flowchart LR
+    subgraph Editor["HROT editor node (networkless)"]
+        DS[Deploy server<br/>DeployProcessorSystem]
+        LC[(Local gameplay channel)]
+        PS[PossessionSystem]
+        W[(World)]
+        subgraph GW["Gateway (DPS plugin)"]
+            WT[World participant<br/>partition base-*]
+            ST[Seat table]
+            S1[Seat 1: participant base-1<br/>DeployFlowSystem, EntityOrders, player station]
+            S2[Seat n: participant base-n<br/>...]
+            CW[ClientWorld gate]
+        end
+    end
+    U1[Client 1<br/>partition base-1]
+    U2[Client n<br/>partition base-n]
+    W -->|one gather| WT
+    WT -->|world topics, once| U1
+    WT -->|world topics, once| U2
+    S1 <-->|PlayerSlot, OwnUnit, View, HUD, JoinRequest, ControlFrame| U1
+    S2 <--> U2
+    S1 <-->|deploy request / offers, status, slot| LC
+    S2 <--> LC
+    LC <--> DS
+    S1 -->|possess, control frames, station = seat| PS
+    DS -->|spawn a role's man| W
+    U1 -->|ClientWorld| CW
+    U2 -->|ClientWorld| CW
+```
+
+What the picture shows that prose hides: the world is **gathered and written once** (one participant whose partition name is a wildcard),
+while everything a player owns lives in **its seat's own participant**; and the gateway seat **decides nothing about deployment** - it sits
+between its client and HROT's one deploy server, through the same deploy flow a cluster player node runs.
+
+## 3. Key concepts and decisions
+
+| Term | Meaning |
+|---|---|
+| **Seat** | one player position in the gateway: a station id, a DDS partition, a deploy flow, an `EntityOrders`, a player station. Seat 0 is the editor's own user |
+| **`StationId`** | HROT's station number: node in the low 16 bits, seat in the high 16 (user, R-139); seat 0 = the node id itself, so today's values are unchanged (HROT Q114) |
+| **Seat partition** | `<base>-<n>` for seat n; the world participant writes on `<base>-*`, which DDS matches to every seat partition (a wildcard on one side only) |
+
+- D-1 **One world participant, one participant per seat.** CycloneDDS.NET takes one partition per participant (`DdsParticipant(domain,
+  defaultPartition)`). World topics are written once by a participant on `<base>-*`; each seat's own topics (`PlayerSlot`, `OwnUnit`, `View`,
+  `PlayerMessage`, `GizmoFrame`, the HUD) and its inbound topics (`JoinRequest`, `ControlFrame`, `Leave`, `GizmoView`, `ClockProbe`) live on
+  `<base>-<n>`. The inbound routing is the partition: a seat reads only its own client. Rejected: appended keyed copies of `PlayerSlot`,
+  `OwnUnit`, `View` (every client changes); a DDS domain per seat (domains are a deployment resource, DD-017 3.2a).
+- D-2 **A seat is a HROT station.** Each seat's `EntityOrders` carries `Station = StationId.Of(editorNode, n)`; HROT's possession compares
+  station numbers only (`Possession.cs:221-263`, `StationClaims.cs:97-104`), so units held by different seats are arbitrated in one place,
+  in one tick. Rejected: seat ids in a reserved number range (a seat would not know its node); reusing node ids (collide with the editor's).
+- D-3 **Deployment is HROT's: one deploy server in the editor, one `DeployFlowSystem` per seat** (user, R-139). The seat builds the flow with
+  its station, its own `Possess` callback (its `EntityOrders`) and an environment answered by the editor; the flow reads its own slot from
+  the server (`DeployProcessorSystem.TryGetSlot`). The gateway maps DPS onto the flow's verbs and readouts (section 3a). Rejected: a thin
+  deploy client in the gateway (duplicates the state machine, its 10 s waits and retries - "one implementation per concept").
+- D-4 **The gateway ticks its seats' flows** (`Execute(view, dt)` from its own frame), since seats come and go at run time and an ECS
+  system is composed once at node start (HROT `GameplayClientPack.cs:36-39`).
+- D-5 **Seat lifecycle.** Seats are configured (`dps.seats`, default 1); each seat's participant exists from the start, so a client may join
+  at any time. A seat is free when no client is its player (DD-017's one-player rule, per seat). Leave or lost liveliness: the seat's flow
+  stops, the seat's unit is released, and the deploy server's slot for that station is freed (HROT Q114 leave verb).
+- D-6 **One seat = today's layout exactly.** With `dps.seats` 1 the gateway uses one participant on `<base>` as now; partitions with a
+  suffix appear only from 2 seats. An existing single-player deployment changes nothing.
+- D-7 **What every seat shares, unchanged:** the world gather, `SimClock` / `ClockStep` (on the world participant), the `ClientWorld` gate
+  (its reader on `<base>-*` sees every seat's client; the host service already waits for every `WaitForMe` client, T-045), the render
+  client (one per gateway, DD-022 D-7).
+
+### 3a. DPS onto HROT's deploy flow
+
+| DPS (client to gateway, seat n) | `DeployFlowSystem` (seat n) |
+|---|---|
+| `JoinRequest` Kind Observe, `Side` | `Observe(side)` |
+| `JoinRequest` Kind Unit, `UnitId`, `Side` | `Request(side, unitNetId)` |
+| `JoinRequest` Kind Role, `UnitId` = the offered role's `Offer.Id`, `Side`, `Kit`, `AreaId` | `Request(side, roleId, kit, areaNetId)` (the server tells a role by its id, `DeployProcessorSystem.cs:168`) |
+| `Leave` / liveliness lost | `StopObserving()` or release + the server's leave (HROT Q114) |
+
+| `DeployFlowSystem` readout | DPS `PlayerSlot` (seat n's partition) |
+|---|---|
+| `State` Waiting / Observing / Choosing / Requesting / TakingControl / Playing / Dead | `SlotState` of the same name (already 1:1, `DpsTypes.cs:50`) |
+| `Offers` (Placed / Role / Area, count / max, holder) | `Offers` (`OfferKindUnit` / `OfferKindRole`; **append `OfferKindArea`**); `Free` = holder 0 |
+| `LastRefusal` | `Reason` |
+| the slot's `RespawnAtSim`, `Side`, unit | `RespawnAtSim`, `Side`, `UnitId` |
+
+## 4. Class diagram
+
+```mermaid
+classDiagram
+    class DpsHostService {
+        <<existing, host lifetime>>
+        +BeginWorld(Guid)
+        +IsWorldReady(Guid, failure, step) bool
+        Worlds : DpsClientWorlds
+    }
+    class DpsWorldTransport {
+        <<existing DpsTransport, partition base-*>>
+        world topics, SimClock, ClockStep, render topics
+    }
+    class DpsSeatTable {
+        <<new>>
+        +Seats : DpsSeat[]
+        +Tick(view, dt)
+    }
+    class DpsSeat {
+        <<new>>
+        +Index : int
+        +Station : StationId
+        +Partition : string
+        Participant
+        Inbound : DpsInbound
+        Slot : DpsPlayerSlot
+        View : DpsViewOutbound
+    }
+    class HrotSeatStation {
+        <<from HrotPlayerStation, per seat>>
+        Orders : EntityOrders
+        Flow : DeployFlowSystem
+    }
+    class DeployFlowSystem {
+        <<HROT, existing>>
+        +Request(side, unit, kit, area) bool
+        +Observe(side) bool
+        +StopObserving() bool
+        +State
+        +Offers
+    }
+    class EntityOrders {
+        <<HROT, existing>>
+        +Station : int
+    }
+    DpsHostService "1" o-- "1" DpsSeatTable
+    DpsSeatTable "1" *-- "1..n" DpsSeat
+    DpsSeat "1" -- "1" HrotSeatStation
+    HrotSeatStation "1" *-- "1" DeployFlowSystem
+    HrotSeatStation "1" *-- "1" EntityOrders
+    DpsSeatTable ..> DpsWorldTransport : shares the world gather
+```
+
+`DpsSeat` is what today's single transport holds per player (inbound, slot, own unit, view, HUD, gizmo view), cut out of `DpsTransport`;
+`HrotSeatStation` is today's `HrotPlayerStation` per seat, its placed-unit join (DD-017 step 1) replaced by the deploy flow.
+`DeployFlowSystem` and `EntityOrders` are HROT's, used unchanged except HROT Q114's registry flag.
+
+## 5. Sequence diagrams
+
+### 5a. Join and deploy as a role
+
+```mermaid
+sequenceDiagram
+    participant U as Client (base-2)
+    participant S as Gateway seat 2
+    participant F as DeployFlowSystem (station node/2)
+    participant D as Deploy server
+    participant P as PossessionSystem
+    D-->>F: offers (local channel, a copy per flow)
+    S->>F: tick
+    S-->>U: PlayerSlot Choosing, Offers
+    U->>S: JoinRequest Role Rifleman, Side, Kit, Area
+    S->>F: Request(side, role, kit, area)
+    F->>D: deploy request (station node/2)
+    D->>D: rules, spawn the man (EntityCreationRequest)
+    D-->>F: status accepted, unit
+    F->>P: Possess(unit) via seat 2's EntityOrders
+    P-->>F: PossessedBy = node/2
+    S-->>U: PlayerSlot Playing, OwnUnit
+```
+
+The seat only translates. Refusals (`WrongSide`, `HeldByAnotherStation`, a full role) come back from the server through the flow's
+`LastRefusal` into `PlayerSlot.Reason`; the client sees Choosing again.
+
+### 5b. Two seats reach for one unit
+
+```mermaid
+sequenceDiagram
+    participant S1 as Seat 1 flow
+    participant S2 as Seat 2 flow
+    participant D as Deploy server
+    S1->>D: request unit 40 (node/1)
+    S2->>D: request unit 40 (node/2)
+    D->>D: one tick, in order - node/1 reserves 40
+    D-->>S1: accepted
+    D-->>S2: refused ReservedForAnother (holder node/1)
+```
+
+One server, one tick: the race is decided in one place (`StationClaims.ForPossess`), never between nodes.
+
+### 5c. Death, respawn, leave
+
+```mermaid
+sequenceDiagram
+    participant U as Client (base-1)
+    participant S as Gateway seat 1
+    participant F as DeployFlowSystem (node/1)
+    participant D as Deploy server
+    D-->>F: slot Dead, RespawnAtSim
+    S-->>U: PlayerSlot Dead, RespawnAtSim
+    D-->>F: slot Choosing (after the delay)
+    S-->>U: PlayerSlot Choosing, Offers
+    U--xS: liveliness lost
+    S->>F: stop, release the unit (EntityOrders)
+    S->>D: leave (station node/1) - slot freed, unit back to its task
+```
+
+## 6. Edge cases and error handling
+
+- **Two clients on one seat partition:** DD-017's rule per seat - the first `JoinRequest` owns it, the other is dropped with one warning.
+- **More clients than seats:** a client on a partition with no seat sees no world (no matching participant); the station logs nothing.
+  Discovery of free seats is out of scope (a lobby would be an appended topic on `<base>-*`).
+- **A world load:** every seat's flow returns to Waiting (the gate closes); the deploy server's slots reset with the scenario; the
+  `ClientWorld` gate waits for every seat's client (DD-022 3g).
+- **The editor's own user** stays seat 0 and keeps possessing through the map; deploying it through the same flow is P-6.
+- **A replay:** seats are view-only during a replay (nothing enters the world, as today); their flows sit in Waiting.
+- **Config with one seat:** today's single partition and single player, byte for byte (D-6).
+
+## 7. Test plan
+
+- **Seats are independent (property):** seeded random joins, requests, deaths and leaves on 1 .. 8 seats; after every step each client's
+  `PlayerSlot` equals its seat flow's readout, no seat ever holds a unit another seat holds, and the server's slots equal the seats'.
+- **The race (5b):** two seats request one unit in one frame - exactly one Playing, the other Choosing with `ReservedForAnother`.
+- **Partitions:** a world sample reaches every seat client once; a seat's `PlayerSlot` reaches only its client; a client's
+  `ControlFrame` reaches only its seat.
+- **One seat = today:** with `dps.seats` 1, today's DPS suites pass unchanged (one partition, no suffix).
+- **Leave:** lost liveliness frees the seat, releases the unit and frees the server's slot; the next client joins it.
+- **Loads:** a load with three seat clients waits until all three are Ready (extends T-045's gate rails).
+- **HROT side** (HROT Q114): the editor composes the server; a role's man spawns in the editor; the local channel gives each flow its own
+  copy of offers and status.
+
+## 8. Proposals awaiting approval
+
+| # | Proposal | Lean |
+|---|---|---|
+| P-1 | World participant on `<base>-*`, one participant per seat on `<base>-<n>` (D-1) | yes - clients unchanged |
+| P-2 | A seat is a HROT station `StationId.Of(node, n)`, 16/16 (D-2; HROT Q114-A) | yes (16/16 is the user's) |
+| P-3 | The gateway ticks one `DeployFlowSystem` per seat (D-3, D-4); DD-017's step-1 placed-unit join is replaced by it | yes |
+| P-4 | Seats configured (`dps.seats`), participants made at start; one seat = today's layout (D-5, D-6) | yes |
+| P-5 | Append `OfferKindArea` to `OfferKind` (3a) | yes - `JoinRequest.AreaId` already exists |
+| P-6 | The editor's own user deploys through the same flow as seat 0 (one path for every player) | later, optional - HROT's UI, not this design |
+
+Needs HROT first (HROT Q114): `StationId`; the deploy server composed in the editor; the local gameplay channel; the flow's registry flag;
+the leave verb.
+
+## 9. As-built notes
+
+Not built.

@@ -96,7 +96,7 @@ Therefore each DPS client pairs with one node that loads the gateway:
 - **Editor (offline):** the editor node is the station (one player), as the other sides already run in the editor.
 - A node whose client is absent is an idle station: it does nothing (no join, no frames).
 
-Rejected: one gateway serving many players (HROT's station identity is the node; a node cannot be several stations without HROT changes).
+Rejected: one gateway serving many players (HROT's station identity is the node; a node cannot be several stations without HROT changes). ⭐ **Superseded for the editor host by [DD-023](DD-023-Dps-Multiple-Players.md)** (R-139, 2026-11-21): seats, each a HROT station (node + seat), several players behind one gateway; the cluster model above stays.
 
 ### 3.2 Late join and absence without a handshake (P-2)
 
