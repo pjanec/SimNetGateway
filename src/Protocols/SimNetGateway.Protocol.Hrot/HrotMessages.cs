@@ -108,6 +108,17 @@ public readonly record struct HrotOrigin(
 public readonly record struct HrotSession(ClusterPhase Phase, bool Advancing, double TimeScale, double SimTime) : IHrotToGatewayMessage;
 
 /// <summary>
+/// An anchor of the simulation clock (DD-022 3b), a copy of HROT's time-mode switch (the master's anchor): <paramref name="Stepped"/> false = Continuous, true = Deterministic
+/// (paused, or stepped). <paramref name="AnchorWallTicks"/> is the station's wall tick (100 ns since 0001-01-01 UTC) the anchor's <paramref name="AnchorSimTime"/> belongs to;
+/// the simulation time while Continuous is <c>AnchorSimTime + (wall - AnchorWallTicks) / 10^7 x TimeScale</c>. <paramref name="TimelineEpoch"/> grows at every discontinuity.
+/// Also sent when the scale of a running clock changes (HROT announces none then): the host re-anchors at that frame.
+/// </summary>
+public readonly record struct HrotClockAnchor(bool Stepped, long AnchorWallTicks, double AnchorSimTime, float TimeScale, float FixedDelta, long TimelineEpoch) : IHrotToGatewayMessage;
+
+/// <summary>One simulation step of a stepped clock (HROT's advance-frame order, DD-022 3c): <paramref name="StepSeq"/> is its frame id, <paramref name="TargetSimTime"/> the time it reaches.</summary>
+public readonly record struct HrotStep(long StepSeq, float FixedDelta, double TargetSimTime, float TimeScale, long TimelineEpoch) : IHrotToGatewayMessage;
+
+/// <summary>
 /// A full snapshot of a HROT entity. <see cref="DisType"/> is the DIS entity type packed in 64 bits (kind 8, domain 8,
 /// country 16, category 8, subcategory 8, specific 8, extra 8 bits, kind in the top byte), 0 = none. <see cref="Force"/>
 /// uses the DIS numbering (0 other, 1 friendly, 2 opposing, 3 neutral). <see cref="CommanderId"/> 0 = none.

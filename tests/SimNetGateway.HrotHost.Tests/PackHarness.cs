@@ -86,6 +86,9 @@ public class PackHarness : IDisposable
             EntityMap = Map,
             LocalNodeId = LocalNodeId,
             Tkb = () => TestTkb,
+            EventBus = World.Bus,
+            TimeController = () => TimeController,
+            WallTicks = () => WallTicksSource(),
         };
         var allocator = new NodeIdAllocator(() => _nextId++);
         HostServices = new HostServices(Plugins, Config, line => Log.Add(line));
@@ -102,6 +105,12 @@ public class PackHarness : IDisposable
         var template = new Fdp.Interfaces.TkbTemplate("T" + tkb, tkb) { DisType = new Fdp.Core.DISEntityType { Kind = disKind, Domain = 1, Country = 225, Category = 1 } };
         TestTkb.Register(template);
     }
+
+    /// <summary>The node's time controller as the host reads it (null = none; a test sets HROT's real master controller).</summary>
+    public Fdp.ModuleHost.Time.ITimeController? TimeController { get; set; }
+
+    /// <summary>The wall tick source of the host (a test's controlled clock).</summary>
+    public Func<long> WallTicksSource { get; set; } = Fdp.Toolkit.Time.HighResUtcClock.GetTicks;
 
     public GatewayConfiguration Config { get; }
 

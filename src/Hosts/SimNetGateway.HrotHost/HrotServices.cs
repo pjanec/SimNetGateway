@@ -1,4 +1,6 @@
+using Fdp.Core;
 using Fdp.Interfaces;
+using Fdp.ModuleHost.Time;
 using Fdp.Toolkit.Orchestration;
 using Fdp.Toolkit.Replication.Services;
 
@@ -27,6 +29,15 @@ public sealed class HrotServices
 
     /// <summary>HROT's suggested camera view (DD-019 3.1): by default HROT's own <c>CameraSuggestion</c> singleton; null or a node with no map = no view.</summary>
     public ISuggestedViewSource? SuggestedView { get; init; } = new HrotCameraViewSource();
+
+    /// <summary>The node's event bus (<c>HrotNodeContext.EventBus</c>): where HROT's time events are read, read-only. Null = no clock is published.</summary>
+    public FdpEventBus? EventBus { get; init; }
+
+    /// <summary>The node's time controller (<c>HrotNodeContext.TimeController</c>), read when needed; null = none.</summary>
+    public Func<ITimeController?> TimeController { get; init; } = () => null;
+
+    /// <summary>HROT's high-resolution UTC clock (100 ns ticks since 0001-01-01 UTC): the clock the time anchors' wall ticks are on, and the station's clock for probes.</summary>
+    public Func<long> WallTicks { get; init; } = Fdp.Toolkit.Time.HighResUtcClock.GetTicks;
 
     /// <summary>The local node id (the replica's <c>NetworkAuthority.LocalNodeId</c>).</summary>
     public int LocalNodeId { get; init; }

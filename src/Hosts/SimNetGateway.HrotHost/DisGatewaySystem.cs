@@ -41,6 +41,7 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
     private ClusterPhase? _sentPhase;
     private bool _sentAdvancing;
     private double _lastGather = double.NegativeInfinity;
+    private readonly HrotClockGather _clockGather;
 
     public DisGatewaySystem(HrotServices services, Gateway.HrotDis.GatewayConfiguration config, Func<GatewayRuntime> factory, Action<string>? error = null, Action? beforeFrame = null)
         : this(services, config, factory is null ? throw new ArgumentNullException(nameof(factory)) : _ => factory(), error, beforeFrame)
@@ -60,6 +61,7 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
         _gatherPeriod = 1.0 / Math.Max(0.1, config.Hrot.SampleRateHz);
         _error = error ?? (line => Console.Error.WriteLine("[SimNetGateway] " + line));
         _beforeFrame = beforeFrame;
+        _clockGather = new HrotClockGather(services);
     }
 
     /// <inheritdoc />
@@ -156,9 +158,15 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
         var runtime = _runtime!;
         var clock = SimClock.Of(world);
         PublishFrame(runtime, phase, clock, _services.GeoReference());
+        _clockGather.Read(runtime.HrotIn);
         double now = runtime.Clock.Now;
         if (phase != ClusterPhase.Idle)
         {
+            if (_clockGather.HasSteps)
+            {
+                _lastGather = double.NegativeInfinity;   // a step: the world gathers this frame, so its state goes out before the step does
+            }
+
             if (now - _lastGather >= _gatherPeriod)
             {
                 _lastGather = now;
@@ -187,6 +195,7 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
             }
         }
 
+        _clockGather.Flush(runtime.HrotIn);
         runtime.Tick();
         _adapter.Apply(world, runtime.HrotOut, ingress: !replaying);
 
@@ -232,6 +241,7 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
             _origin = null;
             _sentPhase = null;
             _lastGather = double.NegativeInfinity;
+            _clockGather.Reset();
             return true;
         }
         catch (Exception ex)

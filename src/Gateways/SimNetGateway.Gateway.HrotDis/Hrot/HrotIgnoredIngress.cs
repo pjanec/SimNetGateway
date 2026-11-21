@@ -14,6 +14,8 @@ public sealed class HrotIgnoredIngress : IGatewayModule
     private static readonly (Type Type, Action<ModuleSetup> Register)[] Entries =
     [
         Ignored<HrotPersonDetail>(),
+        Ignored<HrotClockAnchor>(),   // the simulation clock goes to the dps side (DD-022); DIS keeps its own
+        Ignored<HrotStep>(),
         Ignored<HrotEffect>(),
         Ignored<HrotPersonAppearance>(),
         Ignored<HrotVehicleLook>(),

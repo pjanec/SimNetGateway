@@ -22,6 +22,9 @@ internal sealed class CountingDdsPlugin : IGatewayPlugin
 
     public DpsTransport? Transport { get; private set; }
 
+    /// <summary>Runs when the transport is bound, before the first frame writes (a test taps the channels then).</summary>
+    public Action<DpsTransport>? OnBound { get; set; }
+
     public string Name => _inner.Name;
 
     public int InterfaceVersion => _inner.InterfaceVersion;
@@ -36,6 +39,7 @@ internal sealed class CountingDdsPlugin : IGatewayPlugin
     {
         var bound = _inner.Bind(binding);
         Transport = (DpsTransport)bound.Lease!;
+        OnBound?.Invoke(Transport);
         return bound;
     }
 }

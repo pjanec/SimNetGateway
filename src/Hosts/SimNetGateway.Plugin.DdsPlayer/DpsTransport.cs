@@ -26,6 +26,9 @@ internal sealed class DpsChannel<T> : IOutboundChannel<DpsItem<T>>, IDisposable
 
     public int Written { get; private set; }
 
+    /// <summary>A test seam: sees every sample written (not the disposals).</summary>
+    internal Action<T>? Tap { get; set; }
+
     public void Send(in DpsItem<T> item)
     {
         if (item.Dispose)
@@ -39,12 +42,14 @@ internal sealed class DpsChannel<T> : IOutboundChannel<DpsItem<T>>, IDisposable
         _observe?.Invoke(value, false);
         _writer.Write(value);
         Written++;
+        Tap?.Invoke(value);
     }
 
     public void Write(T value)
     {
         _writer.Write(value);
         Written++;
+        Tap?.Invoke(value);
     }
 
     public void Dispose() => _writer.Dispose();
@@ -58,17 +63,24 @@ public sealed class DpsTransport : IDisposable
 {
     private readonly DdsParticipant _participant;
     private readonly IPlayerStation? _station;
-    private readonly int _epoch;
+    private readonly DpsHostService? _service;
+    private int _epoch;
+    private Session _lastSession;
+    private bool _hasSession;
     private readonly Dictionary<int, Entity> _entities = new();
     private readonly List<IDisposable> _channels = new();
     private readonly DpsInbound? _inbound;
     private readonly DpsPlayerSlot? _slot;
     private readonly DpsGizmos? _gizmos;
+    private readonly DpsClientWorldInbound? _clientWorlds;
+    private readonly DpsClockEcho? _echo;
     private int _offersSeen = -1;
 
-    public DpsTransport(DpsSettings settings, string partition, IPlayerStation? station, int epoch, Action<string>? log = null, IGizmoSource? gizmoSource = null)
+    public DpsTransport(DpsSettings settings, string partition, IPlayerStation? station, int epoch, Action<string>? log = null, IGizmoSource? gizmoSource = null,
+        DpsHostService? service = null, Func<long>? stationTicks = null)
     {
         Partition = partition;
+        _service = service;
         _station = station;
         _epoch = epoch;
         _participant = new DdsParticipant((uint)settings.Domain, defaultPartition: partition);
@@ -78,6 +90,9 @@ public sealed class DpsTransport : IDisposable
             {
                 s.WorldEpoch = (uint)_epoch;
                 s.StationName = partition.Length > 64 ? partition[..64] : partition;
+                _lastSession = s;
+                _hasSession = true;
+                _service?.MarkPublished(s.WorldEpoch);
                 return s;
             }));
             EntityTopic = Add(new DpsChannel<Entity>(_participant, prepare: e =>
@@ -127,6 +142,14 @@ public sealed class DpsTransport : IDisposable
             _slot = new DpsPlayerSlot(station, PlayerSlot, OwnUnit);
             GizmoFrame = Add(new DpsChannel<GizmoFrame>(_participant));
             _gizmos = new DpsGizmos(_participant, settings, partition, gizmoSource, _inbound, GizmoFrame, log ?? (_ => { }));
+            SimClock = Add(new DpsChannel<SimClock>(_participant));
+            ClockStep = Add(new DpsChannel<ClockStep>(_participant));
+            if (service is not null)
+            {
+                _clientWorlds = new DpsClientWorldInbound(_participant, settings, service.Worlds);
+            }
+
+            _echo = new DpsClockEcho(_participant, stationTicks ?? DpsClockEcho.DefaultClock.Ticks, log ?? (_ => { }));
         }
         catch
         {
@@ -203,9 +226,30 @@ public sealed class DpsTransport : IDisposable
 
     internal DpsChannel<GizmoFrame> GizmoFrame { get; } = null!;
 
+    internal DpsChannel<SimClock> SimClock { get; } = null!;
+
+    internal DpsChannel<ClockStep> ClockStep { get; } = null!;
+
+    /// <summary>The world epoch this station publishes now (tests and diagnostics).</summary>
+    internal int Epoch => _epoch;
+
+    /// <summary>Clock probes answered by the echo thread (tests).</summary>
+    internal int ProbesAnswered => _echo?.Answered ?? 0;
+
     /// <summary>Once per frame: an entity whose playable flag changed with the station's offers is written again.</summary>
     public void Pump()
     {
+        // a load committed (the host's world gate): the station moves to the new world epoch and says so at once, whether or not it saw a boundary itself
+        if (_service is not null && _service.TryTakeForced(_epoch, out int forced))
+        {
+            _epoch = forced;
+            if (_hasSession)
+            {
+                Session.Send(new DpsItem<Session>(_lastSession));
+            }
+        }
+
+        _clientWorlds?.Pump();
         _inbound?.Pump();
         _gizmos?.Pump();
         _slot?.Pump();
@@ -263,6 +307,8 @@ public sealed class DpsTransport : IDisposable
 
     public void Dispose()
     {
+        _echo?.Dispose();
+        _clientWorlds?.Dispose();
         _gizmos?.Dispose();
         _inbound?.Dispose();
         foreach (var channel in _channels)

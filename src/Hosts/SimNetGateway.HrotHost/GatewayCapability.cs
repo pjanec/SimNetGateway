@@ -33,6 +33,9 @@ public sealed class GatewayCapability : INodeCapability, IDisposable
 
     public IReadOnlyList<string> Needs => Array.Empty<string>();
 
+    /// <summary>The world-readiness gate of the linked clients (DD-022 3g), from the dps plugin's host service; null when the dps side does not run. HROT's load step calls it.</summary>
+    public SimNetGateway.Gateway.HrotDis.IClientWorldGate? ClientWorldGate => Services.Of("dps") as SimNetGateway.Gateway.HrotDis.IClientWorldGate;
+
     /// <summary>The system built by <see cref="PopulateSystems"/> (null before; a capability is composed once per node).</summary>
     public DisGatewaySystem? System { get; private set; }
 
@@ -49,6 +52,20 @@ public sealed class GatewayCapability : INodeCapability, IDisposable
             throw new InvalidOperationException("The SimNetGateway capability is composed once per node.");
         }
 
+        var services = ServicesFrom(context);
+        var allocator = services.AllocateId is { } allocate ? new NodeIdAllocator(allocate) : null;
+        System = new DisGatewaySystem(
+            services,
+            _config,
+            station => GatewayRuntime.Create(_config, allocator, _plugins, Services, playerStation: station, stationTicks: services.WallTicks, munitionName: tkb => services.Tkb?.Invoke() is { } db && db.TryGetByType(tkb, out var template) ? template.Name : null, log: _log),
+            beforeFrame: () => Services.Pump(_log));
+        // NOT in `input`: that list ends in a togglable group HROT disables for a whole replay, and the gateway runs in a replay. It is a node global
+        // system instead (Register), executed every frame on the main thread in the Input phase.
+    }
+
+    /// <summary>What the pack reads from the node: every dependency the context holds is passed on here (a production caller that has a dependency passes it).</summary>
+    internal static HrotServices ServicesFrom(HrotNodeContext context)
+    {
         var ids = context.IdAllocator;
         var geo = context.GeoTransform;
         var services = new HrotServices
@@ -59,15 +76,11 @@ public sealed class GatewayCapability : INodeCapability, IDisposable
             EntityMap = context.EntityMap,
             Tkb = () => context.TkbDb ?? (context.World.HasSingletonManaged<Fdp.Interfaces.ITkbDatabase>() ? context.World.GetSingletonManaged<Fdp.Interfaces.ITkbDatabase>() : null),
             LocalNodeId = context.NodeId.Value,
+            EventBus = context.EventBus,
+            TimeController = () => context.TimeController,
+            WallTicks = Fdp.Toolkit.Time.HighResUtcClock.GetTicks,
         };
-        var allocator = services.AllocateId is { } allocate ? new NodeIdAllocator(allocate) : null;
-        System = new DisGatewaySystem(
-            services,
-            _config,
-            station => GatewayRuntime.Create(_config, allocator, _plugins, Services, playerStation: station, munitionName: tkb => services.Tkb?.Invoke() is { } db && db.TryGetByType(tkb, out var template) ? template.Name : null, log: _log),
-            beforeFrame: () => Services.Pump(_log));
-        // NOT in `input`: that list ends in a togglable group HROT disables for a whole replay, and the gateway runs in a replay. It is a node global
-        // system instead (Register), executed every frame on the main thread in the Input phase.
+        return services;
     }
 
     /// <summary>Registers the system as a global system of the node kernel (Input phase, main thread, every frame, also in a replay).</summary>

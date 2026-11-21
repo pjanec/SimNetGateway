@@ -1,0 +1,262 @@
+using System.Numerics;
+using Fdp.Core;
+using Fdp.Toolkit.Time.Controllers;
+using SimNetGateway.Plugin.DdsPlayer;
+using SimNetGateway.Protocol.Hrot;
+using D = SimNetGateway.Protocol.DdsPlayer;
+using GatewayConfiguration = SimNetGateway.Gateway.HrotDis.GatewayConfiguration;
+
+namespace SimNetGateway.HrotHost.Tests;
+
+/// <summary>
+/// DD-022 3b, 3c through the host and the dps plugin: HROT's REAL <see cref="MasterSyncController"/> (on a controlled tick source) publishes its time events on the node's bus, the host turns them into
+/// pivot messages, the plugin writes <c>SimClock</c> / <c>ClockStep</c>, and a client model fed only those samples must compute the simulation time of the slave formula.
+/// </summary>
+public class DpsClockTests
+{
+    private const int Domain = 98;   // HrotHost 96..99 (see DpsIntentRateTests)
+    private const long BaseTicks = 639_000_000_000_000_000L;
+
+    private sealed class Rig : IDisposable
+    {
+        private readonly PackHarness _h;
+        private long _ticks = BaseTicks;
+        private long _frames;
+
+        public Rig(string partition, bool startPaused = false, bool discardBoot = false)
+        {
+            var plugin = new CountingDdsPlugin { OnBound = t => { t.SimClock.Tap = Clocks.Add; t.ClockStep.Tap = Steps.Add; } };
+            _h = new PackHarness(dis: false, plugins: [plugin], configure: c => c.WithSide(DpsSide.SideKey, new DpsSettings { Domain = Domain, Partition = partition }));
+            _h.WallTicksSource = () => _ticks;
+            Controller = new MasterSyncController(_h.World.Bus, tickSource: () => _ticks, startPaused: startPaused);
+            _h.TimeController = Controller;
+            if (discardBoot)
+            {
+                _h.World.Bus.SwapBuffers();
+                _h.World.Bus.SwapBuffers();   // the boot anchor was published before this gateway looked: it is gone
+            }
+
+            Plugin = plugin;
+            _h.Step();   // the runtime starts
+            Transport = plugin.Transport!;
+        }
+
+        public PackHarness Harness => _h;
+
+        public MasterSyncController Controller { get; }
+
+        public CountingDdsPlugin Plugin { get; }
+
+        public DpsTransport Transport { get; }
+
+        public List<D.SimClock> Clocks { get; } = new();
+
+        public List<D.ClockStep> Steps { get; } = new();
+
+        public long Ticks => _ticks;
+
+        /// <summary>One host frame: time passes (the controller updates, publishing its events), the bus is swapped as the kernel does, then the gateway's frame runs.</summary>
+        public void Frame(long advanceTicks)
+        {
+            _ticks += advanceTicks;
+            Controller.Update();
+            _h.World.Bus.SwapBuffers();
+            _h.Step();
+            _frames++;
+        }
+
+        public void Dispose() => _h.Dispose();
+    }
+
+    private const long Frame60 = TimeSpan.TicksPerSecond / 60;
+
+    /// <summary>The client's model of the clock: what a client computes from the samples alone.</summary>
+    private static double ClientSim(Rig rig) => DpsClockFormula.SimTime(rig.Clocks[^1], rig.Ticks);
+
+    [Fact]
+    public void A_client_fed_only_the_published_sim_clock_equals_the_slave_formula_through_seeded_random_play_pause_step_scale_snap_and_jump()
+    {
+        int totalSteps = 0, totalJumps = 0, totalReanchors = 0;
+        for (int seed = 1; seed <= 12; seed++)
+        {
+            var rnd = new Random(seed);
+            using var rig = new Rig("clock-prop-" + seed, startPaused: rnd.Next(2) == 0);
+            var ctl = rig.Controller;
+            var expectedSteps = new List<long>();
+            long lastEpoch = 0;
+            int jumps = 0;
+            for (int op = 0; op < 150; op++)
+            {
+                int writesBefore = rig.Clocks.Count;
+                bool runningBefore = rig.Clocks.Count > 0 && rig.Clocks[^1].Mode == D.ClockMode.ClockModeContinuous;
+                var oldClock = rig.Clocks.Count > 0 ? rig.Clocks[^1] : default;
+                string what;
+                switch (rnd.Next(8))
+                {
+                    case 0:
+                        what = "pause";
+                        ctl.SwitchToDeterministic(new HashSet<int>());
+                        rig.Frame(Frame60);
+                        rig.Frame(15_000_000);   // past the future barrier (lookahead)
+                        break;
+                    case 1:
+                        what = "play";
+                        ctl.SwitchToContinuous(rnd.Next(3) == 0 ? 0.5f + rnd.Next(4) * 0.5f : 0f);
+                        rig.Frame(Frame60);
+                        break;
+                    case 2:
+                    case 3:
+                        what = "step";
+                        if (ctl.GetMode() == Fdp.ModuleHost.Time.TimeMode.Deterministic && !ctl.IsPauseBarrierPending)
+                        {
+                            ctl.Step(0.05f);
+                            expectedSteps.Add(ctl.GetCurrentState().FrameNumber);
+                        }
+
+                        rig.Frame(Frame60);
+                        break;
+                    case 4:
+                        what = "scale";
+                        rig.Frame(Frame60 * rnd.Next(1, 5));
+                        writesBefore = rig.Clocks.Count;
+                        oldClock = rig.Clocks[^1];
+                        runningBefore = oldClock.Mode == D.ClockMode.ClockModeContinuous;
+                        float newScale = 0.25f + rnd.Next(1, 16) * 0.25f;
+                        ctl.SetTimeScale(newScale == ctl.GetTimeScale() ? newScale + 0.125f : newScale);   // HROT announces nothing for this
+                        rig.Frame(0);
+                        break;
+                    case 5:
+                        what = "snap";
+                        ctl.SnapAndPause(new GlobalTime { FrameNumber = rnd.Next(0, 5000), TotalTime = rnd.NextDouble() * 900, UnscaledTotalTime = rnd.NextDouble() * 900, TotalWallTicks = rig.Ticks, TimeScale = 1f });
+                        rig.Frame(Frame60);
+                        break;
+                    case 6:
+                        what = "jump";
+                        ctl.JumpWhileRunning(rnd.NextDouble() * 900);
+                        rig.Frame(Frame60);
+                        break;
+                    default:
+                        what = "idle";
+                        rig.Frame(Frame60 * rnd.Next(1, 12));
+                        break;
+                }
+
+                // the equivalence, at the instant of this frame
+                double expected = ctl.GetCurrentState().TotalTime;
+                var clock = rig.Clocks[^1];
+                double got = ClientSim(rig);
+                if (clock.Mode == D.ClockMode.ClockModeStepped)
+                {
+                    Assert.True(expected == got, $"seed {seed} op {op} ({what}): stepped, expected {expected:R} got {got:R}");
+                }
+                else
+                {
+                    Assert.True(Math.Abs(expected - got) < 1e-6, $"seed {seed} op {op} ({what}): continuous, expected {expected:R} got {got:R}");
+                }
+
+                if (what == "scale" && runningBefore && ctl.GetMode() == Fdp.ModuleHost.Time.TimeMode.Continuous && !ctl.IsPauseBarrierPending)
+                {
+                    // a running scale change: exactly one SimClock, and the formula is continuous across it
+                    totalReanchors++;
+                    Assert.Equal(writesBefore + 1, rig.Clocks.Count);
+                    Assert.True(Math.Abs(DpsClockFormula.SimTime(oldClock, rig.Ticks) - DpsClockFormula.SimTime(clock, rig.Ticks)) < 1e-6, $"seed {seed} op {op}: the formula jumps across the scale change");
+                    Assert.Equal(ctl.GetTimeScale(), clock.TimeScale);
+                }
+
+                Assert.True(clock.TimelineEpoch == ctl.TimelineEpoch, $"seed {seed} op {op} ({what}): the published epoch {clock.TimelineEpoch} is not the controller's {ctl.TimelineEpoch}");
+                if (clock.TimelineEpoch != lastEpoch)
+                {
+                    jumps++;
+                    lastEpoch = clock.TimelineEpoch;
+                }
+            }
+
+            totalSteps += rig.Steps.Count;
+            totalJumps += jumps;
+            Assert.Equal(ctl.TimelineEpoch, jumps);   // one jump per epoch change, none besides
+            Assert.Equal(expectedSteps, rig.Steps.Select(s => s.StepSeq).ToList());   // every step, once, with its frame id
+            Assert.All(rig.Steps, s => Assert.Equal((false, 0u), (s.AckRequired, s.Samples)));
+            for (int i = 1; i < rig.Steps.Count; i++)
+            {
+                if (rig.Steps[i].TimelineEpoch == rig.Steps[i - 1].TimelineEpoch)
+                {
+                    Assert.True(rig.Steps[i].StepSeq > rig.Steps[i - 1].StepSeq, $"seed {seed}: step ids do not grow within an epoch");
+                }
+            }
+        }
+
+        // the property was not vacuous: the sequences did run steps, snaps and running scale changes
+        Assert.True(totalSteps > 50 && totalJumps > 30 && totalReanchors > 30, $"steps {totalSteps}, jumps {totalJumps}, re-anchors {totalReanchors}");
+    }
+
+    [Fact]
+    public void A_running_scale_change_that_HROT_does_not_announce_is_one_new_anchor_from_the_controllers_own_state()
+    {
+        using var rig = new Rig("clock-scale");
+        rig.Controller.SwitchToContinuous();
+        rig.Frame(Frame60);
+        rig.Frame(Frame60 * 30);   // half a second at scale 1
+        int before = rig.Clocks.Count;
+
+        rig.Controller.SetTimeScale(2f);
+        rig.Frame(0);
+
+        Assert.Equal(before + 1, rig.Clocks.Count);
+        var anchor = rig.Clocks[^1];
+        Assert.Equal((D.ClockMode.ClockModeContinuous, 2f), (anchor.Mode, anchor.TimeScale));
+        Assert.Equal(rig.Controller.GetCurrentState().TotalTime, anchor.AnchorSimTime);
+        rig.Frame(Frame60 * 6);
+        Assert.Equal(before + 1, rig.Clocks.Count);   // no further sample while nothing changes: none is periodic
+        Assert.Equal(rig.Controller.GetCurrentState().TotalTime, ClientSim(rig), 6);
+    }
+
+    [Fact]
+    public void A_gateway_that_starts_after_the_clock_booted_anchors_from_the_controllers_state()
+    {
+        using var rig = new Rig("clock-late", discardBoot: true);   // the boot anchor was missed
+        rig.Controller.SwitchToContinuous();
+        rig.Frame(Frame60 * 12);
+
+        Assert.NotEmpty(rig.Clocks);
+        Assert.Equal(rig.Controller.GetCurrentState().TotalTime, ClientSim(rig), 6);
+    }
+
+    [Fact]
+    public void A_steps_world_state_is_written_before_its_clock_step_in_the_same_tick()
+    {
+        using var rig = new Rig("clock-order", startPaused: true);
+        rig.Harness.RegisterTemplate(100, 1);
+        var e = rig.Harness.AddHrotEntity(2001, new Vector3(0, 0, 0), tkb: 100);
+        rig.Frame(Frame60);
+        rig.Frame(15_000_000);   // paused, barrier crossed
+        var order = new List<string>();
+        rig.Transport.EntityState.Tap = _ => order.Add("state");
+        rig.Transport.ClockStep.Tap = _ => order.Add("step");
+
+        // the entity moves a metre and the step is taken at the same frame, in the middle of the gather period
+        rig.Harness.Move(e, new Vector3(1, 0, 0));
+        rig.Controller.Step(0.05f);
+        rig.Frame(Frame60);
+
+        Assert.Contains("step", order);
+        Assert.Contains("state", order);
+        Assert.True(order.LastIndexOf("state") < order.IndexOf("step"), "ClockStep written before the state of its step: " + string.Join(",", order));
+    }
+
+    [Fact]
+    public void The_capability_passes_the_nodes_bus_and_time_controller_and_the_high_resolution_clock_to_the_pack()
+    {
+        // HROT's silent-default rule: a production caller that HAS a dependency must pass it. A context with only what the services read (the rest of it is not needed to compose them).
+        var context = (Hrot.Common.Infrastructure.HrotNodeContext)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Hrot.Common.Infrastructure.HrotNodeContext));
+        var bus = new FdpEventBus();
+        var controller = new MasterSyncController(bus, tickSource: () => BaseTicks);
+        typeof(Hrot.Common.Infrastructure.HrotNodeContext).GetProperty("EventBus")!.SetValue(context, bus);
+        typeof(Hrot.Common.Infrastructure.HrotNodeContext).GetProperty("TimeController")!.SetValue(context, controller);
+
+        var services = GatewayCapability.ServicesFrom(context);
+
+        Assert.Same(bus, services.EventBus);
+        Assert.Same(controller, services.TimeController());
+        Assert.Equal(Fdp.Toolkit.Time.HighResUtcClock.GetTicks, services.WallTicks);
+    }
+}

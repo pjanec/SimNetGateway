@@ -135,6 +135,8 @@ public class ProfileTests
             new HrotView("None", "", 0, 0f, 0f, default, HrotQuat.Identity, 0f, "", 0.0),
             new HrotImpact(0.0, default, default, "", "Stop", 0, 0, ""),
             new HrotEntityRemoved(1),
+            new HrotClockAnchor(false, 1, 1.0, 1f, 0f, 0),
+            new HrotStep(1, 0.05f, 1.0, 1f, 0),
         };
         Assert.Equal(typeof(IHrotToGatewayMessage).Assembly.GetExportedTypes().Count(t => !t.IsInterface && typeof(IHrotToGatewayMessage).IsAssignableFrom(t)), messages.Length);
         foreach (var message in messages)
@@ -173,6 +175,8 @@ public class ProfileTests
                 case HrotTrafficLightRemoved m: h.HrotStep(m); break;
                 case HrotView m: h.HrotStep(m); break;
                 case HrotImpact m: h.HrotStep(m); break;
+                case HrotClockAnchor m: h.HrotStep(m); break;
+                case HrotStep m: h.HrotStep(m); break;
                 default: throw new InvalidOperationException(message.GetType().Name);
             }
         }

@@ -39,6 +39,8 @@ internal sealed class DpsPorts
         Status = b.RequireOutbound<DpsItem<Status>>("dps.Status");
         Exercise = b.RequireOutbound<DpsItem<Exercise>>("dps.Exercise");
         View = b.RequireOutbound<DpsItem<View>>("dps.View");
+        SimClock = b.RequireOutbound<DpsItem<SimClock>>("dps.SimClock");
+        ClockStep = b.RequireOutbound<DpsItem<ClockStep>>("dps.ClockStep");
     }
 
     public IOutboundChannel<DpsItem<Session>> Session { get; }
@@ -97,6 +99,10 @@ internal sealed class DpsPorts
 
     public IOutboundChannel<DpsItem<View>> View { get; }
 
+    public IOutboundChannel<DpsItem<SimClock>> SimClock { get; }
+
+    public IOutboundChannel<DpsItem<ClockStep>> ClockStep { get; }
+
     /// <summary>Declares (idempotently) every port on the builder.</summary>
     public static DpsPorts Require(GatewayBuilder builder) => new(builder);
 
@@ -131,5 +137,7 @@ internal sealed class DpsPorts
         b.BindOutbound<DpsItem<Status>>("dps.Status", t.Status);
         b.BindOutbound<DpsItem<Exercise>>("dps.Exercise", t.Exercise);
         b.BindOutbound<DpsItem<View>>("dps.View", t.View);
+        b.BindOutbound<DpsItem<SimClock>>("dps.SimClock", t.SimClock);
+        b.BindOutbound<DpsItem<ClockStep>>("dps.ClockStep", t.ClockStep);
     }
 }

@@ -114,7 +114,7 @@ public class DpsOutboundTests
         private readonly PluginBound _bound;
 
         public Rig(uint domain, string partition = "station-1", IPlayerStation? station = null, DdsPlayerPlugin? plugin = null, IHostService? service = null,
-            Action<string>? log = null, double leaseSeconds = 2.0, IGizmoSource? gizmoSource = null)
+            Action<string>? log = null, double leaseSeconds = 2.0, IGizmoSource? gizmoSource = null, Func<long>? stationTicks = null)
         {
             Domain = domain;
             Plugin = plugin ?? new DdsPlayerPlugin();
@@ -128,7 +128,7 @@ public class DpsOutboundTests
             builder.BindInbound("hrot", HrotIn);
             builder.BindOutbound<IGatewayToHrotMessage>("hrot", new InMemoryOutbound<IGatewayToHrotMessage>());
             Service = service ?? Plugin.CreateHostService(Settings, new PluginHostContext(_ => { }));
-            _bound = Plugin.Bind(new SideBinding(builder, Config, Settings, Clock, Service, _ => null, log ?? (_ => { }), null, station, gizmoSource));
+            _bound = Plugin.Bind(new SideBinding(builder, Config, Settings, Clock, Service, _ => null, log ?? (_ => { }), null, station, gizmoSource, stationTicks));
             Transport = (DpsTransport)_bound.Lease!;
             Engine = builder.Build().Engine;
         }
