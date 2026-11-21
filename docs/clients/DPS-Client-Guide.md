@@ -560,7 +560,7 @@ This publishes the host and every protocol plugin into the folder that HROT's no
 { "dps": { "domain": 0, "partition": "station-1" } }
 ```
 
-Optional keys are `leaseSeconds` (2), `heartbeatSeconds` (5), `positionThresholdM`, `angleThresholdDeg` and `velocityThreshold` ([DpsSettings.cs](https://github.com/pjanec/SimNetGateway/blob/main/src/Hosts/SimNetGateway.Plugin.DdsPlayer/DpsSettings.cs)). Unknown keys are errors. A configuration problem prints one line on stderr, and the gateway stays off.
+Optional keys are `leaseSeconds` (2), `heartbeatSeconds` (5), `positionThresholdM`, `angleThresholdDeg` and `velocityThreshold` and `seats` (1; with N >= 2 the gateway serves N players and a client uses the partition `<partition>-n`, see [DD-023](https://github.com/pjanec/SimNetGateway/blob/main/docs/design/DD-023-Dps-Multiple-Players.md)) ([DpsSettings.cs](https://github.com/pjanec/SimNetGateway/blob/main/src/Hosts/SimNetGateway.Plugin.DdsPlayer/DpsSettings.cs)). Unknown keys are errors. A configuration problem prints one line on stderr, and the gateway stays off.
 
 **Pick a DDS domain below 167 on Windows.** DDS uses UDP ports 7400 + 250 × domain and up. Windows reserves or hands out ports above 49152, so a domain of 167 or more fails at random with "failed to create participant". The gateway's tests found this the hard way. Domain 0 is the usual choice; use different partitions, not different domains, to separate stations.
 

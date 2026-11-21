@@ -552,4 +552,112 @@ public class DpsClockTests
             return service.Worlds.Clients.Count == 0;
         }, 10000));
     }
+
+    // ---- seats (DD-023): the gate counts every seated client, the echo is answered per seat --------------------------------------------
+
+    /// <summary>A client's ClientWorld writer on a partition (the three seat clients and a stray one).</summary>
+    private sealed class WorldClient : IDisposable
+    {
+        private readonly DdsParticipant _participant;
+        private readonly DdsWriter<D.ClientWorld> _writer;
+
+        public WorldClient(uint domain, string partition, ulong id)
+        {
+            Id = id;
+            _participant = new DdsParticipant(domain, defaultPartition: partition);
+            _writer = new DdsWriter<D.ClientWorld>(_participant);
+        }
+
+        public ulong Id { get; }
+
+        public Task<bool> Matched() => _writer.WaitForReaderAsync(TimeSpan.FromSeconds(5));
+
+        public void Say(uint epoch, D.ClientWorldState state, bool wait = true, string step = "") => _writer.Write(Client(Id, epoch, state, wait, step));
+
+        public void Dispose()
+        {
+            _writer.Dispose();
+            _participant.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// (DD-023 f, T-045 extended) With three seat clients a load is ready only when ALL THREE say Ready for the published epoch, and a stray client on a partition with no seat - which waits
+    /// for nothing it is part of - never reaches the table, so it can neither hold the load up nor let it pass early.
+    /// </summary>
+    [Fact]
+    public async Task A_load_with_three_seat_clients_waits_for_all_three_and_never_for_a_stray_client()
+    {
+        uint domain = Watch.NewDomain();
+        using var rig = new Rig(domain, seats: 3);
+        var service = (DpsHostService)rig.Service!;
+        var gate = (IClientWorldGate)service;
+        using var a = new WorldClient(domain, "station-1-1", 1);
+        using var b = new WorldClient(domain, "station-1-2", 2);
+        using var c = new WorldClient(domain, "station-1-3", 3);
+        using var stray = new WorldClient(domain, "station-1-9", 9);
+        Assert.True(await a.Matched());
+        Assert.True(await b.Matched());
+        Assert.True(await c.Matched());
+        rig.Send(new HrotSession(ClusterPhase.Live, true, 1.0, 5.0));
+
+        var load = Guid.NewGuid();
+        gate.BeginWorld(load);
+        rig.Step();   // the new epoch is published
+        uint epoch = (uint)service.Epoch;
+        Assert.Equal(epoch, service.Published);
+
+        stray.Say(epoch, Loading, wait: true, step: "never");
+        a.Say(epoch, Loading, step: "terrain");
+        b.Say(epoch, Loading, step: "terrain");
+        c.Say(epoch, Loading, step: "terrain");
+        Assert.True(DpsOutboundTests.WaitFor(() =>
+        {
+            rig.Step();
+            return service.Worlds.Clients.Count == 3;
+        }));
+        Assert.Equal([1UL, 2UL, 3UL], service.Worlds.Clients.Select(x => x.ClientId).OrderBy(x => x).ToArray());   // the stray is not in the table
+        Assert.False(gate.IsWorldReady(load, out _, out string? step));
+        Assert.Equal("terrain", step);
+
+        a.Say(epoch, Ready);
+        b.Say(epoch, Ready);
+        Assert.True(DpsOutboundTests.WaitFor(() =>
+        {
+            rig.Step();
+            return service.Worlds.Clients.Count(x => x.State == Ready) == 2;
+        }));
+        Assert.False(gate.IsWorldReady(load, out _, out _));   // the third seat has not answered
+
+        c.Say(epoch, Ready);
+        Assert.True(DpsOutboundTests.WaitFor(() =>
+        {
+            rig.Step();
+            return gate.IsWorldReady(load, out _, out _);
+        }));
+        Assert.DoesNotContain(service.Worlds.Clients, x => x.ClientId == 9);   // the stray's Loading ("never") was heard by nobody
+    }
+
+    /// <summary>(DD-023 D-10) The clock probe of a seat's client is read - and its echo written - on that seat's partition, by that seat's echo thread; a client with no seat gets no echo.</summary>
+    [Fact]
+    public void The_clock_echo_is_answered_per_seat_on_the_seats_own_partition()
+    {
+        uint domain = Watch.NewDomain();
+        var station = new StationClock();
+        using var rig = new Rig(domain, stationTicks: station.Ticks, seats: 3);
+        using var two = new ProbeClient(domain, "station-1-2", station, 0, clientId: 22);
+        using var three = new ProbeClient(domain, "station-1-3", station, 0, clientId: 33);
+        using var stray = new ProbeClient(domain, "station-1-9", station, 0, clientId: 99);
+
+        Assert.NotNull(two.Probe());
+        Assert.NotNull(three.Probe());
+        Assert.Null(stray.Probe(timeoutMs: 700));
+
+        Assert.All(two.Received, e => Assert.Equal(22UL, e.ClientId));   // seat 2's echoes never reach seat 3's client and vice versa
+        Assert.All(three.Received, e => Assert.Equal(33UL, e.ClientId));
+        Assert.Empty(stray.Received);
+        Assert.Equal(0, rig.Transport.Seats[0].ProbesAnswered);
+        Assert.True(rig.Transport.Seats[1].ProbesAnswered >= 1);
+        Assert.True(rig.Transport.Seats[2].ProbesAnswered >= 1);
+    }
 }

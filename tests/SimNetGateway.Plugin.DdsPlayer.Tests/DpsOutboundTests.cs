@@ -114,11 +114,12 @@ public class DpsOutboundTests
         private readonly PluginBound _bound;
 
         public Rig(uint domain, string partition = "station-1", IPlayerStation? station = null, DdsPlayerPlugin? plugin = null, IHostService? service = null,
-            Action<string>? log = null, double leaseSeconds = 2.0, IGizmoSource? gizmoSource = null, Func<long>? stationTicks = null)
+            Action<string>? log = null, double leaseSeconds = 2.0, IGizmoSource? gizmoSource = null, Func<long>? stationTicks = null,
+            int seats = 1, IReadOnlyList<IPlayerStation>? stations = null)
         {
             Domain = domain;
             Plugin = plugin ?? new DdsPlayerPlugin();
-            Settings = new DpsSettings { Domain = (int)domain, Partition = partition, LeaseSeconds = leaseSeconds };
+            Settings = new DpsSettings { Domain = (int)domain, Partition = partition, LeaseSeconds = leaseSeconds, Seats = seats };
             Config = (GatewayConfiguration.CreateDefault() with { Dis = null }).WithSide(DpsSide.SideKey, Settings);
             var sides = SideRegistry.Empty.With(Plugin.Side);
             Clock = new ManualClock();
@@ -128,7 +129,7 @@ public class DpsOutboundTests
             builder.BindInbound("hrot", HrotIn);
             builder.BindOutbound<IGatewayToHrotMessage>("hrot", new InMemoryOutbound<IGatewayToHrotMessage>());
             Service = service ?? Plugin.CreateHostService(Settings, new PluginHostContext(_ => { }));
-            _bound = Plugin.Bind(new SideBinding(builder, Config, Settings, Clock, Service, _ => null, log ?? (_ => { }), null, station, gizmoSource, stationTicks));
+            _bound = Plugin.Bind(new SideBinding(builder, Config, Settings, Clock, Service, _ => null, log ?? (_ => { }), null, station, gizmoSource, stationTicks, stations));
             Transport = (DpsTransport)_bound.Lease!;
             Engine = builder.Build().Engine;
         }
@@ -538,6 +539,108 @@ public class DpsOutboundTests
         Thread.Sleep(300);
         other.Pump();
         Assert.Empty(other.Alive);
+    }
+
+    // ---- seats (DD-023): Entity.Playable and Session on the world participant --------------------------------------------------------
+
+    private static DpsInboundTests.RecordingStation Offering(params int[] units)
+    {
+        var station = new DpsInboundTests.RecordingStation();
+        foreach (int u in units)
+        {
+            station.OfferList.Add(new PlayerOffer(u, null, 1));
+        }
+
+        return station;
+    }
+
+    /// <summary>(DD-023 e, D-8) Playable is true for EVERY offerable unit - the union of the seats' offers, one list for all of them - on every seat's client, whichever seat is joined.</summary>
+    [Fact]
+    public void Playable_is_true_for_every_offerable_unit_whichever_seat_is_joined_and_follows_the_offers()
+    {
+        uint domain = NewDomain();
+        var stations = new[] { Offering(1001), Offering(1002), Offering(1003) };
+        stations[1].Slot = new PlayerSlotSnapshot(PlayerSlotState.Playing, 1002, 0.0, 2);   // only seat 2 is joined
+        using var seatTwo = new Watch<D.Entity>(domain, "station-1-2", e => Id(e.EntityId));
+        using var seatThree = new Watch<D.Entity>(domain, "station-1-3", e => Id(e.EntityId));
+        using var rig = new Rig(domain, seats: 3, stations: stations);
+
+        foreach (int id in new[] { 1001, 1002, 1003, 2001 })
+        {
+            rig.Send(State(id));
+        }
+
+        foreach (var watch in new[] { seatTwo, seatThree })
+        {
+            Assert.True(watch.Until(w =>
+            {
+                rig.Step();
+                return w.Alive.Count == 4;
+            }));
+            Assert.Equal([true, true, true, false], new[] { "1001", "1002", "1003", "2001" }.Select(k => watch.Alive[k].Playable).ToArray());
+        }
+
+        stations[2].OfferList.Add(new PlayerOffer(2001, null, 2));   // an offer appears on seat 3 only: still one list for everybody
+        stations[0].OfferList.Clear();                               // and 1001 stops being offered
+        Assert.True(seatTwo.Until(w =>
+        {
+            rig.Step();
+            return w.Alive["2001"].Playable && !w.Alive["1001"].Playable;
+        }));
+        Assert.True(seatThree.Until(w =>
+        {
+            rig.Step();
+            return w.Alive["2001"].Playable && !w.Alive["1001"].Playable;
+        }));
+    }
+
+    /// <summary>(DD-023 e) Session is written by exactly one writer (the world participant): every seat's client gets each sample once, and it names the BASE partition.</summary>
+    [Fact]
+    public void Session_has_exactly_one_writer_and_names_the_base_partition()
+    {
+        uint domain = NewDomain();
+        using var one = new Watch<D.Session>(domain, "station-1-1", _ => "s");
+        using var two = new Watch<D.Session>(domain, "station-1-2", _ => "s");
+        using var rig = new Rig(domain, seats: 2);
+
+        rig.Send(new HrotSession(ClusterPhase.Live, true, 1.0, 5.0));
+
+        foreach (var watch in new[] { one, two })
+        {
+            Assert.True(watch.Until(w => w.Events.Count >= 1));
+            Thread.Sleep(200);
+            watch.Pump();
+            Assert.Single(watch.Events);   // a second writer would show the sample twice
+            Assert.All(watch.Events, e => Assert.Equal("station-1", e.StationName));
+        }
+
+        Assert.Equal(("station-1-*", "station-1"), (rig.Transport.WorldPartition, rig.Transport.Partition));
+        Assert.Equal(["station-1-1", "station-1-2"], rig.Transport.Seats.Select(x => x.Partition).ToArray());
+    }
+
+    /// <summary>(DD-023 g, HOT path) The per-frame Playable computation of three seats allocates nothing in the steady state.</summary>
+    [Fact]
+    public void The_playable_computation_of_three_seats_allocates_nothing_in_the_steady_state()
+    {
+        uint domain = NewDomain();
+        var stations = new[] { Offering(1001, 1002, 1003), Offering(1002, 1004), Offering(1005) };
+        using var rig = new Rig(domain, seats: 3, stations: stations);
+        rig.Transport.RefreshPlayable();
+        for (int i = 0; i < 50; i++)
+        {
+            Assert.False(rig.Transport.RefreshPlayable() && i > 0);   // warmed: the same offers are not a change
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        bool changed = false;
+        for (int i = 0; i < 1000; i++)
+        {
+            changed |= rig.Transport.RefreshPlayable();
+        }
+
+        long after = GC.GetAllocatedBytesForCurrentThread();
+        Assert.False(changed);
+        Assert.Equal(0, after - before);
     }
 
     [Fact]

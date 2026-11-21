@@ -12,8 +12,12 @@ using DISnet;
 using Fdp.Toolkit.Orchestration;
 using Fdp.Toolkit.Replication.Services;
 using Hrot.Common;
+using CycloneDDS.Runtime;
 using SimNetGateway.Gateway.HrotDis;
+using SimNetGateway.Plugin.DdsPlayer;
+using D = SimNetGateway.Protocol.DdsPlayer;
 using SimNetGateway.Protocol.Hrot;
+using GatewayConfiguration = SimNetGateway.Gateway.HrotDis.GatewayConfiguration;
 
 namespace SimNetGateway.HrotHost.Tests;
 
@@ -21,6 +25,9 @@ namespace SimNetGateway.HrotHost.Tests;
 public class PlayerStationTests
 {
     private const int Unit = 2001;
+
+    /// <summary>The gateway player is seat 1: station node | 1 << 16 (DD-023 D-11), no longer the node's own station.</summary>
+    private const int SeatStation = PackHarness.LocalNodeId | (1 << 16);
 
     private sealed class Stage : PackHarness
     {
@@ -46,7 +53,7 @@ public class PlayerStationTests
         }
 
         /// <summary>What HROT's possession system does when it applies the request: the unit is held by this node.</summary>
-        public void Hold(Entity e, int station = LocalNodeId)
+        public void Hold(Entity e, int station = SeatStation)
         {
             if (!World.IsComponentTypeRegistered<PossessedBy>())
             {
@@ -138,7 +145,7 @@ public class PlayerStationTests
 
         var requests = h.Events<PossessRequestEvent>();
         var request = Assert.Single(requests);
-        Assert.Equal(PackHarness.LocalNodeId, (int)request.StationNodeId);
+        Assert.Equal(SeatStation, (int)request.StationNodeId);
         Assert.Equal(e, request.Unit);
         Assert.Equal(PossessionMode.Fps, request.Mode);
         Assert.Equal(PlayerSlotState.TakingControl, h.Station.Slot.State);
@@ -187,7 +194,7 @@ public class PlayerStationTests
 
         var f = Assert.Single(h.Events<OperatorControlFrameEvent>());
         Assert.Equal(e, f.Unit);
-        Assert.Equal(PackHarness.LocalNodeId, (int)f.StationNodeId);
+        Assert.Equal(SeatStation, (int)f.StationNodeId);
         Assert.False(f.IsRemote);
         Assert.Equal(77u, f.Seq);
         Assert.Equal(1f, f.Forward);
@@ -289,7 +296,7 @@ public class PlayerStationTests
         h.Station.Leave();
         var release = Assert.Single(h.Events<ReleasePossessionEvent>());
         Assert.Equal(e, release.Unit);
-        Assert.Equal(PackHarness.LocalNodeId, (int)release.StationNodeId);
+        Assert.Equal(SeatStation, (int)release.StationNodeId);
         Assert.Equal(PlayerSlotState.Choosing, h.Station.Slot.State);
         Assert.Equal(0, h.Station.Slot.UnitId);
 
@@ -537,7 +544,7 @@ public class PlayerStationTests
         Assert.Equal(PlayerSlotState.Choosing, h.Station.Slot.State);
         var release = Assert.Single(h.Read<ReleasePossessionEvent>());
         Assert.Equal(e, release.Unit);
-        Assert.Equal(PackHarness.LocalNodeId, (int)release.StationNodeId);
+        Assert.Equal(SeatStation, (int)release.StationNodeId);
 
         h.Step();
         Assert.Empty(h.Read<ReleasePossessionEvent>());   // asked at most once a second while HROT has not applied it
@@ -643,5 +650,328 @@ public class PlayerStationTests
         Assert.Empty(h.Errors);
         h.Drain();
         Assert.Contains(h.Sent<EntityStatePdu>(), p => SimNetGateway.Protocol.Dis7.EntityAppearance.GetDeactivated(p.EntityAppearance));
+    }
+
+    // ---- seats (DD-023): one HrotPlayerStation per seat, station node | n << 16 -------------------------------------------------------
+
+    private static int SeatStationOf(int seat) => PackHarness.LocalNodeId | (seat << 16);
+
+    /// <summary>A host with several seats; the "possession system" is the test's arbiter (first request in event order wins a free unit), as <see cref="Stage"/>'s Hold does for one.</summary>
+    private sealed class SeatStage : PackHarness
+    {
+        public SeatStage(int seats, CountingDdsPlugin? plugin = null, string partition = "seats")
+            : base(dis: false, plugins: plugin is null ? null : [plugin],
+                configure: plugin is null ? null : c => c.WithSide(DpsSide.SideKey, new DpsSettings { Domain = 96, Partition = partition, Seats = seats }), seats: seats)
+        {
+            RegisterTemplate(300, 3);
+            Steps(3);
+        }
+
+        public Dictionary<int, Entity> Units { get; } = new();
+
+        public HrotPlayerStation Seat(int n) => System.PlayerSeats[n - 1];
+
+        public Entity AddPlayable(int id)
+        {
+            var e = AddHrotEntity(id, new Vector3(1, 2, 0), tkb: 300);
+            World.AddComponent(e, new Hrot.Common.Playable { Side = ForceId.Friend, SlotName = new FixedString32("Rifleman") });
+            Units[id] = e;
+            return e;
+        }
+
+        public int? HolderOf(int unit) => PossessionSystem.HolderOf(World, Units[unit]);
+
+        private void Hold(Entity e, int station)
+        {
+            if (!World.IsComponentTypeRegistered<PossessedBy>())
+            {
+                World.RegisterComponent<PossessedBy>();
+            }
+
+            var held = new PossessedBy { StationNodeId = (NodeId)station, Mode = PossessionMode.Fps, Epoch = 1 };
+            if (World.HasComponent<PossessedBy>(e))
+            {
+                World.SetComponent(e, held);
+            }
+            else
+            {
+                World.AddComponent(e, held);
+            }
+        }
+
+        /// <summary>One frame, then what HROT's possession system would do with the requests it published: a free unit goes to the first asker, a holder's release frees it.</summary>
+        public void Turn()
+        {
+            Step();
+            if (World.Bus.IsRegistered<PossessRequestEvent>())
+            {
+                foreach (ref readonly var r in World.ReadEvents<PossessRequestEvent>())
+                {
+                    if (World.IsAlive(r.Unit) && PossessionSystem.HolderOf(World, r.Unit) is null)
+                    {
+                        Hold(r.Unit, (int)r.StationNodeId);
+                    }
+                }
+            }
+
+            if (World.Bus.IsRegistered<ReleasePossessionEvent>())
+            {
+                foreach (ref readonly var r in World.ReadEvents<ReleasePossessionEvent>())
+                {
+                    if (World.IsAlive(r.Unit) && PossessionSystem.HolderOf(World, r.Unit) == (int)r.StationNodeId && World.HasComponent<PossessedBy>(r.Unit))
+                    {
+                        World.RemoveComponent<PossessedBy>(r.Unit);
+                    }
+                }
+            }
+        }
+
+        public void Turns(int n)
+        {
+            for (int i = 0; i < n; i++)
+            {
+                Turn();
+            }
+        }
+    }
+
+    /// <summary>Seat n of a gateway host is the station node | n &lt;&lt; 16, whatever the number of seats; the node's own station (the editor user) is nobody's seat (D-11).</summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(4)]
+    public void Each_seat_is_the_station_node_or_n_shifted_16(int seats)
+    {
+        using var h = new SeatStage(seats);
+
+        Assert.Equal(seats, h.System.PlayerSeats.Count);
+        for (int n = 1; n <= seats; n++)
+        {
+            Assert.Equal(PackHarness.LocalNodeId | (n << 16), h.Seat(n).Station);
+            Assert.NotEqual(PackHarness.LocalNodeId, h.Seat(n).Station);
+        }
+
+        Assert.Same(h.System.PlayerStation, h.Seat(1));
+    }
+
+    /// <summary>The host offers the seats the running dps side asks for (<c>dps.seats</c>), at least one.</summary>
+    [Fact]
+    public void The_host_offers_as_many_seats_as_the_running_dps_side_asks_for()
+    {
+        var plugins = PluginSet.Of(new DdsPlayerPlugin());
+        var config = GatewayConfiguration.CreateDefault(1) with { Dis = null };
+        Assert.Equal(1, plugins.SeatsFor(config));
+        Assert.Equal(3, plugins.SeatsFor(config.WithSide(DpsSide.SideKey, new DpsSettings { Seats = 3 })));
+        Assert.Equal(1, plugins.SeatsFor(config.WithSide(DpsSide.SideKey, new DpsSettings { Seats = 3, Enabled = false })));
+    }
+
+    /// <summary>(DD-023 c) Two seats join one placed unit in the same frame: HROT's arbiter grants one; exactly one is Playing, the other is back to Choosing with HROT's refusal text as the reason.</summary>
+    [Fact]
+    public void Two_seats_joining_one_unit_in_one_frame_leave_exactly_one_playing_and_the_other_refused_with_hrots_text()
+    {
+        var plugin = new CountingDdsPlugin();
+        using var losers = new SlotWatch(96, "race-2");
+        using var h = new SeatStage(2, plugin, "race");
+        h.AddPlayable(2001);
+        h.Turns(2);
+
+        Assert.True(h.Seat(1).Join(new PlayerJoin(PlayerJoinKind.Unit, 2001, null)));
+        Assert.True(h.Seat(2).Join(new PlayerJoin(PlayerJoinKind.Unit, 2001, null)));   // nothing holds it yet: both are asked
+        h.Turns(3);
+
+        Assert.Equal([PlayerSlotState.Playing, PlayerSlotState.Choosing], [h.Seat(1).Slot.State, h.Seat(2).Slot.State]);
+        Assert.Equal(SeatStationOf(1), h.HolderOf(2001));
+        Assert.Contains($"station {SeatStationOf(1)}", h.Seat(2).Slot.Reason ?? string.Empty);
+        Assert.Equal(0, h.Seat(2).Slot.UnitId);
+        Assert.True(Wait(() =>
+        {
+            h.Turn();
+            losers.Pump();
+            return losers.Last is { } s && s.State == D.SlotState.SlotStateChoosing && s.Reason == Wire(h.Seat(2).Slot.Reason);   // the client of seat 2 is told, on its own partition
+        }));
+    }
+
+    /// <summary>A seat that is refused outright (the unit is already held by another seat) hears HROT's text too, and a later successful join clears it.</summary>
+    [Fact]
+    public void A_join_refused_at_once_carries_hrots_text_and_a_later_join_clears_it()
+    {
+        using var h = new SeatStage(2);
+        h.AddPlayable(2001);
+        h.AddPlayable(2002);
+        h.Turns(2);
+        Assert.True(h.Seat(1).Join(new PlayerJoin(PlayerJoinKind.Unit, 2001, null)));
+        h.Turns(3);
+        Assert.Equal(PlayerSlotState.Playing, h.Seat(1).Slot.State);
+
+        Assert.False(h.Seat(2).Join(new PlayerJoin(PlayerJoinKind.Unit, 2001, null)));
+        Assert.Contains($"station {SeatStationOf(1)}", h.Seat(2).Slot.Reason ?? string.Empty);
+
+        Assert.True(h.Seat(2).Join(new PlayerJoin(PlayerJoinKind.Unit, 2002, null)));
+        h.Turns(3);
+        Assert.Equal((PlayerSlotState.Playing, string.Empty), (h.Seat(2).Slot.State, h.Seat(2).Slot.Reason ?? string.Empty));
+    }
+
+    /// <summary>What the client sees of a reason: PlayerSlot.Reason is at most 64 characters.</summary>
+    private static string Wire(string? reason) => reason is null ? string.Empty : reason.Length <= 64 ? reason : reason[..64];
+
+    private static bool Wait(Func<bool> condition, int timeoutMs = 6000)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (sw.ElapsedMilliseconds < timeoutMs)
+        {
+            if (condition())
+            {
+                return true;
+            }
+
+            Thread.Sleep(5);
+        }
+
+        return condition();
+    }
+
+    /// <summary>The newest PlayerSlot a client of one partition sees.</summary>
+    private sealed class SlotWatch : IDisposable
+    {
+        private readonly DdsParticipant _participant;
+        private readonly DdsReader<D.PlayerSlot> _reader;
+
+        public SlotWatch(uint domain, string partition)
+        {
+            _participant = new DdsParticipant(domain, defaultPartition: partition);
+            _reader = new DdsReader<D.PlayerSlot>(_participant);
+        }
+
+        public D.PlayerSlot? Last { get; private set; }
+
+        public void Pump()
+        {
+            using var loan = _reader.Take(64);
+            foreach (var sample in loan)
+            {
+                if (sample.IsValid && sample.Info.InstanceState == DdsInstanceState.Alive)
+                {
+                    Last = sample.Data;
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            _reader.Dispose();
+            _participant.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// (DD-023 b) Seats are independent: seeded random joins, controls and leaves on 1 .. 4 seats over real DDS. After every step each client's PlayerSlot equals its seat station's slot, no unit
+    /// is Playing on two seats, a Playing seat is the HROT holder of its unit, and no seat ever holds a unit another seat's station holds.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(2, 2)]
+    [InlineData(3, 3)]
+    [InlineData(4, 4)]
+    [InlineData(5, 3)]
+    [InlineData(6, 2)]
+    public void Seats_are_independent_over_random_joins_controls_and_leaves(int seed, int seats)
+    {
+        var rng = new Random(seed);
+        string partition = "prop" + seed;
+        // one seat = the base partition itself, several = base-n
+        var watches = Enumerable.Range(1, seats).Select(n => new SlotWatch(96, seats == 1 ? partition : $"{partition}-{n}")).ToArray();
+        var plugin = new CountingDdsPlugin();
+        using var h = new SeatStage(seats, plugin, partition);
+        try
+        {
+            for (int u = 0; u <= seats; u++)
+            {
+                h.AddPlayable(2001 + u);   // one more unit than seats: contention, but a free one too
+            }
+
+            h.Turns(3);
+
+            void Settle()
+            {
+                Assert.True(Wait(() =>
+                {
+                    h.Turn();
+                    foreach (var w in watches)
+                    {
+                        w.Pump();
+                    }
+
+                    for (int n = 1; n <= seats; n++)
+                    {
+                        var slot = h.Seat(n).Slot;
+                        if (watches[n - 1].Last is not { } seen || (byte)seen.State != (byte)slot.State || seen.UnitId != slot.UnitId || seen.Reason != Wire(slot.Reason))
+                        {
+                            return false;
+                        }
+                    }
+
+                    return true;
+                }), "every client's PlayerSlot reaches its seat's slot");
+            }
+
+            Settle();
+            for (int step = 0; step < 24; step++)
+            {
+                int n = 1 + rng.Next(seats);
+                var seat = h.Seat(n);
+                switch (seat.Slot.State)
+                {
+                    case PlayerSlotState.Choosing when seat.Offers.Count > 0:
+                        seat.Join(new PlayerJoin(PlayerJoinKind.Unit, seat.Offers[rng.Next(seat.Offers.Count)].UnitId, null));
+                        break;
+                    case PlayerSlotState.Playing when rng.Next(2) == 0:
+                        seat.Leave();
+                        break;
+                    case PlayerSlotState.Playing:
+                        seat.Control(Frame());
+                        break;
+                }
+
+                if (rng.Next(3) == 0)
+                {
+                    // the contested case: another seat asks for the same unit in the same frame
+                    int other = 1 + rng.Next(seats);
+                    var o = h.Seat(other);
+                    if (other != n && o.Slot.State == PlayerSlotState.Choosing && seat.Slot.UnitId != 0)
+                    {
+                        o.Join(new PlayerJoin(PlayerJoinKind.Unit, seat.Slot.UnitId, null));
+                    }
+                }
+
+                Settle();
+
+                var playing = new Dictionary<int, int>();
+                for (int k = 1; k <= seats; k++)
+                {
+                    var st = h.Seat(k);
+                    Assert.Equal(SeatStationOf(k), st.Station);
+                    if (st.Slot.State == PlayerSlotState.Playing)
+                    {
+                        Assert.True(playing.TryAdd(st.Slot.UnitId, k), $"unit {st.Slot.UnitId} is Playing on two seats");
+                        Assert.Equal(SeatStationOf(k), h.HolderOf(st.Slot.UnitId));
+                    }
+                }
+
+                foreach (var id in h.Units.Keys)
+                {
+                    if (h.HolderOf(id) is { } holder && holder != PackHarness.LocalNodeId)
+                    {
+                        Assert.Contains(Enumerable.Range(1, seats), k => SeatStationOf(k) == holder);   // only a seat of this gateway holds a unit, and just one
+                    }
+                }
+            }
+        }
+        finally
+        {
+            foreach (var w in watches)
+            {
+                w.Dispose();
+            }
+        }
     }
 }

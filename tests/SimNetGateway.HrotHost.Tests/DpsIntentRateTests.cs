@@ -33,6 +33,10 @@ internal sealed class CountingDdsPlugin : IGatewayPlugin
 
     public bool WantsEventsInReplay(object settings) => _inner.WantsEventsInReplay(settings);
 
+    public int PlayerSeats(object settings) => _inner.PlayerSeats(settings);
+
+    public string? Check(object settings, PluginHostContext context) => _inner.Check(settings, context);
+
     public IHostService? CreateHostService(object settings, PluginHostContext context) => _inner.CreateHostService(settings, context);
 
     public PluginBound Bind(SideBinding binding)

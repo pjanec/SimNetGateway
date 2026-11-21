@@ -19,7 +19,8 @@ namespace SimNetGateway.HrotHost;
 public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayRestoreGated, IDisposable
 {
     private readonly HrotServices _services;
-    private readonly Func<Gateway.HrotDis.IPlayerStation, GatewayRuntime> _factory;
+    private readonly HrotPlayerStation[] _seatArray;
+    private readonly Func<IReadOnlyList<Gateway.HrotDis.IPlayerStation>, GatewayRuntime> _factory;
     private readonly EcsHrotAdapter _adapter;
     private readonly ReplicaPoser _poser;
     private readonly bool _allowZeroOrigin;
@@ -48,13 +49,32 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
     {
     }
 
-    /// <summary>The factory gets the node's player station, to hand to the plugins that play (<see cref="GatewayRuntime.Create"/>).</summary>
+    /// <summary>One seat: the factory gets the node's player station (seat 1), to hand to the plugins that play (<see cref="GatewayRuntime.Create"/>).</summary>
     public DisGatewaySystem(HrotServices services, Gateway.HrotDis.GatewayConfiguration config, Func<Gateway.HrotDis.IPlayerStation, GatewayRuntime> factory, Action<string>? error = null,
         Action? beforeFrame = null)
+        : this(services, config, 1, factory is null ? throw new ArgumentNullException(nameof(factory)) : seats => factory(seats[0]), error, beforeFrame)
+    {
+    }
+
+    /// <summary>
+    /// <paramref name="seats"/> player seats (DD-023): one <see cref="HrotPlayerStation"/> each, station <c>node | n &lt;&lt; 16</c> for seat n = 1 .. seats, each framed, bounded and
+    /// detached like the one was; the factory gets all of them in seat order.
+    /// </summary>
+    public DisGatewaySystem(HrotServices services, Gateway.HrotDis.GatewayConfiguration config, int seats, Func<IReadOnlyList<Gateway.HrotDis.IPlayerStation>, GatewayRuntime> factory,
+        Action<string>? error = null, Action? beforeFrame = null)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
-        PlayerStation = new HrotPlayerStation(services);
+        ArgumentOutOfRangeException.ThrowIfLessThan(seats, 1);
+        var stations = new HrotPlayerStation[seats];
+        for (int i = 0; i < seats; i++)
+        {
+            stations[i] = new HrotPlayerStation(services, HrotPlayerStation.StationOf(services.LocalNodeId, i + 1));
+        }
+
+        PlayerSeats = stations;
+        _seatArray = stations;
+        PlayerStation = stations[0];
         _adapter = new EcsHrotAdapter(services, config);
         _allowZeroOrigin = config.Hrot.AllowZeroOrigin;
         _poser = new ReplicaPoser(_allowZeroOrigin);
@@ -69,6 +89,9 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
 
     /// <summary>The node's player station (DD-017 3.6): the slot, the offers and the control path of the player mode.</summary>
     public HrotPlayerStation PlayerStation { get; }
+
+    /// <summary>Every player seat in seat order (DD-023): element 0 is seat 1 = <see cref="PlayerStation"/>.</summary>
+    public IReadOnlyList<HrotPlayerStation> PlayerSeats { get; }
 
     /// <summary>The adapter (the replica book and the counters).</summary>
     public EcsHrotAdapter Adapter => _adapter;
@@ -140,7 +163,10 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
         }
 
         _wasReplaying = replaying;
-        PlayerStation.Frame(world, phase != ClusterPhase.Idle, replaying);
+        foreach (var seat in _seatArray)
+        {
+            seat.Frame(world, phase != ClusterPhase.Idle, replaying);
+        }
 
         if (_runtime is null)
         {
@@ -233,7 +259,7 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
     {
         try
         {
-            _runtime = _factory(PlayerStation);
+            _runtime = _factory(PlayerSeats);
             Builds++;
             _failed = false;
             _failedPhase = null;
@@ -258,7 +284,11 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
     private void Boundary(EntityRepository world)
     {
         _adapter.Reset(world);
-        PlayerStation.Boundary();
+        foreach (var seat in _seatArray)
+        {
+            seat.Boundary();
+        }
+
         StopRuntime(farewell: false);
         _failed = false;
         _failedPhase = null;
@@ -320,7 +350,11 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
         // thread stopped (the world guard flags such a read). Replicas are swept where the system runs on the simulation thread: at a world boundary and when a replay begins.
         // The farewell tick still runs the plugins' pumps, and a player plugin calls the station from its pump (a pending control frame, a join, a leave): the station is
         // detached first, so none of those calls reaches the world.
-        PlayerStation.Detach();
+        foreach (var seat in _seatArray)
+        {
+            seat.Detach();
+        }
+
         StopRuntime(farewell: true);
     }
 }

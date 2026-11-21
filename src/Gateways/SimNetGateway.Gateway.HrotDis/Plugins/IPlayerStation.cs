@@ -50,8 +50,11 @@ public enum PlayerJoinKind : byte
 /// <summary>A join request: a placed unit by id, a role by name, or observe.</summary>
 public readonly record struct PlayerJoin(PlayerJoinKind Kind, int UnitId, string? Role);
 
-/// <summary>The slot as of <see cref="Version"/>; <see cref="RespawnAt"/> is the simulation time it returns to choosing after death (0 = never).</summary>
-public readonly record struct PlayerSlotSnapshot(PlayerSlotState State, int UnitId, double RespawnAt, int Version);
+/// <summary>
+/// The slot as of <see cref="Version"/>; <see cref="RespawnAt"/> is the simulation time it returns to choosing after death (0 = never); <see cref="Reason"/> is the host's
+/// text for the last refused join (HROT's own refusal text; empty or null = none), shown to the client as <c>PlayerSlot.Reason</c>.
+/// </summary>
+public readonly record struct PlayerSlotSnapshot(PlayerSlotState State, int UnitId, double RespawnAt, int Version, string? Reason = null);
 
 /// <summary>One playable unit (<see cref="Role"/> is its slot name) and the side (DIS force numbering) it belongs to.</summary>
 public readonly record struct PlayerOffer(int UnitId, string? Role, int Force);

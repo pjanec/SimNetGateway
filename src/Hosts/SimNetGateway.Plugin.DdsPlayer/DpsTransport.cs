@@ -56,34 +56,49 @@ internal sealed class DpsChannel<T> : IOutboundChannel<DpsItem<T>>, IDisposable
 }
 
 /// <summary>
-/// The DDS side of the plugin for one gateway runtime: a participant in the station's partition and one writer per published topic. Disposing it ends every
-/// instance the station published (the world boundary), so a client never keeps a stale entity. Main thread only.
+/// The DDS side of the plugin for one gateway runtime (DD-023): the WORLD participant - every world topic, <c>Session</c>, <c>View</c>, <c>SimClock</c> / <c>ClockStep</c> and (interim, until
+/// HROT Q114-I routes it per seat) <c>PlayerMessage</c> - on <c>&lt;base&gt;-*</c> with two or more seats and on <c>&lt;base&gt;</c> with one (D-6), plus one <see cref="DpsSeat"/> per seat on
+/// <c>&lt;base&gt;-n</c> (with one seat the world participant itself). Disposing it ends every instance the gateway published (the world boundary), so a client never keeps a stale entity.
+/// <c>Entity.Playable</c> comes from ONE offerable-unit set shared by every seat (the union of what the seats' stations offer; they share one world). Main thread only.
 /// </summary>
 public sealed class DpsTransport : IDisposable
 {
     private readonly DdsParticipant _participant;
-    private readonly IPlayerStation? _station;
     private readonly DpsHostService? _service;
     private int _epoch;
     private Session _lastSession;
     private bool _hasSession;
     private readonly Dictionary<int, Entity> _entities = new();
     private readonly List<IDisposable> _channels = new();
-    private readonly DpsInbound? _inbound;
-    private readonly DpsPlayerSlot? _slot;
-    private readonly DpsGizmos? _gizmos;
-    private readonly DpsClientWorldInbound? _clientWorlds;
-    private readonly DpsClockEcho? _echo;
-    private int _offersSeen = -1;
+    private readonly List<DpsSeat> _seats = new();
+    private readonly IPlayerStation?[] _stations;
 
-    public DpsTransport(DpsSettings settings, string partition, IPlayerStation? station, int epoch, Action<string>? log = null, IGizmoSource? gizmoSource = null,
-        DpsHostService? service = null, Func<long>? stationTicks = null)
+    // the units any seat offers, rebuilt once per frame without allocating (the steady state), and an order-independent fingerprint of it
+    private readonly HashSet<int> _offerable = new();
+    private ulong _offerHash;
+    private bool _offerKnown;
+
+    /// <param name="partition">The BASE partition name (<see cref="Partition"/>).</param>
+    /// <param name="stations">One player station per seat, in seat order (element 0 = seat 1); a seat with no element has no player mode (it only observes). Null = none.</param>
+    /// <param name="gizmoSources">The gizmo source of each seat, in seat order; null or a missing element = none.</param>
+    public DpsTransport(DpsSettings settings, string partition, IReadOnlyList<IPlayerStation>? stations, int epoch, Action<string>? log = null,
+        IReadOnlyList<IGizmoSource?>? gizmoSources = null, DpsHostService? service = null, Func<long>? stationTicks = null)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+        settings.Validate();
         Partition = partition;
+        SeatCount = settings.Seats;
+        WorldPartition = settings.Seats >= 2 ? partition + "-*" : partition;
         _service = service;
-        _station = station;
         _epoch = epoch;
-        _participant = new DdsParticipant((uint)settings.Domain, defaultPartition: partition);
+        _stations = new IPlayerStation?[settings.Seats];
+        for (int i = 0; i < _stations.Length; i++)
+        {
+            _stations[i] = stations is not null && i < stations.Count ? stations[i] : null;
+        }
+
+        var seatLog = log ?? (_ => { });
+        _participant = new DdsParticipant((uint)settings.Domain, defaultPartition: WorldPartition);
         try
         {
             Session = Add(new DpsChannel<Session>(_participant, prepare: s =>
@@ -132,24 +147,32 @@ public sealed class DpsTransport : IDisposable
             TrafficLights = Add(new DpsChannel<TrafficLights>(_participant));
             TkbType = Add(new DpsChannel<TkbType>(_participant));
             ManDowned = Add(new DpsChannel<ManDowned>(_participant));
-            PlayerMessage = Add(new DpsChannel<PlayerMessage>(_participant));
+            PlayerMessage = Add(new DpsChannel<PlayerMessage>(_participant));   // INTERIM (DD-023 section 9): on the world participant until HROT Q114-I routes it per seat
             Status = Add(new DpsChannel<Status>(_participant));
             Exercise = Add(new DpsChannel<Exercise>(_participant));
             View = Add(new DpsChannel<View>(_participant));
-            PlayerSlot = Add(new DpsChannel<PlayerSlot>(_participant));
-            OwnUnit = Add(new DpsChannel<OwnUnit>(_participant));
-            _inbound = new DpsInbound(_participant, settings, station, log ?? (_ => { }));
-            _slot = new DpsPlayerSlot(station, PlayerSlot, OwnUnit);
-            GizmoFrame = Add(new DpsChannel<GizmoFrame>(_participant));
-            _gizmos = new DpsGizmos(_participant, settings, partition, gizmoSource, _inbound, GizmoFrame, log ?? (_ => { }));
             SimClock = Add(new DpsChannel<SimClock>(_participant));
             ClockStep = Add(new DpsChannel<ClockStep>(_participant));
-            if (service is not null)
+            for (int i = 0; i < settings.Seats; i++)
             {
-                _clientWorlds = new DpsClientWorldInbound(_participant, settings, service.Worlds);
-            }
+                bool own = settings.Seats >= 2;
+                string seatPartition = own ? $"{partition}-{i + 1}" : partition;
+                var participant = own ? new DdsParticipant((uint)settings.Domain, defaultPartition: seatPartition) : _participant;
+                var gizmo = gizmoSources is not null && i < gizmoSources.Count ? gizmoSources[i] : null;
+                try
+                {
+                    _seats.Add(new DpsSeat(i + 1, seatPartition, participant, own, settings, _stations[i], gizmo, service, stationTicks, seatLog));
+                }
+                catch
+                {
+                    if (own)
+                    {
+                        participant.Dispose();
+                    }
 
-            _echo = new DpsClockEcho(_participant, stationTicks ?? DpsClockEcho.DefaultClock.Ticks, log ?? (_ => { }));
+                    throw;
+                }
+            }
         }
         catch
         {
@@ -158,11 +181,20 @@ public sealed class DpsTransport : IDisposable
         }
     }
 
-    /// <summary>The DDS partition every topic of this station is written in.</summary>
+    /// <summary>The BASE partition name: what <c>Session.StationName</c> says and what a seat's partition is derived from (<c>&lt;base&gt;-n</c>).</summary>
     public string Partition { get; }
 
-    /// <summary>The client id of the station's player (0 = nobody plays; tests and diagnostics).</summary>
-    internal ulong InboundOwner => _inbound?.Owner ?? 0;
+    /// <summary>The partition of the world participant: <c>&lt;base&gt;-*</c> with two or more seats, <c>&lt;base&gt;</c> with one.</summary>
+    public string WorldPartition { get; }
+
+    /// <summary>How many seats this transport serves.</summary>
+    public int SeatCount { get; }
+
+    /// <summary>The seats in order (tests and diagnostics).</summary>
+    internal IReadOnlyList<DpsSeat> Seats => _seats;
+
+    /// <summary>The client id of seat 1's player (0 = nobody plays; tests and diagnostics).</summary>
+    internal ulong InboundOwner => _seats.Count > 0 ? _seats[0].InboundOwner : 0;
 
     internal DpsChannel<Session> Session { get; } = null!;
 
@@ -220,11 +252,14 @@ public sealed class DpsTransport : IDisposable
 
     internal DpsChannel<View> View { get; } = null!;
 
-    internal DpsChannel<PlayerSlot> PlayerSlot { get; } = null!;
+    /// <summary>Seat 1's slot writer (the seat-less view of the one-player layout; per seat: <see cref="Seats"/>).</summary>
+    internal DpsChannel<PlayerSlot> PlayerSlot => _seats[0].PlayerSlot;
 
-    internal DpsChannel<OwnUnit> OwnUnit { get; } = null!;
+    /// <summary>Seat 1's own-unit writer.</summary>
+    internal DpsChannel<OwnUnit> OwnUnit => _seats[0].OwnUnit;
 
-    internal DpsChannel<GizmoFrame> GizmoFrame { get; } = null!;
+    /// <summary>Seat 1's gizmo writer.</summary>
+    internal DpsChannel<GizmoFrame> GizmoFrame => _seats[0].GizmoFrame;
 
     internal DpsChannel<SimClock> SimClock { get; } = null!;
 
@@ -233,10 +268,22 @@ public sealed class DpsTransport : IDisposable
     /// <summary>The world epoch this station publishes now (tests and diagnostics).</summary>
     internal int Epoch => _epoch;
 
-    /// <summary>Clock probes answered by the echo thread (tests).</summary>
-    internal int ProbesAnswered => _echo?.Answered ?? 0;
+    /// <summary>Clock probes answered by the echo threads of every seat (tests).</summary>
+    internal int ProbesAnswered
+    {
+        get
+        {
+            int n = 0;
+            for (int i = 0; i < _seats.Count; i++)
+            {
+                n += _seats[i].ProbesAnswered;
+            }
 
-    /// <summary>Once per frame: an entity whose playable flag changed with the station's offers is written again.</summary>
+            return n;
+        }
+    }
+
+    /// <summary>Once per frame: the world epoch, every seat's client topics, and an entity whose playable flag changed with the seats' offers is written again.</summary>
     public void Pump()
     {
         // a load committed (the host's world gate): the station moves to the new world epoch and says so at once, whether or not it saw a boundary itself
@@ -249,28 +296,16 @@ public sealed class DpsTransport : IDisposable
             }
         }
 
-        _clientWorlds?.Pump();
-        _inbound?.Pump();
-        _gizmos?.Pump();
-        _slot?.Pump();
-        if (_station is null)
+        for (int i = 0; i < _seats.Count; i++)
+        {
+            _seats[i].Pump();
+        }
+
+        if (!RefreshPlayable())
         {
             return;
         }
 
-        var offers = _station.Offers;
-        int hash = offers.Count;
-        foreach (var o in offers)
-        {
-            hash = HashCode.Combine(hash, o.UnitId);
-        }
-
-        if (hash == _offersSeen)
-        {
-            return;
-        }
-
-        _offersSeen = hash;
         foreach (var (id, entity) in _entities.ToArray())
         {
             if (entity.Playable != IsOffered(id))
@@ -280,23 +315,44 @@ public sealed class DpsTransport : IDisposable
         }
     }
 
-    private bool IsOffered(int id)
+    /// <summary>
+    /// Rebuilds the set of offerable units - the union of every seat's offers (the seats share one world, so it is one list for all of them, D-8) - and says whether it differs from the
+    /// last one. Once per frame, no LINQ and no allocation in the steady state (the set and its buffers are reused).
+    /// </summary>
+    internal bool RefreshPlayable()
     {
-        if (_station is null)
+        _offerable.Clear();
+        ulong hash = 0;
+        for (int s = 0; s < _stations.Length; s++)
+        {
+            var station = _stations[s];
+            if (station is null)
+            {
+                continue;
+            }
+
+            var offers = station.Offers;
+            for (int i = 0; i < offers.Count; i++)
+            {
+                int id = offers[i].UnitId;
+                if (_offerable.Add(id))
+                {
+                    hash += (ulong)(uint)id * 0x9E3779B97F4A7C15UL + 1;
+                }
+            }
+        }
+
+        if (_offerKnown && hash == _offerHash)
         {
             return false;
         }
 
-        foreach (var o in _station.Offers)
-        {
-            if (o.UnitId == id)
-            {
-                return true;
-            }
-        }
-
-        return false;
+        _offerKnown = true;
+        _offerHash = hash;
+        return true;
     }
+
+    private bool IsOffered(int id) => _offerable.Contains(id);
 
     private DpsChannel<T> Add<T>(DpsChannel<T> channel)
         where T : struct
@@ -307,10 +363,12 @@ public sealed class DpsTransport : IDisposable
 
     public void Dispose()
     {
-        _echo?.Dispose();
-        _clientWorlds?.Dispose();
-        _gizmos?.Dispose();
-        _inbound?.Dispose();
+        for (int i = _seats.Count - 1; i >= 0; i--)
+        {
+            _seats[i].Dispose();
+        }
+
+        _seats.Clear();
         foreach (var channel in _channels)
         {
             channel.Dispose();

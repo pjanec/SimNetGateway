@@ -308,4 +308,21 @@ the leave verb.
 
 ## 9. As-built notes
 
-Not built.
+**T-047 (2026-11-21), the gateway part with no HROT dependency: built; HROT Q114 is not, so joining is still today's placed-unit possession per seat.**
+
+| Built | Where |
+|---|---|
+| `dps.seats` (default 1, 1 .. 1024; outside = a configuration error naming the key, from the file and from `DpsSettings.Validate`) | `DpsSettings.cs`, `DpsSide.cs`, `DdsPlayerPlugin.Check` |
+| World participant on `<base>-*` (Seats >= 2) or `<base>` (Seats 1, D-6): every world topic, `Session` (`StationName` = the base name, one writer), `View`, `SimClock` / `ClockStep`, `PlayerMessage` | `DpsTransport.cs` |
+| `DpsSeat` per seat on `<base>-<n>` (Seats 1: the world participant itself): `PlayerSlot`, `OwnUnit`, `GizmoFrame` + `DpsGizmos`, `DpsInbound` (Join / Control / Leave), `GizmoView`, `DpsClockEcho` (probe read and echo written on the seat), `DpsClientWorldInbound` into the host-lifetime `DpsHostService.Worlds` | `DpsSeat.cs` |
+| `Entity.Playable` from ONE offerable-unit set: the union of every seat's offers, rebuilt once per frame by index loops into a reused `HashSet` (0 bytes in the steady state, test-proved) | `DpsTransport.RefreshPlayable` |
+| N `HrotPlayerStation`s, one per seat, station `node \| n << 16` (one field, used at the five "is this mine" sites); `SideBinding.PlayerSeats` appended (`PlayerStation` = seat 1, so DIS / HLA are unchanged); `IGatewayPlugin.PlayerSeats(settings)` (default 1) tells the host how many | `HrotPlayerStation.cs`, `DisGatewaySystem.cs`, `GatewayRuntime.cs`, `GatewayCapability.cs`, `PluginSet.SeatsFor`, `IGatewayPlugin.cs` |
+
+Findings and deviations:
+- **INTERIM `PlayerMessage`** stays on the world participant (every seat's client sees every message) until HROT Q114-I moves `PlayerMessages.Addressed` below `Hrot.Presentation` and the message is routed per seat (D-15).
+- **Behaviour change on purpose (D-11):** the gateway player is station `node \| 1 << 16`, no longer the node's own station, also with one seat. Tests that assumed the node id were changed.
+- **Refusal text (added, not in the design's seat list):** the seam had no refusal channel (`PlayerSlot.Reason` was always empty). `PlayerSlotSnapshot` gained an appended `Reason` (HROT's own `OrderResult.Detail` of a refused `Possess`); a seat that loses the race (another station was granted the unit) now returns to Choosing at once with that text instead of waiting out the 10 s timeout. `PlayerSlot.Reason` is capped at 64 characters by the contract, so long texts are cut.
+- **PackHarness does not run HROT's `PossessionSystem`:** the tests' arbiter (first request in event order wins a free unit) stands in for it, as `Stage.Hold` already did; the real system's race is the deploy-server scenario `two-seats-one-unit` (D-16), which needs HROT Q114.
+- `ClockStep.Samples` counting for the render seat (D-12) is not built (`Samples` is unchanged, 0 as before); `dps.renderSeat` is not added. Part of the HROT-dependent half.
+- Seats beyond the stations the host offers (a host with fewer player stations than `dps.seats`) only observe, with one warning.
+- Not built here (HROT Q114): the deploy flow per seat (D-3, D-4), roles and areas (`OfferKindArea`, P-5), the leave verb, the seat table type.

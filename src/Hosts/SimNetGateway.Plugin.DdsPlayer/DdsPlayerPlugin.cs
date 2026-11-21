@@ -4,8 +4,8 @@ using D = SimNetGateway.Protocol.DdsPlayer;
 namespace SimNetGateway.Plugin.DdsPlayer;
 
 /// <summary>
-/// The DDS Player Station side as a plugin (DD-017): publishes the world the gateway sees to DDS topics in the station's partition. One DDS participant per
-/// gateway runtime, so a world boundary (which rebuilds the runtime) ends every instance; the world epoch that tells clients to drop their caches lives in
+/// The DDS Player Station side as a plugin (DD-017, DD-023): publishes the world the gateway sees to DDS topics in the station's partition (the world participant, plus one
+/// participant per seat when there are several). The participants live per gateway runtime, so a world boundary (which rebuilds the runtime) ends every instance; the world epoch that tells clients to drop their caches lives in
 /// the host service, which survives the boundary.
 /// </summary>
 public sealed class DdsPlayerPlugin : IGatewayPlugin
@@ -21,9 +21,27 @@ public sealed class DdsPlayerPlugin : IGatewayPlugin
 
     public IHostService? CreateHostService(object settings, PluginHostContext context) => new DpsHostService();
 
+    /// <summary>One seat per configured player (DD-023): the host offers that many player stations.</summary>
+    public int PlayerSeats(object settings) => ((DpsSettings)settings).Seats;
+
+    /// <summary>A configuration this plugin cannot run: <c>dps.seats</c> outside 1 .. 1024.</summary>
+    public string? Check(object settings, PluginHostContext context)
+    {
+        try
+        {
+            ((DpsSettings)settings).Validate();
+            return null;
+        }
+        catch (ArgumentException ex)
+        {
+            return ex.Message;
+        }
+    }
+
     public PluginBound Bind(SideBinding binding)
     {
         var settings = (DpsSettings)binding.Settings;
+        settings.Validate();
         if (Side is DpsSide dps)
         {
             dps.Log = binding.Log;
@@ -33,7 +51,20 @@ public sealed class DdsPlayerPlugin : IGatewayPlugin
             ? settings.Partition
             : $"station-{binding.Config.Shared.Site}-{binding.Config.Shared.Application}";
         int epoch = binding.Service is DpsHostService service ? service.NextEpoch() : 1;
-        var transport = new DpsTransport(settings, partition, binding.PlayerStation, epoch, binding.Log, binding.GizmoSource, binding.Service as DpsHostService, binding.StationTicks);
+        // seat 1 keeps the host's explicit gizmo source (if any); the others use their own station as the source
+        var seats = binding.PlayerSeats;
+        var gizmoSources = new IGizmoSource?[Math.Min(settings.Seats, Math.Max(seats.Count, 1))];
+        for (int i = 0; i < gizmoSources.Length; i++)
+        {
+            gizmoSources[i] = i == 0 ? binding.GizmoSource ?? (seats.Count > 0 ? seats[0] as IGizmoSource : null) : seats[i] as IGizmoSource;
+        }
+
+        if (seats.Count > 0 && seats.Count < settings.Seats)
+        {
+            binding.Log($"dps: warning: dps.seats is {settings.Seats} but the host offers {seats.Count} player station(s); the seats beyond it only observe");
+        }
+
+        var transport = new DpsTransport(settings, partition, seats, epoch, binding.Log, gizmoSources, binding.Service as DpsHostService, binding.StationTicks);
         try
         {
             DpsPorts.Bind(binding.Builder, transport);
@@ -44,7 +75,9 @@ public sealed class DdsPlayerPlugin : IGatewayPlugin
             throw;
         }
 
-        binding.Log($"dps: station partition '{partition}' on DDS domain {settings.Domain}, world epoch {epoch}");
+        binding.Log(settings.Seats == 1
+            ? $"dps: station partition '{partition}' on DDS domain {settings.Domain}, world epoch {epoch}"
+            : $"dps: station partition '{partition}': world on '{transport.WorldPartition}', {settings.Seats} seats on '{partition}-1' .. '{partition}-{settings.Seats}', DDS domain {settings.Domain}, world epoch {epoch}");
         if (settings.LeaseSeconds * 1000.0 < D.DpsProtocol.DefaultLeaseMs)
         {
             // a reader's lease shorter than the writer's fails the DDS match silently: a client with the contract's default lease would never be heard

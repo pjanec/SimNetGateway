@@ -10,7 +10,7 @@ namespace SimNetGateway.Plugin.DdsPlayer.Tests;
 /// <summary>The player topics driving the player-station seam: join, control frames, leave, lost client, one player at a time, the slot and the unit published on change.</summary>
 public class DpsInboundTests
 {
-    internal sealed class RecordingStation : IPlayerStation
+    internal class RecordingStation : IPlayerStation
     {
         public List<PlayerJoin> Joins { get; } = new();
 
@@ -438,5 +438,239 @@ public class DpsInboundTests
         }
 
         Assert.DoesNotContain(log, l => l.Contains("warning"));
+    }
+
+    // ---- seats (DD-023): one world participant on <base>-*, one participant per seat on <base>-n ---------------------------------------
+
+    /// <summary>A seat's station for the partition tests: its own slot, unit and offer, and a gizmo source that draws "seat k" so every product can be told from the other seats'.</summary>
+    internal sealed class SeatStation : RecordingStation, IGizmoSource
+    {
+        private GizmoViewRequest? _view;
+
+        public SeatStation(int k)
+        {
+            K = k;
+            Slot = new PlayerSlotSnapshot(PlayerSlotState.Playing, 1000 + k, 0.0, 1);
+            Unit = new PlayerUnitStatus(10.0 * k, 100.0, Array.Empty<PlayerWeapon>(), 0, 0);
+            OfferList.Add(new PlayerOffer(1000 + k, null, 1));
+        }
+
+        public int K { get; }
+
+        public void SetView(GizmoViewRequest? view) => _view = view;
+
+        public IReadOnlyList<GizmoLayerFrame> Take() =>
+            [.. (_view?.Layers ?? []).Select(l => new GizmoLayerFrame(l, [new GizmoPrimitiveData(GizmoPrimitiveShape.Text, [new HrotVec3(K, 0, 0)], 0u, 0f, "seat " + K)]))];
+    }
+
+    private static string SeatPartition(int k) => $"station-1-{k}";
+
+    /// <summary>Everything one seat's client sees, read in the seat's own partition.</summary>
+    private sealed class SeatView : IDisposable
+    {
+        public SeatView(uint domain, string partition)
+        {
+            Entities = new Watch.Watch<D.Entity>(domain, partition, e => e.EntityId.ToString());
+            Sessions = new Watch.Watch<D.Session>(domain, partition, _ => "session");
+            Slots = new Watch.Watch<D.PlayerSlot>(domain, partition, _ => "slot");
+            Units = new Watch.Watch<D.OwnUnit>(domain, partition, _ => "unit");
+            Frames = new Watch.Watch<D.GizmoFrame>(domain, partition, f => f.Producer + "/" + f.Layer);
+        }
+
+        public Watch.Watch<D.Entity> Entities { get; }
+
+        public Watch.Watch<D.Session> Sessions { get; }
+
+        public Watch.Watch<D.PlayerSlot> Slots { get; }
+
+        public Watch.Watch<D.OwnUnit> Units { get; }
+
+        public Watch.Watch<D.GizmoFrame> Frames { get; }
+
+        public void Pump()
+        {
+            Entities.Pump();
+            Sessions.Pump();
+            Slots.Pump();
+            Units.Pump();
+            Frames.Pump();
+        }
+
+        public void Dispose()
+        {
+            Entities.Dispose();
+            Sessions.Dispose();
+            Slots.Dispose();
+            Units.Dispose();
+            Frames.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// (DD-023 a) Three seats over real DDS: a world sample reaches every seat client exactly once; seat k's PlayerSlot / OwnUnit / GizmoFrame reach ONLY seat k's client; a JoinRequest,
+    /// ControlFrame, GizmoView or Leave written on <c>base-k</c> reaches only seat k's station.
+    /// </summary>
+    [Fact]
+    public void Three_seats_keep_every_world_sample_once_and_every_seat_and_client_topic_on_its_own_partition()
+    {
+        uint domain = Watch.NewDomain();
+        var stations = Enumerable.Range(1, 3).Select(k => new SeatStation(k)).ToArray();
+        var views = Enumerable.Range(1, 3).Select(k => new SeatView(domain, SeatPartition(k))).ToArray();
+        using var rig = new Rig(domain, seats: 3, stations: stations);
+        var clients = Enumerable.Range(1, 3).Select(k => new Client(domain, (ulong)k, SeatPartition(k))).ToArray();
+        try
+        {
+            rig.Transport.EntityTopic.Send(new DpsItem<D.Entity>(new D.Entity { EntityId = 7, Name = "world" }));
+            rig.Transport.Session.Send(new DpsItem<D.Session>(new D.Session { Terrain = "t", StationName = string.Empty }));
+            for (int k = 1; k <= 3; k++)
+            {
+                clients[k - 1].View(["L"]);
+                clients[k - 1].Join((uint)k, 100 + k);
+                clients[k - 1].Control(new D.ControlFrame { Seq = (uint)(10 * k), Forward = k });
+            }
+
+            Assert.True(Until(rig, () => stations.All(s => s.Joins.Count == 1 && s.Controls.Count == 1)));
+            Assert.True(Watch.WaitFor(() =>
+            {
+                rig.Step();
+                foreach (var v in views)
+                {
+                    v.Pump();
+                }
+
+                return views.All(v => v.Entities.Alive.Count == 1 && v.Sessions.Events.Count >= 1 && v.Slots.Alive.Count == 1 && v.Units.Alive.Count == 1 && v.Frames.Alive.Count == 1);
+            }));
+            Frames(rig, 30);
+            foreach (var v in views)
+            {
+                v.Pump();
+            }
+
+            for (int k = 1; k <= 3; k++)
+            {
+                var v = views[k - 1];
+
+                // the world: once per client, never duplicated by a second writer
+                Assert.Single(v.Entities.Events);
+                Assert.Single(v.Sessions.Events);
+                Assert.Equal("station-1", v.Sessions.Events[0].StationName);   // the BASE name, not the seat's partition
+
+                // the seat's own products: only this client's
+                Assert.All(v.Slots.Events, e => Assert.Equal(1000 + k, e.UnitId));
+                Assert.All(v.Units.Events, e => Assert.Equal((1000 + k, 10f * k), (e.UnitId, e.Health)));
+                Assert.Equal([SeatPartition(k) + "/L"], v.Frames.Alive.Keys.ToArray());
+                Assert.All(v.Frames.Events, f => Assert.All(f.Primitives, p => Assert.Equal("seat " + k, p.Text)));
+
+                // the client's own products: only this seat's station
+                Assert.Equal([new PlayerJoin(PlayerJoinKind.Unit, 100 + k, null)], stations[k - 1].Joins);
+                Assert.Equal([(uint)(10 * k)], stations[k - 1].Controls.Select(c => c.Seq).ToArray());
+            }
+
+            clients[1].Leave(1);
+            Assert.True(Until(rig, () => stations[1].Leaves == 1));
+            Frames(rig, 20);
+            Assert.Equal([0, 1, 0], stations.Select(s => s.Leaves).ToArray());   // only seat 2's station heard it
+        }
+        finally
+        {
+            foreach (var c in clients)
+            {
+                c.Dispose();
+            }
+
+            foreach (var v in views)
+            {
+                v.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// (DD-023 a, D-10) A client on a partition with no seat SEES the world (the world participant's wildcard matches it) but is nobody's player: no seat reads its JoinRequest, ControlFrame
+    /// or Leave.
+    /// </summary>
+    [Fact]
+    public void A_client_on_a_partition_with_no_seat_sees_the_world_and_is_nobodys_player()
+    {
+        uint domain = Watch.NewDomain();
+        var stations = Enumerable.Range(1, 2).Select(k => new SeatStation(k)).ToArray();
+        using var stray = new SeatView(domain, "station-1-9");
+        using var rig = new Rig(domain, seats: 2, stations: stations);
+        using var client = new Client(domain, 99, "station-1-9");
+        rig.Transport.EntityTopic.Send(new DpsItem<D.Entity>(new D.Entity { EntityId = 7, Name = "world" }));
+
+        client.Join(1, 1001);
+        client.Control(new D.ControlFrame { Seq = 1 });
+        client.Leave(1);
+
+        Assert.True(Watch.WaitFor(() =>
+        {
+            rig.Step();
+            stray.Pump();
+            return stray.Entities.Alive.Count == 1;
+        }));
+        Frames(rig, 40);
+        Assert.All(stations, s => Assert.Equal((0, 0, 0), (s.Joins.Count, s.Controls.Count, s.Leaves)));
+        Assert.All(rig.Transport.Seats, seat => Assert.Equal(0UL, seat.InboundOwner));
+        stray.Pump();
+        Assert.Empty(stray.Slots.Events);   // no seat's PlayerSlot or OwnUnit leaks onto a seat-less partition
+        Assert.Empty(stray.Units.Events);
+    }
+
+    /// <summary>(DD-023 d) One seat is today's layout exactly: one participant, the partition is the base name itself, no suffix; the player is seat 1.</summary>
+    [Fact]
+    public void One_seat_is_todays_layout_exactly()
+    {
+        uint domain = Watch.NewDomain();
+        var station = new SeatStation(1);
+        using var rig = new Rig(domain, station: station);
+        using var client = new Client(domain);
+        using var view = new SeatView(domain, "station-1");
+
+        Assert.Equal(("station-1", "station-1", 1), (rig.Transport.Partition, rig.Transport.WorldPartition, rig.Transport.SeatCount));
+        Assert.Equal("station-1", Assert.Single(rig.Transport.Seats).Partition);
+
+        client.View(["L"]);
+        client.Join(1, 1201);
+        Assert.True(Until(rig, () => station.Joins.Count == 1));
+        Assert.True(Watch.WaitFor(() =>
+        {
+            rig.Step();
+            view.Pump();
+            return view.Slots.Alive.Count == 1 && view.Frames.Alive.ContainsKey("station-1/L");
+        }));
+    }
+
+    /// <summary>(DD-023 D-5) <c>dps.seats</c> 1 .. 1024 is the whole valid range; anything else is a configuration error with a clear message, from the file and from a hand-built setting.</summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-3)]
+    [InlineData(1025)]
+    public void Seats_outside_1_to_1024_are_a_configuration_error_with_a_clear_message(int seats)
+    {
+        var settings = new DpsSettings { Seats = seats };
+        var ex = Assert.Throws<ArgumentException>(settings.Validate);
+        Assert.Contains("dps.seats", ex.Message);
+        Assert.Contains("1024", ex.Message);
+        Assert.Contains(seats.ToString(), ex.Message);
+        Assert.Contains("dps.seats", new DdsPlayerPlugin().Check(settings, new PluginHostContext(_ => { })));
+        Assert.Throws<ArgumentException>(() => new DpsTransport(settings, "p", null, 1));
+
+        var parsed = GatewayConfigurationFile.Parse($$"""{ "dps": { "seats": {{seats}} } }""", "test", SideRegistry.Empty.With(new DpsSide()));
+        Assert.NotEmpty(parsed.Errors);
+        Assert.Contains("seats", string.Join(" ", parsed.Errors));
+    }
+
+    [Fact]
+    public void Seats_default_to_one_read_from_the_file_and_the_host_is_asked_for_that_many()
+    {
+        Assert.Equal(1, new DpsSettings().Seats);
+        Assert.Null(new DdsPlayerPlugin().Check(new DpsSettings { Seats = 1024 }, new PluginHostContext(_ => { })));
+        var parsed = GatewayConfigurationFile.Parse("""{ "dps": { "seats": 4 } }""", "test", SideRegistry.Empty.With(new DpsSide()));
+        Assert.Empty(parsed.Errors);
+        var settings = (DpsSettings)parsed.Configuration!.SettingsOf("dps")!;
+        Assert.Equal(4, settings.Seats);
+        Assert.Equal(4, new DdsPlayerPlugin().PlayerSeats(settings));
+        Assert.Equal(1, new DdsPlayerPlugin().PlayerSeats(new DpsSettings()));
     }
 }

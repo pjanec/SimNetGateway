@@ -54,8 +54,9 @@ public class PackHarness : IDisposable
     /// <param name="realDis">Use the real UDP transport of the DIS plugin instead of the in-memory socket.</param>
     /// <param name="plugins">Plugins besides DIS, in order.</param>
     /// <param name="configure">Adds the settings of those plugins to the configuration.</param>
+    /// <param name="seats">How many player seats the host offers (DD-023); station of seat n = node | n &lt;&lt; 16.</param>
     public PackHarness(bool dis = true, Action<GatewayConfiguration>? inspect = null, DisConfiguration? disConfiguration = null, bool realDis = false,
-        IReadOnlyList<IGatewayPlugin>? plugins = null, Func<GatewayConfiguration, GatewayConfiguration>? configure = null, Func<long, string?>? munitionName = null)
+        IReadOnlyList<IGatewayPlugin>? plugins = null, Func<GatewayConfiguration, GatewayConfiguration>? configure = null, Func<long, string?>? munitionName = null, int seats = 1)
     {
         Config = GatewayConfiguration.CreateDefault(1) with { Dis = dis ? disConfiguration ?? new DisConfiguration { ExerciseId = 1, HeartbeatS = 5, TimeoutS = 12 } : null };
         if (configure is not null)
@@ -92,7 +93,7 @@ public class PackHarness : IDisposable
         };
         var allocator = new NodeIdAllocator(() => _nextId++);
         HostServices = new HostServices(Plugins, Config, line => Log.Add(line));
-        System = new DisGatewaySystem(services, Config, station => GatewayRuntime.Create(Config, allocator, Plugins, HostServices, GatewayClock, munitionName, line => Log.Add(line), station),
+        System = new DisGatewaySystem(services, Config, seats, stations => GatewayRuntime.Create(Config, allocator, Plugins, HostServices, GatewayClock, munitionName, line => Log.Add(line), stations[0], playerSeats: stations),
             line => Errors.Add(line), () => HostServices.Pump(line => Log.Add(line)));
     }
 

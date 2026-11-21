@@ -15,6 +15,7 @@ internal sealed class DpsPlayerSlot
     private readonly DpsChannel<D.PlayerSlot> _slot;
     private readonly DpsChannel<D.OwnUnit> _unit;
     private int _version = -1;
+    private string _reason = string.Empty;
     private PlayerOffer[]? _offers;
     private bool _wroteUnit;
     private D.OwnUnit _lastUnit;
@@ -41,9 +42,11 @@ internal sealed class DpsPlayerSlot
 
         var slot = _station.Slot;
         var offers = _station.Offers;
-        if (slot.Version != _version || _offers is null || !offers.SequenceEqual(_offers))
+        string reason = slot.Reason is { Length: > 64 } r ? r[..64] : slot.Reason ?? string.Empty;
+        if (slot.Version != _version || _offers is null || !offers.SequenceEqual(_offers) || reason != _reason)
         {
             _version = slot.Version;
+            _reason = reason;
             _offers = [.. offers];
             byte side = 0;
             foreach (var o in offers)
@@ -60,7 +63,7 @@ internal sealed class DpsPlayerSlot
                 UnitId = slot.UnitId,
                 Side = side,
                 RespawnAtSim = slot.RespawnAt,
-                Reason = string.Empty,
+                Reason = reason,
                 Offers = [.. offers.Take(128).Select(o => new D.Offer
                 {
                     Kind = D.OfferKind.OfferKindUnit,

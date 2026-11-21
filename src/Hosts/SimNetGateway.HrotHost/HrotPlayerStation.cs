@@ -58,11 +58,20 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
     private byte _mount, _firePref;
     private bool _detached;
 
-    public HrotPlayerStation(HrotServices services)
+    /// <summary>The station number of seat <paramref name="seat"/> (1 ..) of the node <paramref name="node"/> (DD-023 D-11): the node in the low 16 bits, the seat in the high 16; seat 0 is the node itself (the editor's own user).</summary>
+    public static int StationOf(int node, int seat) => node | (seat << 16);
+
+    /// <param name="services">What the station reads from the node.</param>
+    /// <param name="station">The station this seat possesses as (<see cref="StationOf"/>): the one number every "is this mine" check and the orders' <c>Station</c> use.</param>
+    public HrotPlayerStation(HrotServices services, int station)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
-        _flow = new PossessionFlow(services, () => Orders);
+        Station = station;
+        _flow = new PossessionFlow(services, () => Orders, station);
     }
+
+    /// <summary>The station number of this seat.</summary>
+    public int Station { get; }
 
     /// <summary>Wall milliseconds; tests replace it to move the timeouts.</summary>
     internal Func<long> NowMs
@@ -86,7 +95,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         {
             _world = world;
             var map = _services.EntityMap;
-            _orders = map is null ? null : new EntityOrders(world, map, null) { Station = _services.LocalNodeId };
+            _orders = map is null ? null : new EntityOrders(world, map, null) { Station = Station };
             _flow.Boundary();
         }
 
@@ -210,9 +219,10 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
 
     private void Refresh()
     {
-        if (_slot.State != _flow.State || _slot.UnitId != _flow.UnitId || _slot.RespawnAt != _flow.RespawnAt)
+        string reason = _flow.Reason;
+        if (_slot.State != _flow.State || _slot.UnitId != _flow.UnitId || _slot.RespawnAt != _flow.RespawnAt || (_slot.Reason ?? string.Empty) != reason)
         {
-            _slot = new PlayerSlotSnapshot(_flow.State, _flow.UnitId, _flow.RespawnAt, _slot.Version + 1);
+            _slot = new PlayerSlotSnapshot(_flow.State, _flow.UnitId, _flow.RespawnAt, _slot.Version + 1, reason);
         }
     }
 
@@ -336,6 +346,7 @@ internal sealed class PossessionFlow : IPlayerFlow
 
     private readonly HrotServices _services;
     private readonly Func<EntityOrders?> _orders;
+    private readonly int _station;
     private readonly List<PlayerOffer> _offers = new();
     private EntityRepository? _world;
     private EntityQuery? _query;
@@ -350,10 +361,11 @@ internal sealed class PossessionFlow : IPlayerFlow
     // (the editor operator possessing a playable unit, or a host where no player plugin is installed).
     private readonly HashSet<int> _joined = new();
 
-    public PossessionFlow(HrotServices services, Func<EntityOrders?> orders)
+    public PossessionFlow(HrotServices services, Func<EntityOrders?> orders, int station)
     {
         _services = services;
         _orders = orders;
+        _station = station;
         NowMs = () => Environment.TickCount64;
     }
 
@@ -364,6 +376,9 @@ internal sealed class PossessionFlow : IPlayerFlow
     public int UnitId { get; private set; }
 
     public double RespawnAt => 0.0;
+
+    /// <summary>HROT's own text for the last refused join of this station (empty = none); cleared by the next join.</summary>
+    public string Reason { get; private set; } = string.Empty;
 
     public IReadOnlyList<PlayerOffer> Offers => _offers;
 
@@ -477,9 +492,19 @@ internal sealed class PossessionFlow : IPlayerFlow
                 {
                     State = PlayerSlotState.Dead;
                 }
-                else if (!gone && PossessionSystem.HolderOf(world, unit) == _services.LocalNodeId)
+                else if (!gone && PossessionSystem.HolderOf(world, unit) == _station)
                 {
                     State = PlayerSlotState.Playing;
+                }
+                else if (!gone && PossessionSystem.HolderOf(world, unit) is { } other && other != _station && _orders() is { } orders
+                    && StationClaims.ForPossess(world, unit, _station, out _) != ClaimRefusal.None)
+                {
+                    // the race of two seats for one unit (DD-023 5b): the other station was granted it. Asking again is refused with HROT's own text (a refused possess changes nothing)
+                    // and the seat is back to choosing at once instead of waiting out the timeout.
+                    var refused = orders.Possess(UnitId);
+                    Reason = refused.Accepted ? string.Empty : refused.Detail ?? string.Empty;
+                    UnitId = 0;
+                    State = PlayerSlotState.Choosing;
                 }
                 else if (gone || NowMs() >= _deadline)
                 {
@@ -504,7 +529,7 @@ internal sealed class PossessionFlow : IPlayerFlow
                 {
                     State = PlayerSlotState.Dead;
                 }
-                else if (PossessionSystem.HolderOf(world, unit) != _services.LocalNodeId)
+                else if (PossessionSystem.HolderOf(world, unit) != _station)
                 {
                     UnitId = 0;   // released by HROT or taken by another station
                     State = PlayerSlotState.Choosing;
@@ -538,7 +563,7 @@ internal sealed class PossessionFlow : IPlayerFlow
         bool held = false;
         foreach (var e in _query!)
         {
-            if (!world.IsAlive(e) || PossessionSystem.HolderOf(world, e) != _services.LocalNodeId)
+            if (!world.IsAlive(e) || PossessionSystem.HolderOf(world, e) != _station)
             {
                 continue;
             }
@@ -578,7 +603,7 @@ internal sealed class PossessionFlow : IPlayerFlow
         }
 
         var map = _services.EntityMap;
-        if (map is not null && map.TryGetEntity(_releaseUnit, out var unit) && world.IsAlive(unit) && PossessionSystem.HolderOf(world, unit) == _services.LocalNodeId)
+        if (map is not null && map.TryGetEntity(_releaseUnit, out var unit) && world.IsAlive(unit) && PossessionSystem.HolderOf(world, unit) == _station)
         {
             _orders()?.Unpossess(_releaseUnit);
             _releaseUnit = 0;
@@ -614,10 +639,14 @@ internal sealed class PossessionFlow : IPlayerFlow
                     return false;
                 }
 
-                if (!orders.Possess(request.UnitId).Accepted)
+                var asked = orders.Possess(request.UnitId);
+                if (!asked.Accepted)
                 {
+                    Reason = asked.Detail ?? string.Empty;   // HROT's refusal text (a unit another station holds, the wrong side ...)
                     return false;
                 }
+
+                Reason = string.Empty;
 
                 _joined.Add(request.UnitId);
                 UnitId = request.UnitId;

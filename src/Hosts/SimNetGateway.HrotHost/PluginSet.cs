@@ -43,6 +43,21 @@ public sealed class PluginSet
     /// <summary>The plugin whose side has this key (the key of its configuration section), or null.</summary>
     public DiscoveredPlugin? Find(string key) => _byKey.GetValueOrDefault(key);
 
+    /// <summary>The player seats the host offers for this configuration (DD-023): the most any RUNNING side asks for, at least 1.</summary>
+    public int SeatsFor(GatewayConfiguration config)
+    {
+        int seats = 1;
+        foreach (var found in Plugins)
+        {
+            if (config.SettingsOf(found.Plugin.Side.Key) is { } settings && found.Plugin.Side.Runs(settings))
+            {
+                seats = Math.Max(seats, found.Plugin.PlayerSeats(settings));
+            }
+        }
+
+        return seats;
+    }
+
     /// <summary>The plugins found in a folder (the plugins folder of the host).</summary>
     public static PluginSet FromFolder(string folder)
     {

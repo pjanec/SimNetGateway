@@ -36,6 +36,9 @@ public interface IGatewayPlugin
     /// <summary>A reason this configuration cannot be run (one line, naming the key), or null; checked by the host before it composes anything. The context carries the plugin folder, where add-ons are looked up.</summary>
     string? Check(object settings, PluginHostContext context) => null;
 
+    /// <summary>How many player seats (stations) this side wants the host to offer (DD-023); 1 for a side that plays at most one (or none). The host offers the most any running side asks for. Additive default: the contract version stays.</summary>
+    int PlayerSeats(object settings) => 1;
+
     /// <summary>True when the side shows events while HROT replays a recording (the host then gathers them even when the shared flag is off).</summary>
     bool WantsEventsInReplay(object settings) => false;
 }
@@ -56,7 +59,8 @@ public interface IHostService : IDisposable
 public sealed class SideBinding
 {
     public SideBinding(GatewayBuilder builder, GatewayConfiguration config, object settings, IClock clock, IHostService? service, Func<long, string?> munitionName,
-        Action<string> log, string? pluginFolder = null, IPlayerStation? playerStation = null, IGizmoSource? gizmoSource = null, Func<long>? stationTicks = null)
+        Action<string> log, string? pluginFolder = null, IPlayerStation? playerStation = null, IGizmoSource? gizmoSource = null, Func<long>? stationTicks = null,
+        IReadOnlyList<IPlayerStation>? playerSeats = null)
     {
         Builder = builder;
         Config = config;
@@ -66,7 +70,8 @@ public sealed class SideBinding
         MunitionName = munitionName;
         Log = log;
         PluginFolder = pluginFolder;
-        PlayerStation = playerStation;
+        PlayerSeats = playerSeats is { Count: > 0 } ? playerSeats : playerStation is null ? Array.Empty<IPlayerStation>() : [playerStation];
+        PlayerStation = playerStation ?? (PlayerSeats.Count > 0 ? PlayerSeats[0] : null);
         GizmoSource = gizmoSource;
         StationTicks = stationTicks;
     }
@@ -94,6 +99,12 @@ public sealed class SideBinding
 
     /// <summary>The host's player station (DD-017 3.6) for a side that plays a unit; null when the host has none. Additive: the contract version stays.</summary>
     public IPlayerStation? PlayerStation { get; }
+
+    /// <summary>
+    /// Every player seat the host offers (DD-023), in seat order: element 0 is seat 1 and is <see cref="PlayerStation"/>; a host with one seat (or one that passed only
+    /// <see cref="PlayerStation"/>) has a single element, none when it has no player mode. Additive: the contract version stays.
+    /// </summary>
+    public IReadOnlyList<IPlayerStation> PlayerSeats { get; }
 
     /// <summary>The host's gizmo source (DD-017 3.7) for a side that shows gizmos; null when the host has none. Additive: the contract version stays.</summary>
     public IGizmoSource? GizmoSource { get; }

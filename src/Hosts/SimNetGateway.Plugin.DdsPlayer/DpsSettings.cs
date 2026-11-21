@@ -22,4 +22,22 @@ public sealed record DpsSettings
     public double AngleThresholdDeg { get; init; } = 1.0;
 
     public double VelocityThreshold { get; init; } = 0.1;
+
+    /// <summary>The most seats a gateway offers (DD-023 D-11: the seat number is the high 16 bits of the station, far below 32768).</summary>
+    public const int MaxSeats = 1024;
+
+    /// <summary>
+    /// How many players this gateway serves (DD-023): seat n is the station <c>node | n &lt;&lt; 16</c> on the partition <c>&lt;base&gt;-n</c>; with 1 the partition is <c>&lt;base&gt;</c> itself (D-6).
+    /// Valid 1 .. <see cref="MaxSeats"/>; <see cref="Validate"/> says why a value is not.
+    /// </summary>
+    public int Seats { get; init; } = 1;
+
+    /// <summary>Throws <see cref="ArgumentException"/> with a clear message when <see cref="Seats"/> is outside 1 .. <see cref="MaxSeats"/>.</summary>
+    public void Validate()
+    {
+        if (Seats < 1 || Seats > MaxSeats)
+        {
+            throw new ArgumentException($"dps.seats must be between 1 and {MaxSeats}, not {Seats}.");
+        }
+    }
 }
