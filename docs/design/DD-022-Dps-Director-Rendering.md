@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | approved rev 4 (R-138, 2026-11-21); rev 5 freezes the contract (3g `ClientWorld`, 3h the field-level table) - the Unreal session agreed P-1 .. P-6 ([its answers](../clients/NOTE-2026-11-21-Unreal-Answers-DD-022.md), `5e63786`); not built |
+| **Status** | approved rev 4 (R-138, 2026-11-21); rev 5 freezes the contract (3g `ClientWorld`, 3h the field-level table) - the Unreal session agreed P-1 .. P-6 ([its answers](../clients/NOTE-2026-11-21-Unreal-Answers-DD-022.md), `5e63786`); rev 6 (`2026-11-21`) the render client's facts - D-B4 counts instances since the last presentation, the audio tolerance and no panning ([note §5](../clients/NOTE-2026-11-21-Unreal-Round-7-Render.md)); parts A-C and 3g built (T-045, section 9), part D not built |
 | **Tasks** | T-039 |
 | **Rulings honoured** | R-132, R-133 (contract open, append-only), R-134 (the client owns its camera; HROT's rules live in HROT), R-135 (rate classes, producer-neutral), R-136, R-137, R-138 (approval) |
 | **Date** | 2026-11-21 (rev 3: HROT's time sync measured in code - no pulse; the audio track reworked; the Unreal session's findings. Rev 4: the Unreal session's answers - the tick epoch, the per-step sample barrier, the binding kept, warm-up, S-1 through Unreal's non-real-time mixer) |
@@ -201,10 +201,22 @@ Decisions:
 - D-B3 **Order within a step:** state and events first, then `ClockStep`. Live stepping: the client presents after the poll that brought
   the `ClockStep` (at worst a state one step late, unseen).
 - D-B4 **A stated barrier for render jobs** *(Unreal, rev 4, Q-6: a film frame could keep a unit one step old for good)*: a `ClockStep`
-  with `AckRequired` carries **`Samples`** - the number of world samples the gateway wrote in that step's gather, over every world topic
-  (state and events; not `SimClock`, `ClockStep`, `ClockEcho`, the render topics or `GizmoFrame`). The client presents the step once it
-  holds that many samples whose `SimTime` lies in (the previous target, `TargetSimTime`]. In lockstep a keep-last-1 state instance cannot
-  be overwritten before it is read (the next step waits), so the count is exact. Every world sample already carries `SimTime`.
+  with `AckRequired` carries **`Samples`** - how many world updates the gateway wrote in that step's gather. ⭐ **Rev 6 (`2026-11-21`, the
+  client's render note §2 and its answer §5):** the rev-4 rule (*"samples whose `SimTime` lies in (previous target, target]"*) is
+  SUPERSEDED - `Entity`, `TkbType` and other state topics carry no `SimTime`. Now:
+  - **The unit is an instance, not a sample:** a keyed state topic counts one per instance written or disposed in the step (a write and a
+    dispose of one instance count once); a keyless state topic (`Session`, `View`, `PlayerSlot`, `OwnUnit`, `Exercise`) one if written; an
+    event topic (`Fire`, `Detonation`, `Effect`, `Impact`, `ManDowned`, `PlayerMessage`, `MoverTracks`) one per sample, never more per step
+    than the topic's depth. *(Why: every state topic is keep-last-1 per instance; two writes before the reader's take arrive as one sample,
+    so a sample count can come up short and the frame stalls.)*
+  - **The topic set:** every gateway-written world topic; NOT `SimClock`, `ClockStep`, `ClockEcho`, `RenderJob`, `FrameRequest`,
+    `GizmoFrame`, nor any client-written topic.
+  - **The client counts since its last presentation** (step 0: since it sent `ReadyJobId`) and presents when its count reaches `Samples`;
+    a count above it is a gateway defect (log, present); its own 10 s guard stays.
+  - **Two gateway rules make that count exact:** from `RenderJob` Starting to Done it writes counted topics only in a step's gather, just
+    before that step's `ClockStep` (a `Session` or `Status` change at another moment waits for the next gather); nothing counted is written
+    between `ReadyJobId` and step 0's gather (HROT does not step until the client is ready). Built with part D; its rail checks both rules
+    and the instance count on a seeded random world.
 
 ### 3d. Part C - the camera, dead-reckoned like an entity
 
@@ -277,7 +289,8 @@ Common rules (either way):
 
 1. One track per job: `Dir/<JobId>.wav`, the job's `SampleRate` and `Channels`; the client reports the track's total samples with
    `RenderJob` Done (a new `RenderJobResult` event: `JobId`, `TrackFile`, `TrackSamples`, `Status`, `Reason`); HROT checks it against `round(frames x SampleRate / Fps)` within the
-   mixer's latency (rev 4).
+   mixer's latency (rev 4): **1024 samples**, one mixer buffer (rev 6, measured by the client: 71552 against 72000; a larger miss fails the
+   job with both numbers - HROT CE-11021).
 2. Title card frames (`FrameKindSilence`, HROT's cards) are silence in the track.
 3. A reel item boundary (`WorldEpoch` or `TimelineEpoch` change inside the job): voices in flight fade out over a short time (Q-10); the
    next item starts silent.
@@ -301,6 +314,10 @@ Common rules (either way):
   - Slow motion (Q-9): each voice starts at its film time and plays at natural speed - S-1 gives it by itself; pitching could be a later
     per-job option. Reel item boundary (Q-10): voices fade out over **0.25 s**.
   - S-2 stays the documented fallback if the non-real-time device proves unusable in practice.
+  - **As measured by the client (rev 6, render note §3-4):** the non-real-time device mixes every *spatialized* sound to zero (Unreal
+    UE-381932, open) ⇒ during a job the client attenuates by distance with the air's low-pass but **does not pan** - the track is centred
+    until S-2 or the client's own panner (a client item, no contract change). A voice starts in the frame that reaches its sim time, so up
+    to one film frame late (33 ms at 30 fps), accepted. The Q-10 fade and slow motion are not built on the client yet.
 
 ### 3g. World readiness for EVERY load - `ClientWorld` (rev 5, `2026-11-21`)
 
@@ -327,7 +344,7 @@ with their enum's name, 0 = unknown / none, bounded strings and sequences, `Clie
 | `SimClock` | gw -> client | Discrete | reliable, transient local, keep last 1 | - | `Mode` (`ClockMode`), `AnchorWallTicks` (long), `AnchorSimTime` (double), `TimeScale` (float), `FixedDelta` (float), `StepSeq` (long), `TimelineEpoch` (long), `Seq` (uint) |
 | `ClockProbe` | client -> gw | Event | reliable, volatile, keep last 16 | `ClientId` | `ClientId` (ulong), `ClientSendTicks` (long) |
 | `ClockEcho` | gw -> client | Event | reliable, volatile, keep last 16 | `ClientId` | `ClientId`, `ClientSendTicks`, `StationReceiveTicks`, `StationTransmitTicks` (long) |
-| `ClockStep` | gw -> client | Event | reliable, volatile, keep last 1024 | - | `StepSeq` (long), `FixedDelta` (float), `TargetSimTime` (double), `TimeScale` (float), `TimelineEpoch` (long), `AckRequired` (bool), `Samples` (uint, the world samples written in the step's gather; 0 = not stated, only filled when `AckRequired`) |
+| `ClockStep` | gw -> client | Event | reliable, volatile, keep last 1024 | - | `StepSeq` (long), `FixedDelta` (float), `TargetSimTime` (double), `TimeScale` (float), `TimelineEpoch` (long), `AckRequired` (bool), `Samples` (uint, the world instances and events written in the step's gather, counted as D-B4 rev 6 says; 0 = not stated, only filled when `AckRequired`) |
 | `StepAck` | client -> gw | Event | reliable, volatile, keep last 16 | `ClientId` | `ClientId`, `StepSeq` (long), `Checksum` (int, 0 = none) |
 | `ClientWorld` | client -> gw | Discrete | player QoS (reliable, volatile, keep last 1, AUTOMATIC liveliness, lease `DefaultLeaseMs`) | `ClientId` | `ClientId`, `WorldEpoch` (uint), `State` (`ClientWorldState`), `Step` (64), `Reason` (256), `WaitForMe` (bool) |
 | `RenderClient` | client -> gw | Discrete | player QoS | `ClientId` | `ClientId`, `Name` (64), `Ready` (bool), `MaxWidth`, `MaxHeight` (int), `MaxSupersample` (byte), `Formats` (uint bits: 1 = PNG), `AudioFormats` (uint bits: 1 = WAV PCM16, 2 = WAV float32), `MaxSampleRate` (int), `ReadyJobId` (32) |
