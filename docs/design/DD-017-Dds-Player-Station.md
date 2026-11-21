@@ -39,6 +39,28 @@ behind one station, any station logic inside HROT.
 Anti-goals: a contract that mirrors HROT's internal NED schema; a station that needs HROT to change its behaviour when it connects; an
 animation contract that dictates clips (the renderer animates; the simulation states what the body does).
 
+### 1a. DPS and HROT's NED wire - why two (owner's question, `2026-11-21`)
+
+The owner: *"how much do we duplicate the HROT-NED network protocol with the DPS ... I'm looking for a good reason for keeping it separate."*
+
+| claim | code / reference | design |
+|---|---|---|
+| the main case (the all-in-one editor, the director) has NO NED participant | HROT `NodeExtensionContext.Offline` = "the node has no DDS stack" (`NodeExtensions.cs:30`) | this DD §3.2 ("the networkless editor") |
+| NED's schema is HROT's C# namespaces; a rename breaks the wire; its IDL is not committed | HROT `docs/reference/NED_DDS_Protocol.md` §15 | the anti-goal above; R-135 producer-neutral |
+| NED carries simulation state; presentation results are derived per map node in HROT's look library | HROT `Hrot.Look` (the map and this gateway call it) | HROT R-11000 .. R-11007; R-134 here |
+| a NED node carries obligations (node id, sender identity, id allocator, ownership, 2PC acks) | `NED_DDS_Protocol.md` "What a gateway must do to be a NED node" | HROT R-140 (an IG is a passive node) |
+
+**Decision:** DPS is not a second replication protocol: it is the **public, presentation-level projection of one node's replicated world**,
+published from inside that node (in a cluster the node receives NED like any other; in the editor it is the world). Concepts overlap on
+purpose (pose and dead reckoning, identity, time, load readiness, the player) and are kept from drifting by three guardrails:
+**mirror, never invent** (each DPS mechanism names the HROT mechanism it re-exposes and a rail checks it against it - DD-022's clock is
+HROT's slave formula); **feed back, never fork** (DPS plugs into HROT's own mechanisms - `ClientWorld` into the load phase, the frame sink
+into the director - never a parallel state machine); **make the mapping visible** (the client guide's HROT-concept -> DPS-topic table).
+
+Rejected: the client as a NED node - impossible in the networkless editor, and it would have to port HROT's look rules and follow every HROT
+rename · DPS translated from NED by a separate process - no NED in the editor, no look results on NED · one protocol for both - the internal
+wire would freeze, or the public one would break with HROT.
+
 ## 2. Block diagram
 
 ```mermaid
