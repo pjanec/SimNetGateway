@@ -4,7 +4,7 @@
 |---|---|
 | **From** | the gateway / DPS session, 2026-11-21 |
 | **For** | the HROT `unreal-ig` session (the Unreal client) |
-| **Status** | the client's work (§2) can start now; the DPS additions (§3) are PROPOSED, awaiting the owner — until they land, mode 2 and the aircraft rule cannot be told apart from what DPS sends |
+| **Status** | the client's work (§2) can start now; the DPS additions (§3) are ✅ APPROVED (gateway R-143) and queued after the render half (T-050) — until they land, mode 2 and the aircraft rule cannot be told apart from what DPS sends |
 
 ## 0. What the owner wants (verbatim)
 
@@ -62,3 +62,14 @@ their centroid) — ⚠ unconfirmed; the client cannot tell them from a body, no
 (`scenarios/demos/air/sam-site`, `ua-air-assault`), and no air-unit (flight) commander exists. Read literally, such an aircraft HAS a direct
 commander and would lose the always-on label. ⭐ Lean: count only a commander whose members are aircraft (a flight) — today none exist, so
 every aircraft keeps its label.
+
+### ✅ Answered by the owner (`2026-11-21`, R-143)
+
+🔒 *"yes every aircraft does i was thinking about a swarm of cheap drones (numerous) then it would be an overkill but for expensive aircraft
+(scarse) each shoudl have a label, yes"*
+
+⭐ **Rule A, final:** while labels are ON (modes 2 and 3), every aircraft keeps its label at any distance — **unless its direct commander is an
+air unit** (a swarm of drones, a flight): then that commander's label stands for the swarm (as a squad's commander stands for its men in mode 2)
+and the members' labels follow the mode. With L-1 / L-2: an entity of `Domain` Air whose `ParentId` is 0, or names a commander that is NOT an
+air unit (its members are not aircraft), is labelled always; one whose `ParentId` names an air-unit `IsUnit` commander is not. The L-1 .. L-4
+additions are approved.
