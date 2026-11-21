@@ -300,7 +300,7 @@ sequenceDiagram
 | P-3 | The gateway ticks one `DeployFlowSystem` per seat (D-3, D-4); DD-017's step-1 placed-unit join is replaced by it | yes |
 | P-4 | Seats configured (`dps.seats`, at most 1024), participants made per gateway runtime; seats are node/1 .. node/N, the editor user node/0 (D-5, D-11, D-13) | yes |
 | P-7 | The render client on a named seat; `Samples` = world + that seat (D-12) | yes |
-| P-8 | Append to `Offer` what HROT's deploy offer carries and DPS lacks (`DeployOfferTopic`, HROT `GameplayTopics.cs:81-94`): the role's `Kits` (<= 8 names of 32; `JoinRequest.Kit` already picks one by index) and an area offer's `Outline` (<= 32 world points; a spawn area is an area entity with an outline, HROT `SpawnArea.cs`, which DPS does not send) | yes - append-only; awaits the user |
+| P-8 | Append to `Offer` what HROT's deploy offer carries and DPS lacks (`DeployOfferTopic`, HROT `GameplayTopics.cs:81-94`): the role's `Kits` (<= 8 names of 32; `JoinRequest.Kit` already picks one by index) and an area offer's `Outline` (<= 32 world points; a spawn area is an area entity with an outline, HROT `SpawnArea.cs`, which DPS does not send) | yes - append-only; ✅ approved (R-141) |
 | P-5 | Append `OfferKindArea` to `OfferKind` (3a) | yes - `JoinRequest.AreaId` already exists |
 | P-6 | The editor's own user deploys through the same flow as seat 0 (one path for every player) | later, optional - HROT's UI, not this design |
 
