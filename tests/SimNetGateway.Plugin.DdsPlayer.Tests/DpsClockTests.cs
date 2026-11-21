@@ -240,6 +240,13 @@ public class DpsClockTests
             Service.MarkPublished((uint)TransportEpoch);
         }
 
+        /// <summary>A world boundary: a new gateway runtime takes the next epoch (or the forced one) and publishes it.</summary>
+        public void Boundary()
+        {
+            TransportEpoch = Service.NextEpoch();
+            Service.MarkPublished((uint)TransportEpoch);
+        }
+
         /// <summary>The transport's pump: adopt a forced epoch and publish it.</summary>
         public void Pump()
         {
@@ -304,6 +311,28 @@ public class DpsClockTests
     }
 
     [Fact]
+    public void A_world_boundary_after_BeginWorld_is_waited_for_on_the_newest_epoch_and_never_deadlocks()
+    {
+        var station = new Station();   // epoch 1
+        var gate = (IClientWorldGate)station.Service;
+        station.Service.Worlds.Update(Client(1, 1, Ready), 1);
+        var load = Guid.NewGuid();
+        gate.BeginWorld(load);
+        station.Pump();                // the live transport takes the forced epoch 2
+        Assert.Equal(2, station.TransportEpoch);
+        station.Boundary();            // the world moved: a new runtime at epoch 3; the clients follow the Session to 3
+        Assert.Equal(3, station.TransportEpoch);
+
+        station.Service.Worlds.Update(Client(1, 2, Ready), 1);   // Ready only for the epoch the load asked for
+        Assert.False(gate.IsWorldReady(load, out _, out _));
+        station.Service.Worlds.Update(Client(1, 3, Loading, step: "terrain"), 1);
+        Assert.False(gate.IsWorldReady(load, out _, out string? step));
+        Assert.Equal("terrain", step);
+        station.Service.Worlds.Update(Client(1, 3, Ready), 1);   // Ready for the world now shown
+        Assert.True(gate.IsWorldReady(load, out _, out _));
+    }
+
+    [Fact]
     public void A_runtime_built_before_the_forced_epoch_was_taken_is_the_new_world()
     {
         var service = new DpsHostService();
@@ -350,7 +379,7 @@ public class DpsClockTests
             var loads = new List<Guid>();
             for (int op = 0; op < 120; op++)
             {
-                switch (rnd.Next(6))
+                switch (rnd.Next(7))
                 {
                     case 0:
                     case 1:
@@ -382,6 +411,11 @@ public class DpsClockTests
                         model.Begin(load);
                         break;
                     }
+
+                    case 5:
+                        station.Boundary();
+                        model.Boundary();
+                        break;
 
                     default:
                         station.Pump();
@@ -448,6 +482,21 @@ public class DpsClockTests
             }
         }
 
+        /// <summary>A world boundary: a new runtime takes the forced epoch if one is waiting, else the next.</summary>
+        public void Boundary()
+        {
+            if (_forced)
+            {
+                _forced = false;
+            }
+            else
+            {
+                Epoch++;
+            }
+
+            _published = Epoch;
+        }
+
         public (bool Ready, string? Failure, string? Step) Ready(Guid load)
         {
             if (!_loads.TryGetValue(load, out uint epoch))
@@ -460,6 +509,7 @@ public class DpsClockTests
                 return (false, null, null);
             }
 
+            epoch = _published;   // the newest published world is the one shown
             var waited = _clients.Where(c => c.Wait).ToList();
             bool ready = waited.All(c => c.Epoch == epoch && c.State == D.ClientWorldState.ClientWorldStateReady);
             string? failure = waited.Where(c => c.Epoch == epoch && c.State == D.ClientWorldState.ClientWorldStateFailed).Select(c => c.Reason).FirstOrDefault();

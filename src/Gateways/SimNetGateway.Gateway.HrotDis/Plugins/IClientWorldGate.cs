@@ -14,9 +14,9 @@ public interface IClientWorldGate
     void BeginWorld(Guid loadId);
 
     /// <summary>
-    /// True when every live client that wants to be waited for reports Ready for the epoch published for <paramref name="loadId"/>, and that epoch has been published; true at
+    /// True when the epoch of <paramref name="loadId"/> has been published and every live client that wants to be waited for reports Ready for the NEWEST published epoch (a world boundary after the commit moves the clients on to a newer epoch, and being ready for the world now shown is what the load needs); true at
     /// once when no such client exists (once the epoch is published); true for an id <see cref="BeginWorld"/> never saw. False before the epoch is published.
-    /// <paramref name="failure"/> is the reason of the first client that reports Failed for that epoch, <paramref name="step"/> the step of the first client still Loading it.
+    /// <paramref name="failure"/> is the reason of the first client that reports Failed for the newest published epoch, <paramref name="step"/> the step of the first client still Loading it.
     /// </summary>
     bool IsWorldReady(Guid loadId, out string? failure, out string? step);
 }

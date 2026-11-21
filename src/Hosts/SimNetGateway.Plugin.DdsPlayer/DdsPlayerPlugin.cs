@@ -139,7 +139,8 @@ public sealed class DpsHostService : IHostService, IClientWorldGate
             return false;
         }
 
-        return Worlds.Evaluate(epoch, out failure, out step);
+        // the NEWEST published world is the one the clients show: a boundary after the commit moves them on to a newer epoch and they never say Ready for the load's own
+        return Worlds.Evaluate(Published, out failure, out step);
     }
 
     public void Pump()

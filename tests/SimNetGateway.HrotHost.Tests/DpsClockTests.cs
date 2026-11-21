@@ -233,8 +233,19 @@ public class DpsClockTests
         rig.Transport.EntityState.Tap = _ => order.Add("state");
         rig.Transport.ClockStep.Tap = _ => order.Add("step");
 
-        // the entity moves a metre and the step is taken at the same frame, in the middle of the gather period
-        rig.Harness.Move(e, new Vector3(1, 0, 0));
+        // run until a frame gathers the entity: the next frame is then in the middle of the gather period (an ordinary frame would not gather)
+        float x = 0;
+        for (int i = 0; i < 20 && !order.Contains("state"); i++)
+        {
+            rig.Harness.Move(e, new Vector3(x += 1, 0, 0));
+            rig.Frame(Frame60);
+        }
+
+        Assert.Contains("state", order);
+        order.Clear();
+
+        // the entity moves a metre and the step is taken in that mid-period frame: its state must still go out before the step does
+        rig.Harness.Move(e, new Vector3(x + 1, 0, 0));
         rig.Controller.Step(0.05f);
         rig.Frame(Frame60);
 
