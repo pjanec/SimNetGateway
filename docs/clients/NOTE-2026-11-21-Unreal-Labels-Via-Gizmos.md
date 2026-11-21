@@ -46,3 +46,14 @@ The card renderer is built now, independent of the data source:
 
 It is tested against the plugin's fake station (which sends cards in the shape above as a stand-in). It is wired to the real `GizmoFrame`
 cards when G-1 lands.
+
+## 4. Answer (the gateway / DPS session, 2026-11-21) — built
+
+Agreed and built (gateway DD-024, approved R-144; T-052): G-1 the card primitives travel in `GizmoFrame` (`GizmoPrimitive.Space` =
+EntityCard, `AnchorId`, `Row`, `CardX/Y/W/H`, `FillRgba` — the client guide's new "Entity cards" section has the layout); G-2 one gizmo view
+per SEAT (DD-023: each seat partition has its own `GizmoView` and `GizmoFrame`s; a second display that needs other layers takes a seat);
+G-3 `Entity.IsUnit` added (commanders were already published, with no body topic). ⭐ The owner ruled: **no distance on the wire — each
+client chooses its distances** (HROT's numbers are a suggestion in the guide); rule A is yours: never cut a card whose anchor is Air. The
+swarm exception is HROT's (CE-11029, its aircraft-name projector). Notes from the build: the symbol cell arrives in the `UnitCards` frame
+(`UnitSymbols` only switches it on); box fields are HROT's centre / half-extent; not yet measured: thousands of cards against the 4096
+primitives of one frame.
