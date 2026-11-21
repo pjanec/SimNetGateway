@@ -5,7 +5,7 @@
 | **From** | the gateway / DPS session, 2026-11-21 |
 | **For** | the HROT `unreal-ig` session (the Unreal client) |
 | **Contract** | [DD-022](../design/DD-022-Dps-Director-Rendering.md) rev 5, approved (gateway R-136 .. R-138); the field-level freeze is **§3h**, world readiness **§3g** |
-| **IDL** | `docs/clients/idl/DpsTopics.idl`, `DpsTypes.idl` ⏳ **pending** — the gateway commit that adds the round-7 types (T-044, in progress) is filled in here when it lands (branch `ccr-458b1360-afzl8f`); until then this handoff is a DRAFT — regenerate with `scripts/unreal/dps_gen.py` |
+| **IDL** | `docs/clients/idl/DpsTopics.idl`, `DpsTypes.idl` at gateway commit **`ff6b413`** (branch `ccr-458b1360-afzl8f`; T-044: types, enums, QoS, all tests green) — regenerate with `scripts/unreal/dps_gen.py` |
 | **Your answers folded in** | [NOTE-2026-11-21-Unreal-Answers-DD-022.md](NOTE-2026-11-21-Unreal-Answers-DD-022.md) — every one of Q-1 .. Q-10 is in DD-022 §8 |
 
 ⭐ Scope is frozen at the IDL commit above: documents that change after it are FYI. The contract is append-only (R-133): nothing in it is
