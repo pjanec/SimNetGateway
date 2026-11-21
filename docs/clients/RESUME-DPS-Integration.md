@@ -46,6 +46,8 @@ the committed IDL, the guide and a DDS implementation.
 | [DD-018](../design/DD-018-Dps-Round-2.md) | 2 | HUD, type data (`TkbType`), rounds and flames, animals, the motorcycle bank, carriage, building damage and glass, traffic as world-space tracks, one trajectory model |
 | [DD-019](../design/DD-019-Dps-Round-3.md) | 3, 5 | client feedback: the suggested `View`, `Impact`, event depth, missile motor, committed IDL, effects in replay; round 5 = on HROT's look library |
 | [DD-020](../design/DD-020-Dps-Round-4.md) | 4, 6 | rate classes, `PersonAim` and intent instead of moving results, producer-neutral contract; round 6 = HROT's stance timing, effects from state |
+| [DD-021](../design/DD-021-Aim-And-Look-Stream.md) | draft | the aim and look stream apart from the slow body state (T-038) |
+| [DD-022](../design/DD-022-Dps-Director-Rendering.md) | draft | director rendering through DPS: Unreal as the film director's frame sink, HROT's map keeps running (T-039, R-136); out for the Unreal session's feedback |
 
 Rulings that shape further work (`docs/RULINGS.md`):
 
