@@ -301,7 +301,8 @@ public class DpsClockTests
         Assert.Equal(2, service.Epoch);
         Assert.False(service.IsWorldReady(load, out _, out _));   // not published yet: nothing is ready
 
-        rig.Step();   // the next frame
+        rig.Step();   // the next frame takes the epoch ...
+        rig.Step();   // ... and the one after announces it (a frame later, so the host's terrain gather of the load reaches the Session first)
         Assert.True(sessions.Until(w => w.Events[^1].WorldEpoch == 2u));
         Assert.Equal(2u, service.Published);
         Assert.True(service.IsWorldReady(load, out _, out _));   // no client waits
@@ -603,7 +604,8 @@ public class DpsClockTests
 
         var load = Guid.NewGuid();
         gate.BeginWorld(load);
-        rig.Step();   // the new epoch is published
+        rig.Step();
+        rig.Step();   // the new epoch is published (a frame after it was taken: T-050 finding A)
         uint epoch = (uint)service.Epoch;
         Assert.Equal(epoch, service.Published);
 

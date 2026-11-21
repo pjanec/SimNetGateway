@@ -28,6 +28,8 @@
     <!-- the DIS peer builders of the gateway tests, shared by source link (test-side helpers of that project) -->
     <Compile Include="../SimNetGateway.Gateway.HrotDis.Tests/DisPdus.cs" Link="Shared/DisPdus.cs" />
     <Compile Include="../SimNetGateway.Gateway.HrotDis.Tests/TestFrame.cs" Link="Shared/TestFrame.cs" />
+    <!-- the fake render client over DDS of the plugin's render tests (T-050), shared by source link -->
+    <Compile Include="../SimNetGateway.Plugin.DdsPlayer.Tests/FakeRenderClient.cs" Link="Shared/FakeRenderClient.cs" />
   </ItemGroup>
   <!-- the packaged folder lands in <bin>/staged/extensions/simnetgateway/, made by the very script an installation uses -->
   <Target Name="StageGatewayExtension" AfterTargets="Build">

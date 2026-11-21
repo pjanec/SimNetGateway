@@ -60,7 +60,7 @@ public class PlayerStationTests
                 World.RegisterComponent<PossessedBy>();
             }
 
-            var held = new PossessedBy { StationNodeId = (NodeId)station, Mode = PossessionMode.Fps, Epoch = 1 };
+            var held = new PossessedBy { StationNodeId = (StationId)station, Mode = PossessionMode.Fps, Epoch = 1 };
             if (World.HasComponent<PossessedBy>(e))
             {
                 World.SetComponent(e, held);
@@ -688,7 +688,7 @@ public class PlayerStationTests
                 World.RegisterComponent<PossessedBy>();
             }
 
-            var held = new PossessedBy { StationNodeId = (NodeId)station, Mode = PossessionMode.Fps, Epoch = 1 };
+            var held = new PossessedBy { StationNodeId = (StationId)station, Mode = PossessionMode.Fps, Epoch = 1 };
             if (World.HasComponent<PossessedBy>(e))
             {
                 World.SetComponent(e, held);

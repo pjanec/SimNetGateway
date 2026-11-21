@@ -316,4 +316,66 @@ public class DpsClockTests
 
         Assert.Equal((string.Empty, string.Empty, string.Empty), (sessions[^1].Terrain, sessions[^1].TerrainBaseHash, sessions[^1].TerrainOverlayHash));
     }
+
+    // ---- T-050 finding A: no Session of a new world epoch before the runtime knows the terrain -----------------------------------------------
+
+    [Fact]
+    public void The_first_session_of_a_runtime_already_names_the_resident_terrain_on_the_first_frame_and_at_a_world_boundary()
+    {
+        var sessions = new List<D.Session>();
+        var plugin = new CountingDdsPlugin { OnBound = t => t.Session.Tap = sessions.Add };
+        using var h = new PackHarness(dis: false, plugins: [plugin], configure: c => c.WithSide(DpsSide.SideKey, new DpsSettings { Domain = Domain, Partition = "terrain-first-1" }));
+        h.World.SetSingletonManaged(new Fdp.Toolkit.Terrain.TerrainDefinition { ResolvedName = "farm", ResolvedBaseHash = "b1", ResolvedOverlayHash = "o1" });   // resident before the gateway's first frame
+        h.Steps(3);
+        Assert.NotEmpty(sessions);
+        Assert.All(sessions, s => Assert.Equal(("farm", "b1", "o1"), (s.Terrain, s.TerrainBaseHash, s.TerrainOverlayHash)));   // not one Session without it
+
+        sessions.Clear();
+        Fdp.Toolkit.Replication.Services.WorldEpoch.Restored(h.World);   // a world boundary: a new runtime, a new epoch
+        h.Steps(3);
+        Assert.NotEmpty(sessions);
+        Assert.All(sessions, s => Assert.Equal("farm", s.Terrain));
+        Assert.Equal(1, sessions.Select(s => s.WorldEpoch).Distinct().Count());   // all of one epoch, the first sample included
+    }
+
+    [Fact]
+    public void With_no_terrain_resident_every_session_of_the_epoch_says_so_and_none_adds_a_name_later()
+    {
+        var sessions = new List<D.Session>();
+        var plugin = new CountingDdsPlugin { OnBound = t => t.Session.Tap = sessions.Add };
+        using var h = new PackHarness(dis: false, plugins: [plugin], configure: c => c.WithSide(DpsSide.SideKey, new DpsSettings { Domain = Domain, Partition = "terrain-first-2" }));
+        h.Steps(5);
+        Assert.NotEmpty(sessions);
+        Assert.All(sessions, s => Assert.Equal((string.Empty, string.Empty, string.Empty), (s.Terrain, s.TerrainBaseHash, s.TerrainOverlayHash)));
+    }
+
+    [Fact]
+    public void A_forced_epoch_after_a_load_publishes_its_first_session_with_the_terrain_the_load_made_resident()
+    {
+        var sessions = new List<D.Session>();
+        var plugin = new CountingDdsPlugin { OnBound = t => t.Session.Tap = sessions.Add };
+        using var h = new PackHarness(dis: false, plugins: [plugin], configure: c => c.WithSide(DpsSide.SideKey, new DpsSettings { Domain = Domain, Partition = "terrain-first-3" }));
+        h.Steps(3);   // a world with no terrain, epoch 1
+        var service = (DpsHostService)h.HostServices.Of("dps")!;
+        Assert.All(sessions, s => Assert.Equal(1u, s.WorldEpoch));
+
+        // the load commits: the terrain is made resident, then the linked client's world gate is begun (HROT's chain order), both in one frame
+        h.World.SetSingletonManaged(new Fdp.Toolkit.Terrain.TerrainDefinition { ResolvedName = "berlin", ResolvedBaseHash = "bb", ResolvedOverlayHash = string.Empty });
+        service.BeginWorld(Guid.NewGuid());
+        sessions.Clear();
+        h.Steps(4);
+
+        var epoch2 = sessions.Where(s => s.WorldEpoch == 2u).ToList();
+        Assert.NotEmpty(epoch2);
+        Assert.All(epoch2, s => Assert.Equal(("berlin", "bb"), (s.Terrain, s.TerrainBaseHash)));   // the first sample of the new epoch already names it
+        Assert.DoesNotContain(sessions, s => s.WorldEpoch == 2u && s.Terrain.Length == 0);
+
+        // the same terrain again (a reload of the same map): the epoch is announced with it, and no later sample of the epoch changes it
+        sessions.Clear();
+        service.BeginWorld(Guid.NewGuid());
+        h.Steps(4);
+        var epoch3 = sessions.Where(s => s.WorldEpoch == 3u).ToList();
+        Assert.NotEmpty(epoch3);
+        Assert.All(epoch3, s => Assert.Equal("berlin", s.Terrain));
+    }
 }

@@ -1,3 +1,4 @@
+using SimNetGateway.Engine;
 using SimNetGateway.Gateway.HrotDis;
 using D = SimNetGateway.Protocol.DdsPlayer;
 
@@ -19,7 +20,10 @@ public sealed class DdsPlayerPlugin : IGatewayPlugin
     /// <summary>The station shows effects of a recording as well as of a live run.</summary>
     public bool WantsEventsInReplay(object settings) => true;
 
-    public IHostService? CreateHostService(object settings, PluginHostContext context) => new DpsHostService();
+    /// <summary>The wall clock the render timeouts (180 s warm-up, 30 s a frame) run on: the host's own monotonic clock unless a test sets one (never simulation time).</summary>
+    public IClock WallClock { get; set; } = new StopwatchClock();
+
+    public IHostService? CreateHostService(object settings, PluginHostContext context) => new DpsHostService((DpsSettings)settings, WallClock, context.Log);
 
     /// <summary>One seat per configured player (DD-023): the host offers that many player stations.</summary>
     public int PlayerSeats(object settings) => ((DpsSettings)settings).Seats;
@@ -94,7 +98,7 @@ public sealed class DdsPlayerPlugin : IGatewayPlugin
 /// world-readiness gate (<see cref="IClientWorldGate"/>). A forced bump (<see cref="BeginWorld"/>) is taken by the live transport on its next pump, or by the next runtime, whichever
 /// comes first; <see cref="Published"/> says which epoch a Session was written with last.
 /// </summary>
-public sealed class DpsHostService : IHostService, IClientWorldGate
+public sealed class DpsHostService : IHostService, IClientWorldGate, IRenderGate
 {
     private const int MaxLoads = 64;
 
@@ -103,8 +107,30 @@ public sealed class DpsHostService : IHostService, IClientWorldGate
     private int _epoch;
     private bool _forced;
 
+    /// <param name="settings">The "dps" settings (the render root and seat).</param>
+    /// <param name="clock">The wall clock of the render timeouts.</param>
+    public DpsHostService(DpsSettings? settings = null, IClock? clock = null, Action<string>? log = null)
+    {
+        Render = new DpsRenderService(clock ?? new StopwatchClock(), settings ?? new DpsSettings(), log);
+    }
+
     /// <summary>What the clients said about their world.</summary>
     internal DpsClientWorlds Worlds { get; } = new();
+
+    /// <summary>The render client's film state and the barrier of a job (DD-022 3e, D-B4).</summary>
+    internal DpsRenderService Render { get; }
+
+    /// <inheritdoc />
+    public bool CanFilm => Render.CanFilm;
+
+    /// <inheritdoc />
+    public Task BeginJob(RenderJobSpec job) => Render.BeginJob(job);
+
+    /// <inheritdoc />
+    public Task Frame(RenderFrameSpec frame) => Render.Frame(frame);
+
+    /// <inheritdoc />
+    public Task<RenderTrackSpec?> EndJob(RenderJobSpec job, RenderEnd end, string? reason) => Render.EndJob(job, end, reason);
 
     /// <summary>The newest world epoch the station has counted.</summary>
     public int Epoch => _epoch;
@@ -176,11 +202,7 @@ public sealed class DpsHostService : IHostService, IClientWorldGate
         return Worlds.Evaluate(Published, out failure, out step);
     }
 
-    public void Pump()
-    {
-    }
+    public void Pump() => Render.Pump();
 
-    public void Dispose()
-    {
-    }
+    public void Dispose() => Render.Shutdown();
 }

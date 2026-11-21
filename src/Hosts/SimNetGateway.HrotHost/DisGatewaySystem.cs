@@ -184,9 +184,11 @@ public sealed class DisGatewaySystem : IEcsModuleSystem, Fdp.Interfaces.IReplayR
 
         var runtime = _runtime!;
         var clock = SimClock.Of(world);
+        // the terrain goes BEFORE the session: the first Session of a runtime's world epoch must already name the resident terrain (T-050 finding A: a client that is truthful about
+        // the world it holds answers Ready to a Session that names none; an empty Terrain means "no terrain", never "not sent yet")
+        GatherTerrain(world, runtime.HrotIn);
         PublishFrame(runtime, phase, clock, _services.GeoReference());
         _clockGather.Read(runtime.HrotIn);
-        GatherTerrain(world, runtime.HrotIn);
         double now = runtime.Clock.Now;
         if (phase != ClusterPhase.Idle)
         {

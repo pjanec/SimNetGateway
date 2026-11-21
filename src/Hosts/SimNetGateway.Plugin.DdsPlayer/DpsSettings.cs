@@ -32,12 +32,29 @@ public sealed record DpsSettings
     /// </summary>
     public int Seats { get; init; } = 1;
 
-    /// <summary>Throws <see cref="ArgumentException"/> with a clear message when <see cref="Seats"/> is outside 1 .. <see cref="MaxSeats"/>.</summary>
+    /// <summary>
+    /// The seat the render client (DD-022 3e) sits on (DD-023 D-12): its <c>RenderClient</c>, <c>FrameDone</c> and <c>RenderJobResult</c> are read on that seat's partition, its <c>RenderJob</c> and
+    /// <c>FrameRequest</c> written there, and <c>ClockStep.Samples</c> counts the world's topics plus that seat's own. Valid 1 .. <see cref="Seats"/>; default 1.
+    /// </summary>
+    public int RenderSeat { get; init; } = 1;
+
+    /// <summary>
+    /// The folder the render client and the gateway both reach (DD-022 3e, D-5): a job's folder and a frame's file are sent relative to it. Empty = not configured (a film job then fails with
+    /// that reason). A folder outside it fails the job.
+    /// </summary>
+    public string RenderRoot { get; init; } = string.Empty;
+
+    /// <summary>Throws <see cref="ArgumentException"/> with a clear message when <see cref="Seats"/> is outside 1 .. <see cref="MaxSeats"/> or <see cref="RenderSeat"/> outside 1 .. <see cref="Seats"/>.</summary>
     public void Validate()
     {
         if (Seats < 1 || Seats > MaxSeats)
         {
             throw new ArgumentException($"dps.seats must be between 1 and {MaxSeats}, not {Seats}.");
+        }
+
+        if (RenderSeat < 1 || RenderSeat > Seats)
+        {
+            throw new ArgumentException($"dps.renderSeat must be between 1 and dps.seats ({Seats}), not {RenderSeat}.");
         }
     }
 }

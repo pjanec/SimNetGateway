@@ -577,7 +577,8 @@ module SimNetGateway {
             enum FrameKind {
                 FrameKindUnknown,
                 FrameKindScene,
-                FrameKindSilence
+                FrameKindSilence,
+                FrameKindRepeat
             };
 
             @bit_bound(8)

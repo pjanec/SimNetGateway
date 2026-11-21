@@ -21,6 +21,7 @@ internal sealed class DpsSeat : IDisposable
     private readonly DpsGizmos _gizmos;
     private readonly DpsClientWorldInbound? _clientWorlds;
     private readonly DpsClockEcho _echo;
+    private readonly DpsRenderEndpoint? _render;
 
     /// <param name="index">The seat number, 1 ..: the station is <c>node | index &lt;&lt; 16</c>.</param>
     /// <param name="partition">The partition this seat's topics are written and read in.</param>
@@ -35,8 +36,12 @@ internal sealed class DpsSeat : IDisposable
         _ownsParticipant = ownsParticipant;
         try
         {
-            PlayerSlot = Add(new DpsChannel<D.PlayerSlot>(_participant));
-            OwnUnit = Add(new DpsChannel<D.OwnUnit>(_participant));
+            // the seat's slot and unit are held in a render job like the world's topics; only the RENDER seat's are counted for Samples (DD-023 D-12: its client is the render client)
+            var barrier = service?.Render.Barrier;
+            bool renderSeat = index == settings.RenderSeat;
+            var counting = renderSeat ? DpsCountKind.Keyless : DpsCountKind.None;
+            PlayerSlot = Add(new DpsChannel<D.PlayerSlot>(_participant, hold: barrier is null ? null : new DpsHold<D.PlayerSlot>(barrier, counting)));
+            OwnUnit = Add(new DpsChannel<D.OwnUnit>(_participant, hold: barrier is null ? null : new DpsHold<D.OwnUnit>(barrier, counting)));
             _inbound = new DpsInbound(_participant, settings, station, log);
             _slot = new DpsPlayerSlot(station, PlayerSlot, OwnUnit);
             GizmoFrame = Add(new DpsChannel<D.GizmoFrame>(_participant));
@@ -47,6 +52,10 @@ internal sealed class DpsSeat : IDisposable
             }
 
             _echo = new DpsClockEcho(_participant, stationTicks ?? DpsClockEcho.DefaultClock.Ticks, log);
+            if (service is not null && renderSeat)
+            {
+                _render = new DpsRenderEndpoint(_participant, settings, service.Render);
+            }
         }
         catch
         {
@@ -80,6 +89,7 @@ internal sealed class DpsSeat : IDisposable
     public void Pump()
     {
         _clientWorlds?.Pump();
+        _render?.Pump();
         _inbound.Pump();
         _gizmos.Pump();
         _slot.Pump();
@@ -92,8 +102,12 @@ internal sealed class DpsSeat : IDisposable
         return channel;
     }
 
+    /// <summary>The render client's endpoint when this is the render seat (tests).</summary>
+    internal DpsRenderEndpoint? Render => _render;
+
     public void Dispose()
     {
+        _render?.Dispose();
         _echo?.Dispose();
         _clientWorlds?.Dispose();
         _gizmos?.Dispose();

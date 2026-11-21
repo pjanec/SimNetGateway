@@ -138,6 +138,6 @@ internal sealed class DpsPorts
         b.BindOutbound<DpsItem<Exercise>>("dps.Exercise", t.Exercise);
         b.BindOutbound<DpsItem<View>>("dps.View", t.View);
         b.BindOutbound<DpsItem<SimClock>>("dps.SimClock", t.SimClock);
-        b.BindOutbound<DpsItem<ClockStep>>("dps.ClockStep", t.ClockStep);
+        b.BindOutbound<DpsItem<ClockStep>>("dps.ClockStep", t.ClockStepPort);
     }
 }

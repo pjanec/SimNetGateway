@@ -20,6 +20,9 @@ internal sealed class CountingDdsPlugin : IGatewayPlugin
 {
     private readonly DdsPlayerPlugin _inner = new();
 
+    /// <summary>The plugin behind (a test sets its wall clock before the host services are made).</summary>
+    public DdsPlayerPlugin Inner => _inner;
+
     public DpsTransport? Transport { get; private set; }
 
     /// <summary>Runs when the transport is bound, before the first frame writes (a test taps the channels then).</summary>

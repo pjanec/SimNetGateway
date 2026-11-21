@@ -677,8 +677,12 @@ public class DpsTopicTests
             }).ToList(),
             LayersOn = Enumerable.Range(0, 32).Select(i => new LayerName { Name = i == 31 ? Full(64) : "on" + i }).ToList(),
             LayersOff = Enumerable.Range(0, 32).Select(i => new LayerName { Name = i == 31 ? Full(64) : "off" + i }).ToList(),
+            Fade = 0.625f,
         };
         var frame = RoundTrip(request, "t7-frame");
+        Assert.Equal(0.625f, frame.Fade);
+        var repeat = RoundTrip(new FrameRequest { JobId = "r", FrameIndex = 7, Kind = FrameKind.FrameKindRepeat, Fade = 1f, Graphics = new(), LayersOn = new(), LayersOff = new() }, "t7-repeat");
+        Assert.Equal((FrameKind.FrameKindRepeat, 1f), (repeat.Kind, repeat.Fade));
         Assert.Equal((Full(32), 123456, FrameKind.FrameKindSilence, 5_000_000_006L, 321.125, 0.25f, 47.5f, 1920, 1080, (byte)3, Full(256), Full(512), SubtitlePosition.SubtitlePositionCentre, 0.75f),
             (frame.JobId, frame.FrameIndex, frame.Kind, frame.StepSeq, frame.SimTime, frame.FilmRate, frame.FovDeg, frame.Width, frame.Height, frame.Supersample, frame.File, frame.Subtitle, frame.SubtitlePosition, frame.SubtitleAlpha));
         Assert.Equal((1.5, -2.5, 3.5, 0.1f, 0.2f, 0.3f, 0.4f), (frame.Position.X, frame.Position.Y, frame.Position.Z, frame.Orientation.X, frame.Orientation.Y, frame.Orientation.Z, frame.Orientation.W));
@@ -842,5 +846,19 @@ public class DpsTopicTests
         Assert.Equal("TerrainOverlayHash", Last<Session>());
         Assert.Equal(["Count", "Max", "Kits", "Outline"], typeof(Offer).GetFields().Select(f => f.Name).TakeLast(4).ToArray());
         Assert.Equal(["TerrainFormat", "TerrainBaseHash", "TerrainOverlayHash"], typeof(Session).GetFields().Select(f => f.Name).TakeLast(3).ToArray());
+    }
+
+    // ---- T-050: FrameKindRepeat and FrameRequest.Fade (DD-022 P-7, R-142) -----------------------------------------------------------
+
+    [Fact]
+    public void FrameKindRepeat_is_appended_after_the_old_values_and_Fade_is_the_last_field_of_FrameRequest()
+    {
+        Assert.Equal((byte)1, (byte)FrameKind.FrameKindScene);   // the old values do not move
+        Assert.Equal((byte)2, (byte)FrameKind.FrameKindSilence);
+        Assert.Equal((byte)3, (byte)FrameKind.FrameKindRepeat);
+        Assert.Equal("Fade", typeof(FrameRequest).GetFields().Select(f => f.Name).Last());
+        Assert.Equal(["LayersOn", "LayersOff", "Fade"], typeof(FrameRequest).GetFields().Select(f => f.Name).TakeLast(3).ToArray());
+        Assert.Contains("FrameKindRepeat", File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "DpsTypes.idl")));
+        Assert.Contains("float Fade", File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "DpsTopics.idl")));
     }
 }

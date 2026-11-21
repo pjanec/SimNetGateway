@@ -39,6 +39,8 @@ public sealed class DpsSide : IProtocolSide
             AngleThresholdDeg = section.Number("angleThresholdDeg", d.AngleThresholdDeg, min: 0),
             VelocityThreshold = section.Number("velocityThreshold", d.VelocityThreshold, min: 0),
             Seats = (int)section.Integer("seats", d.Seats, 1, DpsSettings.MaxSeats),
+            RenderSeat = (int)section.Integer("renderSeat", d.RenderSeat, 1, DpsSettings.MaxSeats),
+            RenderRoot = section.String("renderRoot", d.RenderRoot),
         };
         section.Finish();
         return result;
@@ -57,6 +59,8 @@ public sealed class DpsSide : IProtocolSide
         w.WriteNumber("angleThresholdDeg", s.AngleThresholdDeg);
         w.WriteNumber("velocityThreshold", s.VelocityThreshold);
         w.WriteNumber("seats", s.Seats);
+        w.WriteNumber("renderSeat", s.RenderSeat);
+        w.WriteString("renderRoot", s.RenderRoot);
     }
 
     /// <inheritdoc />

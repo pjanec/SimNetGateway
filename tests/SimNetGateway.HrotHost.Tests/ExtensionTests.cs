@@ -162,4 +162,26 @@ public sealed class ExtensionTests : IDisposable
             }
         }
     }
+
+    /// <summary>T-050 finding B: the gateway was never offered as HROT's linked client, so no load waited. The whole composition path: the configuration file, the extension, the capability HROT composes, the node's registry.</summary>
+    [Fact]
+    public void The_capability_the_extension_creates_offers_itself_on_the_nodes_linked_clients_when_composed_and_withdraws_at_teardown()
+    {
+        var x = new GatewayExtension(() => File_("""{ "dps": { "domain": 99, "partition": "ext-offer" } }"""), PluginSet.Of(new SimNetGateway.Plugin.DdsPlayer.DdsPlayerPlugin()));
+        var capability = Assert.IsType<GatewayCapability>(x.CreateCapability(Offline()));
+        Assert.Empty(x.Errors);
+
+        var registry = new LinkedClients();
+        var context = (HrotNodeContext)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(HrotNodeContext));
+        typeof(HrotNodeContext).GetProperty("LinkedClients")!.SetValue(context, registry);
+        Assert.Null(registry.Current);   // nothing offered before the node composes the capability
+
+        capability.PopulateSystems(context, [], [], []);
+
+        var client = Assert.IsType<DpsLinkedClient>(registry.Current);   // what HROT's load step now finds and waits for
+        Assert.Same(capability.LinkedClient, client);
+        Assert.Equal("dps", client.Name);
+        capability.Dispose();
+        Assert.Null(registry.Current);
+    }
 }

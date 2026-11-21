@@ -1314,6 +1314,8 @@ public partial struct FrameRequest
     [DdsBound(32)] public List<LayerName> LayersOn;
     /// <summary>Layers to switch off for this frame.</summary>
     [DdsBound(32)] public List<LayerName> LayersOff;
+    /// <summary>The dip to black over the picture this frame: 0 = none ... 1 = black (DD-022 P-7, appended).</summary>
+    public float Fade;
 }
 
 /// <summary>The client's answer to a <see cref="FrameRequest"/>: the frame is written, or failed.</summary>

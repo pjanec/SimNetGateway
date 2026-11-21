@@ -219,8 +219,11 @@ public enum RenderKind : byte { RenderKindUnknown = 0, RenderKindMovie, RenderKi
 /// <summary>The state of a render job.</summary>
 public enum RenderState : byte { RenderStateUnknown = 0, RenderStateStarting, RenderStateRunning, RenderStateDone, RenderStateFailed, RenderStateCancelled }
 
-/// <summary>What a film frame is: a Scene to render, or Silence (a title card; silence in the soundtrack).</summary>
-public enum FrameKind : byte { FrameKindUnknown = 0, FrameKindScene, FrameKindSilence }
+/// <summary>
+/// What a film frame is: a Scene to render, Silence (a title card; silence in the soundtrack), or a Repeat (slow motion past one frame per step: the previous scene frame's picture again,
+/// the station's side copies the file and the client only advances its soundtrack by one frame; DD-022 P-7, appended).
+/// </summary>
+public enum FrameKind : byte { FrameKindUnknown = 0, FrameKindScene, FrameKindSilence, FrameKindRepeat }
 
 /// <summary>The outcome of a frame or of a job's result.</summary>
 public enum FrameStatus : byte { FrameStatusUnknown = 0, FrameStatusWritten, FrameStatusFailed }
