@@ -81,8 +81,8 @@ sequence diagrams, rulings and tasks recorded). In addition, learned on this wor
 
 Waiting on HROT (ask through a prompt):
 
-- `Impact` in replay - the recorded effect entities lack the impact kind (Entered / Left / Stopped) and the shooter; HROT could add
-  them to `EffectCause` or record the impact event.
+- `Impact` in replay - HROT CE-11024 (Q113 H, HROT `ui`): `EffectCause` gains the impact kind and the shooter, then the gateway makes `Impact`
+  from the recorded effect entities, live and in replay alike (one path, from state - HROT R-11007); replaces the event-based `Impact`.
 - `View` in replay - HROT's camera suggestion is node-local and not recorded.
 - Terrain changes on the wire: door states (doors are entities without a state today and most of the entity traffic), felled and
   damaged trees, ground patches (craters, road blockage), marking signs of a marked minefield.
