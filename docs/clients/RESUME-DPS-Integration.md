@@ -25,6 +25,12 @@ CE-11024) · ④ the DD-023 D-16 feature scenarios on the real editor · ⑤ the
 ⑥ measure thousands of cards against the 4096-primitive frame bound (DD-024 section 9). **HROT:** CE-11021 (the encode muxes the client's
 track within 1024 samples).
 
+**⚠ Waiting on the owner (decide when you are back):** cards at scale (T-058, DD-024 §9) — one layer's `GizmoFrame` holds 4096 primitives
+= 819 men's cards; past it the gateway now cuts at a whole card (no half cards) but drops the rest. Lossless options: A — split a layer into
+parts by NAME (`Labels`, `Labels~1`, …; no IDL change, a client unions them); B — a `Part` key field (NOT append-only: old clients break);
+C — a larger bound (one huge sample per layer); D — send a layer only when it changes, plus a heartbeat (no IDL change; ~14.5 MB/s → ~0 for
+a calm 5 000-man scene). ⭐ Lean: A + D.
+
 **Rulings today:** gateway R-136 .. R-144; HROT R-11008 .. R-11011.
 
 ## 1. Where things stand
