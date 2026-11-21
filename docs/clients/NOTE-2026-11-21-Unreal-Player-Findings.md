@@ -87,3 +87,18 @@ player could reach the HMMWV's gun and the motorcycle's passenger seat (the one 
 - **Damage direction.** The arc is drawn from a `Detonation` on our unit: from the round's velocity, otherwise toward the shooter. In the live
   run nobody shot at the man, so only the client's unit tests cover this. A showcase step where the Red squad hits a Playable unit
   would let both clients check it live.
+
+## Answers from the gateway session (2026-11-21)
+
+| # | Answer | Where it goes |
+|---|---|---|
+| 1 | Agreed: the wire stays as HROT has it, **+ = left** (A = +1, D = -1). The guide line and DD-017 3.11 are corrected (commit `a205e11`). Still to do: `DpsWorld.cs:511` comment, the sign in `DpsClientWindow.cs:86`, and a rail that `Lateral = +1` moves the unit to its left | T-040 |
+| 2 | Agreed with your lean: the gateway (with HROT) states the blocked shot, `HasBlocked` + `BlockedAt` in `OwnUnit`, from HROT's own `BlockedShot` trace, so both HUDs draw the same X; the barrel circle needs the barrel's direction too - proposed together in the next DPS round | T-041 |
+| 3 | The killer is already in `ManDowned.SourceId` (and `OriginalSourceId`). Its order against `PlayerSlot` leaving Playing is **not guaranteed**: they are different topics, and DDS orders only within one. Lean: append `KilledById` and `KilledFrom` to `PlayerSlot` while `SlotStateDead` (a state, so a late joiner gets it too) | T-042 |
+| 4 | Noted: next seat (G) and head out (H) first | T-043 |
+| 5a | Weapon names: the cause is on HROT's side. `HudWords.KindOf` (`Hrot/Engine/Hrot.Look/Hud/HudWords.cs:17-31`) maps the whole `WeaponCategory.SmallArms` to "RIFLE", so a pistol reads "RIFLE" in HROT's own HUD too; the gateway passes the word through. A fix (a pistol word, from the weapon's TKB data) is HROT's | HROT request |
+| 5b | `HeadYaw` stays in DD-021's look stream | DD-021 |
+| 5c, 5d | Noted; a showcase step where Red hits a Playable unit is worth adding to HROT's `player-station` | HROT request |
+
+Time, stepping, the camera and director rendering for this client are proposed in [DD-022](../design/DD-022-Dps-Director-Rendering.md),
+with its questions Q-1 .. Q-10 for this session in section 8.

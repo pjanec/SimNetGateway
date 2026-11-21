@@ -68,8 +68,9 @@ step: **a film frame is a lockstep step**.
 
 ### 1b. Inputs from the Unreal session (HROT `unreal-ig`, `docs/designs/IG/DRAFT_Unreal_Image_Generator.md` U-18l, U-18m)
 
-⚠ The note `docs/clients/NOTE-2026-11-21-Unreal-Player-Findings.md` was not found on any pushed branch of either repository; these are the
-findings recorded in the Unreal session's own design rows.
+The session's note [`NOTE-2026-11-21-Unreal-Player-Findings.md`](../clients/NOTE-2026-11-21-Unreal-Player-Findings.md) (gateway `bf2a406`) and its
+design rows; the note's other items (blocked shot, kill cam, station keys, weapon names) are answered in the note itself and tracked as
+T-040 .. T-043 - they are not this design's.
 
 | Finding | Bearing |
 |---|---|
