@@ -974,4 +974,106 @@ public class PlayerStationTests
             }
         }
     }
+
+    // ---- T-054: PlayerMessage per seat (DD-023 D-15) ----------------------------------------------------------------------------------
+
+    private sealed class MessageWatch : IDisposable
+    {
+        private readonly DdsParticipant _participant;
+        private readonly DdsReader<D.PlayerMessage> _reader;
+
+        public MessageWatch(uint domain, string partition)
+        {
+            _participant = new DdsParticipant(domain, defaultPartition: partition);
+            _reader = new DdsReader<D.PlayerMessage>(_participant);
+        }
+
+        public HashSet<int> Ids { get; } = new();
+
+        public void Pump()
+        {
+            using var loan = _reader.Take(64);
+            foreach (var sample in loan)
+            {
+                if (sample.IsValid)
+                {
+                    Ids.Add(sample.Data.MessageId);
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            _reader.Dispose();
+            _participant.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// T-054: every address kind reaches exactly the seats HROT's own rule (<c>PlayerMessageAddressing.Addressed</c>) picks over each seat's viewer - the unit it holds, its side, its station - and only those, on the seat's own
+    /// participant. Seat 1 holds a Friend unit, seat 2 a Hostile one, seat 3 holds nothing (a seat with no unit is still addressed by All, by its station and, being side-less, by the neutral side).
+    /// Mutations: the message written on the world participant (every seat hears it); the station-addressed one delivered to every seat.
+    /// </summary>
+    [Fact]
+    public void Each_address_kind_reaches_exactly_the_seats_hrots_rule_picks()
+    {
+        using var w1 = new MessageWatch(96, "msg-1");
+        using var w2 = new MessageWatch(96, "msg-2");
+        using var w3 = new MessageWatch(96, "msg-3");
+        using var h = new SeatStage(3, new CountingDdsPlugin(), "msg");
+        h.AddPlayable(2001);
+        var hostile = h.AddPlayable(2002);
+        h.World.SetComponent(hostile, new Hrot.Common.Playable { Side = ForceId.Hostile, SlotName = new FixedString32("Gunner") });
+        h.Turns(2);
+        Assert.True(h.Seat(1).Join(new PlayerJoin(PlayerJoinKind.Unit, 2001, null)));
+        Assert.True(h.Seat(2).Join(new PlayerJoin(PlayerJoinKind.Unit, 2002, null)));
+        h.Turns(4);
+        Assert.Equal([PlayerSlotState.Playing, PlayerSlotState.Playing, PlayerSlotState.Choosing], [h.Seat(1).Slot.State, h.Seat(2).Slot.State, h.Seat(3).Slot.State]);
+
+        var viewers = new[]
+        {
+            new Hrot.Common.Messages.MessageViewer(2001, ForceId.Friend, (StationId)SeatStationOf(1)),
+            new Hrot.Common.Messages.MessageViewer(2002, ForceId.Hostile, (StationId)SeatStationOf(2)),
+            new Hrot.Common.Messages.MessageViewer(0, ForceId.Neutral, (StationId)SeatStationOf(3)),
+        };
+        // (id, kind, the value on the wire: a side is a DIS force; the rule's value: HROT's force id)
+        var cases = new (int Id, string Kind, int Wire, int Rule)[]
+        {
+            (11, "All", 0, 0), (12, "Side", 1, (int)ForceId.Friend), (13, "Side", 2, (int)ForceId.Hostile), (14, "Side", 3, (int)ForceId.Neutral),
+            (15, "Unit", 2002, 2002), (16, "Station", SeatStationOf(3), SeatStationOf(3)), (17, "Station", SeatStationOf(1), SeatStationOf(1)), (18, "Instructor", 0, 0),
+        };
+        var watches = new[] { w1, w2, w3 };
+        bool Done() => cases.All(c => viewers.Select((v, i) => (v, i)).All(t => !Hrot.Common.Messages.PlayerMessageAddressing.Addressed(c.Kind, c.Rule, t.v) || watches[t.i].Ids.Contains(c.Id)));
+        Assert.True(Wait(() =>
+        {
+            foreach (var c in cases)
+            {
+                h.World.Bus.PublishManaged(new Fdp.Toolkit.ScenarioRules.PlayerMessageEvent { MessageId = c.Id, ToKind = c.Kind, ToValue = c.Kind == "Side" ? c.Rule : c.Wire, Text = "m" + c.Id });
+            }
+
+            h.World.Bus.SwapBuffers();
+            h.Turn();
+            foreach (var w in watches)
+            {
+                w.Pump();
+            }
+
+            return Done();
+        }, 15000));
+        h.Turns(3);
+        foreach (var w in watches)
+        {
+            w.Pump();
+        }
+
+        for (int seat = 0; seat < 3; seat++)
+        {
+            var expected = cases.Where(c => Hrot.Common.Messages.PlayerMessageAddressing.Addressed(c.Kind, c.Rule, viewers[seat])).Select(c => c.Id).OrderBy(x => x).ToArray();
+            Assert.Equal(expected, watches[seat].Ids.OrderBy(x => x).ToArray());
+        }
+
+        Assert.Equal([11, 12, 17], watches[0].Ids.OrderBy(x => x).ToArray());   // seat 1: All, its side, its station
+        Assert.Equal([11, 13, 15], watches[1].Ids.OrderBy(x => x).ToArray());                        // seat 2: All, its side, its unit
+        Assert.Equal([11, 14, 16], watches[2].Ids.OrderBy(x => x).ToArray());                        // seat 3: All, the neutral side, its station; the instructor message nobody
+    }
 }

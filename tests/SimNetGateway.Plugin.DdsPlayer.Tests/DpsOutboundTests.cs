@@ -761,6 +761,68 @@ public class DpsOutboundTests
         Assert.Equal(0, after - before);
     }
 
+    /// <summary>A seat station whose answer to "is this message for you" is the test's (the host's rule stands behind it; the plugin has none of its own).</summary>
+    private sealed class AddressedStation : DpsInboundTests.RecordingStation, IPlayerStation
+    {
+        public bool Wants { get; set; }
+
+        public List<(string Kind, int Value)> Asked { get; } = new();
+
+        bool IPlayerStation.Addressed(string kind, int value)
+        {
+            Asked.Add((kind, value));
+            return Wants;
+        }
+    }
+
+    /// <summary>T-054 (DD-023 D-15): a message is written on the participant of each seat whose station says it is addressed to it, with the address kind NAME and value the rule is asked; the others hear nothing. Mutations: written on the world participant; every seat.</summary>
+    [Fact]
+    public void A_player_message_is_written_only_on_the_seats_whose_station_it_is_addressed_to()
+    {
+        uint domain = NewDomain();
+        var stations = new[] { new AddressedStation { Wants = true }, new AddressedStation { Wants = false }, new AddressedStation { Wants = true } };
+        using var one = new Watch<D.PlayerMessage>(domain, "station-1-1", m => "m");
+        using var two = new Watch<D.PlayerMessage>(domain, "station-1-2", m => "m");
+        using var three = new Watch<D.PlayerMessage>(domain, "station-1-3", m => "m");
+        using var rig = new Rig(domain, seats: 3, stations: stations.Cast<IPlayerStation>().ToArray());
+
+        Assert.True(one.Until(w =>
+        {
+            rig.Send(new HrotPlayerMessage(7, 0, "Station", 65537, "to seat one", 4f, 0, 1.0, 0));
+            two.Pump();
+            three.Pump();
+            return w.Events.Count > 0 && three.Events.Count > 0;
+        }));
+        Thread.Sleep(200);
+        two.Pump();
+        Assert.Empty(two.Events);   // seat 2's station said no
+        Assert.All(new[] { one, three }, w => Assert.Equal((D.MessageAddress.MessageAddressStation, 65537, "to seat one"), (w.Events[0].To, w.Events[0].ToValue, w.Events[0].Text)));
+        Assert.All(stations, st => Assert.Equal(("Station", 65537), st.Asked[0]));
+    }
+
+    /// <summary>
+    /// T-054 (HOT path): with three seats and no message the message path costs nothing per steady frame: the router is built once and touched only when a message arrives, no station is asked and nothing is written.
+    /// (The whole engine tick of a rig is NOT 0 B - about 1.4 KB a frame measured before this task, from the slot / HUD paths, not from messages.)
+    /// </summary>
+    [Fact]
+    public void Three_seats_with_no_messages_allocate_nothing_per_steady_frame_for_the_message_path()
+    {
+        uint domain = NewDomain();
+        var stations = new[] { new AddressedStation(), new AddressedStation(), new AddressedStation() };
+        using var rig = new Rig(domain, seats: 3, stations: stations.Cast<IPlayerStation>().ToArray());
+        rig.Step();
+        var port = rig.Transport.PlayerMessage;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 1000; i++)
+        {
+            _ = rig.Transport.PlayerMessage;
+        }
+
+        Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.Same(port, rig.Transport.PlayerMessage);
+        Assert.All(stations, st => Assert.Empty(st.Asked));
+    }
+
     [Fact]
     public void The_side_reads_and_writes_its_section()
     {

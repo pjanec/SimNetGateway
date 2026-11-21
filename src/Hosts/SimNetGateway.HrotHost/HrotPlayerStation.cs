@@ -215,6 +215,33 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
 
     internal HrotGizmoHost Gizmos => _gizmos;
 
+    /// <inheritdoc />
+    /// <remarks>HROT's one addressing rule (<c>PlayerMessageAddressing.Addressed</c>) over this seat's viewer: the unit it holds (Playing), its side and its station. No second filter here: the only work is the contract's DIS force back to HROT's force id.</remarks>
+    public bool Addressed(string kind, int value)
+    {
+        int unit = _flow.State == PlayerSlotState.Playing ? _flow.UnitId : 0;
+        byte dis = _flow.Side;
+        if (dis == 0 && unit != 0)
+        {
+            var offers = _flow.Offers;
+            for (int i = 0; i < offers.Count; i++)
+            {
+                if (offers[i].UnitId == unit)
+                {
+                    dis = (byte)offers[i].Force;
+                }
+            }
+        }
+
+        var side = dis switch { 1 => ForceId.Friend, 2 => ForceId.Hostile, _ => ForceId.Neutral };
+        if (kind == "Side")
+        {
+            value = value switch { 1 => (int)ForceId.Friend, 2 => (int)ForceId.Hostile, _ => (int)ForceId.Neutral };
+        }
+
+        return Hrot.Common.Messages.PlayerMessageAddressing.Addressed(kind, value, new Hrot.Common.Messages.MessageViewer(unit, side, (StationId)Station));
+    }
+
     public bool Join(PlayerJoin request)
     {
         if (_detached)

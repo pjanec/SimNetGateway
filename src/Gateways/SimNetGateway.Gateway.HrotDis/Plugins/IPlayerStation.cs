@@ -18,6 +18,12 @@ public interface IPlayerStation
     /// <summary>The player's own unit (all zero while no unit is held).</summary>
     PlayerUnitStatus Unit { get; }
 
+    /// <summary>
+    /// Is a player message to (<paramref name="kind"/>, <paramref name="value"/>) for this seat (T-054, DD-023 D-15)? <paramref name="kind"/> is the NAME of the address (All, Side, Station, Unit, Instructor), a side is
+    /// in DIS force numbering. The host answers with the product's own addressing rule for this seat's unit, side and station; a host with no rule delivers everything (the default).
+    /// </summary>
+    bool Addressed(string kind, int value) => true;
+
     /// <summary>Asks to join; false = not accepted now (the slot says where it is).</summary>
     bool Join(PlayerJoin request);
 

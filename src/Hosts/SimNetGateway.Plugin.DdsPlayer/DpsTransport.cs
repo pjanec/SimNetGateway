@@ -295,7 +295,6 @@ public sealed class DpsTransport : IDisposable
             TrafficLights = Add(new DpsChannel<TrafficLights>(_participant, hold: Hold<TrafficLights>(DpsCountKind.Keyed, key: t => t.SignalId)));
             TkbType = Add(new DpsChannel<TkbType>(_participant, hold: Hold<TkbType>(DpsCountKind.Keyed, key: t => t.TypeId)));
             ManDowned = Add(new DpsChannel<ManDowned>(_participant, hold: Hold<ManDowned>(DpsCountKind.Event, EventDepth)));
-            PlayerMessage = Add(new DpsChannel<PlayerMessage>(_participant, hold: Hold<PlayerMessage>(DpsCountKind.Event, EventDepth)));   // INTERIM (DD-023 section 9): on the world participant until HROT Q114-I routes it per seat
             Status = Add(new DpsChannel<Status>(_participant, hold: Hold<Status>(DpsCountKind.Keyed, key: t => t.StatusId)));
             Exercise = Add(new DpsChannel<Exercise>(_participant, hold: Hold<Exercise>(DpsCountKind.Keyless)));
             View = Add(new DpsChannel<View>(_participant, hold: Hold<View>(DpsCountKind.Keyless)));
@@ -417,7 +416,10 @@ public sealed class DpsTransport : IDisposable
 
     internal DpsChannel<ManDowned> ManDowned { get; } = null!;
 
-    internal DpsChannel<PlayerMessage> PlayerMessage { get; } = null!;
+    /// <summary>The player message port (T-054, D-15): routes each message to the seats the host's addressing rule picks; each is written on that seat's participant.</summary>
+    internal IOutboundChannel<DpsItem<PlayerMessage>> PlayerMessage => _messages ??= new DpsMessageRouter(_seats);
+
+    private DpsMessageRouter? _messages;
 
     internal DpsChannel<Status> Status { get; } = null!;
 

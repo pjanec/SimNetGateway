@@ -1,5 +1,4 @@
 using System.Numerics;
-using System.Reflection;
 using Fdp.Core;
 using Fdp.Toolkit.Time;
 using Fdp.Toolkit.Weather;
@@ -11,19 +10,12 @@ using GwState = SimNetGateway.Gateway.HrotDis.PlayerSlotState;
 
 namespace SimNetGateway.HrotHost;
 
-/// <summary>
-/// Whether the node serves the deploy flow in-process (DD-023 D-14: "<c>ServerExists</c> = the editor composes the server"). HROT's <see cref="LocalGameplayHub"/> has no public
-/// "is a server end open" member (<see cref="LocalGameplayHub.ServerEnd"/> would OPEN one when there is none, which would make every later probe true), so this reads the hub's one private
-/// field. ONE place, so a HROT member that says it (a finding for HROT) replaces a single method; if the field is gone the answer is false (the seat keeps today's possession flow).
-/// </summary>
+/// <summary>Whether the node serves the deploy flow in-process (DD-023 D-14: "<c>ServerExists</c> = the editor composes the server"): the hub has an open server end (<c>LocalGameplayHub.HasServer</c> opens nothing).</summary>
 internal static class DeployServer
 {
-    private static readonly FieldInfo? ServerField = typeof(LocalGameplayHub).GetField("_server", BindingFlags.Instance | BindingFlags.NonPublic);
-
-    /// <summary>True when <see cref="LocalGameplayHub.Of"/> of <paramref name="world"/> has an open server end (the node composed the deploy server over it).</summary>
     public static bool Exists(EntityRepository world) => Exists(LocalGameplayHub.Of(world));
 
-    public static bool Exists(LocalGameplayHub hub) => ServerField?.GetValue(hub) is LocalGameplayEnd { IsOpen: true };
+    public static bool Exists(LocalGameplayHub hub) => hub.HasServer;
 }
 
 /// <summary>

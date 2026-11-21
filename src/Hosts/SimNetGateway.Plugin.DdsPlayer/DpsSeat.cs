@@ -44,6 +44,8 @@ internal sealed class DpsSeat : IDisposable
             OwnUnit = Add(new DpsChannel<D.OwnUnit>(_participant, hold: barrier is null ? null : new DpsHold<D.OwnUnit>(barrier, counting)));
             _inbound = new DpsInbound(_participant, settings, station, log);
             _slot = new DpsPlayerSlot(station, PlayerSlot, OwnUnit);
+            // the seat's own messages (T-054, D-15): counted in a render job on the render seat only, like its slot
+            PlayerMessage = Add(new DpsChannel<D.PlayerMessage>(_participant, hold: barrier is null ? null : new DpsHold<D.PlayerMessage>(barrier, renderSeat ? DpsCountKind.Event : DpsCountKind.None, 1024)));
             GizmoFrame = Add(new DpsChannel<D.GizmoFrame>(_participant));
             _gizmos = new DpsGizmos(_participant, settings, partition, gizmoSource, _inbound, GizmoFrame, log);
             if (service is not null)
@@ -76,6 +78,9 @@ internal sealed class DpsSeat : IDisposable
     internal DpsChannel<D.PlayerSlot> PlayerSlot { get; } = null!;
 
     internal DpsChannel<D.OwnUnit> OwnUnit { get; } = null!;
+
+    /// <summary>The messages addressed to this seat (written on the seat's participant).</summary>
+    internal DpsChannel<D.PlayerMessage> PlayerMessage { get; } = null!;
 
     internal DpsChannel<D.GizmoFrame> GizmoFrame { get; } = null!;
 
