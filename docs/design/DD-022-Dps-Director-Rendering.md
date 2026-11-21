@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| **Status** | draft rev 4 - the Unreal session agreed P-1 .. P-6 with refinements ([its answers](../clients/NOTE-2026-11-21-Unreal-Answers-DD-022.md), `5e63786`), folded in; awaiting the owner's approval (not built) |
+| **Status** | approved rev 4 (R-138, 2026-11-21) - the Unreal session agreed P-1 .. P-6 ([its answers](../clients/NOTE-2026-11-21-Unreal-Answers-DD-022.md), `5e63786`); not built |
 | **Tasks** | T-039 |
-| **Rulings honoured** | R-132, R-133 (contract open, append-only), R-134 (the client owns its camera; HROT's rules live in HROT), R-135 (rate classes, producer-neutral), R-136, R-137 |
+| **Rulings honoured** | R-132, R-133 (contract open, append-only), R-134 (the client owns its camera; HROT's rules live in HROT), R-135 (rate classes, producer-neutral), R-136, R-137, R-138 (approval) |
 | **Date** | 2026-11-21 (rev 3: HROT's time sync measured in code - no pulse; the audio track reworked; the Unreal session's findings. Rev 4: the Unreal session's answers - the tick epoch, the per-step sample barrier, the binding kept, warm-up, S-1 through Unreal's non-real-time mixer) |
 
 ## 1. Context and goals
