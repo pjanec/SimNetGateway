@@ -119,6 +119,9 @@ flowchart LR
 
 ### 3a. What HROT has to provide (requests to the HROT session)
 
+HROT's design for these: [DESIGN_External_Renderer_Director.md](https://github.com/pjanec/HROT/blob/ui/docs/designs/IG/DESIGN_External_Renderer_Director.md) and its
+[Architect_Question_113](https://github.com/pjanec/HROT/blob/ui/docs/blueprints/Architect_Question_113_External_Renderer_For_The_Director.md) (HROT `ui`, CE-11017 .. CE-11022).
+
 | Id | HROT change | Why |
 |---|---|---|
 | H-1 | A node extension can offer an `IFrameSink` (a capability); the director picks it per job: an offered, ready external sink wins over `FilmFrameSink` unless the request says `renderer: map` | R-136 |
