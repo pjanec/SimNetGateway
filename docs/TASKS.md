@@ -92,3 +92,4 @@ progress and done.
 | **T-063** | done | `EntityStatus` gains `Behaviour` (the active behaviour's name: `BehaviorState.ActiveBehaviorHash` + the node's `BehaviorRegistry.TryGetName`) and `Task` (`BrainIntentReader`'s task slot), on change; the HROT pin moves to e2b43ab4c (CE-11032 offers the registry on `HrotNodeContext`) | DD-025 | R-146 |
 | **T-064** | in-progress | Voice events (DD-026): `Utterance`, `Report`, `Order` event topics once on the world partition, from HROT's `Utterance` component and `CommandHistory` | DD-026 | R-148 |
 | **T-065** | todo | Bursts on `Fire` (DD-027): BurstId / BurstRounds / BurstIndex from HROT's `FireBurst` - after HROT CE-11033 | DD-027 | R-147 |
+| **T-066** | todo | Ambience and weather on DPS (DD-028): `Ambience` from HROT's ambience layers, `Weather` from its weather entities - after HROT CE-11034 | DD-028 | R-149 |
