@@ -467,30 +467,33 @@ public sealed class DpsWorld : IDisposable
     }
 
     /// <summary>Asks for the first free unit among the slot's unit offers (roles are not requested). False when there is none.</summary>
-    public bool JoinFirstUnit()
+    public bool JoinFirstUnit() => TryJoin(new DpsJoinPlan(DpsJoinMode.FirstUnit), out _);
+
+    /// <summary>The last reason <see cref="TryJoin"/> could not send a request (no such role, role full ...); null after a request went out.</summary>
+    public string? JoinProblem { get; private set; }
+
+    /// <summary>Writes the join the plan asks for, built from the slot's current offers. False (with <paramref name="problem"/>) when none can be made now.</summary>
+    public bool TryJoin(DpsJoinPlan plan, out string? problem)
     {
         HasLeft = false;
-        if (Slot is not { } slot || slot.Offers is null)
+        problem = "no slot yet";
+        if (Slot is { } slot && plan.Build(slot, out problem) is { } request)
         {
-            return false;
+            request.RequestSeq = ++_joinSeq;
+            request.ClientId = ClientId;
+            _join.Write(request);
+            JoinProblem = problem = null;
+            return true;
         }
 
-        foreach (var offer in slot.Offers)
-        {
-            if (offer.Kind == D.OfferKind.OfferKindUnit && offer.Free)
-            {
-                _join.Write(new D.JoinRequest { RequestSeq = ++_joinSeq, Kind = D.JoinKind.JoinKindUnit, UnitId = offer.Id, Role = string.Empty, ClientId = ClientId });
-                return true;
-            }
-        }
-
+        JoinProblem = problem;
         return false;
     }
 
     private double _lastAutoJoin = double.NegativeInfinity;
 
     /// <summary>Headless join: once a second while the slot is Choosing, never after the client has left.</summary>
-    public bool TryAutoJoin()
+    public bool TryAutoJoin(DpsJoinPlan? plan = null)
     {
         double now = _clock();
         if (HasLeft || Slot is not { State: D.SlotState.SlotStateChoosing } || now - _lastAutoJoin < 1.0)
@@ -499,7 +502,7 @@ public sealed class DpsWorld : IDisposable
         }
 
         _lastAutoJoin = now;
-        return JoinFirstUnit();
+        return TryJoin(plan ?? new DpsJoinPlan(DpsJoinMode.FirstUnit), out _);
     }
 
     public void Leave()

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using D = SimNetGateway.Protocol.DdsPlayer;
 using SimNetGateway.Protocol.DdsPlayer;
 
 namespace SimNetGateway.DpsClient;
@@ -10,7 +11,7 @@ namespace SimNetGateway.DpsClient;
 /// </summary>
 public static class DpsClientProgram
 {
-    public const string Usage = "usage: DpsClient --domain N --partition NAME [--headless --seconds N [--join] [--forward F --drive-seconds N] [--fire-after S] [--leave-after S]]";
+    public const string Usage = "usage: DpsClient --domain N --partition NAME [--headless --seconds N [--join | --role NAME [--side N] [--kit N] [--area NAME] | --observe] [--retry] [--list-offers] [--forward F --drive-seconds N] [--fire-after S] [--leave-after S]]";
 
     private static readonly string[] SummaryTopics =
         [DpsProtocol.Entity, DpsProtocol.EntityState, DpsProtocol.PersonState, DpsProtocol.PersonAim, DpsProtocol.Appearance, DpsProtocol.VehicleLook, DpsProtocol.Fire, DpsProtocol.Detonation,
@@ -23,7 +24,10 @@ public static class DpsClientProgram
     {
         uint domain = 0;
         string partition = "station-1";
-        bool headless = false, join = false;
+        bool headless = false, join = false, observe = false, retry = false, listOffers = false;
+        string? role = null, area = null;
+        byte side = 0, kit = 0;
+        bool sideGiven = false, kitGiven = false;
         double seconds = 5.0, driveSeconds = 0, fireAfter = -1, leaveAfter = -1;
         float forward = 0;
 
@@ -69,12 +73,58 @@ public static class DpsClientProgram
                 case "--join":
                     join = true;
                     break;
+                case "--observe":
+                    observe = true;
+                    break;
+                case "--retry":
+                    retry = true;
+                    break;
+                case "--list-offers":
+                    listOffers = true;
+                    break;
+                case "--role" when !string.IsNullOrEmpty(v):
+                    role = v;
+                    i++;
+                    break;
+                case "--area" when !string.IsNullOrEmpty(v):
+                    area = v;
+                    i++;
+                    break;
+                case "--side" when byte.TryParse(v, NumberStyles.None, CultureInfo.InvariantCulture, out var sd):
+                    side = sd;
+                    sideGiven = true;
+                    i++;
+                    break;
+                case "--kit" when byte.TryParse(v, NumberStyles.None, CultureInfo.InvariantCulture, out var kt):
+                    kit = kt;
+                    kitGiven = true;
+                    i++;
+                    break;
                 default:
                     error.WriteLine($"unknown or incomplete argument: {a}");
                     error.WriteLine(Usage);
                     return 2;
             }
         }
+
+        string? conflict =
+            (role is not null ? 1 : 0) + (join ? 1 : 0) + (observe ? 1 : 0) > 1 ? "--join, --role and --observe exclude each other"
+            : area is not null && role is null ? "--area needs --role"
+            : kitGiven && role is null ? "--kit needs --role"
+            : sideGiven && role is null && !join ? "--side needs --role or --join"
+            : observe && (sideGiven || kitGiven) ? "--observe takes no --side or --kit"
+            : null;
+        if (conflict is not null)
+        {
+            error.WriteLine(conflict);
+            error.WriteLine(Usage);
+            return 2;
+        }
+
+        DpsJoinPlan? plan = role is not null ? new DpsJoinPlan(DpsJoinMode.Role, role, side, kit, area)
+            : observe ? new DpsJoinPlan(DpsJoinMode.Observe)
+            : join ? new DpsJoinPlan(DpsJoinMode.FirstUnit, Side: side)
+            : null;
 
         using var world = new DpsWorld(domain, partition);
         if (!headless)
@@ -84,15 +134,57 @@ public static class DpsClientProgram
 
         var sw = Stopwatch.StartNew();
         double nextLine = 1.0, nextFrame = 0, playingSince = -1;
-        bool fired = false, left = false, triggerFrame = false;
+        bool fired = false, left = false, triggerFrame = false, listed = false, attempted = false, sawLeftChoosing = false;
+        string? printedReason = null, printedProblem = null;
         while (sw.Elapsed.TotalSeconds < seconds)
         {
             double t = sw.Elapsed.TotalSeconds;
             world.Pump();
 
-            if (join && !world.IsPlaying)
+            if (listOffers && !listed && world.Slot is { State: D.SlotState.SlotStateChoosing } choosing)
             {
-                world.TryAutoJoin();
+                foreach (string offerLine in DpsOfferList.Lines(choosing))
+                {
+                    output.WriteLine(offerLine);
+                }
+
+                listed = true;
+            }
+
+            // --join keeps retrying; the new modes ask once unless --retry
+            if (plan is not null && !world.IsPlaying && (plan.Mode == DpsJoinMode.FirstUnit || retry || !attempted))
+            {
+                bool wasChoosing = world.Slot is { State: D.SlotState.SlotStateChoosing };
+                if (world.TryAutoJoin(plan))
+                {
+                    attempted = true;
+                    sawLeftChoosing = false;
+                }
+                else if (wasChoosing && world.JoinProblem is { } problem && problem != printedProblem)
+                {
+                    output.WriteLine($"join not sent: {problem}");
+                    printedProblem = problem;
+                }
+            }
+
+            if (world.Slot is { } cur)
+            {
+                if (cur.State != D.SlotState.SlotStateChoosing)
+                {
+                    sawLeftChoosing = true;
+                }
+
+                if (cur.State == D.SlotState.SlotStatePlaying)
+                {
+                    printedReason = null;
+                    printedProblem = null;
+                }
+                else if (attempted && cur.State == D.SlotState.SlotStateChoosing && !string.IsNullOrEmpty(cur.Reason) && (cur.Reason != printedReason || sawLeftChoosing))
+                {
+                    output.WriteLine($"join refused: {cur.Reason}");
+                    printedReason = cur.Reason;
+                    sawLeftChoosing = false;
+                }
             }
 
             if (world.IsPlaying)
@@ -155,6 +247,19 @@ public static class DpsClientProgram
     private static string Line(DpsWorld w, double t)
     {
         string state = w.Slot is { } s ? $"{s.State}/{s.UnitId}" : "none/0";
+        if (w.Slot is { } extra)
+        {
+            if (!string.IsNullOrEmpty(extra.Reason))
+            {
+                state += $" reason=\"{extra.Reason}\"";
+            }
+
+            if (extra.RespawnAtSim > 0)
+            {
+                state += FormattableString.Invariant($" respawn_at={extra.RespawnAtSim:0.0}");
+            }
+        }
+
         string pos = "n/a";
         if (w.Slot is { } slot && w.Entities.TryGetValue(slot.UnitId, out var own) && own.State is { } st)
         {

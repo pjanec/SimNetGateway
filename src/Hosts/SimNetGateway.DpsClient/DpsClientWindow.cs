@@ -482,6 +482,10 @@ internal static class DpsClientWindow
     {
         string state = world.Slot is { } slot ? slot.State.ToString().Replace("SlotState", string.Empty) : "no slot yet";
         string reason = world.Slot is { Reason: { Length: > 0 } r } ? $" ({r})" : string.Empty;
+        if (world.Slot is { RespawnAtSim: > 0 } dead)
+        {
+            reason += FormattableString.Invariant($" respawn at sim {dead.RespawnAtSim:0.0}");
+        }
         Raylib.DrawText($"{state}{reason}   entities {world.Entities.Count}   gizmo layers {world.Gizmos.Count}   {note}", 10, 8, 16, Color.White);
         Raylib.DrawText("J join  WASD move  mouse aim  LMB fire  C stance  F use  Esc leave/quit  RMB pick  G gizmos  wheel zoom", 10, 28, 14, new Color(150, 160, 175, 255));
         if (world.Own is { } own && world.IsPlaying)
@@ -500,7 +504,7 @@ internal static class DpsClientWindow
                     break;
                 }
 
-                Raylib.DrawText($"{(offer.Kind == D.OfferKind.OfferKindUnit ? "unit" : "role")} {offer.Id} {offer.Name} {(offer.Free ? string.Empty : "(taken)")}", 10, y, 13, new Color(200, 205, 215, 255));
+                Raylib.DrawText($"{DpsOfferList.Kind(offer.Kind)} {offer.Id} {offer.Name} {(offer.Free ? string.Empty : "(taken)")}", 10, y, 13, new Color(200, 205, 215, 255));
                 y += 15;
             }
         }
