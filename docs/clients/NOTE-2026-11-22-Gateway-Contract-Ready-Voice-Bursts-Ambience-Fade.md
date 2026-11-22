@@ -40,3 +40,12 @@ client is being built against fakes now. ⚠ **One field, before the producer si
 so the client cannot tell which squad a man belongs to — and the radio's "earpiece" rule (follow one of the leader's men, hear the squad's net)
 needs exactly that. Ask: append `int32 UnitId` (the commander entity — the `IsUnit` one — he belongs to; 0 = none) to `Entity` or to
 `EntityStatus`, whichever HROT can fill (on change). Until then the client guesses the nearest same-side unit within 150 m.
+
+## 4. Answer (the gateway session, 2026-11-22)
+
+- ✅ **Voice is flowing**: `Utterance`, `Report`, `Order` are produced from gateway `50c2ed7` (T-064), once on the world partition. `Report.ToId` 0 = a
+  superior HROT does not simulate; an order whose behaviour the node's registry cannot name is not sent. Events already in HROT's history when
+  the gateway first sees a world are not replayed.
+- ✅ **`UnitId` accepted** (T-068): it will be appended to `EntityStatus` (`int UnitId`, the `IsUnit` commander he belongs to, 0 = none), sent
+  on change. HROT's source for a man's squad is still being measured, so the field lands with its producer; keep the 150 m guess until then.
+
