@@ -11,15 +11,14 @@
 ## 1. Context
 
 🔒 User: *"I think we should send the burst information to the DPS instead of a single shot … cannot apply to player, because we never know how
-long burst the player is going to do."* HROT (CE-11033) marks the shooter's current burst in a `FireBurst` component; each round stays one
-`Fire` sample. The client may play a burst sound from the first round instead of N single ones.
+long burst the player is going to do."* HROT (CE-11033) stamps each round's `WeaponFireNotification` with its burst (BurstId / BurstRounds / BurstIndex, HROT R-11013:
+recordings may break); each round stays one `Fire` sample. The client may play a burst sound from the first round instead of N single ones.
 
 ## 2. Block diagram
 
 ```mermaid
 flowchart LR
-    N[WeaponFireNotification per round] --> G[the existing fire gather]
-    B[(FireBurst on the shooter)] --> G
+    N[WeaponFireNotification per round, with its burst] --> G[the existing fire gather]
     G -->|HrotFire + burst id, rounds, index| O[DPS Fire]
 ```
 
@@ -27,7 +26,7 @@ flowchart LR
 
 - D-1 **Append to `Fire`:** `uint BurstId` (0 = not a planned burst — a single aimed shot or a player's round), `byte BurstRounds` (the planned
   rounds), `byte BurstIndex` (0-based, this round's place). Rejected: a separate `Burst` topic (a client would join two topics per round).
-- D-2 **Read at the round:** the shooter's `FireBurst` whose `Mount` matches the round's weapon; none ⇒ 0s.
+- D-2 **Copied from the round:** the notification's own burst fields (⛔ SUPERSEDED: reading a `FireBurst` component on the shooter).
 - D-3 Each round is still one sample (tracers, impacts, ammunition keep agreeing with the picture).
 
 ## 4. Class diagram
@@ -46,7 +45,7 @@ sequenceDiagram
     participant H as HROT (AI burst of 3)
     participant G as Gateway
     participant C as Client
-    H->>G: round 1 (FireBurst Id 7, Rounds 3, Fired 1)
+    H->>G: round 1 (BurstId 7, Rounds 3, Index 0)
     G->>C: Fire (BurstId 7, Rounds 3, Index 0) - the client starts a 3-round burst sound
     H->>G: rounds 2 and 3
     G->>C: Fire (7, 3, 1) and Fire (7, 3, 2)
