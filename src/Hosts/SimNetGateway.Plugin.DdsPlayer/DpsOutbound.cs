@@ -467,6 +467,9 @@ public sealed class DpsOutbound : IGatewayModule
             Origin = V3d(m.Origin),
             Velocity = V3f(m.Velocity),
             WeaponCategory = LookNames.WeaponCategoryOf(m.WeaponCategory),
+            BurstId = m.BurstId,
+            BurstRounds = m.BurstId == 0 ? (byte)0 : m.BurstRounds,
+            BurstIndex = m.BurstId == 0 ? (byte)0 : m.BurstIndex,
         }));
 
     private void OnDetonation(in HrotDetonation m, IngressContext ctx) =>

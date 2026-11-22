@@ -143,6 +143,10 @@ public class ProfileTests
             new HrotUtterance(1, "Talk", 0, 1.0),
             new HrotReport(1, 0, 2, 0, 1, 1, 1, 0, 0, 0, 0, 0, false, 1.0),
             new HrotOrder(1, 2, "Attack", 1.0),
+            new HrotAmbience(1, "battle.distant", 0.5f, false, HrotVec3.Zero, 0f, 0.0),
+            new HrotAmbienceRemoved(1),
+            new HrotWeather(1, null, 0f, 0f, 0f, 0f, 0, 0f, 20000f, 0f, 0f, 0, 0f, 15f, 0.6f),
+            new HrotWeatherRemoved(1),
         };
         Assert.Equal(typeof(IHrotToGatewayMessage).Assembly.GetExportedTypes().Count(t => !t.IsInterface && typeof(IHrotToGatewayMessage).IsAssignableFrom(t)), messages.Length);
         foreach (var message in messages)
@@ -189,6 +193,10 @@ public class ProfileTests
                 case HrotUtterance m: h.HrotStep(m); break;
                 case HrotReport m: h.HrotStep(m); break;
                 case HrotOrder m: h.HrotStep(m); break;
+                case HrotAmbience m: h.HrotStep(m); break;
+                case HrotAmbienceRemoved m: h.HrotStep(m); break;
+                case HrotWeather m: h.HrotStep(m); break;
+                case HrotWeatherRemoved m: h.HrotStep(m); break;
                 default: throw new InvalidOperationException(message.GetType().Name);
             }
         }

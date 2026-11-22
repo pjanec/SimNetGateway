@@ -16,9 +16,9 @@ public class ContractTests
     {
         string[] expected =
             [
-                "HrotAnimal", "HrotBuildingDamage", "HrotClockAnchor", "HrotDetonation", "HrotEffect", "HrotEntityRemoved", "HrotEntityState", "HrotEntityStatus", "HrotEntityStatusRemoved", "HrotExercise", "HrotFire", "HrotFireSpots", "HrotFlameJet", "HrotFlameJetRemoved",
+                "HrotAmbience", "HrotAmbienceRemoved", "HrotAnimal", "HrotBuildingDamage", "HrotClockAnchor", "HrotDetonation", "HrotEffect", "HrotEntityRemoved", "HrotEntityState", "HrotEntityStatus", "HrotEntityStatusRemoved", "HrotExercise", "HrotFire", "HrotFireSpots", "HrotFlameJet", "HrotFlameJetRemoved",
                 "HrotGroundMarks", "HrotImpact", "HrotManDowned", "HrotMover", "HrotMoverRemoved", "HrotMoverTracks", "HrotMunitionLook", "HrotOrder", "HrotOrigin", "HrotPersonAppearance", "HrotPersonDetail", "HrotPlayerMessage", "HrotReport", "HrotRound", "HrotSession",
-                "HrotStatus", "HrotStatusRemoved", "HrotStep", "HrotTerrain", "HrotTrafficLight", "HrotTrafficLightRemoved", "HrotTurretPose", "HrotTypeRecord", "HrotUtterance", "HrotVehicleLook", "HrotView",
+                "HrotStatus", "HrotStatusRemoved", "HrotStep", "HrotTerrain", "HrotTrafficLight", "HrotTrafficLightRemoved", "HrotTurretPose", "HrotTypeRecord", "HrotUtterance", "HrotVehicleLook", "HrotView", "HrotWeather", "HrotWeatherRemoved",
             ];
         var actual = Messages.Where(t => typeof(IHrotToGatewayMessage).IsAssignableFrom(t)).Select(t => t.Name).Order().ToArray();
         Assert.Equal(expected, actual);

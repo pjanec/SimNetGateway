@@ -59,4 +59,27 @@ rounds are 0; the IDL gains lines only. Mutations: index not counted; a player's
 
 ## 8. Proposals / 9. As built
 
-Approved (R-147). Not built.
+Approved (R-147).
+
+## 9. As built (T-065, 2026-11-22)
+
+HROT pin moved from `e2b43ab4c` to `a36176252` (`HROT_ROOT=/home/user/hrot-c5f8c1971`); the whole gateway built against it with no source change needed. The fields exist there: `WeaponFireNotification.BurstId / BurstRounds / BurstIndex`
+(`FDP/Toolkits/Fdp.Toolkits/Combat/Events/WeaponFireEvents.cs`, 1-based index). Contract and IDL unchanged.
+
+```mermaid
+flowchart LR
+    N[WeaponFireNotification, BurstIndex 1-based] --> G[EcsHrotAdapter.GatherEvents: BurstIndexOf = hrot - 1]
+    G -->|HrotFire BurstId, BurstRounds, BurstIndex 0-based| O[DpsOutbound.OnFire]
+    O -->|BurstId 0 forces rounds and index 0| F[DPS Fire]
+```
+
+*What the picture shows:* the 1-to-0-based shift is the gateway's, in the HROT-facing gather; the pivot and the client only ever see 0-based.
+
+| # | as built |
+|---|---|
+| 1 | `HrotFire` gained three optional trailing fields (`BurstId`, `BurstRounds`, `BurstIndex`, 0-based); existing constructors keep working. `EcsHrotAdapter.BurstIndexOf(id, hrotIndex)` = `hrotIndex - 1`, and 0 when `BurstId` is 0 or the index is 0 (never wraps to 255). |
+| 2 | `DpsOutbound.OnFire` copies the three; a round with `BurstId` 0 is sent 0/0/0 whatever the other fields hold. Each round is still one `Fire` sample (D-3). The replay path (flash entities, no notification) sends 0/0/0. |
+| 3 | Tests: `LookGatherTests` (stamp copied, index shifted for a 3-round burst, no burst = 0/0/0, shift for every value), `DpsOutboundTests` (3 rounds = 3 samples with one id and indices 0..2; id 0 = 0/0/0). |
+| 4 | Defaults: none needed - every field has a source. |
+
+Mutations (each reddened the named test, then restored): index not shifted -> `A_planned_burst_stamp_is_copied...` and `The_burst_index_shift_holds...`; stamp dropped in the gather -> `A_planned_burst_stamp_is_copied...`; `BurstId` dropped in `OnFire` -> `Every_round_of_a_burst_is_a_fire_sample...`; a round with no id given a burst -> `A_round_without_a_burst_id_goes_out_as_zero_zero_zero...`.

@@ -300,6 +300,8 @@ public sealed class DpsTransport : IDisposable
             Utterance = Add(new DpsChannel<Utterance>(_participant, hold: Hold<Utterance>(DpsCountKind.Event, EventDepth)));   // DD-026: events once on the world partition
             Report = Add(new DpsChannel<Report>(_participant, hold: Hold<Report>(DpsCountKind.Event, EventDepth)));
             Order = Add(new DpsChannel<Order>(_participant, hold: Hold<Order>(DpsCountKind.Event, EventDepth)));
+            Ambience = Add(new DpsChannel<Ambience>(_participant, hold: Hold<Ambience>(DpsCountKind.Keyed, key: a => a.Id)));   // DD-028: state once on the world partition
+            Weather = Add(new DpsChannel<Weather>(_participant, hold: Hold<Weather>(DpsCountKind.Keyed, key: w => w.Id)));
             Exercise = Add(new DpsChannel<Exercise>(_participant, hold: Hold<Exercise>(DpsCountKind.Keyless)));
             View = Add(new DpsChannel<View>(_participant, hold: Hold<View>(DpsCountKind.Keyless)));
             SimClock = Add(new DpsChannel<SimClock>(_participant));
@@ -395,6 +397,10 @@ public sealed class DpsTransport : IDisposable
     internal DpsChannel<Report> Report { get; } = null!;
 
     internal DpsChannel<Order> Order { get; } = null!;
+
+    internal DpsChannel<Ambience> Ambience { get; } = null!;
+
+    internal DpsChannel<Weather> Weather { get; } = null!;
 
     internal DpsChannel<Detonation> Detonation { get; } = null!;
 

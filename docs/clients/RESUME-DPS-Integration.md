@@ -7,7 +7,7 @@ design docs and the client guide are the canon, this file is only the map.
 ## 0. ⭐ RESUME HERE — state at the end of 2026-11-21
 
 **Branches:** gateway `ccr-458b1360-afzl8f` (pushed, clean); HROT `ui` (pushed through `d611a7336`, clean); the gateway builds against the
-HROT worktree `/home/user/hrot-c5f8c1971` pinned at HROT `ui` `f5851caf0` (`HROT_ROOT`). Nothing is in flight.
+HROT worktree `/home/user/hrot-c5f8c1971` pinned at HROT `ui` `a36176252` (`HROT_ROOT`). Nothing is in flight.
 
 **Done (gateway):** T-045 · T-047 seats · T-048 terrain · T-049 deploy contract · T-050 render half (linked client `dps`) · T-051 Impact
 from effect entities · T-052 entity cards · T-053 seats deploy through HROT's server · T-054 PlayerMessage per seat · T-055 choosing seat's

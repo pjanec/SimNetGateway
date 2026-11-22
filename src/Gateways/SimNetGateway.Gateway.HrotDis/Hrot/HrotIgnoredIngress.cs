@@ -46,6 +46,10 @@ public sealed class HrotIgnoredIngress : IGatewayModule
         Ignored<HrotUtterance>(),   // a voice line is a client's (DD-026); DIS has no place for it
         Ignored<HrotReport>(),
         Ignored<HrotOrder>(),
+        Ignored<HrotAmbience>(),   // ambience and weather are a client's (DD-028); DIS has no place for them
+        Ignored<HrotAmbienceRemoved>(),
+        Ignored<HrotWeather>(),
+        Ignored<HrotWeatherRemoved>(),
     ];
 
     /// <summary>The message types this profile ignores on purpose.</summary>

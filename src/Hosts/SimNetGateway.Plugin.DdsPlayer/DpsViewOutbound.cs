@@ -31,6 +31,12 @@ public sealed class DpsViewOutbound : IGatewayModule
     /// <summary>The field of view may drift this much from its prediction before a sample is due (degrees).</summary>
     private const double FovThresholdDeg = 0.1;
 
+    /// <summary>The fade or the subtitle's alpha may move this much from the last sample before one is due (DD-022 P-8).</summary>
+    private const float PictureStep = 0.02f;
+
+    /// <summary>The bound of <see cref="D.View.Subtitle"/>.</summary>
+    public const int MaxSubtitle = 512;
+
     private readonly record struct Sample(double Time, Vec3 Position, Quaternion Rotation, double Fov);
 
     internal DpsViewOutbound(DpsSettings settings, DpsPorts ports)
@@ -70,6 +76,10 @@ public sealed class DpsViewOutbound : IGatewayModule
             FovDeg = m.FovDeg,
             Shot = m.Shot is { Length: > 64 } shot ? shot[..64] : m.Shot ?? string.Empty,
             SimTime = m.SimTime,
+            Fade = Unit(m.Fade),
+            Subtitle = m.Subtitle is { Length: > MaxSubtitle } text ? text[..MaxSubtitle] : m.Subtitle ?? string.Empty,
+            SubtitlePosition = SubtitlePositionOf(m.SubtitlePosition),
+            SubtitleAlpha = Unit(m.SubtitleAlpha),
         };
 
         bool cut = !_hasSent || view.Source != _sent.Source || view.Mode != _sent.Mode || view.TargetId != _sent.TargetId || view.Shot != _sent.Shot
@@ -110,6 +120,12 @@ public sealed class DpsViewOutbound : IGatewayModule
             return true;
         }
 
+        // the director's picture (DD-022 P-8): a fade or an alpha that moved by more than a step or reached 0 / 1, or a new text or place
+        if (Moved(v.Fade, _sent.Fade) || Moved(v.SubtitleAlpha, _sent.SubtitleAlpha) || v.Subtitle != _sent.Subtitle || v.SubtitlePosition != _sent.SubtitlePosition)
+        {
+            return true;
+        }
+
         double dt = v.SimTime - _held.Time;
         if (Math.Abs(v.FovDeg - (_sent.FovDeg + _sent.FovRate * dt)) > FovThresholdDeg)
         {
@@ -120,6 +136,20 @@ public sealed class DpsViewOutbound : IGatewayModule
         var held = _policy.Held(in _held, v.SimTime);
         return _policy.Exceeds(in truth, in held);
     }
+
+    /// <summary>Is a value that moved by more than <see cref="PictureStep"/> since the last sample, or that reached 0 or 1 (so the end of a fade is always sent).</summary>
+    private static bool Moved(float now, float sent) => Math.Abs(now - sent) > PictureStep || (now != sent && (now == 0f || now == 1f));
+
+    private static float Unit(float value) => float.IsFinite(value) ? Math.Clamp(value, 0f, 1f) : 0f;
+
+    /// <summary>HROT's number of the subtitle's place (0 bottom, 1 top, 2 middle) as the contract's enum; anything else (including "none stated") is Unknown.</summary>
+    internal static D.SubtitlePosition SubtitlePositionOf(byte hrot) => hrot switch
+    {
+        0 => D.SubtitlePosition.SubtitlePositionBottom,
+        1 => D.SubtitlePosition.SubtitlePositionTop,
+        2 => D.SubtitlePosition.SubtitlePositionCentre,
+        _ => D.SubtitlePosition.SubtitlePositionUnknown,
+    };
 
     private void Push(Sample s)
     {

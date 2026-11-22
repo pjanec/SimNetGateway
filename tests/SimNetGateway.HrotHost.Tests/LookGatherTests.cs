@@ -152,6 +152,41 @@ public class LookGatherTests
     }
 
     [Fact]
+    public void A_planned_burst_stamp_is_copied_to_the_fire_and_the_index_is_shifted_to_zero_based()
+    {
+        using var h = new Stage();
+        var tank = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: TankType);
+        for (byte hrotIndex = 1; hrotIndex <= 3; hrotIndex++)   // HROT counts 1..3, one WeaponFireNotification per round
+        {
+            h.PublishForNextFrame(new WeaponFireNotification { Shooter = tank, Target = Entity.Null, WeaponIndex = 0, Quantity = 1, BurstId = 7, BurstRounds = 3, BurstIndex = hrotIndex });
+            var fire = Assert.Single(h.GatherEvents().Of<HrotFire>());
+            Assert.Equal((7u, (byte)3, (byte)(hrotIndex - 1)), (fire.BurstId, fire.BurstRounds, fire.BurstIndex));   // one id, indices 0, 1, 2
+        }
+    }
+
+    [Fact]
+    public void A_round_outside_a_planned_burst_passes_as_zero_zero_zero()
+    {
+        using var h = new Stage();
+        var tank = h.AddHrotEntity(2001, new Vector3(0, 0, 3), tkb: TankType);
+        h.PublishForNextFrame(new WeaponFireNotification { Shooter = tank, Target = Entity.Null, WeaponIndex = 0, Quantity = 1 });
+        var fire = Assert.Single(h.GatherEvents().Of<HrotFire>());
+        Assert.Equal((0u, (byte)0, (byte)0), (fire.BurstId, fire.BurstRounds, fire.BurstIndex));
+    }
+
+    [Fact]
+    public void The_burst_index_shift_holds_for_every_value_and_never_wraps()
+    {
+        Assert.Equal((byte)0, EcsHrotAdapter.BurstIndexOf(0, 0));   // not a burst
+        Assert.Equal((byte)0, EcsHrotAdapter.BurstIndexOf(0, 5));   // a stray index without an id is dropped
+        Assert.Equal((byte)0, EcsHrotAdapter.BurstIndexOf(9, 0));   // an unstamped index never wraps to 255
+        for (int i = 1; i <= 255; i++)
+        {
+            Assert.Equal((byte)(i - 1), EcsHrotAdapter.BurstIndexOf(9, (byte)i));
+        }
+    }
+
+    [Fact]
     public void Person_appearance_is_published_once_and_on_change()
     {
         using var h = new Stage();

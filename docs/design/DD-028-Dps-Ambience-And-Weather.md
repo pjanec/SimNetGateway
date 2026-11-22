@@ -75,6 +75,45 @@ unknown kind is sent as is. Tests: create / replace / dispose / expiry rows; pos
 outline; on change only (0 writes while steady, 0 B per steady gather); written once with 2 seats; the IDL gains lines only. Mutations: a row
 not disposed on expiry; written every frame; the outline dropped for a region.
 
-## 7. Proposals / 8. As built
+## 7. Proposals / 8. Notes
 
-Approved (R-149). Not built.
+Approved (R-149).
+
+## 9. As built (T-066, 2026-11-22)
+
+HROT pin moved from `e2b43ab4c` to `a36176252`; the gateway built with no source change. Sources there: `Ambience` (`FDP/Toolkits/Fdp.Toolkits/Ambience/Ambience.cs`), `WeatherConditions` / `WeatherField.GlobalOf` / `TryOutline` (`FDP/Toolkits/Fdp.Toolkits/Weather/`), `EditablePolyline`. Contract and IDL unchanged.
+
+```mermaid
+flowchart LR
+    A[(Ambience entities)] --> AG[AmbienceGather]
+    W[(WeatherConditions: environment + regions)] --> WG[WeatherGather]
+    AG -->|HrotAmbience / HrotAmbienceRemoved| AO[DpsAmbienceOutbound]
+    WG -->|HrotWeather / HrotWeatherRemoved| WO[DpsWeatherOutbound]
+    AO --> T[DpsTransport channels, Keyed, world participant, TransientLocal]
+    WO --> T
+```
+
+*What the picture shows:* the same pivot + module + keyed-state channel as `EntityStatus` (DD-025); two small modules, no new mechanism. The DIS side ignores the four pivot messages.
+
+| # | as built |
+|---|---|
+| 1 | `AmbienceGather` / `WeatherGather` (host, called after `VoiceGather`; cleared at a world boundary so the new world states everything again). Id = the entity's network id, its slot index when it has none. An entity in `TearDown` (HROT's expiry marks it at once) or destroyed is withdrawn once. |
+| 2 | On change only: a held layer or weather sends nothing; a steady gather allocates 0 bytes (rail, 300 gathers). Weather compares the mapped values plus the region's origin and relative points. |
+| 3 | `DpsAmbienceOutbound` / `DpsWeatherOutbound` write once on the world participant (rail: one write with 2 seats); a disposal is sent only for a row that was written; a late joiner gets the current rows (TransientLocal rail). |
+
+**Defaults and mappings chosen (a field HROT has no direct source for):**
+
+| field | rule |
+|---|---|
+| `Ambience.Radius` of a positionless layer | 0 (HROT ignores it there) |
+| `Ambience.Intensity` | clamped 0..1, non-finite = 0 |
+| `Weather` global row | only when the world has a World Environment (`WeatherField.GlobalOf`); none = no row, the client keeps its own default (HROT would read its built-in ISA day) |
+| `Weather.FeatherM` of the global weather | 0 (unused there) |
+| surface wind | the USED wind level with the lowest altitude; no level = calm (0, 0, 0) |
+| cloud | the used layer with the lowest base; no layer = 0 octas, base 0 |
+| `FogVisibilityM` | HROT's value only when `FogTopM` > 0, else 0 (HROT's default 200 means nothing without fog) |
+| `Precipitation` | HROT's number 0..5 = the contract's enum; out of range = None |
+| Region outline | HROT's points are relative to the entity: sent as origin + point in the simulation frame, Z = the entity's Z; more than 32 points are sampled evenly down to 32 (first point kept). A weather entity with no outline of 3+ points or no position is no region (as `WeatherField`) |
+| Not carried | pressure, lapse rate, further wind levels and cloud layers, cloud kind (D-2: no client asked) |
+
+Mutations (each reddened the named tests, then restored): layer written while held -> `A_layer_is_sent...`, `A_steady_gather_allocates_nothing`; weather written while held -> `Weather_is_sent_on_change_only...`; layer disposal missed (host) -> `A_layer_is_sent...`, torn-down rail; disposal missed (DPS) -> `A_late_client_gets_the_current_state...`; region outline dropped (host and DPS) -> `Weather_is_sent_on_change_only...`, `Every_weather_field_reaches_the_topic...`; surface wind from the highest level -> `The_global_weather_has_an_empty_outline...`; a second write per row -> `Ambience_and_weather_are_written_once...`.

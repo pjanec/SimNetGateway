@@ -189,7 +189,8 @@ public readonly record struct HrotTurretPose(int Id, int PartId, double Azimuth,
 
 /// <summary>
 /// <see cref="TargetId"/> 0 = none. <see cref="Origin"/> and <see cref="Velocity"/> are ENU. <see cref="WeaponCategory"/> is the NAME of HROT's weapon category of the shooter's
-/// mount ("" = not known), written by the host from the enumeration.
+/// mount ("" = not known), written by the host from the enumeration. <see cref="BurstId"/> is the planned burst the round belongs to (DD-027; 0 = none: a single shot or a player's round),
+/// <see cref="BurstRounds"/> its planned rounds and <see cref="BurstIndex"/> this round's place, 0-BASED (HROT stamps it 1-based; the host shifts it).
 /// </summary>
 public readonly record struct HrotFire(
     int ShooterId,
@@ -199,7 +200,10 @@ public readonly record struct HrotFire(
     HrotVec3 Origin,
     HrotVec3 Velocity,
     int Quantity,
-    string WeaponCategory = "") : IHrotToGatewayMessage;
+    string WeaponCategory = "",
+    uint BurstId = 0,
+    byte BurstRounds = 0,
+    byte BurstIndex = 0) : IHrotToGatewayMessage;
 
 /// <summary><see cref="TargetId"/> 0 = ground. <see cref="Location"/> and <see cref="Velocity"/> are ENU.</summary>
 public readonly record struct HrotDetonation(
@@ -600,9 +604,16 @@ public readonly record struct HrotTrafficLightRemoved(int SignalId) : IHrotToGat
 /// "Operator"; "Free", "Orbit", "Eyes", "Shoulder", "Chase", "Fixed"); <paramref name="TargetId"/> 0 = none; <paramref name="Distance"/> metres (0 = eyes, negative =
 /// ahead), <paramref name="Side"/> +1 right / -1 left; the pose is in local ENU metres with the camera's quaternion; <paramref name="FovDeg"/> 0 = not stated;
 /// <paramref name="Shot"/> is the take name; <paramref name="Cut"/> is the source's own hard-cut counter (grows at every cut the director makes; 0 = the source keeps none). A source that stops suggesting sends one sample with Source "None".
+/// The director's picture (DD-022 P-8): <paramref name="Fade"/> the black over it 0..1, <paramref name="Subtitle"/> the text on screen ("" = none), <paramref name="SubtitlePosition"/> HROT's number of where it sits
+/// (0 bottom, 1 top, 2 middle; <see cref="NoSubtitlePosition"/> = the source states none), <paramref name="SubtitleAlpha"/> its opacity 0..1; every other source sends 0, "", <see cref="NoSubtitlePosition"/>, 0.
 /// </summary>
 public readonly record struct HrotView(
-    string Source, string Mode, int TargetId, float Distance, float Side, HrotVec3 Position, HrotQuat Orientation, float FovDeg, string Shot, double SimTime, int Cut = 0) : IHrotToGatewayMessage;
+    string Source, string Mode, int TargetId, float Distance, float Side, HrotVec3 Position, HrotQuat Orientation, float FovDeg, string Shot, double SimTime, int Cut = 0,
+    float Fade = 0f, string Subtitle = "", byte SubtitlePosition = HrotView.NoSubtitlePosition, float SubtitleAlpha = 0f) : IHrotToGatewayMessage
+{
+    /// <summary>The <see cref="SubtitlePosition"/> of a source that states no subtitle placement.</summary>
+    public const byte NoSubtitlePosition = 255;
+}
 
 /// <summary>
 /// A round marked a surface of the static world (HROT's round-impact event). <paramref name="Kind"/> is the NAME of HROT's impact kind (Entry, Exit, Stop);
@@ -650,3 +661,27 @@ public readonly record struct HrotReport(
 
 /// <summary>An order entered a unit's command history (DD-026), once per order (a re-sent order is not news): <paramref name="Name"/> the ordered behaviour's registry NAME, <paramref name="ToId"/> the member ordered.</summary>
 public readonly record struct HrotOrder(int FromId, int ToId, string Name, double SimTime) : IHrotToGatewayMessage;
+
+// ---- DPS: ambience and weather (DD-028) -------------------------------------------------------------------------------------------
+
+/// <summary>
+/// One ambience layer exists or changed (DD-028; HROT's <c>Ambience</c> component), sent on change. <paramref name="Id"/> the layer entity's network id (its slot index when it has none),
+/// <paramref name="Kind"/> the dotted kind NAME, <paramref name="Intensity"/> 0..1, <paramref name="HasPosition"/> false = heard everywhere (then <paramref name="Position"/> and <paramref name="Radius"/> are zero),
+/// <paramref name="UntilSim"/> the simulation time it ends (0 = until removed). <paramref name="Position"/> is ENU.
+/// </summary>
+public readonly record struct HrotAmbience(int Id, string Kind, float Intensity, bool HasPosition, HrotVec3 Position, float Radius, double UntilSim) : IHrotToGatewayMessage;
+
+/// <summary>The ambience layer <paramref name="Id"/> is over (its entity is gone or being torn down).</summary>
+public readonly record struct HrotAmbienceRemoved(int Id) : IHrotToGatewayMessage;
+
+/// <summary>
+/// The weather of one area exists or changed (DD-028; HROT's <c>WeatherConditions</c>), sent on change. <paramref name="Id"/> the weather entity's network id (slot index when none);
+/// <paramref name="Outline"/> the region's outline in the simulation frame (ENU; null or empty = the global weather); the rest is HROT's values as they are (surface wind = HROT's lowest wind level,
+/// cloud = its lowest layer, <paramref name="Precipitation"/> the number of HROT's <c>PrecipitationKind</c>, 0 none .. 5 hail).
+/// </summary>
+public readonly record struct HrotWeather(
+    int Id, HrotVec3[]? Outline, float FeatherM, float WindFromDeg, float WindSpeedMps, float WindGustMps, byte Precipitation, float PrecipitationMmPerHour, float VisibilityM,
+    float FogTopM, float FogVisibilityM, byte CloudOctas, float CloudBaseM, float GroundTemperatureC, float RelativeHumidity) : IHrotToGatewayMessage;
+
+/// <summary>The weather <paramref name="Id"/> is gone (its entity is gone or being torn down).</summary>
+public readonly record struct HrotWeatherRemoved(int Id) : IHrotToGatewayMessage;

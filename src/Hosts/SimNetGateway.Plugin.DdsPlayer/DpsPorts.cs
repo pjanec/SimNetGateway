@@ -41,6 +41,8 @@ internal sealed class DpsPorts
         Utterance = b.RequireOutbound<DpsItem<Utterance>>("dps.Utterance");
         Report = b.RequireOutbound<DpsItem<Report>>("dps.Report");
         Order = b.RequireOutbound<DpsItem<Order>>("dps.Order");
+        Ambience = b.RequireOutbound<DpsItem<Ambience>>("dps.Ambience");
+        Weather = b.RequireOutbound<DpsItem<Weather>>("dps.Weather");
         Exercise = b.RequireOutbound<DpsItem<Exercise>>("dps.Exercise");
         View = b.RequireOutbound<DpsItem<View>>("dps.View");
         SimClock = b.RequireOutbound<DpsItem<SimClock>>("dps.SimClock");
@@ -107,6 +109,10 @@ internal sealed class DpsPorts
 
     public IOutboundChannel<DpsItem<Order>> Order { get; }
 
+    public IOutboundChannel<DpsItem<Ambience>> Ambience { get; }
+
+    public IOutboundChannel<DpsItem<Weather>> Weather { get; }
+
     public IOutboundChannel<DpsItem<Exercise>> Exercise { get; }
 
     public IOutboundChannel<DpsItem<View>> View { get; }
@@ -151,6 +157,8 @@ internal sealed class DpsPorts
         b.BindOutbound<DpsItem<Utterance>>("dps.Utterance", t.Utterance);
         b.BindOutbound<DpsItem<Report>>("dps.Report", t.Report);
         b.BindOutbound<DpsItem<Order>>("dps.Order", t.Order);
+        b.BindOutbound<DpsItem<Ambience>>("dps.Ambience", t.Ambience);
+        b.BindOutbound<DpsItem<Weather>>("dps.Weather", t.Weather);
         b.BindOutbound<DpsItem<Exercise>>("dps.Exercise", t.Exercise);
         b.BindOutbound<DpsItem<View>>("dps.View", t.View);
         b.BindOutbound<DpsItem<SimClock>>("dps.SimClock", t.SimClock);

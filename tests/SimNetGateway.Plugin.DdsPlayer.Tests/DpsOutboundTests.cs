@@ -403,6 +403,49 @@ public class DpsOutboundTests
     }
 
     [Fact]
+    public void Every_round_of_a_burst_is_a_fire_sample_with_one_id_and_a_zero_based_place()
+    {
+        uint domain = NewDomain();
+        using var fires = new Watch<D.Fire>(domain, "station-1", f => "fire");
+        using var rig = new Rig(domain);
+        rig.Send(HrotOrigin.Utm(50, 14, 300, 1));
+        rig.Send(new HrotSession(ClusterPhase.Live, true, 1.0, 12.5));
+        rig.Send(State(2001, simTime: 12.5));
+
+        Assert.True(fires.Until(w =>
+        {
+            for (byte i = 0; i < 3; i++)   // the host sends 0-based indices
+            {
+                rig.Send(new HrotFire(2001, 0, 501, TankDis, HrotVec3.Zero, HrotVec3.Zero, 1, "", 7, 3, i));
+            }
+
+            return w.Events.Select(e => e.BurstIndex).Distinct().Count() == 3;
+        }));
+
+        Assert.All(fires.Events, e => Assert.Equal((7u, (byte)3), (e.BurstId, e.BurstRounds)));
+        Assert.Equal([(byte)0, (byte)1, (byte)2], fires.Events.Select(e => e.BurstIndex).Distinct().Order().ToArray());
+    }
+
+    [Fact]
+    public void A_round_without_a_burst_id_goes_out_as_zero_zero_zero_whatever_the_other_fields_hold()
+    {
+        uint domain = NewDomain();
+        using var fires = new Watch<D.Fire>(domain, "station-1", f => "fire");
+        using var rig = new Rig(domain);
+        rig.Send(HrotOrigin.Utm(50, 14, 300, 1));
+        rig.Send(new HrotSession(ClusterPhase.Live, true, 1.0, 12.5));
+        rig.Send(State(2001, simTime: 12.5));
+
+        Assert.True(fires.Until(w =>
+        {
+            rig.Send(new HrotFire(2001, 0, 501, TankDis, HrotVec3.Zero, HrotVec3.Zero, 1, "", 0, 3, 2));
+            return w.Events.Count > 0;
+        }));
+
+        Assert.All(fires.Events, e => Assert.Equal((0u, (byte)0, (byte)0), (e.BurstId, e.BurstRounds, e.BurstIndex)));
+    }
+
+    [Fact]
     public void Effect_maps_every_field()
     {
         uint domain = NewDomain();

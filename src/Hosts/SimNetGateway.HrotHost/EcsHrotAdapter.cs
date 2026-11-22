@@ -54,6 +54,8 @@ public sealed class EcsHrotAdapter
     private readonly PersonDetailGather _details = new();
     private readonly EntityStatusGather _status = new();
     private readonly VoiceGather _voice = new();
+    private readonly AmbienceGather _ambience = new();
+    private readonly WeatherGather _weather = new();
     private readonly Func<int, bool> _isReplica;
     private readonly EffectGather _effects = new();
     private readonly AppearanceGather _appearances = new();
@@ -278,6 +280,8 @@ public sealed class EcsHrotAdapter
         _traffic.Gather(world, inbound, simTime, _types);
         _view.Gather(world, _services.SuggestedView, inbound, simTime);
         _voice.Gather(world, inbound, simTime, _services.Behaviors(), _isReplica);   // what the men shout, report and order (DD-026)
+        _ambience.Gather(world, inbound);   // the ambience layers (DD-028)
+        _weather.Gather(world, inbound);   // the global weather and the weather regions (DD-028)
         _types.Flush(tkb, inbound);
     }
 
@@ -351,6 +355,9 @@ public sealed class EcsHrotAdapter
         return Math.Min(d, 2.0 * Math.PI - d) * (180.0 / Math.PI);
     }
 
+    /// <summary>HROT stamps a round's place in its burst 1-based, DPS wants 0-based (DD-027): hrot - 1; 0 when the round is not part of a planned burst.</summary>
+    internal static byte BurstIndexOf(uint burstId, byte hrotIndex) => burstId == 0 || hrotIndex == 0 ? (byte)0 : (byte)(hrotIndex - 1);
+
     /// <summary>Publishes last frame's fire and detonation events of HROT entities (not <c>IsRemote</c>, not by a replica).</summary>
     public void GatherEvents(EntityRepository world, InMemoryInbound inbound)
     {
@@ -380,7 +387,8 @@ public sealed class EcsHrotAdapter
 
             _types.Reference(f.AmmoGuid);
             string category = CombatTkb.MountOf(world, f.Shooter, f.WeaponIndex)?.Category.ToString() ?? string.Empty;   // HROT's weapon category by name
-            inbound.Enqueue(new HrotFire(shooter, target, f.AmmoGuid, MunitionDis(tkb, f.AmmoGuid), V(origin), V(f.Velocity), Math.Max(1, f.Quantity), category));
+            inbound.Enqueue(new HrotFire(shooter, target, f.AmmoGuid, MunitionDis(tkb, f.AmmoGuid), V(origin), V(f.Velocity), Math.Max(1, f.Quantity), category,
+                f.BurstId, f.BurstRounds, BurstIndexOf(f.BurstId, f.BurstIndex)));
             Counters.FiresSent++;
         }
 
@@ -892,6 +900,8 @@ public sealed class EcsHrotAdapter
         _details.Clear();
         _status.Clear();
         _voice.Clear();   // a world boundary forgets: nothing is replayed (DD-026)
+        _ambience.Clear();   // and a new world states every layer and weather again (DD-028)
+        _weather.Clear();
         _appearances.Clear();
         _vehicleLooks.Clear();
         _rounds.Clear();
