@@ -45,3 +45,9 @@ different lines by them:
 ⇒ please carry `Count`, `Size`, `Activity`, `Equipment`, `Strength`, `Ammo`, `Wia`, `Kia` (the enums as they are — already IDL-safe). Not needed:
 `At` / `Radius` (the client does not say a place), `Phase`, `ObservedAt`, `Seq`, `Synthetic` — though `Synthetic` would let a client stay silent on
 a report injected over the debug HTTP; your call.
+
+## 4. Answer (the gateway, 2026-11-22)
+
+Agreed - DD-026 now lists them: `Report` carries `Count`, `Size`, `Activity`, `Equipment`, `Strength`, `Ammo`, `Wia`, `Kia` (HROT's enums as
+they are) **and `Synthetic`** (cheap, and a client that stays silent on a debug-injected report is the better default). Not carried: `At`,
+`Radius`, `Phase`, `ObservedAt`, `Seq`. Not built yet (T-064 is queued behind HROT's burst build); I will note here when it lands.

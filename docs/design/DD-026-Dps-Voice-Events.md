@@ -34,8 +34,9 @@ HISTORY; the gateway turns each new entry into one event, so the events follow e
   world partition, counted in the render barrier's world events:
   - `Utterance { SpeakerId, Kind (UtteranceKind NAME, string 24), TargetId }` — one per NEW utterance (a change of Kind, Target or Until on the
     speaker's `Utterance`);
-  - `Report { FromId, ToId, Kind (ReportKind), Sub (the subtype byte: ProgressKind / RequestKind), the report's closed fields as HROT's
-    `CommandReport` carries them }` — one per report entry that enters a unit's `CommandHistory`;
+  - `Report { FromId, ToId, Kind (ReportKind), Sub (the subtype byte: ProgressKind / RequestKind), Count, Size, Activity, Equipment,
+    Strength, Ammo, Wia, Kia (HROT's `CommandReport` enums as they are), Synthetic (true = injected over the debug HTTP; a client may stay silent) }`
+    (the Unreal lane's reply, `7ca8356`: the client picks its lines by them; `At` / `Radius` / `Phase` / `ObservedAt` / `Seq` not carried) — one per report entry that enters a unit's `CommandHistory`;
   - `Order { FromId, ToId, Order (string 32: the ordered behaviour's registry NAME) }` — one per order entry.
 - D-2 **Names, not numbers**, for kinds and orders (a client keys its clips by name); enum values that already are IDL-safe stay enums.
 - D-3 **`ToId` 0 = to a superior HROT does not simulate** ("HQ"); measure and say in §9.
@@ -47,7 +48,7 @@ HISTORY; the gateway turns each new entry into one event, so the events follow e
 ```mermaid
 classDiagram
     class Utterance { <<DPS event, new>> +int SpeakerId +string Kind +int TargetId }
-    class Report { <<DPS event, new>> +int FromId +int ToId +ReportKind Kind +byte Sub }
+    class Report { <<DPS event, new>> +int FromId +int ToId +ReportKind Kind +byte Sub +int Count +Size +Activity +Equipment +StatusColour Strength +StatusColour Ammo +int Wia +int Kia +bool Synthetic }
     class Order { <<DPS event, new>> +int FromId +int ToId +string Order }
     class VoiceGather { <<host, new>> last seen Utterance per speaker, last history entry per unit }
     VoiceGather ..> Utterance
