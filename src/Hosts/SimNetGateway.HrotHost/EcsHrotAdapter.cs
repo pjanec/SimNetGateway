@@ -240,7 +240,7 @@ public sealed class EcsHrotAdapter
             }
 
             // what the client draws the entity's card from (DD-025), after the state, for the entities HROT would give a card
-            _status.Gather(world, tkb, e, id, state.TkbType, inbound);
+            _status.Gather(world, tkb, _services.Behaviors(), e, id, state.TkbType, inbound);
         }
 
         _scratch.Clear();

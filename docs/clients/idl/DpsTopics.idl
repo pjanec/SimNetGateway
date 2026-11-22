@@ -382,6 +382,8 @@ module SimNetGateway {
                 float MindFill;
                 float MindBreak;
                 SimNetGateway::Protocol::DdsPlayer::MindBand MindBand;
+                string<32> Behaviour;
+                string<32> Task;
             };
 
             @topic

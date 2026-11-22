@@ -104,6 +104,7 @@ public sealed class GatewayCapability : INodeCapability, IDisposable
             LocalNodeId = context.NodeId.Value,
             EventBus = context.EventBus,
             TimeController = () => context.TimeController,
+            Behaviors = () => context.BehaviorRegistry,
             WallTicks = Fdp.Toolkit.Time.HighResUtcClock.GetTicks,
         };
         return services;

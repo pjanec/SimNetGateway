@@ -60,10 +60,11 @@ public class DpsEntityStatusTests
         var full = RoundTrip(new EntityStatus
         {
             EntityId = 2001, Symbol = new string('S', 40), HealthCurrent = 59.98f, HealthMax = 100f, StrengthPresent = 3, StrengthAuthorized = 4, AmmoShare = 0.4375f,
-            MindFill = 0.62f, MindBreak = 0.8f, MindBand = MindBand.MindBandNervous,
+            MindFill = 0.62f, MindBreak = 0.8f, MindBand = MindBand.MindBandNervous, Behaviour = new string('B', 32), Task = "Patrol",
         }, "t62-full");
         Assert.Equal((2001, new string('S', 40), 59.98f, 100f, 3, 4, 0.4375f, 0.62f, 0.8f, MindBand.MindBandNervous),
             (full.EntityId, full.Symbol, full.HealthCurrent, full.HealthMax, full.StrengthPresent, full.StrengthAuthorized, full.AmmoShare, full.MindFill, full.MindBreak, full.MindBand));
+        Assert.Equal((new string('B', 32), "Patrol"), (full.Behaviour, full.Task));   // T-063: appended, bounded at 32
 
         var none = RoundTrip(new EntityStatus { EntityId = 7, Symbol = string.Empty, AmmoShare = -1f, MindBreak = -1f }, "t62-none");
         Assert.Equal((7, string.Empty, 0f, 0f, 0, 0, -1f, 0f, -1f, MindBand.MindBandNone), (none.EntityId, none.Symbol, none.HealthCurrent, none.HealthMax, none.StrengthPresent, none.StrengthAuthorized, none.AmmoShare, none.MindFill, none.MindBreak, none.MindBand));
@@ -91,6 +92,10 @@ public class DpsEntityStatusTests
         Assert.Contains("struct EntityStatus {", topics);
         Assert.Contains("@key int32 EntityId;", topics[topics.IndexOf("struct EntityStatus {", StringComparison.Ordinal)..]);
         Assert.Contains("string<40> Symbol;", topics);
+        string status = topics[topics.IndexOf("struct EntityStatus {", StringComparison.Ordinal)..];
+        status = status[..status.IndexOf("};", StringComparison.Ordinal)];
+        // T-063: Behaviour and Task are the LAST two members (appended: an older reader of the appendable type still reads the rest)
+        Assert.EndsWith("MindBand;\n                string<32> Behaviour;\n                string<32> Task;\n            ", status.Replace("\r\n", "\n"));
         Assert.Contains("enum MindBand {", types);
     }
 }

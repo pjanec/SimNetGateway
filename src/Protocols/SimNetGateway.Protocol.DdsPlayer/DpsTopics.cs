@@ -543,7 +543,7 @@ public partial struct BuildingDamage
 /// the client keeps the layout and the simulation keeps the meaning. One instance per entity that has a card (not for a round, an effect or a rule), written once on the
 /// world partition and sent again only when a value changes by more than a small step (0.01 for the float fields); disposed with the entity. A value the simulation does
 /// not have is its none-value: Symbol empty (not a unit), HealthMax 0, StrengthAuthorized 0, AmmoShare -1, MindBand None. A fraction is derived by the client from the pair.
-/// What the unit is doing (its behaviour and task) is not in this topic yet.
+/// What the unit is doing is its Behaviour and Task (names, empty when none or not known; appended, T-063).
 /// </summary>
 [DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.EntityStatus)]
@@ -564,6 +564,10 @@ public partial struct EntityStatus
     public float MindFill, MindBreak;
     /// <summary>The band the bar is drawn in; None = nothing to show (a calm man, a unit, a vehicle).</summary>
     public MindBand MindBand;
+    /// <summary>The name of the behaviour the entity is running now (its active behaviour as the simulation's behaviour registry names it); empty = none, or not known. Appended (T-063).</summary>
+    [MaxLength(32)] public string Behaviour;
+    /// <summary>The name of the task the entity is ordered to do (the task slot of its brain as the scenario would save it; a running reaction reports the task it paused); empty = none, or not known. Appended (T-063).</summary>
+    [MaxLength(32)] public string Task;
 }
 
 #endregion

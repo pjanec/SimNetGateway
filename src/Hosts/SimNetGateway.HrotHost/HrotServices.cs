@@ -39,6 +39,9 @@ public sealed class HrotServices
     /// <summary>HROT's high-resolution UTC clock (100 ns ticks since 0001-01-01 UTC): the clock the time anchors' wall ticks are on, and the station's clock for probes.</summary>
     public Func<long> WallTicks { get; init; } = Fdp.Toolkit.Time.HighResUtcClock.GetTicks;
 
+    /// <summary>The node's behaviour registry (<c>HrotNodeContext.BehaviorRegistry</c>): names the behaviours a brain runs; null = a node with no brain (no behaviour or task names).</summary>
+    public Func<Fdp.Toolkit.Behavior.BehaviorRegistry?> Behaviors { get; init; } = () => null;
+
     /// <summary>The local node id (the replica's <c>NetworkAuthority.LocalNodeId</c>).</summary>
     public int LocalNodeId { get; init; }
 }

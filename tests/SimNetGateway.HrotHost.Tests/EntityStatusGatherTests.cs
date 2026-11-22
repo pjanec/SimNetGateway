@@ -3,6 +3,7 @@ using CarKinem.Core;
 using Fdp.Core;
 using Fdp.Core.CommandHierarchy;
 using Fdp.Interfaces;
+using Fdp.Toolkit.Behavior;
 using Fdp.Toolkit.Behavior.Components;
 using Fdp.Toolkit.Civilians;
 using Fdp.Toolkit.Combat;
@@ -78,6 +79,48 @@ public class EntityStatusGatherTests
             var sink = new Capture();
             inbound.Drain(sink, int.MaxValue);
             return sink;
+        }
+
+        /// <summary>A registry of the behaviours "Patrol", "Flee" and "Halt" for the node (a node with no brain leaves it null).</summary>
+        public BehaviorRegistry Registry()
+        {
+            var registry = new BehaviorRegistry();
+            foreach (string name in new[] { "Patrol", "Flee", "Halt", new string('L', 45) })
+            {
+                registry.Register(name, new BehaviorDefinition { Name = name, BrainTier = 1 });
+            }
+
+            BehaviorRegistry = registry;
+            Ensure<BehaviorState>();
+            if (!World.TryGetTable(typeof(PausedTask), out _))
+            {
+                World.RegisterManagedComponent<PausedTask>();
+            }
+
+            return registry;
+        }
+
+        /// <summary>Stamps <paramref name="name"/> as the entity's active behaviour (hash of the name), by <paramref name="origin"/>; <paramref name="paused"/> = the task a reaction paused.</summary>
+        public void Think(Entity e, string name, BehaviorOrigin origin, string? paused = null)
+        {
+            SetThink(e, BehaviorHash.FromName(name), origin);
+            if (paused is not null)
+            {
+                World.SetManagedComponent(e, new PausedTask { BehaviorName = paused, Hash = BehaviorHash.FromName(paused), Origin = BehaviorOrigin.Superior });
+            }
+        }
+
+        public void SetThink(Entity e, int hash, BehaviorOrigin origin)
+        {
+            var state = new BehaviorState { ActiveBehaviorHash = hash, Origin = origin, InstanceId = 1 };
+            if (World.HasComponent<BehaviorState>(e))
+            {
+                World.SetComponent(e, state);
+            }
+            else
+            {
+                World.AddComponent(e, state);
+            }
         }
 
         public Entity AddMan(int id, float health = 60f, float stress = 0.5f, ForceId force = ForceId.Friend)
@@ -306,6 +349,92 @@ public class EntityStatusGatherTests
         Assert.NotEqual(after.AmmoShare, ammo.AmmoShare);
     }
 
+    // ---- what the unit is doing (T-063, DD-025 D-5) ----------------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_brain_entity_has_the_name_of_its_active_behaviour_and_of_its_task()
+    {
+        using var h = new Stage();
+        h.Registry();
+        var man = h.AddMan(Man);
+        h.Think(man, "Patrol", BehaviorOrigin.Superior);
+        var s = StatusOf(h.Gather(), Man);
+        Assert.Equal(("Patrol", "Patrol"), (s.Behaviour, s.Task));   // what runs is the task
+
+        h.Think(man, "Flee", BehaviorOrigin.Reaction, paused: "Halt");   // a reaction answers an event: it runs, the task is the one it paused
+        var r = StatusOf(h.Gather(), Man);
+        Assert.Equal(("Flee", "Halt"), (r.Behaviour, r.Task));
+        Assert.Equal(("Patrol", "Patrol"), (s.Behaviour, s.Task));   // the earlier value is a value, not a view
+    }
+
+    [Fact]
+    public void A_change_of_behaviour_is_written_once_and_a_steady_brain_writes_nothing()
+    {
+        using var h = new Stage();
+        h.Registry();
+        var man = h.AddMan(Man);
+        h.Think(man, "Patrol", BehaviorOrigin.Superior);
+        StatusOf(h.Gather(), Man);
+        for (int i = 0; i < 4; i++)
+        {
+            Assert.Empty(h.Gather().Of<HrotEntityStatus>());
+        }
+
+        h.Think(man, "Halt", BehaviorOrigin.Superior);
+        var s = Assert.Single(h.Gather().Of<HrotEntityStatus>());
+        Assert.Equal(("Halt", "Halt"), (s.Behaviour, s.Task));
+        Assert.Empty(h.Gather().Of<HrotEntityStatus>());
+
+        h.SetThink(man, 0, BehaviorOrigin.Unmarked);   // the slot is empty again
+        var none = Assert.Single(h.Gather().Of<HrotEntityStatus>());
+        Assert.Equal((string.Empty, string.Empty), (none.Behaviour, none.Task));
+    }
+
+    [Fact]
+    public void No_registry_no_behaviour_state_hash_zero_or_an_unregistered_hash_give_empty_names()
+    {
+        using var h = new Stage();
+        var plain = h.AddMan(Man);   // no registry at all: a node with no brain
+        h.Registry();
+        h.BehaviorRegistry = null;
+        h.Think(plain, "Patrol", BehaviorOrigin.Superior);
+        var noRegistry = StatusOf(h.Gather(), Man);
+        Assert.Equal((string.Empty, string.Empty), (noRegistry.Behaviour, noRegistry.Task));
+
+        h.Registry();
+        var noState = h.AddMan(2020);   // a registry but no BehaviorState
+        var hashZero = h.AddMan(2021);
+        h.SetThink(hashZero, 0, BehaviorOrigin.Superior);
+        var unknown = h.AddMan(2022);
+        h.SetThink(unknown, 12345, BehaviorOrigin.Superior);
+        var c = h.Gather();
+        foreach (int id in new[] { 2020, 2021, 2022 })
+        {
+            var s = StatusOf(c, id);
+            Assert.Equal((string.Empty, string.Empty), (s.Behaviour, s.Task));
+        }
+
+        var back = StatusOf(c, Man);   // the registry arrived (after composition): the names appear, sent once
+        Assert.Equal(("Patrol", "Patrol"), (back.Behaviour, back.Task));
+        Assert.NotNull(noState);
+    }
+
+    [Fact]
+    public void A_name_longer_than_the_bound_is_cut_and_a_mission_driven_unit_has_no_ordered_task()
+    {
+        using var h = new Stage();
+        h.Registry();
+        var man = h.AddMan(Man);
+        h.Think(man, new string('L', 45), BehaviorOrigin.Superior);
+        var s = StatusOf(h.Gather(), Man);
+        Assert.Equal(new string('L', 32), s.Behaviour);
+        Assert.Equal(new string('L', 32), s.Task);
+
+        h.Think(man, "Patrol", BehaviorOrigin.Sop);   // the SOP's idle choice is not an ORDER: the scenario scope leaves it out, the behaviour is still what runs
+        var sop = StatusOf(h.Gather(), Man);
+        Assert.Equal(("Patrol", string.Empty), (sop.Behaviour, sop.Task));
+    }
+
     // ---- HOT path ----------------------------------------------------------------------------------------------------------------------
 
     /// <summary>A steady gather of the status allocates nothing (the symbol string is made once per type and side).</summary>
@@ -315,6 +444,9 @@ public class EntityStatusGatherTests
         using var h = new Stage();
         h.AddMan(Man);
         h.AddSquad(Squad);
+        h.Registry();
+        h.Think(h.AddMan(2010), "Patrol", BehaviorOrigin.Superior);   // a man on a task: its behaviour and task names are read once, then cached
+        h.Think(h.AddMan(2011), "Flee", BehaviorOrigin.Reaction, paused: "Patrol");   // a reaction on top of a paused task
         var civilian = h.AddHrotEntity(Civilian, new Vector3(9, 9, 0), "civilian", CivilianType, ForceId.Neutral, 100f);
         h.World.AddComponent(civilian, new VehicleParams { Class = VehicleClass.Pedestrian });
         h.World.AddComponent(civilian, new CivilianState());
@@ -323,12 +455,13 @@ public class EntityStatusGatherTests
         var inbound = new InMemoryInbound(new SourceId(99), "test");
         var status = new EntityStatusGather();
         var tkb = h.TestTkb;
+        var registry = h.BehaviorRegistry;
         var query = h.World.Query().With<NetworkIdentity>().With<TkbIdentity>().Build();
         void Pass()
         {
             foreach (var e in query)
             {
-                status.Gather(h.World, tkb, e, h.World.GetComponentRO<NetworkIdentity>(e).Value, h.World.GetComponentRO<TkbIdentity>(e).TkbType.Value, inbound);
+                status.Gather(h.World, tkb, registry, e, h.World.GetComponentRO<NetworkIdentity>(e).Value, h.World.GetComponentRO<TkbIdentity>(e).TkbType.Value, inbound);
             }
         }
 

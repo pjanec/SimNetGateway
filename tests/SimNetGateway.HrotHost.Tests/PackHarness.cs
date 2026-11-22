@@ -89,6 +89,7 @@ public class PackHarness : IDisposable
             Tkb = () => TestTkb,
             EventBus = World.Bus,
             TimeController = () => TimeController,
+            Behaviors = () => BehaviorRegistry,
             WallTicks = () => WallTicksSource(),
         };
         var allocator = new NodeIdAllocator(() => _nextId++);
@@ -281,6 +282,9 @@ public class PackHarness : IDisposable
     }
 
     // ---- HROT entities --------------------------------------------------------------------------------------------------------
+
+    /// <summary>The node's behaviour registry the host reads (null = a node with no brain); set it before the entities are gathered.</summary>
+    public Fdp.Toolkit.Behavior.BehaviorRegistry? BehaviorRegistry { get; set; }
 
     public Entity AddHrotEntity(int id, Vector3 position, string name = "HROT-1", long tkb = 100, ForceId force = ForceId.Friend, float health = 100f)
     {

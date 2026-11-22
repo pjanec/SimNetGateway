@@ -14,6 +14,9 @@ public sealed class DpsStatusOutbound : IGatewayModule
     /// <summary>The bound of <see cref="D.EntityStatus.Symbol"/>.</summary>
     public const int MaxSymbol = 40;
 
+    /// <summary>The bound of <see cref="D.EntityStatus.Behaviour"/> and <see cref="D.EntityStatus.Task"/>.</summary>
+    public const int MaxName = 32;
+
     private readonly DpsPorts _ports;
     private readonly HashSet<int> _written = new();
 
@@ -31,6 +34,8 @@ public sealed class DpsStatusOutbound : IGatewayModule
     private void OnStatus(in HrotEntityStatus m, IngressContext ctx)
     {
         string symbol = m.Symbol ?? string.Empty;
+        string behaviour = m.Behaviour ?? string.Empty;
+        string task = m.Task ?? string.Empty;
         _written.Add(m.Id);
         _ports.EntityStatus.Send(new DpsItem<D.EntityStatus>(new D.EntityStatus
         {
@@ -43,6 +48,8 @@ public sealed class DpsStatusOutbound : IGatewayModule
             AmmoShare = Finite(m.AmmoShare, -1f),
             MindFill = Finite(m.MindFill, 0f),
             MindBreak = Finite(m.MindBreak, -1f),
+            Behaviour = behaviour.Length > MaxName ? behaviour[..MaxName] : behaviour,
+            Task = task.Length > MaxName ? task[..MaxName] : task,
             MindBand = m.MindBand switch
             {
                 HrotMindBand.Calm => D.MindBand.MindBandCalm,

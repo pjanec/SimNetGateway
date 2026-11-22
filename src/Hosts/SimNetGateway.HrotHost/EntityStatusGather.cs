@@ -1,6 +1,8 @@
 using Fdp.Core;
 using Fdp.Core.CommandHierarchy;
 using Fdp.Interfaces;
+using Fdp.Toolkit.Behavior;
+using Fdp.Toolkit.Behavior.Components;
 using Fdp.Toolkit.Combat;
 using Fdp.Toolkit.Combat.Components;
 using Fdp.Toolkit.Physics.Components;
@@ -18,6 +20,9 @@ namespace SimNetGateway.HrotHost;
 /// the entities HROT would give a card (<c>Seeable.OnMap</c>); the card readers keep HROT's own conditions (a unit is an entity with <c>UnitEntity</c>, a mind-state bar is a living person's).
 /// Sent when a value changes by more than <see cref="Step"/> (floats; ints and strings exactly), compared with what was last sent; an entity that stops having a card is withdrawn once. A steady
 /// gather allocates nothing (the symbol string is made once per unit type and side). Main thread only.
+/// <para>What the unit is doing (T-063): <c>Behaviour</c> is the name the node's <c>BehaviorRegistry</c> gives <c>BehaviorState.ActiveBehaviorHash</c> (a name the registry owns: no string is made per frame),
+/// <c>Task</c> the name of the task slot of <c>BrainIntentReader.TaskOf</c> in the scenario's scope. <c>TaskOf</c> builds a slot object, so it is called only when the entity's active behaviour (hash or
+/// origin) differs from the last gather's; a steady world reads the cached pair.</para>
 /// </summary>
 internal sealed class EntityStatusGather
 {
@@ -27,21 +32,36 @@ internal sealed class EntityStatusGather
     private readonly Dictionary<int, HrotEntityStatus> _sent = new();
     private readonly Dictionary<(long Type, ForceId Side), string> _symbols = new();
     private ITkbDatabase? _symbolsFor;
+    private readonly Dictionary<int, BrainNames> _brain = new();
+    private BehaviorRegistry? _brainFor;
+
+    /// <summary>The longest <c>Behaviour</c> / <c>Task</c> sent (the topic's bound); a longer name is cut.</summary>
+    public const int MaxName = 32;
+
+    /// <summary>What the last gather read for an entity's brain: the key it was read for and the two names.</summary>
+    private readonly record struct BrainNames(int Hash, BehaviorOrigin Origin, string Behaviour, string Task);
 
     public void Clear()
     {
         _sent.Clear();
         _symbols.Clear();
         _symbolsFor = null;
+        _brain.Clear();
+        _brainFor = null;
     }
 
-    public void Forget(int id) => _sent.Remove(id);
+    public void Forget(int id)
+    {
+        _sent.Remove(id);
+        _brain.Remove(id);
+    }
 
     /// <summary>Gathers the status of <paramref name="e"/> (network id <paramref name="id"/>, TKB type <paramref name="tkbType"/>) and enqueues it when it is new or changed; an entity that has no card now but had one is withdrawn.</summary>
-    public void Gather(EntityRepository world, ITkbDatabase? tkb, Entity e, int id, long tkbType, InMemoryInbound inbound)
+    public void Gather(EntityRepository world, ITkbDatabase? tkb, BehaviorRegistry? behaviors, Entity e, int id, long tkbType, InMemoryInbound inbound)
     {
         if (!Seeable.OnMap(world, e))
         {
+            _brain.Remove(id);
             if (_sent.Remove(id))
             {
                 inbound.Enqueue(new HrotEntityStatusRemoved(id));
@@ -50,7 +70,7 @@ internal sealed class EntityStatusGather
             return;
         }
 
-        var now = Read(world, tkb, e, id, tkbType);
+        var now = Read(world, tkb, behaviors, e, id, tkbType);
         if (_sent.TryGetValue(id, out var sent) && !Differs(in sent, in now))
         {
             return;
@@ -60,7 +80,7 @@ internal sealed class EntityStatusGather
         inbound.Enqueue(in now);
     }
 
-    private HrotEntityStatus Read(EntityRepository world, ITkbDatabase? tkb, Entity e, int id, long tkbType)
+    private HrotEntityStatus Read(EntityRepository world, ITkbDatabase? tkb, BehaviorRegistry? behaviors, Entity e, int id, long tkbType)
     {
         bool unit = world.IsComponentTypeRegistered<UnitEntity>() && world.HasComponent<UnitEntity>(e);
 
@@ -115,8 +135,44 @@ internal sealed class EntityStatusGather
             }
         }
 
-        return new HrotEntityStatus(id, symbol, current, max, present, authorized, ammo, fill, mark, band);
+        var (behaviour, task) = BrainOf(world, behaviors, e, id);
+        return new HrotEntityStatus(id, symbol, current, max, present, authorized, ammo, fill, mark, band, behaviour, task);
     }
+
+    /// <summary>
+    /// The names of the behaviour the entity runs and of its task slot ("" = none, no registry or not known). Read again only when the active behaviour hash or its origin differ from the last
+    /// gather's, because <c>BrainIntentReader.TaskOf</c> allocates its slot.
+    /// </summary>
+    private (string Behaviour, string Task) BrainOf(EntityRepository world, BehaviorRegistry? registry, Entity e, int id)
+    {
+        if (registry is null || !world.IsComponentTypeRegistered<BehaviorState>() || !world.HasComponent<BehaviorState>(e))
+        {
+            _brain.Remove(id);
+            return (string.Empty, string.Empty);
+        }
+
+        if (!ReferenceEquals(_brainFor, registry))
+        {
+            _brain.Clear();   // another registry (a reload): the names are read again
+            _brainFor = registry;
+        }
+
+        ref readonly var state = ref world.GetComponentRO<BehaviorState>(e);
+        int hash = state.ActiveBehaviorHash;
+        var origin = state.Origin;
+        if (_brain.TryGetValue(id, out var known) && known.Hash == hash && known.Origin == origin)
+        {
+            return (known.Behaviour, known.Task);
+        }
+
+        string behaviour = hash != BehaviorIds.None && registry.TryGetName(hash, out string? name) ? Cut(name) : string.Empty;
+        string task = BrainIntentReader.TaskOf(world, e, registry, BrainIntentScope.Ordered)?.Name ?? string.Empty;
+        task = Cut(task);
+        _brain[id] = new BrainNames(hash, origin, behaviour, task);
+        return (behaviour, task);
+    }
+
+    private static string Cut(string name) => name.Length > MaxName ? name[..MaxName] : name;
 
     /// <summary>The unit's symbol in wire form: its type's derived symbol in its side's frame; "" when its type is not a unit's. Made once per type and side.</summary>
     private string SymbolOf(EntityRepository world, ITkbDatabase? tkb, Entity e, long tkbType)
@@ -152,6 +208,7 @@ internal sealed class EntityStatusGather
 
     private static bool Differs(in HrotEntityStatus a, in HrotEntityStatus b) =>
         a.StrengthPresent != b.StrengthPresent || a.StrengthAuthorized != b.StrengthAuthorized || a.MindBand != b.MindBand || !string.Equals(a.Symbol, b.Symbol, StringComparison.Ordinal)
+        || !string.Equals(a.Behaviour, b.Behaviour, StringComparison.Ordinal) || !string.Equals(a.Task, b.Task, StringComparison.Ordinal)
         || Moved(a.HealthCurrent, b.HealthCurrent) || Moved(a.HealthMax, b.HealthMax) || Moved(a.AmmoShare, b.AmmoShare) || Moved(a.MindFill, b.MindFill) || Moved(a.MindBreak, b.MindBreak);
 
     private static bool Moved(float last, float now) => MathF.Abs(now - last) >= Step;

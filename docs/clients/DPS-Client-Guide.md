@@ -197,9 +197,11 @@ A client may draw an entity's card from DATA instead of subscribing to the card 
 | `HealthCurrent`, `HealthMax` | HROT's health pool and its maximum. **No fraction is sent: derive `clamp(Current / Max, 0, 1)` yourself.** HROT's bar is green from 66 %, yellow from 33 %, else red | `HealthMax` 0 = no health |
 | `StrengthPresent`, `StrengthAuthorized` | a unit's men present and authorized (HROT's `UnitCardFacts.Strength`; a stochastic unit's slots included). HROT draws the bar as `Present / Authorized` with ticks at 70 % and 90 % | `StrengthAuthorized` 0 = not known: draw no strength bar |
 | `AmmoShare` | 0..1, the share of its rounds a unit still carries (HROT: green from 50 %, amber from 25 %, else red) | -1 = not known |
+| `Behaviour` (string, at most 32) | the name of the behaviour the entity runs now (the simulation's behaviour registry names it) | empty = none, or not known (a node with no brain) |
+| `Task` (string, at most 32) | the name of the task the entity is ordered to do (a running reaction reports the task it paused; what a mission plan or the unit's own doctrine chose is not an order and reads empty) | empty = none, or not known |
 | `MindFill`, `MindBreak`, `MindBand` | a living man's mind-state bar: the fill 0..1 (stress for a soldier, fear for a civilian), the mark of his breaking point on it (a soldier only) and the band to draw it in: Calm (slate blue), Nervous (amber), Broken (red, with the word BROKEN under it), Fear (amber-orange) | `MindBand` None = draw no bar (a calm man, a unit, a vehicle, a dead man); `MindBreak` negative = no mark |
 
-**On change.** A sample is written when an entity first has a card and then only when a value changed: the float fields (health, ammunition share, mind fill and mark) by at least 0.01 against the LAST SENT value, the integers and the symbol exactly. A calm entity sends nothing, and there is no heartbeat: the last sample is the current one. The commander flag is `Entity.IsUnit` (not repeated here).
+**On change.** A sample is written when an entity first has a card and then only when a value changed: the float fields (health, ammunition share, mind fill and mark) by at least 0.01 against the LAST SENT value, the integers, the symbol, the behaviour and the task exactly. A calm entity sends nothing, and there is no heartbeat: the last sample is the current one. The commander flag is `Entity.IsUnit` (not repeated here).
 
 **What a client does with it.**
 1. Join `EntityStatus` with `Entity` by `EntityId`. A status whose `Entity` has not arrived yet waits for it.
@@ -207,7 +209,7 @@ A client may draw an entity's card from DATA instead of subscribing to the card 
 3. **Rule A (R-143): never cut the card of an anchor whose `Entity.Domain` is `DomainAir`**, at any distance. Distance is otherwise the client's choice (HROT's suggestion: frame and bars up to 1 m/px, the name up to 2 m/px).
 4. The look of a card is yours; HROT's own layout is the reference.
 
-**Not in this topic yet:** what the unit is doing (its behaviour and task). They live in HROT's presentation assembly, which the gateway cannot read without a second copy of the rule; they will be appended once HROT moves a current-behaviour reader into its common layer (DD-025 D-5).
+`Behaviour` and `Task` are the last two members of the topic (appended; a client built from the earlier IDL still reads the rest). Show them as text on a card; the names are the simulation's own.
 
 ## Camera controllers to build
 

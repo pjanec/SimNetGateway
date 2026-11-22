@@ -11,7 +11,7 @@ public class DpsEntityStatusTests
     private static string Id(int id) => id.ToString();
 
     private static HrotEntityStatus Status(int id, string symbol = "", float health = 60f, float max = 100f, int present = 0, int authorized = 0, float ammo = -1f, float fill = 0f, float mark = -1f,
-        HrotMindBand band = HrotMindBand.None) => new(id, symbol, health, max, present, authorized, ammo, fill, mark, band);
+        HrotMindBand band = HrotMindBand.None, string behaviour = "", string task = "") => new(id, symbol, health, max, present, authorized, ammo, fill, mark, band, behaviour, task);
 
     [Fact]
     public void Every_field_reaches_the_topic_the_symbol_is_bounded_and_every_band_maps()
@@ -36,6 +36,26 @@ public class DpsEntityStatusTests
         Assert.Equal(D.MindBand.MindBandNone, watch.Alive["2002"].MindBand);
         var none = watch.Alive["2006"];
         Assert.Equal((0f, 0f, -1f, 0f, -1f), (none.HealthCurrent, none.HealthMax, none.AmmoShare, none.MindFill, none.MindBreak));
+    }
+
+    /// <summary>T-063: the behaviour and the task names reach the topic, a name past the bound (32) is cut, a missing one is empty.</summary>
+    [Fact]
+    public void The_behaviour_and_the_task_reach_the_topic_bounded_and_empty_when_missing()
+    {
+        uint domain = Watch.NewDomain();
+        using var watch = new Watch.Watch<D.EntityStatus>(domain, "station-1", s => Id(s.EntityId));
+        using var rig = new Rig(domain);
+
+        rig.Send(Status(2001, behaviour: "Patrol", task: "Halt"));
+        rig.Send(Status(2002, behaviour: new string('b', 50), task: new string('t', 50)));
+        rig.Send(Status(2003));
+        rig.Send(Status(2004) with { Behaviour = null!, Task = null! });
+
+        Assert.True(watch.Until(w => w.Alive.Count == 4));
+        Assert.Equal(("Patrol", "Halt"), (watch.Alive["2001"].Behaviour, watch.Alive["2001"].Task));
+        Assert.Equal((new string('b', 32), new string('t', 32)), (watch.Alive["2002"].Behaviour, watch.Alive["2002"].Task));
+        Assert.Equal((string.Empty, string.Empty), (watch.Alive["2003"].Behaviour, watch.Alive["2003"].Task));
+        Assert.Equal((string.Empty, string.Empty), (watch.Alive["2004"].Behaviour, watch.Alive["2004"].Task));
     }
 
     /// <summary>One writer, on the world participant: every seat's client gets each sample once, and the channel is written once per status.</summary>

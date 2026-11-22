@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | approved rev 1 (R-146); built (T-062, section 9) |
-| **Tasks** | T-062 |
+| **Status** | approved rev 1 (R-146); built (T-062, T-063; section 9) |
+| **Tasks** | T-062, T-063 |
 | **Rulings honoured** | R-146, R-133 (append-only), R-135 (rate classes, producer-neutral), R-140 (world topics once on `<base>-*`), R-143 / R-144 (labels: the client's look), HROT 2026-09-05 *"no precalculated percentages"* |
 | **Related** | DD-024 (cards as gizmos — stays, optional: the client no longer subscribes by default); the Unreal note `NOTE_UnrealIg_To_Ui_Entity_Status.md` (HROT `unreal-ig` `2a8e52f1d`) asking for it |
 | **Date** | 2026-11-22 |
@@ -50,7 +50,7 @@ own cards use; the gateway only quantises and sends on change.
   rounds, effects, a seated man; animals by the same rule.
 - D-4 **On change, quantised:** floats compared at a step of 0.01 (health and fill), ints exactly, strings exactly; one sample per changed
   entity per gather; 0 B per steady gather (HOT path).
-- D-5 **`Behaviour` and `Task` are NOT in this round.** ⛔ *Rev 1 said the reader lives in `Hrot.Presentation` — WRONG (corrected
+- D-5 **`Behaviour` and `Task` were not in round 1; appended by T-063 (section 9).** ⛔ *Rev 1 said the reader lives in `Hrot.Presentation` — WRONG (corrected
   2026-11-22 when the owner asked).* The behaviour is simulation state and its reader is below Presentation: `BehaviorState.ActiveBehaviorHash`
   plus `BehaviorRegistry.TryGetName`, and `BrainIntentReader.Read(repo, entity, registry, scope)` (the task slot), all in `Fdp.Toolkits`,
   which the gateway references. The only gap: the node's `BehaviorRegistry` instance is a property of each node bootstrapper, not offered on
@@ -137,3 +137,15 @@ Where the build is exact about what the design left open (none contradicts a dec
 7. **The topic is a new module, `DpsStatusOutbound`,** registered by `DpsSide` (now nine modules); the DIS side ignores both messages (`HrotIgnoredIngress`). The protocol minor stays 0 (a new topic, an appended enum; the IDL gained lines only).
 
 Mutations (the four of section 7, each made, the touched tests run red, restored): a fraction sent instead of the pair (6 of the 12 gather tests); the status written once per seat (the 2-seat test); the quantise step 0 (5 tests, among them the 0 B rail and the half-step one); an entity with no card given a status (the no-card test).
+
+### T-063: `Behaviour` and `Task` (D-5 built)
+
+HROT's CE-11032 put the node's `BehaviorRegistry` on `HrotNodeContext` (null on a node with no brain); the HROT pin moved to `e2b43ab4c`. Two strings were appended to the end of `EntityStatus` and of `HrotEntityStatus` (as optional trailing arguments, so existing callers compile): `[MaxLength(32)] Behaviour` and `[MaxLength(32)] Task`. The IDL gained two lines (`string<32> Behaviour;`, `string<32> Task;`) and nothing else; the protocol minor stays 0 (appendable struct).
+
+1. **Where the registry comes from:** `HrotServices.Behaviors` (`Func<BehaviorRegistry?>`), filled in `GatewayCapability.ServicesFrom` from `context.BehaviorRegistry` (read at each gather, so a registry that arrives after composition is used); `EcsHrotAdapter` passes it to `EntityStatusGather.Gather`.
+2. **`Behaviour`** = `registry.TryGetName(BehaviorState.ActiveBehaviorHash)`; `""` for hash 0 (`BehaviorIds.None`), no registry, no `BehaviorState`, or a hash the registry does not know. The name is the registry's own string (no string is made per frame); a name longer than 32 is cut (the plugin cuts again).
+3. **`Task`** = the `Name` of `BrainIntentReader.TaskOf(world, entity, registry, BrainIntentScope.Ordered)` (the scenario's scope: a running reaction or possession reports the task it paused; a unit driven by a mission plan and a behaviour the SOP chose report none, because a reload re-derives them), or `""`. Measured by reading the code (`BrainIntentReader.cs:41-65`): `Read` builds an `InitialBrainIntent` and `TaskOf` builds a `SavedBrainSlot` (a class) and parses its params, so both allocate. The task-slot reader `TaskOf` is public, so only it is called (the SOP and ROE slots are not needed), and **only when the entity's active behaviour hash or its origin differs from the last gather's**; the pair is cached per entity (`EntityStatusGather._brain`, cleared with the registry instance, on `Clear`, `Forget` and a lost card). A steady world therefore reads two ints and allocates 0 B (the 0 B rail now includes a man on a task and a man in a reaction over a paused task).
+4. **On change like the other fields:** both strings compared exactly (`Differs`).
+5. **Known limit:** the cache key is hash and origin, as the brief said. A task that changes while the same reaction keeps running (a new order replacing the paused task) is read at the next change of hash or origin. If that proves visible, add the paused task's hash to the key.
+
+Tests: `EntityStatusGatherTests` (a brain entity gets both names, a reaction over a paused task, a change written once, no registry / no state / hash 0 / unknown hash give `""`, the registry arriving later, a 45-character name cut to 32, a SOP-chosen behaviour has a behaviour and no task, 0 B steady), `DpsEntityStatusTests` (Plugin: the mapping, bound and empty), `DpsEntityStatusTests` (Protocol: the round trip and the IDL ends with the two new members). Mutations (each made, the touched tests run red, restored): `Behaviour` from hash 0 (4 tests); `Task` always `""` (4 tests); written every gather, `Differs` always true (6 tests, among them the 0 B and the steady-world ones); the per-entity cache never hit, so `TaskOf` runs every gather (the 0 B rail).
