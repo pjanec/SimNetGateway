@@ -3,6 +3,7 @@ using Fdp.Core.CommandHierarchy;
 using Fdp.Interfaces;
 using Fdp.Toolkit.Behavior;
 using Fdp.Toolkit.Behavior.Components;
+using Fdp.Toolkit.Behavior.Systems;
 using Fdp.Toolkit.Combat;
 using Fdp.Toolkit.Combat.Components;
 using Fdp.Toolkit.Physics.Components;
@@ -22,7 +23,7 @@ namespace SimNetGateway.HrotHost;
 /// gather allocates nothing (the symbol string is made once per unit type and side). Main thread only.
 /// <para>What the unit is doing (T-063): <c>Behaviour</c> is the name the node's <c>BehaviorRegistry</c> gives <c>BehaviorState.ActiveBehaviorHash</c> (a name the registry owns: no string is made per frame),
 /// <c>Task</c> the name of the task slot of <c>BrainIntentReader.TaskOf</c> in the scenario's scope. <c>TaskOf</c> builds a slot object, so it is called only when the entity's active behaviour (hash or
-/// origin) differs from the last gather's; a steady world reads the cached pair.</para>
+/// origin) or its paused task differs from the last gather's; a steady world reads the cached pair.</para>
 /// </summary>
 internal sealed class EntityStatusGather
 {
@@ -39,7 +40,7 @@ internal sealed class EntityStatusGather
     public const int MaxName = 32;
 
     /// <summary>What the last gather read for an entity's brain: the key it was read for and the two names.</summary>
-    private readonly record struct BrainNames(int Hash, BehaviorOrigin Origin, string Behaviour, string Task);
+    private readonly record struct BrainNames(int Hash, BehaviorOrigin Origin, PausedTask? Paused, string Behaviour, string Task);
 
     public void Clear()
     {
@@ -140,7 +141,7 @@ internal sealed class EntityStatusGather
     }
 
     /// <summary>
-    /// The names of the behaviour the entity runs and of its task slot ("" = none, no registry or not known). Read again only when the active behaviour hash or its origin differ from the last
+    /// The names of the behaviour the entity runs and of its task slot ("" = none, no registry or not known). Read again only when the active behaviour hash, its origin or its paused task (the PausedTask record's identity) differ from the last
     /// gather's, because <c>BrainIntentReader.TaskOf</c> allocates its slot.
     /// </summary>
     private (string Behaviour, string Task) BrainOf(EntityRepository world, BehaviorRegistry? registry, Entity e, int id)
@@ -160,7 +161,9 @@ internal sealed class EntityStatusGather
         ref readonly var state = ref world.GetComponentRO<BehaviorState>(e);
         int hash = state.ActiveBehaviorHash;
         var origin = state.Origin;
-        if (_brain.TryGetValue(id, out var known) && known.Hash == hash && known.Origin == origin)
+        // the task a reaction or possession paused: HROT's PausedTask is an immutable record replaced whole, so its reference is its identity (an order that replaces the paused task is a new object)
+        var paused = world.TryGetTable(typeof(PausedTask), out _) ? BehaviorIngressSystem.PausedTaskOf(world, e) : null;
+        if (_brain.TryGetValue(id, out var known) && known.Hash == hash && known.Origin == origin && ReferenceEquals(known.Paused, paused))
         {
             return (known.Behaviour, known.Task);
         }
@@ -168,7 +171,7 @@ internal sealed class EntityStatusGather
         string behaviour = hash != BehaviorIds.None && registry.TryGetName(hash, out string? name) ? Cut(name) : string.Empty;
         string task = BrainIntentReader.TaskOf(world, e, registry, BrainIntentScope.Ordered)?.Name ?? string.Empty;
         task = Cut(task);
-        _brain[id] = new BrainNames(hash, origin, behaviour, task);
+        _brain[id] = new BrainNames(hash, origin, paused, behaviour, task);
         return (behaviour, task);
     }
 

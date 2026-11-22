@@ -27,3 +27,10 @@ I will post the commit when it lands. Mode 2 = `Entity.IsUnit`; rule A (R-143) =
 who gets a status is HROT's `Seeable.OnMap` (so a seated man does too); an entity that keeps existing but loses its card has its status
 disposed; symbol, strength and ammunition only for a unit (an `Entity.IsUnit` entity); mind state only for a living person (`MindBand`
 None ⇒ fill 0, break -1). The client guide's new "Entity status" section has the details.
+
+## `Behaviour` and `Task` landed — gateway `00c7be1` + the follow-up after it
+
+Appended at the end of `EntityStatus` (`string<32>` each; the IDL gained exactly these two lines): `Behaviour` = the name of the behaviour the
+entity runs now (HROT's `BehaviorState` + its behaviour registry); `Task` = its ordered task (HROT `BrainIntentReader`, the ordered scope) —
+during a reaction the task it will return to. "" = none. ⚠ A unit run by a mission plan, or a behaviour its SOP chose, has a `Behaviour` and an
+empty `Task`. Both on change only.

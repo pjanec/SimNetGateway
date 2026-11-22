@@ -367,6 +367,24 @@ public class EntityStatusGatherTests
         Assert.Equal(("Patrol", "Patrol"), (s.Behaviour, s.Task));   // the earlier value is a value, not a view
     }
 
+    /// <summary>The gap T-063 named: a new order replaces the task a reaction paused while the reaction keeps running; the Task changes at once, once.</summary>
+    [Fact]
+    public void A_reaction_that_keeps_running_while_its_paused_task_is_replaced_changes_the_task_once()
+    {
+        using var h = new Stage();
+        h.Registry();
+        var man = h.AddMan(Man);
+        h.Think(man, "Flee", BehaviorOrigin.Reaction, paused: "Patrol");
+        var first = StatusOf(h.Gather(), Man);
+        Assert.Equal(("Flee", "Patrol"), (first.Behaviour, first.Task));
+        Assert.Empty(h.Gather().Of<HrotEntityStatus>());
+
+        h.World.SetManagedComponent(man, new PausedTask { BehaviorName = "Halt", Hash = BehaviorHash.FromName("Halt"), Origin = BehaviorOrigin.Superior });   // same reaction, a new order under it
+        var changed = Assert.Single(h.Gather().Of<HrotEntityStatus>());
+        Assert.Equal(("Flee", "Halt"), (changed.Behaviour, changed.Task));
+        Assert.Empty(h.Gather().Of<HrotEntityStatus>());   // once
+    }
+
     [Fact]
     public void A_change_of_behaviour_is_written_once_and_a_steady_brain_writes_nothing()
     {
