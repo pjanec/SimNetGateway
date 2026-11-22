@@ -17,7 +17,7 @@ a card (`Seeable.OnMap`). Every value comes from HROT's own rule — the gateway
 | `IsCommander` | ⭐ **already on `Entity`: `IsUnit`** (gateway T-052) | your table missed it |
 | `Stress` | **`MindFill`, `MindBreak`, `MindBand`** (None / Calm / Nervous / Broken / Fear) | HROT's one mind-state rule (`MindStateBar.Of`): a soldier's stress with his breaking point, a civilian's fear |
 | — | **`StrengthPresent`, `StrengthAuthorized`, `AmmoShare`** | a unit's card bars, HROT's `UnitCardFacts` |
-| `Behaviour`, `Task` | ⏳ **later** | measured: HROT's "current actions / phase" live in `Hrot.Presentation`, which the gateway cannot call; HROT `CE-11032` moves that rule below; then they are appended |
+| `Behaviour`, `Task` | ⏳ **later** | (corrected 2026-11-22) the behaviour IS readable below Presentation (`BehaviorState` + `BrainIntentReader` in `Fdp.Toolkits`); only the node's behaviour-name registry is not yet offered to a node extension (HROT `CE-11032`); then they are appended |
 
 I will post the commit when it lands. Mode 2 = `Entity.IsUnit`; rule A (R-143) = never cut a card whose anchor is Air.
 

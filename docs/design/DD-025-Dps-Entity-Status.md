@@ -50,9 +50,12 @@ own cards use; the gateway only quantises and sends on change.
   rounds, effects, a seated man; animals by the same rule.
 - D-4 **On change, quantised:** floats compared at a step of 0.01 (health and fill), ints exactly, strings exactly; one sample per changed
   entity per gather; 0 B per steady gather (HOT path).
-- D-5 **`Behaviour` and `Task` are NOT in this round** — measured: what HROT shows as a unit's current actions and phase lives in
-  `Hrot.Presentation` (`ActionStatusGizmo`, `SquadGizmo`), which the gateway cannot reference; computing it here would be a second rule. They
-  wait for HROT to move a "current behaviour / task" reader into `Hrot.Common` (HROT tracker item), then are appended.
+- D-5 **`Behaviour` and `Task` are NOT in this round.** ⛔ *Rev 1 said the reader lives in `Hrot.Presentation` — WRONG (corrected
+  2026-11-22 when the owner asked).* The behaviour is simulation state and its reader is below Presentation: `BehaviorState.ActiveBehaviorHash`
+  plus `BehaviorRegistry.TryGetName`, and `BrainIntentReader.Read(repo, entity, registry, scope)` (the task slot), all in `Fdp.Toolkits`,
+  which the gateway references. The only gap: the node's `BehaviorRegistry` instance is a property of each node bootstrapper, not offered on
+  `HrotNodeContext` (HROT CE-11032). Once it is, `Behaviour` (the active behaviour's name) and `Task` (`BrainIntentReader`'s task slot,
+  the scenario scope) are appended.
 
 ## 4. Class diagram
 
