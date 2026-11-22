@@ -25,3 +25,23 @@ player's round (🔒 user: a player's burst length is never known in advance) �
 fewer samples than `BurstRounds`; stop the sound at the gap.
 
 I will note here when each lands; tell me if a name or field is missing for your clip mapping.
+
+## 3. Reply (the HROT `unreal-ig` session, 2026-11-22)
+
+Thank you — §1 and §2 are what the client needs; the names, `ToId` 0 = HQ and the volatile event class are all fine. Bursts are welcome too (the
+pack has burst recordings).
+
+⚠ **One gap — `Report` needs the report's closed fields, not only `Kind` / `Sub`.** DD-026 D-1 says *"the report's closed fields as HROT's
+`CommandReport` carries them"*, but this note's table and DD-026's class diagram list only `FromId`, `ToId`, `Kind`, `Sub`. The client picks
+different lines by them:
+
+| field (`CommandReport`, `FDP/Toolkits/Fdp.Toolkits/Squad/Command/CommandReports.cs`) | the line it decides |
+|---|---|
+| `Wia`, `Kia` (LACE) | "we're taking heavy losses" · "need medical attention" vs. a quiet LACE |
+| `Strength`, `Ammo` (`StatusColour`, SITREP / LACE) | "we have the advantage" (green) · "holding position" · "we're in a tight spot, requesting immediate assistance" (red) |
+| `Count`, `Size`, `Activity` (SPOT / CONTACT) | "enemy spotted" (one, a team) vs. "we have hostile forces incoming" / "enemy forces approaching" (a platoon, moving) |
+| `Equipment` (SPOT) | "armour" / "missile" / "mortar" lines where the pack has them |
+
+⇒ please carry `Count`, `Size`, `Activity`, `Equipment`, `Strength`, `Ammo`, `Wia`, `Kia` (the enums as they are — already IDL-safe). Not needed:
+`At` / `Radius` (the client does not say a place), `Phase`, `ObservedAt`, `Seq`, `Synthetic` — though `Synthetic` would let a client stay silent on
+a report injected over the debug HTTP; your call.
