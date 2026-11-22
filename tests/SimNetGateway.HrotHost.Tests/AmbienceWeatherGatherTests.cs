@@ -96,16 +96,16 @@ public class AmbienceWeatherGatherTests
         public Capture GatherAmbience()
         {
             Ambience.Gather(World, _inbound);
-            return Drain();
+            return DrainInbound();
         }
 
         public Capture GatherWeather()
         {
             Weather.Gather(World, _inbound);
-            return Drain();
+            return DrainInbound();
         }
 
-        private Capture Drain()
+        private Capture DrainInbound()
         {
             var sink = new Capture();
             _inbound.Drain(sink, int.MaxValue);
@@ -255,7 +255,7 @@ public class AmbienceWeatherGatherTests
         Assert.Equal(2, got.Count);
         Assert.True(got[8001].Outline is null or { Length: 0 });
         Assert.Equal(50f, got[8002].FeatherM);
-        Assert.Equal([new HrotVec3(900, 1900, 10), new HrotVec3(1100, 1900, 10), new HrotVec3(1100, 2100, 10), new HrotVec3(900, 2100, 10)], got[8002].Outline);
+        Assert.Equal([new HrotVec3(900, 1900, 10), new HrotVec3(1100, 1900, 10), new HrotVec3(1100, 2100, 10), new HrotVec3(900, 2100, 10)], got[8002].Outline!);
     }
 
     [Fact]

@@ -568,6 +568,8 @@ public partial struct EntityStatus
     [MaxLength(32)] public string Behaviour;
     /// <summary>The name of the task the entity is ordered to do (the task slot of its brain as the scenario would save it; a running reaction reports the task it paused); empty = none, or not known. Appended (T-063).</summary>
     [MaxLength(32)] public string Task;
+    /// <summary>The commander unit he belongs to: the Entity.Id of the entity whose Entity.IsUnit is true (the same id space); 0 = none (no commander, or it is gone). Appended (T-068).</summary>
+    public int UnitId;
 }
 
 #endregion

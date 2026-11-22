@@ -48,6 +48,7 @@ public sealed class DpsStatusOutbound : IGatewayModule
             AmmoShare = Finite(m.AmmoShare, -1f),
             MindFill = Finite(m.MindFill, 0f),
             MindBreak = Finite(m.MindBreak, -1f),
+            UnitId = m.UnitId,
             Behaviour = behaviour.Length > MaxName ? behaviour[..MaxName] : behaviour,
             Task = task.Length > MaxName ? task[..MaxName] : task,
             MindBand = m.MindBand switch

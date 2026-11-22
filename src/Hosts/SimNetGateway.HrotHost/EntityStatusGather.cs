@@ -7,6 +7,7 @@ using Fdp.Toolkit.Behavior.Systems;
 using Fdp.Toolkit.Combat;
 using Fdp.Toolkit.Combat.Components;
 using Fdp.Toolkit.Physics.Components;
+using Fdp.Toolkit.Replication.Components;
 using GizmoMap.Contracts.Symbology;
 using Hrot.Common.Diagnostics.Gizmos;
 using Hrot.Core.Tkb;
@@ -137,7 +138,19 @@ internal sealed class EntityStatusGather
         }
 
         var (behaviour, task) = BrainOf(world, behaviors, e, id);
-        return new HrotEntityStatus(id, symbol, current, max, present, authorized, ammo, fill, mark, band, behaviour, task);
+        return new HrotEntityStatus(id, symbol, current, max, present, authorized, ammo, fill, mark, band, behaviour, task, UnitIdOf(world, e));
+    }
+
+    /// <summary>The network id of the commander unit the entity belongs to (HROT's <c>UnitSubordinate.Commander</c>); 0 when it has none, the commander is gone, or it has no network id (T-068).</summary>
+    private static int UnitIdOf(EntityRepository world, Entity e)
+    {
+        if (!world.IsComponentTypeRegistered<UnitSubordinate>() || !world.HasComponent<UnitSubordinate>(e))
+        {
+            return 0;
+        }
+
+        var commander = world.GetComponentRO<UnitSubordinate>(e).Commander;
+        return !commander.IsNull && world.IsAlive(commander) && world.HasComponent<NetworkIdentity>(commander) ? world.GetComponentRO<NetworkIdentity>(commander).Value : 0;
     }
 
     /// <summary>
@@ -211,7 +224,7 @@ internal sealed class EntityStatusGather
 
     private static bool Differs(in HrotEntityStatus a, in HrotEntityStatus b) =>
         a.StrengthPresent != b.StrengthPresent || a.StrengthAuthorized != b.StrengthAuthorized || a.MindBand != b.MindBand || !string.Equals(a.Symbol, b.Symbol, StringComparison.Ordinal)
-        || !string.Equals(a.Behaviour, b.Behaviour, StringComparison.Ordinal) || !string.Equals(a.Task, b.Task, StringComparison.Ordinal)
+        || a.UnitId != b.UnitId || !string.Equals(a.Behaviour, b.Behaviour, StringComparison.Ordinal) || !string.Equals(a.Task, b.Task, StringComparison.Ordinal)
         || Moved(a.HealthCurrent, b.HealthCurrent) || Moved(a.HealthMax, b.HealthMax) || Moved(a.AmmoShare, b.AmmoShare) || Moved(a.MindFill, b.MindFill) || Moved(a.MindBreak, b.MindBreak);
 
     private static bool Moved(float last, float now) => MathF.Abs(now - last) >= Step;

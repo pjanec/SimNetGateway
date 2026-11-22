@@ -149,3 +149,17 @@ HROT's CE-11032 put the node's `BehaviorRegistry` on `HrotNodeContext` (null on 
 5. **The cache key** is the active hash, the origin and the identity (reference) of HROT's `PausedTask` record (an immutable record replaced whole, read allocation-free through `BehaviorIngressSystem.PausedTaskOf`, guarded by the table being registered). A new order that replaces the task a running reaction paused is a new `PausedTask`, so `Task` updates at once and is written once. (The earlier gap, a key of hash and origin only, is closed.) Rail: `A_reaction_that_keeps_running_while_its_paused_task_is_replaced_changes_the_task_once`; mutation: the paused task left out of the key turns it red.
 
 Tests: `EntityStatusGatherTests` (a brain entity gets both names, a reaction over a paused task, a change written once, no registry / no state / hash 0 / unknown hash give `""`, the registry arriving later, a 45-character name cut to 32, a SOP-chosen behaviour has a behaviour and no task, 0 B steady), `DpsEntityStatusTests` (Plugin: the mapping, bound and empty), `DpsEntityStatusTests` (Protocol: the round trip and the IDL ends with the two new members). Mutations (each made, the touched tests run red, restored): `Behaviour` from hash 0 (4 tests); `Task` always `""` (4 tests); written every gather, `Differs` always true (6 tests, among them the 0 B and the steady-world ones); the per-entity cache never hit, so `TaskOf` runs every gather (the 0 B rail).
+
+### T-068: `UnitId` - the commander unit a man belongs to (2026-11-22; owner of EntityStatus: this design)
+
+HROT pin `a36176252`. Source (measured): `UnitSubordinate { Entity Commander; TacticalDesignation Designation; FireTeam FireTeam }` on the man (`FDP/Engine/Fdp.Core/CommandHierarchy/UnitSubordinate.cs`). `int UnitId` was appended at the END of `EntityStatus` (R-133; the committed IDL gained exactly one line, `int32 UnitId;`) and as a trailing optional argument of `HrotEntityStatus`, the way `Behaviour` / `Task` were.
+
+| # | as built |
+|---|---|
+| 1 | `EntityStatusGather.UnitIdOf`: the commander's `NetworkIdentity` value; **0** when the man has no `UnitSubordinate`, the commander is `Entity.Null`, not alive, or has no `NetworkIdentity`. Compared in `Differs` like the other fields: sent once when it changes (a re-parent, a commander's death), never while held; 0 B per steady gather (rail). |
+| 2 | `DpsStatusOutbound` copies it. |
+| 3 | **Id space, verified by a rail through the real host and plugin** (`Through_the_host_and_the_plugin_the_unit_id_is_the_entity_id_of_a_published_is_unit_row`): `UnitId` equals the `Entity.Id` of the DPS `Entity` row published for the commander (`DpsOutbound` writes `EntityId` = the network id; the adapter selects `SimTransform` + `TkbIdentity` + `NetworkIdentity`), and that row has `IsUnit` true (DIS kind 11 from the unit template, DD-024). So **a body-less commander IS published as an `Entity` row with `IsUnit` true on this host**, provided its type is a unit template (kind 11) - the client can resolve the id. |
+| 4 | **Out of scope, found:** `EcsHrotAdapter.StateOf` builds `HrotEntityState` with `CommanderId` 0; it feeds DIS `Structure.Parent` through `HrotEntityStateIngress.SetCommander`, so filling it would change the DIS output. Not touched. |
+| 5 | Limit: a commander that has no network id (or is not a gathered entity, e.g. a replica) reads as 0 - the man then has no unit for the client; not worked around. |
+
+Mutations (each reddened the named tests, then restored): see the result table in the T-068 report.

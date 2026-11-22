@@ -384,6 +384,7 @@ module SimNetGateway {
                 SimNetGateway::Protocol::DdsPlayer::MindBand MindBand;
                 string<32> Behaviour;
                 string<32> Task;
+                int32 UnitId;
             };
 
             @topic

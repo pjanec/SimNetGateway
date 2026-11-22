@@ -58,6 +58,21 @@ public class DpsEntityStatusTests
         Assert.Equal((string.Empty, string.Empty), (watch.Alive["2004"].Behaviour, watch.Alive["2004"].Task));
     }
 
+    /// <summary>T-068: the unit id reaches the topic as is (0 = none).</summary>
+    [Fact]
+    public void The_unit_id_reaches_the_topic_and_0_means_none()
+    {
+        uint domain = Watch.NewDomain();
+        using var watch = new Watch.Watch<D.EntityStatus>(domain, "station-1", s => Id(s.EntityId));
+        using var rig = new Rig(domain);
+
+        rig.Send(Status(2001) with { UnitId = 2004 });
+        rig.Send(Status(2002));
+
+        Assert.True(watch.Until(w => w.Alive.Count == 2));
+        Assert.Equal((2004, 0), (watch.Alive["2001"].UnitId, watch.Alive["2002"].UnitId));
+    }
+
     /// <summary>One writer, on the world participant: every seat's client gets each sample once, and the channel is written once per status.</summary>
     [Fact]
     public void A_status_is_written_once_on_the_world_participant_whatever_the_seats()

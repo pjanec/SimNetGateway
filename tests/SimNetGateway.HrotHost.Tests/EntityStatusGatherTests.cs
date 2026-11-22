@@ -52,6 +52,7 @@ public class EntityStatusGatherTests
             World.SetSingletonManaged<ITkbDatabase>(TestTkb);
             Ensure<UnitEntity>();
             Ensure<UnitRoster>();
+            Ensure<UnitSubordinate>();
             Ensure<Stress>();
             Ensure<VehicleParams>();
             Ensure<Fear>();
@@ -534,5 +535,214 @@ public class EntityStatusGatherTests
         h.RemoveHrotEntity(man);
         h.Steps(5);
         Assert.Equal(2, written.Count);   // the removal disposes the instance, it writes no sample
+    }
+    // ---- T-068: the commander unit a man belongs to ----------------------------------------------------------------------------------
+
+    /// <summary>A body-less commander with a network id and no members (the id space of every DPS <c>Entity</c>).</summary>
+    private static Entity Commander(Stage h, int id)
+    {
+        var c = h.AddHrotEntity(id, new Vector3(id % 100, 5, 0), "unit" + id, SquadType, ForceId.Friend);
+        h.World.RemoveComponent<Health>(c);
+        h.World.AddComponent(c, new UnitEntity());
+        return c;
+    }
+
+    private static void Assign(Stage h, Entity man, Entity commander)
+    {
+        var sub = new UnitSubordinate { Commander = commander };
+        if (h.World.HasComponent<UnitSubordinate>(man))
+        {
+            h.World.SetComponent(man, sub);
+        }
+        else
+        {
+            h.World.AddComponent(man, sub);
+        }
+    }
+
+    [Fact]
+    public void A_mans_unit_id_is_his_commanders_network_id_and_0_when_he_has_no_commander()
+    {
+        using var h = new Stage();
+        var squad = Commander(h, Squad);
+        var man = h.AddMan(Man);
+        var loner = h.AddMan(Man + 10);
+        Assign(h, man, squad);
+
+        var got = h.Gather();
+
+        Assert.Equal(Squad, StatusOf(got, Man).UnitId);   // the network id, not the entity index
+        Assert.NotEqual(squad.Index, StatusOf(got, Man).UnitId);
+        Assert.Equal(0, StatusOf(got, Man + 10).UnitId);   // no UnitSubordinate at all
+        Assign(h, loner, Entity.Null);
+        Assert.Empty(h.Gather().Of<HrotEntityStatus>());   // an explicit "no commander" is still 0: no change
+    }
+
+    [Fact]
+    public void A_reparented_man_is_sent_once_on_the_change_and_not_while_held()
+    {
+        using var h = new Stage();
+        var a = Commander(h, Squad);
+        var b = Commander(h, Squad + 1);
+        var man = h.AddMan(Man);
+        Assign(h, man, a);
+        Assert.Equal(Squad, StatusOf(h.Gather(), Man).UnitId);
+        for (int i = 0; i < 20; i++)
+        {
+            Assert.DoesNotContain(h.Gather().Of<HrotEntityStatus>(), x => x.Id == Man);
+        }
+
+        Assign(h, man, b);
+        Assert.Equal(Squad + 1, StatusOf(h.Gather(), Man).UnitId);
+        Assert.DoesNotContain(h.Gather().Of<HrotEntityStatus>(), x => x.Id == Man);
+    }
+
+    [Fact]
+    public void A_dead_or_unnumbered_commander_is_0_and_the_change_is_sent()
+    {
+        using var h = new Stage();
+        var squad = Commander(h, Squad);
+        var man = h.AddMan(Man);
+        Assign(h, man, squad);
+        Assert.Equal(Squad, StatusOf(h.Gather(), Man).UnitId);
+
+        h.RemoveHrotEntity(squad);   // the commander is gone
+        Assert.Equal(0, StatusOf(h.Gather(), Man).UnitId);
+
+        var ghost = h.World.CreateEntity();   // alive but with no network identity
+        Assign(h, man, ghost);
+        Assert.DoesNotContain(h.Gather().Of<HrotEntityStatus>(), x => x.Id == Man);   // still 0: nothing to send
+        var back = Commander(h, Squad + 2);
+        Assign(h, man, back);
+        Assert.Equal(Squad + 2, StatusOf(h.Gather(), Man).UnitId);
+    }
+
+    /// <summary>A seeded random run of re-parenting and commander deaths: after every gather the client's picture of each man's UnitId equals HROT's commander's network id (0 when none/dead) and a gather of an unchanged world sends nothing.</summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(7)]
+    [InlineData(2026)]
+    public void Seeded_runs_keep_every_mans_unit_id_equal_to_his_commanders_id(int seed)
+    {
+        using var h = new Stage();
+        var random = new Random(seed);
+        var men = Enumerable.Range(0, 6).Select(i => h.AddMan(3000 + i)).ToArray();
+        var commanders = new List<Entity>();
+        int next = 3500;
+        var picture = new Dictionary<int, int>();
+        for (int step = 0; step < 200; step++)
+        {
+            switch (random.Next(5))
+            {
+                case 0:
+                    commanders.Add(Commander(h, next++));
+                    break;
+                case 1 when commanders.Count > 0:
+                    Assign(h, men[random.Next(men.Length)], commanders[random.Next(commanders.Count)]);
+                    break;
+                case 2 when commanders.Count > 0:
+                    int k = random.Next(commanders.Count);
+                    h.RemoveHrotEntity(commanders[k]);
+                    commanders.RemoveAt(k);
+                    break;
+                case 3:
+                    Assign(h, men[random.Next(men.Length)], Entity.Null);
+                    break;
+            }
+
+            var before = new Dictionary<int, int>(picture);
+            foreach (var st in h.Gather().Of<HrotEntityStatus>())
+            {
+                Assert.False(before.TryGetValue(st.Id, out int old) && old == st.UnitId, "a status is sent only when the unit id changed");   // nothing is sent for an unchanged world
+                picture[st.Id] = st.UnitId;
+            }
+
+            foreach (var man in men)
+            {
+                int id = h.World.GetComponentRO<NetworkIdentity>(man).Value;
+                int expected = 0;
+                if (h.World.HasComponent<UnitSubordinate>(man))
+                {
+                    var c = h.World.GetComponentRO<UnitSubordinate>(man).Commander;
+                    expected = !c.IsNull && h.World.IsAlive(c) && h.World.HasComponent<NetworkIdentity>(c) ? h.World.GetComponentRO<NetworkIdentity>(c).Value : 0;
+                }
+
+                Assert.Equal(expected, picture.GetValueOrDefault(id));
+            }
+        }
+    }
+
+    [Fact]
+    public void A_steady_gather_with_commanders_allocates_nothing()
+    {
+        using var h = new Stage();
+        var squad = Commander(h, Squad);
+        for (int i = 0; i < 4; i++)
+        {
+            Assign(h, h.AddMan(2301 + i), squad);
+        }
+
+        var inbound = new InMemoryInbound(new SourceId(99), "test");
+        var status = new EntityStatusGather();
+        var query = h.World.Query().With<NetworkIdentity>().With<TkbIdentity>().Build();
+        void Pass()
+        {
+            foreach (var e in query)
+            {
+                status.Gather(h.World, h.TestTkb, null, e, h.World.GetComponentRO<NetworkIdentity>(e).Value, h.World.GetComponentRO<TkbIdentity>(e).TkbType.Value, inbound);
+            }
+        }
+
+        for (int i = 0; i < 100; i++)
+        {
+            Pass();
+        }
+
+        Thread.Sleep(250);
+        for (int i = 0; i < 100; i++)
+        {
+            Pass();
+        }
+
+        inbound.Drain(new Capture(), int.MaxValue);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 300; i++)
+        {
+            Pass();
+        }
+
+        Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);
+    }
+
+    /// <summary>The id-space check T-068 asks for: through the host and the plugin, the UnitId a man's status carries equals the <c>Entity.Id</c> of the DPS Entity row published for his commander, and that row has IsUnit true.</summary>
+    [Fact]
+    public void Through_the_host_and_the_plugin_the_unit_id_is_the_entity_id_of_a_published_is_unit_row()
+    {
+        var plugin = new CountingDdsPlugin();
+        var entities = new List<(int Id, bool IsUnit)>();
+        var statuses = new List<(int Id, int UnitId)>();
+        plugin.OnBound = t =>
+        {
+            t.EntityTopic.Tap = e => entities.Add((e.EntityId, e.IsUnit));
+            t.EntityStatus.Tap = s => statuses.Add((s.EntityId, s.UnitId));
+        };
+        using var h = new PackHarness(dis: false, plugins: [plugin], configure: c => c.WithSide(Plugin.DdsPlayer.DpsSide.SideKey, new Plugin.DdsPlayer.DpsSettings { Domain = 97, Partition = "t68-unit" }));
+        h.RegisterTemplate(ManType, 3);
+        h.TestTkb.Register(new TkbTemplate("squad", SquadType) { DisType = UnitDis.Land(UnitArm.Infantry, UnitEchelon.Squad, 225) });
+        h.World.SetSingletonManaged<ITkbDatabase>(h.TestTkb);
+        h.World.RegisterComponent<UnitEntity>();
+        h.World.RegisterComponent<UnitSubordinate>();
+        h.Steps(3);
+        var squad = h.AddHrotEntity(Squad, new Vector3(5, 5, 0), "squad", SquadType, ForceId.Friend, 100f);
+        h.World.RemoveComponent<Health>(squad);
+        h.World.AddComponent(squad, new UnitEntity());
+        var man = h.AddHrotEntity(Man, new Vector3(1, 2, 0), "man", ManType, ForceId.Friend, 100f);
+        h.World.AddComponent(man, new UnitSubordinate { Commander = squad });
+        h.Steps(6);
+
+        var row = Assert.Single(entities, e => e.Id == Squad);
+        Assert.True(row.IsUnit);   // the body-less commander IS published as an Entity row with IsUnit true
+        var status = Assert.Single(statuses, x => x.Id == Man);
+        Assert.Equal(row.Id, status.UnitId);   // the same id space
     }
 }

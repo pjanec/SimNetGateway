@@ -94,8 +94,8 @@ public class DpsEntityStatusTests
         Assert.Contains("string<40> Symbol;", topics);
         string status = topics[topics.IndexOf("struct EntityStatus {", StringComparison.Ordinal)..];
         status = status[..status.IndexOf("};", StringComparison.Ordinal)];
-        // T-063: Behaviour and Task are the LAST two members (appended: an older reader of the appendable type still reads the rest)
-        Assert.EndsWith("MindBand;\n                string<32> Behaviour;\n                string<32> Task;\n            ", status.Replace("\r\n", "\n"));
+        // T-063 / T-068: Behaviour, Task and UnitId are the LAST three members (appended: an older reader of the appendable type still reads the rest)
+        Assert.EndsWith("MindBand;\n                string<32> Behaviour;\n                string<32> Task;\n                int32 UnitId;\n            ", status.Replace("\r\n", "\n"));
         Assert.Contains("enum MindBand {", types);
     }
 }

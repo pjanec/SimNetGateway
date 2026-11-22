@@ -632,10 +632,10 @@ public enum HrotMindBand : byte { None = 0, Calm, Nervous, Broken, Fear }
 /// What a client draws an entity's card from (DD-025), computed by HROT's own rules and sent when a value changes: <paramref name="Symbol"/> the unit's symbol in wire form
 /// ("" = not a unit), <paramref name="HealthCurrent"/> and <paramref name="HealthMax"/> HROT's health pair (<c>HealthMax</c> 0 = no health; no fraction), the men
 /// <paramref name="StrengthPresent"/> of <paramref name="StrengthAuthorized"/> of a unit (<c>StrengthAuthorized</c> 0 = not known), <paramref name="AmmoShare"/> 0..1 (-1 = not known),
-/// the mind-state bar's <paramref name="MindFill"/> 0..1, its breaking point <paramref name="MindBreak"/> (negative = none) and <paramref name="MindBand"/>, the name of the behaviour it runs now <paramref name="Behaviour"/> and of the task it is ordered to do <paramref name="Task"/> ("" = none or not known). Sent for the entities HROT would give a card.
+/// the mind-state bar's <paramref name="MindFill"/> 0..1, its breaking point <paramref name="MindBreak"/> (negative = none) and <paramref name="MindBand"/>, the name of the behaviour it runs now <paramref name="Behaviour"/> and of the task it is ordered to do <paramref name="Task"/> ("" = none or not known), the commander unit he belongs to <paramref name="UnitId"/> (its network id; 0 = none, dead or unnumbered). Sent for the entities HROT would give a card.
 /// </summary>
 public readonly record struct HrotEntityStatus(
-    int Id, string Symbol, float HealthCurrent, float HealthMax, int StrengthPresent, int StrengthAuthorized, float AmmoShare, float MindFill, float MindBreak, HrotMindBand MindBand, string Behaviour = "", string Task = "") : IHrotToGatewayMessage;
+    int Id, string Symbol, float HealthCurrent, float HealthMax, int StrengthPresent, int StrengthAuthorized, float AmmoShare, float MindFill, float MindBreak, HrotMindBand MindBand, string Behaviour = "", string Task = "", int UnitId = 0) : IHrotToGatewayMessage;
 
 /// <summary>The entity <see cref="Id"/> no longer has a card (it is not on the map any more); its status is withdrawn. An entity that leaves altogether is <see cref="HrotEntityRemoved"/>.</summary>
 public readonly record struct HrotEntityStatusRemoved(int Id) : IHrotToGatewayMessage;
