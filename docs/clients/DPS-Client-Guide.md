@@ -185,6 +185,30 @@ Colours are 0xRRGGBBAA, as everywhere.
 
 **Limits.** A frame holds at most 4096 primitives; a card is about 6 to 10 primitives (an estimate), so one layer carries roughly 400 to 600 cards. Beyond that the gateway keeps the first 4096 (cards of 8 000 units at once have not been measured, see DD-024 §9).
 
+## Entity status: the data to draw your own cards (DD-025)
+
+A client may draw an entity's card from DATA instead of subscribing to the card layers above: the gateway sends the values HROT's own rules compute and the client keeps the layout. The `EntityStatus` topic is optional and costs nothing when not read. The design is [DD-025](https://github.com/pjanec/SimNetGateway/blob/main/docs/design/DD-025-Dps-Entity-Status.md). The card gizmos stay available (DD-024); a client uses one source for a card, never both.
+
+**The topic.** `EntityStatus` is keyed by `EntityId`, Discrete, reliable, `TransientLocal` with keep-last 1, written once on the world partition (`<base>-*`) like `Entity`, so every seat gets it and a late joiner gets the last values at once. There is one instance for every entity HROT would give a card (HROT's `Seeable.OnMap`): not for a round, an effect, a cloud, a minefield, a camera or a rule (objective, trigger). It is disposed with the entity, and also when the entity stops having a card.
+
+| Field | Meaning | None-value |
+| --- | --- | --- |
+| `Symbol` (string, at most 40) | the unit's NATO symbol in its side's frame: a 2525C SIDC, then optionally `\|` and HROT's extension (the part after the first `\|` may be ignored); the same text as the card's `Icon`. Only for a unit (a body-less commander) | empty = not a unit |
+| `HealthCurrent`, `HealthMax` | HROT's health pool and its maximum. **No fraction is sent: derive `clamp(Current / Max, 0, 1)` yourself.** HROT's bar is green from 66 %, yellow from 33 %, else red | `HealthMax` 0 = no health |
+| `StrengthPresent`, `StrengthAuthorized` | a unit's men present and authorized (HROT's `UnitCardFacts.Strength`; a stochastic unit's slots included). HROT draws the bar as `Present / Authorized` with ticks at 70 % and 90 % | `StrengthAuthorized` 0 = not known: draw no strength bar |
+| `AmmoShare` | 0..1, the share of its rounds a unit still carries (HROT: green from 50 %, amber from 25 %, else red) | -1 = not known |
+| `MindFill`, `MindBreak`, `MindBand` | a living man's mind-state bar: the fill 0..1 (stress for a soldier, fear for a civilian), the mark of his breaking point on it (a soldier only) and the band to draw it in: Calm (slate blue), Nervous (amber), Broken (red, with the word BROKEN under it), Fear (amber-orange) | `MindBand` None = draw no bar (a calm man, a unit, a vehicle, a dead man); `MindBreak` negative = no mark |
+
+**On change.** A sample is written when an entity first has a card and then only when a value changed: the float fields (health, ammunition share, mind fill and mark) by at least 0.01 against the LAST SENT value, the integers and the symbol exactly. A calm entity sends nothing, and there is no heartbeat: the last sample is the current one. The commander flag is `Entity.IsUnit` (not repeated here).
+
+**What a client does with it.**
+1. Join `EntityStatus` with `Entity` by `EntityId`. A status whose `Entity` has not arrived yet waits for it.
+2. **The card modes** (the client's own switch, the same three as HROT's layers): mode 1 = no cards; mode 2 = the cards of entities with `Entity.IsUnit` only (symbol, strength bar, ammunition bar); mode 3 = mode 2 plus the cards of every other entity with a status (health bar, mind bar, name from `Entity.Name`).
+3. **Rule A (R-143): never cut the card of an anchor whose `Entity.Domain` is `DomainAir`**, at any distance. Distance is otherwise the client's choice (HROT's suggestion: frame and bars up to 1 m/px, the name up to 2 m/px).
+4. The look of a card is yours; HROT's own layout is the reference.
+
+**Not in this topic yet:** what the unit is doing (its behaviour and task). They live in HROT's presentation assembly, which the gateway cannot read without a second copy of the rule; they will be appended once HROT moves a current-behaviour reader into its common layer (DD-025 D-5).
+
 ## Camera controllers to build
 
 Build three cameras that behave exactly like HROT's. Two of them, the follow camera and the player's camera, are one rig with a distance continuum: far away it orbits the unit, close in it is over the shoulder, at zero it is the eyes, and a little past zero it is ahead of the eyes. The design and its decisions are [DESIGN\_Unit\_Camera.md](https://github.com/pjanec/HROT/blob/coordinator/docs/DESIGN_Unit_Camera.md) (§4 the continuum, §5 control over the shoulder, §8 as-built). The numbers are in [UnitCameraRig.cs](https://github.com/pjanec/HROT/blob/coordinator/Hrot/Engine/Hrot.Presentation/Map3D/UnitCameraRig.cs), a pure static class that ports directly.
@@ -471,7 +495,7 @@ Every topic belongs to one rate class, stated on its C# type by the `[DpsRate]` 
 | Class | Changes | Topics | What a client does |
 | --- | --- | --- | --- |
 | Fixed | once per instance or type | `Entity`, `Appearance`, `TkbType`, `MunitionLook`, `Mover` | Cache; never expect a re-send unless the thing itself changed |
-| Discrete | on events | `Session`, `PersonState`, `VehicleLook`, `Animal`, `Round`, `Status`, `Exercise`, `BuildingDamage`, `FireSpots`, `GroundMarks`, `OwnUnit`, `PlayerSlot`, `TrafficLights`, `View`, `JoinRequest`, `Leave`, `GizmoView` | No continuous field: a value that moves over time is a start time + target + duration; animate it yourself |
+| Discrete | on events | `Session`, `EntityStatus`, `PersonState`, `VehicleLook`, `Animal`, `Round`, `Status`, `Exercise`, `BuildingDamage`, `FireSpots`, `GroundMarks`, `OwnUnit`, `PlayerSlot`, `TrafficLights`, `View`, `JoinRequest`, `Leave`, `GizmoView` | No continuous field: a value that moves over time is a start time + target + duration; animate it yourself |
 | Continuous | by threshold plus a heartbeat | `EntityState`, `Articulation`, `PersonAim`, `MoverTracks`, `FlameJet`, `ControlFrame`, `GizmoFrame` | Small samples; extrapolate between them |
 | Event | as they happen | `Fire`, `Detonation`, `Effect`, `Impact`, `ManDowned`, `PlayerMessage` | A reader keeps up to 1024 samples |
 

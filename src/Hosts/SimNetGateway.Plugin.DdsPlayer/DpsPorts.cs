@@ -14,6 +14,7 @@ internal sealed class DpsPorts
         Session = b.RequireOutbound<DpsItem<Session>>("dps.Session");
         Entity = b.RequireOutbound<DpsItem<Entity>>("dps.Entity");
         EntityState = b.RequireOutbound<DpsItem<EntityState>>("dps.EntityState");
+        EntityStatus = b.RequireOutbound<DpsItem<EntityStatus>>("dps.EntityStatus");
         Articulation = b.RequireOutbound<DpsItem<Articulation>>("dps.Articulation");
         PersonState = b.RequireOutbound<DpsItem<PersonState>>("dps.PersonState");
         PersonAim = b.RequireOutbound<DpsItem<PersonAim>>("dps.PersonAim");
@@ -48,6 +49,8 @@ internal sealed class DpsPorts
     public IOutboundChannel<DpsItem<Entity>> Entity { get; }
 
     public IOutboundChannel<DpsItem<EntityState>> EntityState { get; }
+
+    public IOutboundChannel<DpsItem<EntityStatus>> EntityStatus { get; }
 
     public IOutboundChannel<DpsItem<Articulation>> Articulation { get; }
 
@@ -112,6 +115,7 @@ internal sealed class DpsPorts
         b.BindOutbound<DpsItem<Session>>("dps.Session", t.Session);
         b.BindOutbound<DpsItem<Entity>>("dps.Entity", t.EntityTopic);
         b.BindOutbound<DpsItem<EntityState>>("dps.EntityState", t.EntityState);
+        b.BindOutbound<DpsItem<EntityStatus>>("dps.EntityStatus", t.EntityStatus);
         b.BindOutbound<DpsItem<Articulation>>("dps.Articulation", t.Articulation);
         b.BindOutbound<DpsItem<PersonState>>("dps.PersonState", t.PersonState);
         b.BindOutbound<DpsItem<PersonAim>>("dps.PersonAim", t.PersonAim);

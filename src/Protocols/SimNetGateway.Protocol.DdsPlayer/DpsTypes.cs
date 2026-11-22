@@ -180,6 +180,9 @@ public enum ViewSource : byte { ViewSourceNone = 0, ViewSourceDirector, ViewSour
 /// <summary>How the suggested camera sits: Free (no binding), Orbit (around a target), Eyes, Shoulder, Chase, Fixed (a scripted camera key); Unknown = a mode this contract does not name.</summary>
 public enum ViewMode : byte { ViewModeUnknown = 0, ViewModeFree, ViewModeOrbit, ViewModeEyes, ViewModeShoulder, ViewModeChase, ViewModeFixed }
 
+/// <summary>The band of a man's mind-state bar (<see cref="EntityStatus.MindBand"/>): Calm, Nervous and Broken for a soldier (by his stress against his breaking point), Fear for a civilian; None = nothing to show.</summary>
+public enum MindBand : byte { MindBandNone = 0, MindBandCalm, MindBandNervous, MindBandBroken, MindBandFear }
+
 /// <summary>What a round did to a surface of the static world (the producer's impact kind): it Entered a piece it passes through, Left it, or Stopped on it.</summary>
 public enum ImpactKind : byte { ImpactKindUnknown = 0, ImpactKindEntered, ImpactKindLeft, ImpactKindStopped }
 

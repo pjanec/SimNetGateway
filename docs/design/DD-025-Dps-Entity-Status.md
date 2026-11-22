@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | approved rev 1 (R-146) |
+| **Status** | approved rev 1 (R-146); built (T-062, section 9) |
 | **Tasks** | T-062 |
 | **Rulings honoured** | R-146, R-133 (append-only), R-135 (rate classes, producer-neutral), R-140 (world topics once on `<base>-*`), R-143 / R-144 (labels: the client's look), HROT 2026-09-05 *"no precalculated percentages"* |
 | **Related** | DD-024 (cards as gizmos — stays, optional: the client no longer subscribes by default); the Unreal note `NOTE_UnrealIg_To_Ui_Entity_Status.md` (HROT `unreal-ig` `2a8e52f1d`) asking for it |
@@ -46,7 +46,7 @@ own cards use; the gateway only quantises and sends on change.
   | `MindFill`, `MindBreak` (float), `MindBand` (enum None, Calm, Nervous, Broken, Fear) | `MindStateBar.Of` (stress for a soldier, fear for a civilian; the break tick) | `MindBand` None |
 
   The commander flag is `Entity.IsUnit` (T-052) — not repeated.
-- D-3 **Which entities:** those HROT would give a card — the gateway's entity set filtered by HROT's `Seeable.OnMap` (Hrot.Common); none for
+- D-3 **Which entities** *(as built: exactly `Seeable.OnMap`; "a seated man" below is not excluded by it, section 9 item 1)*: those HROT would give a card — the gateway's entity set filtered by HROT's `Seeable.OnMap` (Hrot.Common); none for
   rounds, effects, a seated man; animals by the same rule.
 - D-4 **On change, quantised:** floats compared at a step of 0.01 (health and fill), ints exactly, strings exactly; one sample per changed
   entity per gather; 0 B per steady gather (HOT path).
@@ -72,11 +72,13 @@ classDiagram
         +MindBand MindBand
     }
     class MindBand { <<enum, new>> None Calm Nervous Broken Fear }
-    class StatusGather { <<host, new>> +Gather(world) kept last values, quantised compare }
+    class EntityStatusGather { <<host, new>> +Gather(world, tkb, entity) kept last values, quantised compare }
     class HrotEntityStatus { <<pivot, new>> }
+    class HrotEntityStatusRemoved { <<pivot, new, as built>> }
     class DpsStatusOutbound { <<plugin, new>> world participant writer }
-    StatusGather ..> HrotEntityStatus : sends on change
-    DpsStatusOutbound ..> EntityStatus : writes
+    EntityStatusGather ..> HrotEntityStatus : sends on change
+    EntityStatusGather ..> HrotEntityStatusRemoved : a card lost
+    DpsStatusOutbound ..> EntityStatus : writes and disposes
     EntityStatus --> MindBand
 ```
 
@@ -85,7 +87,7 @@ classDiagram
 ```mermaid
 sequenceDiagram
     participant W as HROT world
-    participant G as StatusGather
+    participant G as EntityStatusGather
     participant O as DpsStatusOutbound
     participant C as Client
     W->>G: each gather - entities with a card
@@ -119,4 +121,16 @@ All approved with the design (R-146). D-5's later round needs a HROT item first.
 
 ## 9. As-built notes
 
-Not built.
+Built as T-062. The class and sequence diagrams above hold as built (the gather is `EntityStatusGather`; a second pivot message was added, item 6 below). Tests: `EntityStatusGatherTests` (HrotHost.Tests: each field against HROT's own functions, which entities, on change, 0 B, and the whole chain through the plugin), `DpsEntityStatusTests` (Plugin.DdsPlayer.Tests: the mapping, once on the world participant with 2 seats, a late client, disposal), `DpsEntityStatusTests` (Protocol.DdsPlayer.Tests: the contract and the IDL) and the seeded barrier rail of `DpsRenderTests`, which now writes `EntityStatus` among the counted world topics (`DpsTransport` holds it as a keyed topic; `FakeRenderClient` counts it). Client guide: "Entity status" in `DPS-Client-Guide.md`; the reference client keeps the topic in `DpsWorld.EntityStatuses`.
+
+Where the build is exact about what the design left open (none contradicts a decision):
+
+1. **Which entities (D-3):** the filter is `Seeable.OnMap` and nothing else. The design's "a seated man" is not excluded by HROT's rule (a man in a vehicle seat has a card in HROT), so he gets a status; the sentence in D-3 was prose, the measured rule is `Seeable.OnMap` (it excludes a round, a cloud, a minefield and its records, an air arena, the map camera, a rule entity and a macro instance that expanded into nothing seeable).
+2. **What "a unit" is (D-2):** an entity with HROT's `UnitEntity`, the projector filter of HROT's `UnitCardGizmo` and `UnitSymbolCardGizmo`. `Symbol`, `StrengthPresent` / `StrengthAuthorized` and `AmmoShare` are read for units only (a man would read as 1 of 1 men: HROT never draws that). `Symbol` is `UnitSymbolDeriver.TryOfType` for the entity's TKB type, from the host's template database (not the world singleton), in the side of `EntityInfo.ForceId`, written in wire form by `SymbolCode.Format`; made once per type and side, so a steady gather allocates nothing. A reload of the template database clears the cache.
+3. **Mind state (D-2):** read for a living person only (`PhysicsColliderReaders.IsPerson`, not `CombatLife.IsDestroyed`): HROT's `MindStateGizmo` draws it for nobody else. A band None is sent as fill 0, mark -1.
+4. **None-values:** a health pool whose maximum is not positive or not finite is `HealthCurrent` 0, `HealthMax` 0 (HROT's bar draws nothing for it); an unknown ammunition share is -1; a non-finite value is its none-value (the plugin enforces it too).
+5. **On change (D-4):** every float field is compared at the step 0.01 against the LAST SENT value (health, ammunition share, mind fill and mark), so a slow drift is sent once it adds up to a step; ints and the symbol exactly.
+6. **A second pivot message, `HrotEntityStatusRemoved`:** an entity that stays but stops having a card (it became a rule's or a cloud's entity, or a macro instance that now has no seeable member) is withdrawn once (the instance is disposed); an entity that leaves is disposed through `HrotEntityRemoved` as the sequence shows. Not in the design's sequence; added because "disposed with the entity" alone would leave a stale card.
+7. **The topic is a new module, `DpsStatusOutbound`,** registered by `DpsSide` (now nine modules); the DIS side ignores both messages (`HrotIgnoredIngress`). The protocol minor stays 0 (a new topic, an appended enum; the IDL gained lines only).
+
+Mutations (the four of section 7, each made, the touched tests run red, restored): a fraction sent instead of the pair (6 of the 12 gather tests); the status written once per seat (the 2-seat test); the quantise step 0 (5 tests, among them the 0 B rail and the half-step one); an entity with no card given a status (the no-card test).

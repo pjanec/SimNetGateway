@@ -274,6 +274,7 @@ public sealed class DpsTransport : IDisposable
                 }
             }, hold: Hold<Entity>(DpsCountKind.Keyed, key: e => e.EntityId)));
             EntityState = Add(new DpsChannel<EntityState>(_participant, hold: Hold<EntityState>(DpsCountKind.Keyed, key: e => e.EntityId)));
+            EntityStatus = Add(new DpsChannel<EntityStatus>(_participant, hold: Hold<EntityStatus>(DpsCountKind.Keyed, key: e => e.EntityId)));
             Articulation = Add(new DpsChannel<Articulation>(_participant, hold: Hold<Articulation>(DpsCountKind.Keyed, key: a => ((long)a.EntityId << 32) | (uint)a.PartId)));
             PersonState = Add(new DpsChannel<PersonState>(_participant, hold: Hold<PersonState>(DpsCountKind.Keyed, key: e => e.EntityId)));
             PersonAim = Add(new DpsChannel<PersonAim>(_participant, hold: Hold<PersonAim>(DpsCountKind.Keyed, key: e => e.EntityId)));
@@ -373,6 +374,8 @@ public sealed class DpsTransport : IDisposable
     internal DpsChannel<Entity> EntityTopic { get; } = null!;
 
     internal DpsChannel<EntityState> EntityState { get; } = null!;
+
+    internal DpsChannel<EntityStatus> EntityStatus { get; } = null!;
 
     internal DpsChannel<Articulation> Articulation { get; } = null!;
 

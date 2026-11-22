@@ -214,6 +214,9 @@ public sealed class DpsWorld : IDisposable
 
     public Dictionary<int, D.Animal> Animals { get; } = new();
 
+    /// <summary>What an entity's own card is drawn from (symbol, health, strength, ammunition, mind state) by entity id (DD-025).</summary>
+    public Dictionary<int, D.EntityStatus> EntityStatuses { get; } = new();
+
     /// <summary>The TKB type records by type id.</summary>
     public Dictionary<long, D.TkbType> TkbTypes { get; } = new();
 
@@ -269,6 +272,7 @@ public sealed class DpsWorld : IDisposable
         Keep(DpsProtocol.FireSpots, FireSpots, (D.FireSpots s) => s.EntityId);
         Keep(DpsProtocol.GroundMarks, GroundMarks, (D.GroundMarks m) => m.EntityId);
         Keep(DpsProtocol.Animal, Animals, (D.Animal a) => a.EntityId);
+        Keep(DpsProtocol.EntityStatus, EntityStatuses, (D.EntityStatus s) => s.EntityId);
         Keep(DpsProtocol.TkbType, TkbTypes, (D.TkbType t) => t.TypeId);
         Keep(DpsProtocol.BuildingDamage, BuildingDamage, (D.BuildingDamage b) => b.Building ?? string.Empty);
         Keep(DpsProtocol.Status, Statuses, (D.Status s) => s.StatusId);

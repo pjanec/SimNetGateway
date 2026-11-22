@@ -538,6 +538,34 @@ public partial struct BuildingDamage
     [DdsBound(256)] public List<WindowDamage> Windows;
 }
 
+/// <summary>
+/// What a client needs to draw an entity's own card (DD-025): its unit symbol, health, strength, ammunition and mind state, as the simulation's own rules give them, so
+/// the client keeps the layout and the simulation keeps the meaning. One instance per entity that has a card (not for a round, an effect or a rule), written once on the
+/// world partition and sent again only when a value changes by more than a small step (0.01 for the float fields); disposed with the entity. A value the simulation does
+/// not have is its none-value: Symbol empty (not a unit), HealthMax 0, StrengthAuthorized 0, AmmoShare -1, MindBand None. A fraction is derived by the client from the pair.
+/// What the unit is doing (its behaviour and task) is not in this topic yet.
+/// </summary>
+[DpsRate(DpsRateClass.Discrete)]
+[DdsTopic(DpsProtocol.EntityStatus)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+[DdsManaged]
+public partial struct EntityStatus
+{
+    [DdsKey] public int EntityId;
+    /// <summary>The unit's NATO symbol in its side's frame: a 2525C symbol id, then, after a '|', the simulation's extension (a role mark, a mobility mark); empty = the entity is not a unit.</summary>
+    [MaxLength(40)] public string Symbol;
+    /// <summary>The health pool now and at full; HealthMax 0 = the entity has no health. No fraction is sent.</summary>
+    public float HealthCurrent, HealthMax;
+    /// <summary>A unit's men present and authorized (the simulation's own strength reading); StrengthAuthorized 0 = not known (no strength bar).</summary>
+    public int StrengthPresent, StrengthAuthorized;
+    /// <summary>The share 0..1 of its rounds a unit still carries; -1 = not known.</summary>
+    public float AmmoShare;
+    /// <summary>A man's mind-state bar: its fill 0..1 (stress for a soldier, fear for a civilian) and the breaking point's mark on it (negative = none).</summary>
+    public float MindFill, MindBreak;
+    /// <summary>The band the bar is drawn in; None = nothing to show (a calm man, a unit, a vehicle).</summary>
+    public MindBand MindBand;
+}
+
 #endregion
 
 #region Events (gateway to client)

@@ -371,6 +371,21 @@ module SimNetGateway {
 
             @topic
             @appendable
+            struct EntityStatus {
+                @key int32 EntityId;
+                string<40> Symbol;
+                float HealthCurrent;
+                float HealthMax;
+                int32 StrengthPresent;
+                int32 StrengthAuthorized;
+                float AmmoShare;
+                float MindFill;
+                float MindBreak;
+                SimNetGateway::Protocol::DdsPlayer::MindBand MindBand;
+            };
+
+            @topic
+            @appendable
             struct Fire {
                 double SimTime;
                 int32 ShooterId;

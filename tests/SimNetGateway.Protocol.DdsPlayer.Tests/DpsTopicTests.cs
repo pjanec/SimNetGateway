@@ -568,7 +568,7 @@ public class DpsTopicTests
             var type = topic["DPS_".Length..];
             Assert.Contains($"struct {type} ", idl);
         }
-        Assert.Equal(46, DpsProtocol.AllTopics.Count);
+        Assert.Equal(47, DpsProtocol.AllTopics.Count);
         foreach (var name in new[] { "Mover", "MoverTracks", "TrafficLights" })
         {
             Assert.Contains("DPS_" + name, DpsProtocol.AllTopics);

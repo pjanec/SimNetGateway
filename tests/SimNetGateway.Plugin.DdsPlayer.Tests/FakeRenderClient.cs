@@ -100,6 +100,7 @@ internal sealed class FakeRenderClient : IDisposable
         Keyless<D.Session>();
         Keyed<D.Entity>(e => e.EntityId);
         Keyed<D.EntityState>(e => e.EntityId);
+        Keyed<D.EntityStatus>(e => e.EntityId);
         Keyed<D.Articulation>(a => ((long)a.EntityId << 32) | (uint)a.PartId);
         Keyed<D.PersonState>(e => e.EntityId);
         Keyed<D.PersonAim>(e => e.EntityId);

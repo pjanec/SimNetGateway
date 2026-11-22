@@ -52,6 +52,7 @@ public sealed class EcsHrotAdapter
     private readonly Dictionary<int, DisReplica> _replicas = new();
     private readonly Dictionary<int, Sent> _sent = new();
     private readonly PersonDetailGather _details = new();
+    private readonly EntityStatusGather _status = new();
     private readonly EffectGather _effects = new();
     private readonly AppearanceGather _appearances = new();
     private readonly VehicleLookGather _vehicleLooks = new();
@@ -237,6 +238,9 @@ public sealed class EcsHrotAdapter
             {
                 inbound.Enqueue(in look);
             }
+
+            // what the client draws the entity's card from (DD-025), after the state, for the entities HROT would give a card
+            _status.Gather(world, tkb, e, id, state.TkbType, inbound);
         }
 
         _scratch.Clear();
@@ -257,6 +261,7 @@ public sealed class EcsHrotAdapter
             _animals.Forget(id);
             _banks.Forget(id);
             _vehicleLooks.Forget(id);
+            _status.Forget(id);
             inbound.Enqueue(new HrotEntityRemoved(id));
             Counters.RemovalsSent++;
         }
@@ -881,6 +886,7 @@ public sealed class EcsHrotAdapter
         _replicas.Clear();
         _sent.Clear();
         _details.Clear();
+        _status.Clear();
         _appearances.Clear();
         _vehicleLooks.Clear();
         _rounds.Clear();

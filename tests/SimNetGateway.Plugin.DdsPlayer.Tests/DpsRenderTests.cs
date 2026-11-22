@@ -213,7 +213,7 @@ public class DpsRenderTests
         int ops = rnd.Next(1, 14);
         for (int i = 0; i < ops; i++)
         {
-            switch (rnd.Next(11))
+            switch (rnd.Next(12))
             {
                 case 0:
                 case 1:
@@ -271,6 +271,9 @@ public class DpsRenderTests
                     break;
                 case 9:
                     t.Exercise.Send(new DpsItem<D.Exercise>(new D.Exercise { Reason = string.Empty }));
+                    break;
+                case 10:
+                    t.EntityStatus.Send(new DpsItem<D.EntityStatus>(new D.EntityStatus { EntityId = rnd.Next(1, 25), Symbol = string.Empty, HealthCurrent = (float)rnd.NextDouble(), HealthMax = 1f }));
                     break;
                 default:
                     if (rnd.Next(2) == 0)

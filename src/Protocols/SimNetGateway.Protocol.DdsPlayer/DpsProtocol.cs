@@ -12,6 +12,7 @@ public static class DpsProtocol
     public const string Session = "DPS_Session";
     public const string Entity = "DPS_Entity";
     public const string EntityState = "DPS_EntityState";
+    public const string EntityStatus = "DPS_EntityStatus";
     public const string Articulation = "DPS_Articulation";
     public const string PersonState = "DPS_PersonState";
     public const string PersonAim = "DPS_PersonAim";
@@ -59,7 +60,7 @@ public static class DpsProtocol
     /// <summary>Every topic name, in the order of DD-017 section 4.</summary>
     public static readonly IReadOnlyList<string> AllTopics =
     [
-        Session, Entity, EntityState, Articulation, PersonState, PersonAim, Appearance, Fire, Detonation, Effect, Impact, VehicleLook,
+        Session, Entity, EntityState, EntityStatus, Articulation, PersonState, PersonAim, Appearance, Fire, Detonation, Effect, Impact, VehicleLook,
         Round, MunitionLook, FlameJet, FireSpots, GroundMarks,
         Animal, TkbType, BuildingDamage, Mover, MoverTracks, TrafficLights,
         ManDowned, PlayerMessage, Status, Exercise, View,

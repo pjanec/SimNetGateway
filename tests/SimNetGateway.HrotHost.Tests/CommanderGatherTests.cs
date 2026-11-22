@@ -45,10 +45,11 @@ public class CommanderGatherTests
 
         var messages = Gather(h, 1.0);
 
-        Assert.All(messages, m => Assert.True(m is HrotEntityState or HrotTypeRecord, "no person, appearance, vehicle look or animal for a commander, found " + m.GetType().Name));   // the state and the type's record only
+        Assert.All(messages, m => Assert.True(m is HrotEntityState or HrotTypeRecord or HrotEntityStatus, "no person, appearance, vehicle look or animal for a commander, found " + m.GetType().Name));   // the state, the type's record and its card status (DD-025) only
         var state = Assert.Single(messages.OfType<HrotEntityState>());
         Assert.Equal(2001, state.Id);
         Assert.Equal(UnitKind, DisTypeCode.Unpack(state.DisType).Kind);
         Assert.Equal(new HrotVec3(12, 34, 5), state.Position);   // the unit's own SimTransform: its owner places it at its live members' centroid
+        Assert.NotEqual(string.Empty, Assert.Single(messages.OfType<HrotEntityStatus>()).Symbol);   // its card has the unit's symbol (DD-025)
     }
 }

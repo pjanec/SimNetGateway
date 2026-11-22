@@ -16,7 +16,7 @@ public class ContractTests
     {
         string[] expected =
             [
-                "HrotAnimal", "HrotBuildingDamage", "HrotClockAnchor", "HrotDetonation", "HrotEffect", "HrotEntityRemoved", "HrotEntityState", "HrotExercise", "HrotFire", "HrotFireSpots", "HrotFlameJet", "HrotFlameJetRemoved",
+                "HrotAnimal", "HrotBuildingDamage", "HrotClockAnchor", "HrotDetonation", "HrotEffect", "HrotEntityRemoved", "HrotEntityState", "HrotEntityStatus", "HrotEntityStatusRemoved", "HrotExercise", "HrotFire", "HrotFireSpots", "HrotFlameJet", "HrotFlameJetRemoved",
                 "HrotGroundMarks", "HrotImpact", "HrotManDowned", "HrotMover", "HrotMoverRemoved", "HrotMoverTracks", "HrotMunitionLook", "HrotOrigin", "HrotPersonAppearance", "HrotPersonDetail", "HrotPlayerMessage", "HrotRound", "HrotSession",
                 "HrotStatus", "HrotStatusRemoved", "HrotStep", "HrotTerrain", "HrotTrafficLight", "HrotTrafficLightRemoved", "HrotTurretPose", "HrotTypeRecord", "HrotVehicleLook", "HrotView",
             ];
