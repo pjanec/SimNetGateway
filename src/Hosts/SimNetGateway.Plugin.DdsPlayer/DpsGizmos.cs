@@ -27,6 +27,17 @@ internal sealed class DpsGizmos : IDisposable
     private readonly HashSet<string> _published = new(StringComparer.Ordinal);
     private readonly HashSet<string> _truncated = new(StringComparer.Ordinal);
     private readonly DpsGizmoFrames _frameBuilder = new();
+    private readonly double _heartbeatSeconds;
+    private readonly Dictionary<string, Sent> _sent = new(StringComparer.Ordinal);
+
+    /// <summary>What a layer last wrote: its content hash and when (T-061, R-145: a layer is written only when its content changed, plus a heartbeat).</summary>
+    private struct Sent
+    {
+        public ulong Hash;
+        public double At;
+    }
+
+    private static double Now => System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
 
     /// <summary>The most primitives one <c>GizmoFrame</c> holds (the topic's <c>DdsBound</c>).</summary>
     internal const int MaxPrimitives = 4096;
@@ -42,6 +53,7 @@ internal sealed class DpsGizmos : IDisposable
         _frames = frames;
         _producer = partition.Length > 64 ? partition[..64] : partition;
         _log = log;
+        _heartbeatSeconds = settings.HeartbeatSeconds;
         _reader = new DdsReader<D.GizmoView>(participant, null, new DdsReaderOptions { LivelinessLeaseDuration = TimeSpan.FromSeconds(settings.LeaseSeconds) }, null);
         _reader.LivelinessChanged += (_, st) => _liveliness.Enqueue(new Liveliness(st.LastPublicationHandle, st.AliveCountChange, st.NotAliveCountChange, st.AliveCount));
     }
@@ -118,6 +130,7 @@ internal sealed class DpsGizmos : IDisposable
         {
             var request = ToRequest(in wanted);
             _source.SetView(request);
+            _sent.Clear();   // a new view says everything again
             DisposeUnwanted(request.Layers);
         }
 
@@ -131,6 +144,15 @@ internal sealed class DpsGizmos : IDisposable
         {
             var frame = frames[i];
             _published.Add(frame.Layer);
+            int fit = Fit(frame.Primitives);
+            ulong hash = DpsGizmoFrames.ContentHash(frame, fit);
+            double now = Now;
+            if (_sent.TryGetValue(frame.Layer, out var last) && last.Hash == hash && now - last.At < _heartbeatSeconds)
+            {
+                continue;   // calm: the last sample (TransientLocal, keep-last 1) already says it; the heartbeat repeats it
+            }
+
+            _sent[frame.Layer] = new Sent { Hash = hash, At = now };
             _frames.Send(new DpsItem<D.GizmoFrame>(ToFrame(frame)));
         }
     }
@@ -152,6 +174,7 @@ internal sealed class DpsGizmos : IDisposable
             {
                 _frames.Send(new DpsItem<D.GizmoFrame>(new D.GizmoFrame { Producer = _producer, Layer = layer, Primitives = [] }, true));
                 _published.Remove(layer);
+                _sent.Remove(layer);
             }
         }
     }

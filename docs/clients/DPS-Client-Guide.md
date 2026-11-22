@@ -181,6 +181,8 @@ Colours are 0xRRGGBBAA, as everywhere.
 
 **Views are per seat** (DD-023): each seat's client has its own `GizmoView` and receives its own `GizmoFrame` instances, so a second display that needs other layers takes a seat.
 
+**A calm layer arrives only at the heartbeat** (T-061, R-145): the gateway writes a layer's `GizmoFrame` only when its content changed since its last write, plus a repeat every `dps.heartbeatSeconds` (default 5 s), and a new `GizmoView` makes it say every layer again. The topic is `TransientLocal` with keep-last 1, so the LAST sample persists: keep drawing the layer from it until a newer sample or a dispose arrives, and do not read a quiet layer as an empty one. Today every layer is written on the seat's own partition; the shared layers (one frame on the world partition for every seat, DD-024 T-061 part 1) are not built yet, so a client must keep reading `GizmoFrame` on its seat's partition.
+
 **Limits.** A frame holds at most 4096 primitives; a card is about 6 to 10 primitives (an estimate), so one layer carries roughly 400 to 600 cards. Beyond that the gateway keeps the first 4096 (cards of 8 000 units at once have not been measured, see DD-024 §9).
 
 ## Camera controllers to build

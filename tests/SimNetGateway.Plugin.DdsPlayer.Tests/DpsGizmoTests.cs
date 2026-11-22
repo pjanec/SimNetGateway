@@ -258,6 +258,84 @@ public class DpsGizmoTests
         Assert.Equal(4096, DpsGizmos.Fit(world));
     }
 
+    /// <summary>
+    /// T-061 (R-145 D): a layer is written only when its content changed, plus a heartbeat. A steady layer writes nothing between heartbeats, a change writes once, the heartbeat repeats it,
+    /// and a new view says everything again. Mutations: the change check always true (a write every frame); no heartbeat (a calm layer never repeats); the hash blind to the text (a change is missed).
+    /// </summary>
+    [Fact]
+    public void A_steady_layer_writes_nothing_between_heartbeats_and_a_change_writes_once()
+    {
+        uint domain = Watch.NewDomain();
+        var source = new StableGizmos { Frames = [Cards("UnitCards", 3, 100)] };
+        using var frames = new Watch.Watch<D.GizmoFrame>(domain, "station-1", Key);
+        using var rig = new Rig(domain, gizmoSource: source, heartbeatSeconds: 3.0);
+        using var client = new Client(domain);
+        client.View(["UnitCards"], rateHz: 10f);
+        Assert.True(frames.Until(w => { rig.Step(); return w.Events.Count >= 1; }));
+
+        // calm: many frames, no new sample (well inside the heartbeat)
+        var calm = System.Diagnostics.Stopwatch.StartNew();
+        while (calm.ElapsedMilliseconds < 700)
+        {
+            rig.Step();
+            frames.Pump();
+            Thread.Sleep(5);
+        }
+
+        Assert.Single(frames.Events);
+
+        // a change (one card's text, SAME length) is written once
+        source.Frames = [Cards("UnitCards", 3, 100, "Riflemam")];
+        Assert.True(frames.Until(w => { rig.Step(); return w.Events.Count >= 2; }, 1500));   // well before the heartbeat: the change itself wrote it
+        int afterChange = frames.Events.Count;
+        Assert.Equal(2, afterChange);
+        Assert.Contains(frames.Events[1].Primitives, p => p.Text.StartsWith("Riflemam", StringComparison.Ordinal));
+
+        // the heartbeat repeats the unchanged layer
+        Assert.True(frames.Until(w => { rig.Step(); return w.Events.Count >= 3; }, 6000));
+    }
+
+    /// <summary>T-061: a calm 3-layer view of 100 cards between heartbeats costs the gateway 0 B a frame (hash over the source, no topic value built, nothing written).</summary>
+    [Fact]
+    public void A_calm_three_layer_view_costs_nothing_between_heartbeats()
+    {
+        uint domain = Watch.NewDomain();
+        var source = new StableGizmos();
+        using var frames = new Watch.Watch<D.GizmoFrame>(domain, "station-1", Key);
+        using var rig = new Rig(domain, gizmoSource: source, heartbeatSeconds: 600);
+        using var client = new Client(domain);
+        string[] layers = ["Labels", "UnitCards", "UnitSymbols"];
+        source.Frames = [Cards("Labels", 100, 1000), Cards("UnitCards", 100, 2000), Cards("UnitSymbols", 100, 3000)];
+        client.View(layers, rateHz: 10f);
+        Assert.True(frames.Until(w => { rig.Step(); return w.Alive.Count == 3; }));
+        for (int i = 0; i < 50; i++)
+        {
+            rig.Step();
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 300; i++)
+        {
+            rig.Transport.Pump();
+        }
+
+        Assert.Equal(0L, (GC.GetAllocatedBytesForCurrentThread() - before) / 300);
+    }
+
+    [Fact]
+    public void A_new_view_says_every_layer_again()
+    {
+        uint domain = Watch.NewDomain();
+        var source = new StableGizmos { Frames = [Cards("UnitCards", 2, 100)] };
+        using var frames = new Watch.Watch<D.GizmoFrame>(domain, "station-1", Key);
+        using var rig = new Rig(domain, gizmoSource: source, heartbeatSeconds: 60);
+        using var client = new Client(domain);
+        client.View(["UnitCards"], rateHz: 10f);
+        Assert.True(frames.Until(w => { rig.Step(); return w.Events.Count >= 1; }));
+        client.View(["UnitCards"], rateHz: 20f);
+        Assert.True(frames.Until(w => { rig.Step(); return w.Events.Count >= 2; }));
+    }
+
     /// <summary>A source that hands back the same frames every run, as the host's reused frame array does.</summary>
     private sealed class StableGizmos : IGizmoSource
     {
@@ -270,7 +348,7 @@ public class DpsGizmoTests
         public IReadOnlyList<GizmoLayerFrame> Take() => Active ? Frames : [];
     }
 
-    private static GizmoLayerFrame Cards(string layer, int cards, int firstAnchor)
+    private static GizmoLayerFrame Cards(string layer, int cards, int firstAnchor, string? nameOverride = null)
     {
         var list = new List<GizmoPrimitiveData>();
         for (int c = 0; c < cards; c++)
@@ -279,7 +357,7 @@ public class DpsGizmoTests
             list.Add(new GizmoPrimitiveData(GizmoPrimitiveShape.Box, [], 0x0A141EFFu, 1f, string.Empty, GizmoPrimitiveSpace.EntityCard, a, 0, 0.5f, 8f, 0.5f, 8f, 0x000000A0u));
             list.Add(new GizmoPrimitiveData(GizmoPrimitiveShape.Box, [], 0xFFFFFFFFu, 1f, string.Empty, GizmoPrimitiveSpace.EntityCard, a, 0, 0.5f, 8f, 0.5f, 8f));
             list.Add(new GizmoPrimitiveData(GizmoPrimitiveShape.Box, [], 0x00FF00FFu, 0f, string.Empty, GizmoPrimitiveSpace.EntityCard, a, 10, 0.35f, 4f, 0.3f, 3f, 0x00FF00FFu));
-            list.Add(new GizmoPrimitiveData(GizmoPrimitiveShape.Text, [], 0xFFFFFFFFu, 13f, "Rifleman " + a, GizmoPrimitiveSpace.EntityCard, a, 20, 3f, 0f));
+            list.Add(new GizmoPrimitiveData(GizmoPrimitiveShape.Text, [], 0xFFFFFFFFu, 13f, (nameOverride ?? "Rifleman") + " " + a, GizmoPrimitiveSpace.EntityCard, a, 20, 3f, 0f));
             list.Add(new GizmoPrimitiveData(GizmoPrimitiveShape.Icon, [], 0xFFFFFFFFu, 0f, "SHGPUCI---", GizmoPrimitiveSpace.EntityCard, a, 0, CardH: 22f));
         }
 

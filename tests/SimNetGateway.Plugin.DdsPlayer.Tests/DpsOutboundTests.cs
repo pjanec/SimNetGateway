@@ -115,11 +115,11 @@ public class DpsOutboundTests
 
         public Rig(uint domain, string partition = "station-1", IPlayerStation? station = null, DdsPlayerPlugin? plugin = null, IHostService? service = null,
             Action<string>? log = null, double leaseSeconds = 2.0, IGizmoSource? gizmoSource = null, Func<long>? stationTicks = null,
-            int seats = 1, IReadOnlyList<IPlayerStation>? stations = null, int renderSeat = 1, string renderRoot = "")
+            int seats = 1, IReadOnlyList<IPlayerStation>? stations = null, int renderSeat = 1, string renderRoot = "", double heartbeatSeconds = 5.0)
         {
             Domain = domain;
             Plugin = plugin ?? new DdsPlayerPlugin();
-            Settings = new DpsSettings { Domain = (int)domain, Partition = partition, LeaseSeconds = leaseSeconds, Seats = seats, RenderSeat = renderSeat, RenderRoot = renderRoot };
+            Settings = new DpsSettings { Domain = (int)domain, Partition = partition, LeaseSeconds = leaseSeconds, Seats = seats, RenderSeat = renderSeat, RenderRoot = renderRoot, HeartbeatSeconds = heartbeatSeconds };
             Config = (GatewayConfiguration.CreateDefault() with { Dis = null }).WithSide(DpsSide.SideKey, Settings);
             var sides = SideRegistry.Empty.With(Plugin.Side);
             Clock = new ManualClock();
