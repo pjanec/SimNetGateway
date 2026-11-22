@@ -612,6 +612,7 @@ HROT side: in HROT's design for H-1 .. H-8.
 | P-5 | The soundtrack built on sim time (3f) | S-1 through the engine's non-real-time mixer, on a client started for rendering; checked by its total at the end | folded (D-F2) - awaits the owner |
 | P-6 | HROT requests H-1 .. H-8 as one prompt to the HROT session | yes | after the owner's approval |
 | P-7 | *(rev 7, 2026-11-21 - HROT's film contract as built, CE-11018)* append `FrameKindRepeat` to `FrameKind` (slow motion past one frame per step repeats the last scene: no image, the client advances its track one frame) and `FrameRequest.Fade` (float 0..1, the dip to black over the picture); the camera arrives as forward + up and the gateway converts it to the wire's `Orientation` | - | ✅ approved (R-142) |
+| P-8 | *(rev 8, 2026-11-22 - user: "yes add live fade and subtitles too")* append to `View`: `Fade` (float 0..1, the director's dip to black), `Subtitle` (string 512), `SubtitlePosition` (`SubtitlePosition`), `SubtitleAlpha` (float) - the live director's picture as the render path's `FrameRequest` already carries it; from HROT's `CameraSuggestion` (CE-11035). Sent when the fade or the alpha moves by more than 0.02, reaches 0 or 1, or the text changes (in addition to the camera's own send rule); the text is read from HROT only on a new caption serial | - | ✅ approved (R-150) |
 
 | | Question | Answer *(Unreal, rev 4)* |
 |---|---|---|

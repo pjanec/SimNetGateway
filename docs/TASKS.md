@@ -93,3 +93,4 @@ progress and done.
 | **T-064** | in-progress | Voice events (DD-026): `Utterance`, `Report`, `Order` event topics once on the world partition, from HROT's `Utterance` component and `CommandHistory` | DD-026 | R-148 |
 | **T-065** | todo | Bursts on `Fire` (DD-027): BurstId / BurstRounds / BurstIndex from HROT's `FireBurst` - after HROT CE-11033 | DD-027 | R-147 |
 | **T-066** | todo | Ambience and weather on DPS (DD-028): `Ambience` from HROT's ambience layers, `Weather` from its weather entities - after HROT CE-11034 | DD-028 | R-149 |
+| **T-067** | todo | The director's fade and subtitle on the live `View` (DD-022 P-8) - after HROT CE-11035 | DD-022 | R-150 |
