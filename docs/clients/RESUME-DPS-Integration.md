@@ -15,7 +15,7 @@ side + 0 B station frame · T-057 Impact: no fold, HROT's Normal · T-058 cards 
 owner's) · T-059 gizmo path 0 B · T-060 the reference client joins roles / kits / areas and waits for its writer to match. HROT pin: `d3df19e19`.
 **Done (HROT ui, through `599a5d799`):** CE-11026 · CE-11027 S12-1..S12-4 + HasServer · backend's batch (CE-11018/19/22/23/24/25) · CE-11029
 swarm exception · CE-11030 one impact entity + Normal · CE-11031 card projectors 0 B · CE-11021 the encode muxes the client's track (1024).
-**Open, not urgent:** T-056 (ask CycloneDds.NET for an allocation-free empty take and managed write — a library outside this session's
+**Open, not urgent:** T-056 (corrected 2026-11-22: the empty take is 0 B; only the managed write's string marshalling is the binding's, see docs/notes/NOTE-2026-11-22-CycloneDdsNet-Allocations.md; was: ask CycloneDds.NET for an allocation-free empty take and managed write — a library outside this session's
 repos) · the DD-023 D-16 seat scenarios on the real editor (need the gateway extension inside HROT's scenario regression — design first) ·
 CE-11028 director scenario (tracked).
 

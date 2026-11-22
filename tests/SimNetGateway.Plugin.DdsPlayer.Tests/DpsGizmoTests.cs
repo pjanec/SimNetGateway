@@ -328,7 +328,7 @@ public class DpsGizmoTests
 
     /// <summary>
     /// T-059: the whole transport pump of a steady 3-layer view of 100 cards. Measured: the topic values cost 0 B (above); what the pump allocates in addition to the same view drawing nothing is the CycloneDDS writer's own cost of
-    /// marshalling a managed sample (about 16 B a primitive, the text strings and lists of the binding, the sibling of T-056's reader floor): asserted not to grow past 24 B a primitive.
+    /// marshalling a managed sample (32 B per non-empty text string: the generated `Encoding.UTF8.GetBytes`, nothing per point; T-056 note; the reader has no floor): asserted not to grow past 24 B a primitive.
     /// </summary>
     [Fact]
     public void A_steady_three_layer_view_costs_the_ddswriters_floor_and_nothing_of_the_gateways_own()

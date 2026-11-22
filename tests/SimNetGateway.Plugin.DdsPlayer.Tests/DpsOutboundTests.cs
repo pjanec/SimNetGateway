@@ -825,11 +825,12 @@ public class DpsOutboundTests
 
     /// <summary>
     /// T-055 (b), HOT path: a whole steady engine tick of three PLAYING seats (slots, offers, own-unit status with ammo, the inbound reads) allocates nothing of the gateway's own. Measured source of the old ~1.4 KB a frame:
-    /// <c>DpsPlayerSlot.Pump</c> (offers compared through <c>SequenceEqual</c>, the own unit rebuilt with LINQ every frame). What is left is the CycloneDDS binding: each <c>DdsReader.Take</c> allocates 16 bytes even when empty, and
-    /// <c>DpsInbound.Pump</c> reads three topics per seat per frame, so the tick may allocate at most 3 seats x 3 reads x 16 B = 144 B (exactly that is measured). Mutation: the own unit built every frame again.
+    /// <c>DpsPlayerSlot.Pump</c> (offers compared through <c>SequenceEqual</c>, the own unit rebuilt with LINQ every frame). The 144 B once attributed to the CycloneDDS binding
+    /// (<c>DdsReader.Take</c>, 16 B an empty read) were the gateway's own: <c>DpsInbound.HandleLiveliness</c> had a lambda capturing the loop variable, so a 48 B closure was allocated per seat per tick (T-056, measured by bisecting
+    /// <c>DpsInbound.Pump</c>; an empty <c>Take</c> in CycloneDDS.NET 1.2.20 is 0 B). Mutations: the own unit built every frame again; the capturing lambda back.
     /// </summary>
     [Fact]
-    public void A_steady_engine_tick_of_three_playing_seats_allocates_only_the_ddsreader_floor()
+    public void A_steady_engine_tick_of_three_playing_seats_allocates_nothing()
     {
         uint domain = NewDomain();
         var stations = new AddressedStation[3];
@@ -854,7 +855,7 @@ public class DpsOutboundTests
         }
 
         long perTick = (GC.GetAllocatedBytesForCurrentThread() - before) / 500;
-        Assert.True(perTick <= 3 * 3 * 16, $"{perTick} B per steady tick");
+        Assert.Equal(0L, perTick);
     }
 
     [Fact]

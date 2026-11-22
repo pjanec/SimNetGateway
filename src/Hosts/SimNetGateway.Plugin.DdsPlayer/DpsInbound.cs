@@ -122,7 +122,7 @@ internal sealed class DpsInbound : IDisposable
                 continue;
             }
 
-            if (_ownerHandles.Contains((e.Topic, e.Handle)) || (e.AliveCount == 0 && _ownerHandles.Any(h => h.Topic == e.Topic)))
+            if (_ownerHandles.Contains((e.Topic, e.Handle)) || (e.AliveCount == 0 && OwnsTopic(e.Topic)))
             {
                 lost = true;
             }
@@ -135,6 +135,23 @@ internal sealed class DpsInbound : IDisposable
 
         _station!.Leave();
         ClearOwner();
+    }
+
+    /// <summary>
+    /// Whether a handle of the topic belongs to the owner. A loop, not a LINQ lambda over <c>e</c>: a lambda capturing the loop's <c>e</c> makes the compiler allocate a 48 B closure
+    /// every time <see cref="HandleLiveliness"/>'s <c>while</c> condition is evaluated, even when the queue is empty (T-056: that, not <c>DdsReader.Take</c>, was the 16 B per read).
+    /// </summary>
+    private bool OwnsTopic(int topic)
+    {
+        foreach (var h in _ownerHandles)
+        {
+            if (h.Topic == topic)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void ClearOwner()
