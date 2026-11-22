@@ -15,6 +15,9 @@
 # HrotRoot: the HROT checkout to build against (environment variable HROT_ROOT or HrotRoot).
 # Usage: bash scripts/package-extension.sh [target-folder]   (extra dotnet arguments after "--")
 set -euo pipefail
+# No MSBuild node reuse: the nested dotnet publish calls would leave reused nodes holding the caller's output pipe (the HrotHost tests
+# run this script; their run hung, found 2026-11-22, T-062).
+export MSBUILDDISABLENODEREUSE=1
 here="$(cd "$(dirname "$0")/.." && pwd)"
 export PATH="$HOME/.dotnet:$PATH"
 target="${1:-$here/out/extensions/simnetgateway}"

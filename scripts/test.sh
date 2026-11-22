@@ -3,6 +3,9 @@
 # Uses the per-user SDK of scripts/setup-dotnet.sh when no dotnet is on PATH.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# No MSBuild node reuse: nested dotnet publish (package-extension.sh, run by the HrotHost tests) leaves reused nodes holding the
+# caller's output pipe and the run hangs (found 2026-11-22, T-062).
+export MSBUILDDISABLENODEREUSE=1
 if ! command -v dotnet >/dev/null 2>&1; then
   if [ -x "$HOME/.dotnet/dotnet" ] || [ -x "$HOME/.dotnet/dotnet.exe" ]; then
     export PATH="$HOME/.dotnet:$PATH"
