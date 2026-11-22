@@ -239,3 +239,18 @@ public enum SubtitlePosition : byte { SubtitlePositionUnknown = 0, SubtitlePosit
 
 /// <summary>What a <see cref="FilmGraphic"/> draws: a Ring, an Arrow, a Route, an Area or a Label.</summary>
 public enum FilmGraphicKind : byte { FilmGraphicKindUnknown = 0, FilmGraphicKindRing, FilmGraphicKindArrow, FilmGraphicKindRoute, FilmGraphicKindArea, FilmGraphicKindLabel }
+
+/// <summary>A report's kind (DD-026): the six doctrinal reports.</summary>
+public enum ReportKind : byte { ReportKindNone = 0, ReportKindContact, ReportKindSpot, ReportKindSitrep, ReportKindLace, ReportKindProgress, ReportKindRequest }
+
+/// <summary>The size of a reported element.</summary>
+public enum ElementSize : byte { ElementSizeUnknown = 0, ElementSizeIndividual, ElementSizeTeam, ElementSizeSquad, ElementSizePlatoon }
+
+/// <summary>What a reported element is doing.</summary>
+public enum ElementActivity : byte { ElementActivityUnknown = 0, ElementActivityFiring, ElementActivityMoving, ElementActivityStatic, ElementActivityWithdrawing, ElementActivitySurrendering }
+
+/// <summary>A status colour (strength, ammunition): green, amber, red, black.</summary>
+public enum StatusColour : byte { StatusColourUnknown = 0, StatusColourGreen, StatusColourAmber, StatusColourRed, StatusColourBlack }
+
+/// <summary>A weather's precipitation.</summary>
+public enum PrecipitationKind : byte { PrecipitationKindNone = 0, PrecipitationKindDrizzle, PrecipitationKindRain, PrecipitationKindSnow, PrecipitationKindSleet, PrecipitationKindHail }

@@ -398,6 +398,9 @@ module SimNetGateway {
                 SimNetGateway::Protocol::DdsPlayer::Vec3d Origin;
                 SimNetGateway::Protocol::DdsPlayer::Vec3f Velocity;
                 SimNetGateway::Protocol::DdsPlayer::WeaponCategory WeaponCategory;
+                uint32 BurstId;
+                octet BurstRounds;
+                octet BurstIndex;
             };
 
             @topic
@@ -461,6 +464,10 @@ module SimNetGateway {
                 SimNetGateway::Protocol::DdsPlayer::Vec3f Acceleration;
                 SimNetGateway::Protocol::DdsPlayer::Vec3f AngularVelocity;
                 float FovRate;
+                float Fade;
+                string<512> Subtitle;
+                SimNetGateway::Protocol::DdsPlayer::SubtitlePosition SubtitlePosition;
+                float SubtitleAlpha;
             };
 
             @appendable
@@ -901,6 +908,75 @@ module SimNetGateway {
                 string<256> TrackFile;
                 int64 TrackSamples;
                 string<256> Reason;
+            };
+
+            @topic
+            @appendable
+            struct Utterance {
+                double SimTime;
+                int32 SpeakerId;
+                string<24> Kind;
+                int32 TargetId;
+            };
+
+            @topic
+            @appendable
+            struct Report {
+                double SimTime;
+                int32 FromId;
+                int32 ToId;
+                SimNetGateway::Protocol::DdsPlayer::ReportKind Kind;
+                octet Sub;
+                octet Count;
+                SimNetGateway::Protocol::DdsPlayer::ElementSize Size;
+                SimNetGateway::Protocol::DdsPlayer::ElementActivity Activity;
+                octet Equipment;
+                SimNetGateway::Protocol::DdsPlayer::StatusColour Strength;
+                SimNetGateway::Protocol::DdsPlayer::StatusColour Ammo;
+                octet Wia;
+                octet Kia;
+                boolean Synthetic;
+            };
+
+            @topic
+            @appendable
+            struct Order {
+                double SimTime;
+                int32 FromId;
+                int32 ToId;
+                string<32> Name;
+            };
+
+            @topic
+            @appendable
+            struct Ambience {
+                @key int32 Id;
+                string<32> Kind;
+                float Intensity;
+                boolean HasPosition;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d Position;
+                float Radius;
+                double UntilSim;
+            };
+
+            @topic
+            @appendable
+            struct Weather {
+                @key int32 Id;
+                sequence<SimNetGateway::Protocol::DdsPlayer::Vec3d, 32> Outline;
+                float FeatherM;
+                float WindFromDeg;
+                float WindSpeedMps;
+                float WindGustMps;
+                SimNetGateway::Protocol::DdsPlayer::PrecipitationKind Precipitation;
+                float PrecipitationMmPerHour;
+                float VisibilityM;
+                float FogTopM;
+                float FogVisibilityM;
+                octet CloudOctas;
+                float CloudBaseM;
+                float GroundTemperatureC;
+                float RelativeHumidity;
             };
 
         };

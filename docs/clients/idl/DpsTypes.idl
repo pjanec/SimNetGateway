@@ -621,6 +621,55 @@ module SimNetGateway {
                 FilmGraphicKindLabel
             };
 
+            @bit_bound(8)
+            enum ReportKind {
+                ReportKindNone,
+                ReportKindContact,
+                ReportKindSpot,
+                ReportKindSitrep,
+                ReportKindLace,
+                ReportKindProgress,
+                ReportKindRequest
+            };
+
+            @bit_bound(8)
+            enum ElementSize {
+                ElementSizeUnknown,
+                ElementSizeIndividual,
+                ElementSizeTeam,
+                ElementSizeSquad,
+                ElementSizePlatoon
+            };
+
+            @bit_bound(8)
+            enum ElementActivity {
+                ElementActivityUnknown,
+                ElementActivityFiring,
+                ElementActivityMoving,
+                ElementActivityStatic,
+                ElementActivityWithdrawing,
+                ElementActivitySurrendering
+            };
+
+            @bit_bound(8)
+            enum StatusColour {
+                StatusColourUnknown,
+                StatusColourGreen,
+                StatusColourAmber,
+                StatusColourRed,
+                StatusColourBlack
+            };
+
+            @bit_bound(8)
+            enum PrecipitationKind {
+                PrecipitationKindNone,
+                PrecipitationKindDrizzle,
+                PrecipitationKindRain,
+                PrecipitationKindSnow,
+                PrecipitationKindSleet,
+                PrecipitationKindHail
+            };
+
         };
     };
 };

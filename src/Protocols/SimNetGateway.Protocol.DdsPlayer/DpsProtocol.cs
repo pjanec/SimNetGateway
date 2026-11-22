@@ -56,6 +56,11 @@ public static class DpsProtocol
     public const string FrameRequest = "DPS_FrameRequest";
     public const string FrameDone = "DPS_FrameDone";
     public const string RenderJobResult = "DPS_RenderJobResult";
+    public const string Utterance = "DPS_Utterance";
+    public const string Report = "DPS_Report";
+    public const string Order = "DPS_Order";
+    public const string Ambience = "DPS_Ambience";
+    public const string Weather = "DPS_Weather";
 
     /// <summary>Every topic name, in the order of DD-017 section 4.</summary>
     public static readonly IReadOnlyList<string> AllTopics =
@@ -66,6 +71,7 @@ public static class DpsProtocol
         ManDowned, PlayerMessage, Status, Exercise, View,
         PlayerSlot, OwnUnit, JoinRequest, ControlFrame, Leave, GizmoView, GizmoFrame,
         SimClock, ClockProbe, ClockEcho, ClockStep, StepAck, ClientWorld, RenderClient, RenderJob, FrameRequest, FrameDone, RenderJobResult,
+        Utterance, Report, Order, Ambience, Weather,
     ];
 }
 

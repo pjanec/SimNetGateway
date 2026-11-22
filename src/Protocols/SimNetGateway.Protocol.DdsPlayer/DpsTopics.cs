@@ -588,6 +588,12 @@ public partial struct Fire
     public Vec3f Velocity;
     /// <summary>The shooter's mount category; a client draws tracer streams for machine guns and autocannons and knows a flamethrower.</summary>
     public WeaponCategory WeaponCategory;
+    /// <summary>The planned burst this round belongs to (DD-027); 0 = not a planned burst (a single aimed shot, or a player's round - its length is never known).</summary>
+    public uint BurstId;
+    /// <summary>The burst's planned rounds (0 when not a planned burst); a burst cut short sends fewer <c>Fire</c> samples.</summary>
+    public byte BurstRounds;
+    /// <summary>This round's place in its burst, 0-based.</summary>
+    public byte BurstIndex;
 }
 
 [DpsRate(DpsRateClass.Event)]
@@ -695,6 +701,13 @@ public partial struct View
     public Vec3f AngularVelocity;
     /// <summary>The rate of change of <see cref="FovDeg"/> (degrees per second).</summary>
     public float FovRate;
+    /// <summary>The film director's dip to black over the picture, 0..1 (DD-022 P-8); 0 for every other source.</summary>
+    public float Fade;
+    /// <summary>The director's subtitle now; empty = none.</summary>
+    [MaxLength(512)] public string Subtitle;
+    public SubtitlePosition SubtitlePosition;
+    /// <summary>The subtitle's opacity, 0..1 (it fades in and out).</summary>
+    public float SubtitleAlpha;
 }
 
 #endregion
@@ -1404,6 +1417,121 @@ public partial struct RenderJobResult
     /// <summary>The track's total sample count.</summary>
     public long TrackSamples;
     [MaxLength(256)] public string Reason;
+}
+
+#endregion
+
+#region Voice, ambience and weather (DD-026, DD-028)
+
+/// <summary>A man says something now (DD-026): one sample per NEW utterance. The client picks its recorded line by <see cref="Kind"/>.</summary>
+[DpsRate(DpsRateClass.Event)]
+[DdsTopic(DpsProtocol.Utterance)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 32)]
+[DdsManaged]
+public partial struct Utterance
+{
+    public double SimTime;
+    public int SpeakerId;
+    /// <summary>What is said, by the producer's name for it (e.g. CallContact, CmdHandsUp, CallReloading); a client keys its lines by it.</summary>
+    [MaxLength(24)] public string Kind;
+    /// <summary>Whom or what it is about (0 = none), e.g. the contact of a CallContact.</summary>
+    public int TargetId;
+}
+
+/// <summary>A report sent up or down the chain of command (DD-026), at the moment the simulation considers it sent.</summary>
+[DpsRate(DpsRateClass.Event)]
+[DdsTopic(DpsProtocol.Report)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 32)]
+public partial struct Report
+{
+    public double SimTime;
+    public int FromId;
+    /// <summary>The receiver; 0 = a superior the simulation does not simulate ("HQ").</summary>
+    public int ToId;
+    public ReportKind Kind;
+    /// <summary>The subtype: a Progress report's progress kind, a Request's request kind (the producer's numbers; 0 = none).</summary>
+    public byte Sub;
+    /// <summary>SPOT / CONTACT: how many, how big, doing what, with what (Equipment: bit flags 1 machine gun, 2 sniper, 4 anti-tank, 8 vehicle, 16 indirect fire, 32 air defence, 64 smoke).</summary>
+    public byte Count;
+    public ElementSize Size;
+    public ElementActivity Activity;
+    public byte Equipment;
+    /// <summary>SITREP / LACE: strength and ammunition.</summary>
+    public StatusColour Strength;
+    public StatusColour Ammo;
+    /// <summary>LACE: wounded and killed.</summary>
+    public byte Wia;
+    public byte Kia;
+    /// <summary>True = injected by a tool (not by a man in the simulation); a client may stay silent.</summary>
+    public bool Synthetic;
+}
+
+/// <summary>An order given (DD-026).</summary>
+[DpsRate(DpsRateClass.Event)]
+[DdsTopic(DpsProtocol.Order)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.Volatile, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 32)]
+[DdsManaged]
+public partial struct Order
+{
+    public double SimTime;
+    public int FromId;
+    public int ToId;
+    /// <summary>The ordered behaviour's name (e.g. Attack, Move, Defend).</summary>
+    [MaxLength(32)] public string Name;
+}
+
+/// <summary>
+/// An ambience layer (DD-028): the war around the scenario, a siren, an alarm. A state instance per layer, disposed when the layer ends.
+/// <see cref="Kind"/> is a dotted name, never a sample: map it to a recording; for an unknown name drop the last part and try again (alarm.airraid.preliminary, alarm.airraid, alarm).
+/// </summary>
+[DpsRate(DpsRateClass.Discrete)]
+[DdsTopic(DpsProtocol.Ambience)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+[DdsManaged]
+public partial struct Ambience
+{
+    [DdsKey] public int Id;
+    [MaxLength(32)] public string Kind;
+    /// <summary>0..1.</summary>
+    public float Intensity;
+    /// <summary>False = heard everywhere; true = heard within <see cref="Radius"/> of <see cref="Position"/>.</summary>
+    public bool HasPosition;
+    public Vec3d Position;
+    public float Radius;
+    /// <summary>The simulation time it ends; 0 = until disposed.</summary>
+    public double UntilSim;
+}
+
+/// <summary>
+/// The weather of one area (DD-028): the global weather (empty <see cref="Outline"/>) or a region's, blended over <see cref="FeatherM"/> at its edge.
+/// A client takes the region its camera is in, else the global one.
+/// </summary>
+[DpsRate(DpsRateClass.Discrete)]
+[DdsTopic(DpsProtocol.Weather)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+[DdsManaged]
+public partial struct Weather
+{
+    [DdsKey] public int Id;
+    /// <summary>The region's outline in the simulation frame (empty = the global weather).</summary>
+    [DdsBound(32)] public List<Vec3d> Outline;
+    public float FeatherM;
+    /// <summary>The surface wind: where it blows FROM (degrees, 0 = north, clockwise), its speed and gusts.</summary>
+    public float WindFromDeg;
+    public float WindSpeedMps;
+    public float WindGustMps;
+    public PrecipitationKind Precipitation;
+    public float PrecipitationMmPerHour;
+    public float VisibilityM;
+    /// <summary>Ground fog: its top and the visibility inside it (0 = none).</summary>
+    public float FogTopM;
+    public float FogVisibilityM;
+    /// <summary>The lowest cloud layer: cover in octas (0..8) and its base.</summary>
+    public byte CloudOctas;
+    public float CloudBaseM;
+    public float GroundTemperatureC;
+    /// <summary>0..1.</summary>
+    public float RelativeHumidity;
 }
 
 #endregion
