@@ -469,6 +469,9 @@ public sealed class DpsWorld : IDisposable
     /// <summary>Asks for the first free unit among the slot's unit offers (roles are not requested). False when there is none.</summary>
     public bool JoinFirstUnit() => TryJoin(new DpsJoinPlan(DpsJoinMode.FirstUnit), out _);
 
+    /// <summary>True when the JoinRequest writer has a matched reader (DdsWriter.WaitForReaderAsync with a 1 ms wait; CycloneDDS.NET exposes no matched count property).</summary>
+    public bool JoinWriterMatched => _join.WaitForReaderAsync(TimeSpan.FromMilliseconds(1)).GetAwaiter().GetResult();
+
     /// <summary>The last reason <see cref="TryJoin"/> could not send a request (no such role, role full ...); null after a request went out.</summary>
     public string? JoinProblem { get; private set; }
 
@@ -477,6 +480,14 @@ public sealed class DpsWorld : IDisposable
     {
         HasLeft = false;
         problem = "no slot yet";
+
+        // JoinRequest is volatile: a sample written before the writer is matched to the gateway's reader is lost for good, so a one-shot join must wait for the match
+        if (!JoinWriterMatched)
+        {
+            problem = "waiting for the gateway to match the JoinRequest writer";
+            return false;
+        }
+
         if (Slot is { } slot && plan.Build(slot, out problem) is { } request)
         {
             request.RequestSeq = ++_joinSeq;

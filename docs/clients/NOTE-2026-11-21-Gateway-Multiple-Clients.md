@@ -53,3 +53,11 @@ Tell me what you see per row — a mismatch is a gateway or HROT defect and I wi
 - The gateway's own reference client (`SimNetGateway.DpsClient`, `--domain`, `--partition`, `--join`) joins the first free placed unit only;
   it can stand in as a second player for rows 2, 3, 5.
 - Not yet run live with several Unreal clients — yours is the first run.
+
+## 5. Added 2026-11-22 — write a `JoinRequest` only once your writer is matched
+
+`JoinRequest` is VOLATILE: a sample written before DDS has matched your writer to the gateway's reader is lost for good, so a one-shot join
+sent at startup can silently never arrive (found by the gateway's reference client, T-060). ⭐ Wait for the writer's publication-matched
+status (CycloneDDS: `dds_get_publication_matched_status`; CycloneDDS.NET: `DdsWriter.WaitForReaderAsync` / `PublicationMatched`) before the
+first join, or re-send while your slot stays Choosing. The reference client (`SimNetGateway.DpsClient`) now does the first; it also joins
+roles: `--role NAME --side N --kit N --area NAME`, `--observe`, `--list-offers` — a stand-in third or fourth player for your tests.

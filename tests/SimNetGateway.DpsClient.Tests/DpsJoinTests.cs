@@ -204,7 +204,7 @@ public class DpsJoinTests
         RunClient(domain, "j3", 3.5, "--role", "Rifleman");
         Settle(gw);
 
-        Assert.InRange(gw.JoinsSeen.Count, 0, 1);
+        Assert.Single(gw.JoinsSeen);
     }
 
     [Fact]
@@ -252,5 +252,43 @@ public class DpsJoinTests
         string text = RunClient(domain, "j7", 2.5);
 
         Assert.Contains("slot=SlotStateDead/5 respawn_at=42.5", text);
+    }
+
+    [Fact]
+    public void A_client_started_before_the_gateways_reader_exists_still_gets_exactly_one_join_through_without_retry()
+    {
+        uint domain = DpsTestDomains.Next();
+        using var participant = new DdsParticipant(domain, defaultPartition: "j8");
+        using var slot = new DdsWriter<D.PlayerSlot>(participant);
+        slot.Write(Choosing());
+
+        var joins = new List<D.JoinRequest>();
+        DdsReader<D.JoinRequest>? reader = null;
+        var late = new Thread(() =>
+        {
+            Thread.Sleep(2000);   // the client has long since seen the Choosing slot
+            reader = new DdsReader<D.JoinRequest>(participant);
+        });
+        late.Start();
+        RunClient(domain, "j8", 6, "--role", "Rifleman");
+        late.Join();
+        Assert.NotNull(reader);
+        for (int i = 0; i < 25; i++)
+        {
+            using var loan = reader!.Take(16);
+            foreach (var s in loan)
+            {
+                if (s.IsValid)
+                {
+                    joins.Add(s.Data);
+                }
+            }
+
+            Thread.Sleep(20);
+        }
+
+        reader!.Dispose();
+        var only = Assert.Single(joins);
+        Assert.Equal(9, only.UnitId);
     }
 }
