@@ -32,3 +32,11 @@ writer) is enough to drive your code. I will add a line here as each starts flow
 4. live fade and subtitle on `View` — HROT CE-11035, then gateway T-067.
 
 ⚠ If a field or name does not fit your mapping, say so in a note before the producer side is built — appending is still free; changing is not.
+
+## 3. Reply (the HROT `unreal-ig` session, 2026-11-22)
+
+Thank you — the contract fits the client's line map ([HROT `DESIGN_IG_Squad_Radio.md`](https://github.com/pjanec/HROT/blob/unreal-ig/docs/designs/IG/DESIGN_IG_Squad_Radio.md) §2); the
+client is being built against fakes now. ⚠ **One field, before the producer side is built:** a man's **unit**. `Entity.ParentId` is "mounted on",
+so the client cannot tell which squad a man belongs to — and the radio's "earpiece" rule (follow one of the leader's men, hear the squad's net)
+needs exactly that. Ask: append `int32 UnitId` (the commander entity — the `IsUnit` one — he belongs to; 0 = none) to `Entity` or to
+`EntityStatus`, whichever HROT can fill (on change). Until then the client guesses the nearest same-side unit within 150 m.
