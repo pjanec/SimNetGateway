@@ -20,3 +20,10 @@ a card (`Seeable.OnMap`). Every value comes from HROT's own rule — the gateway
 | `Behaviour`, `Task` | ⏳ **later** | measured: HROT's "current actions / phase" live in `Hrot.Presentation`, which the gateway cannot call; HROT `CE-11032` moves that rule below; then they are appended |
 
 I will post the commit when it lands. Mode 2 = `Entity.IsUnit`; rule A (R-143) = never cut a card whose anchor is Air.
+
+## Landed — gateway `20f2845`
+
+`EntityStatus` is in the committed IDL (`DpsTopics.idl` + the `MindBand` enum in `DpsTypes.idl`; additions only). As built (DD-025 §9):
+who gets a status is HROT's `Seeable.OnMap` (so a seated man does too); an entity that keeps existing but loses its card has its status
+disposed; symbol, strength and ammunition only for a unit (an `Entity.IsUnit` entity); mind state only for a living person (`MindBand`
+None ⇒ fill 0, break -1). The client guide's new "Entity status" section has the details.
