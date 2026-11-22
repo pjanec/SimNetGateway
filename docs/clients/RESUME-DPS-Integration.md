@@ -12,12 +12,12 @@ HROT worktree `/home/user/hrot-c5f8c1971` pinned at HROT `ui` `f5851caf0` (`HROT
 **Done (gateway):** T-045 · T-047 seats · T-048 terrain · T-049 deploy contract · T-050 render half (linked client `dps`) · T-051 Impact
 from effect entities · T-052 entity cards · T-053 seats deploy through HROT's server · T-054 PlayerMessage per seat · T-055 choosing seat's
 side + 0 B station frame · T-057 Impact: no fold, HROT's Normal · T-058 cards at scale measured (whole-card cut; the lossless choice is the
-owner's) · T-059 gizmo path 0 B. HROT pin: `d3df19e19`.
+owner's) · T-059 gizmo path 0 B · T-060 the reference client joins roles / kits / areas and waits for its writer to match. HROT pin: `d3df19e19`.
 **Done (HROT ui, through `599a5d799`):** CE-11026 · CE-11027 S12-1..S12-4 + HasServer · backend's batch (CE-11018/19/22/23/24/25) · CE-11029
 swarm exception · CE-11030 one impact entity + Normal · CE-11031 card projectors 0 B · CE-11021 the encode muxes the client's track (1024).
 **Open, not urgent:** T-056 (ask CycloneDds.NET for an allocation-free empty take and managed write — a library outside this session's
 repos) · the DD-023 D-16 seat scenarios on the real editor (need the gateway extension inside HROT's scenario regression — design first) ·
-CE-11028 director scenario (tracked) · the reference `DpsClient` learns roles / kits / areas (T-060).
+CE-11028 director scenario (tracked).
 
 **Waiting on the Unreal lane:** the re-run of the three linked loads (`NOTE-…-Gateway-Rerun-Linked-Load.md`), the render client against
 T-050, the card renderer against T-052.
