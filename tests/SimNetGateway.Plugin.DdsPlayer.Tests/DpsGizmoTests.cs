@@ -257,4 +257,114 @@ public class DpsGizmoTests
         var world = Enumerable.Range(0, 5000).Select(_ => new GizmoPrimitiveData(GizmoPrimitiveShape.Box, [], 1u, 1f, string.Empty)).ToList();
         Assert.Equal(4096, DpsGizmos.Fit(world));
     }
+
+    /// <summary>A source that hands back the same frames every run, as the host's reused frame array does.</summary>
+    private sealed class StableGizmos : IGizmoSource
+    {
+        public GizmoLayerFrame[] Frames { get; set; } = [];
+
+        public bool Active { get; private set; }
+
+        public void SetView(GizmoViewRequest? view) => Active = view is not null;
+
+        public IReadOnlyList<GizmoLayerFrame> Take() => Active ? Frames : [];
+    }
+
+    private static GizmoLayerFrame Cards(string layer, int cards, int firstAnchor)
+    {
+        var list = new List<GizmoPrimitiveData>();
+        for (int c = 0; c < cards; c++)
+        {
+            int a = firstAnchor + c;
+            list.Add(new GizmoPrimitiveData(GizmoPrimitiveShape.Box, [], 0x0A141EFFu, 1f, string.Empty, GizmoPrimitiveSpace.EntityCard, a, 0, 0.5f, 8f, 0.5f, 8f, 0x000000A0u));
+            list.Add(new GizmoPrimitiveData(GizmoPrimitiveShape.Box, [], 0xFFFFFFFFu, 1f, string.Empty, GizmoPrimitiveSpace.EntityCard, a, 0, 0.5f, 8f, 0.5f, 8f));
+            list.Add(new GizmoPrimitiveData(GizmoPrimitiveShape.Box, [], 0x00FF00FFu, 0f, string.Empty, GizmoPrimitiveSpace.EntityCard, a, 10, 0.35f, 4f, 0.3f, 3f, 0x00FF00FFu));
+            list.Add(new GizmoPrimitiveData(GizmoPrimitiveShape.Text, [], 0xFFFFFFFFu, 13f, "Rifleman " + a, GizmoPrimitiveSpace.EntityCard, a, 20, 3f, 0f));
+            list.Add(new GizmoPrimitiveData(GizmoPrimitiveShape.Icon, [], 0xFFFFFFFFu, 0f, "SHGPUCI---", GizmoPrimitiveSpace.EntityCard, a, 0, CardH: 22f));
+        }
+
+        list.Add(Line());   // a world primitive with points too
+        return new GizmoLayerFrame(layer, list);
+    }
+
+    /// <summary>
+    /// T-059 (HOT path): building the topic values of a steady 3-layer view of 100 cards each (1 503 primitives) allocates 0 bytes: the values are reused (lists grown, never shrunk, each primitive keeps its point list), no LINQ, no
+    /// per-frame strings; a layer that shrinks or grows says exactly its primitives. Mutation: one LINQ Select back in the builder.
+    /// </summary>
+    [Fact]
+    public void Building_the_topic_values_of_a_steady_three_layer_view_of_cards_allocates_nothing()
+    {
+        var builder = new DpsGizmoFrames();
+        var frames = new[] { Cards("Labels", 100, 1000), Cards("UnitCards", 100, 2000), Cards("UnitSymbols", 100, 3000) };
+        foreach (var f in frames)
+        {
+            builder.Build("station-1", f, f.Primitives.Count);   // the buffers grow once
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 300; i++)
+        {
+            foreach (var f in frames)
+            {
+                builder.Build("station-1", f, f.Primitives.Count);
+            }
+        }
+
+        Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);
+
+        // the content is the primitives', whole: 100 cards of 5 and the world line with its two points
+        var built = builder.Build("station-1", frames[0], frames[0].Primitives.Count);
+        Assert.Equal((501, "station-1", "Labels"), (built.Primitives.Count, built.Producer, built.Layer));
+        Assert.Equal((D.GizmoSpace.GizmoSpaceEntityCard, 1000, (byte)10), (built.Primitives[2].Space, built.Primitives[2].AnchorId, built.Primitives[2].Row));
+        Assert.Equal("Rifleman 1003", built.Primitives[3 + 5 * 3].Text);
+        Assert.Equal([1.0, 4.0], [built.Primitives[500].Points[0].X, built.Primitives[500].Points[1].X]);
+
+        // a layer that shrinks and grows says exactly its primitives, no stale tail
+        var small = Cards("Labels", 10, 1000);
+        Assert.Equal(51, builder.Build("station-1", small, small.Primitives.Count).Primitives.Count);
+        Assert.Equal(501, builder.Build("station-1", frames[0], frames[0].Primitives.Count).Primitives.Count);
+        Assert.Empty(builder.Build("station-1", new GizmoLayerFrame("Labels", []), 0).Primitives);
+    }
+
+    /// <summary>
+    /// T-059: the whole transport pump of a steady 3-layer view of 100 cards. Measured: the topic values cost 0 B (above); what the pump allocates in addition to the same view drawing nothing is the CycloneDDS writer's own cost of
+    /// marshalling a managed sample (about 16 B a primitive, the text strings and lists of the binding, the sibling of T-056's reader floor): asserted not to grow past 24 B a primitive.
+    /// </summary>
+    [Fact]
+    public void A_steady_three_layer_view_costs_the_ddswriters_floor_and_nothing_of_the_gateways_own()
+    {
+        uint domain = Watch.NewDomain();
+        var source = new StableGizmos();
+        using var frames = new Watch.Watch<D.GizmoFrame>(domain, "station-1", Key);
+        using var rig = new Rig(domain, gizmoSource: source);
+        using var client = new Client(domain);
+        string[] layers = ["Labels", "UnitCards", "UnitSymbols"];
+        source.Frames = [.. layers.Select(l => new GizmoLayerFrame(l, []))];
+        client.View(layers, rateHz: 10f);
+        Assert.True(frames.Until(w => { rig.Step(); return w.Alive.Count == 3; }));
+
+        long Measure(int n)
+        {
+            for (int i = 0; i < 30; i++)
+            {
+                rig.Step();
+            }
+
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < n; i++)
+            {
+                rig.Transport.Pump();
+            }
+
+            return (GC.GetAllocatedBytesForCurrentThread() - before) / n;
+        }
+
+        long floor = Measure(200);
+        source.Frames = [Cards("Labels", 100, 1000), Cards("UnitCards", 100, 2000), Cards("UnitSymbols", 100, 3000)];
+        rig.Step();   // the buffers grow once
+        long loaded = Measure(200);
+        int primitives = source.Frames.Sum(f => f.Primitives.Count);
+        Assert.InRange(loaded - floor, 0, 24L * primitives);
+        Assert.True(frames.Until(w => { rig.Step(); return w.Alive.Values.Any(f => f.Layer == "Labels" && f.Primitives.Count == 501); }));   // and it arrived: 100 cards x 5 + the world line
+    }
 }

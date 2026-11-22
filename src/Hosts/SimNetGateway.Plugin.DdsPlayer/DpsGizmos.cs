@@ -26,6 +26,7 @@ internal sealed class DpsGizmos : IDisposable
     private readonly ConcurrentQueue<Liveliness> _liveliness = new();
     private readonly HashSet<string> _published = new(StringComparer.Ordinal);
     private readonly HashSet<string> _truncated = new(StringComparer.Ordinal);
+    private readonly DpsGizmoFrames _frameBuilder = new();
 
     /// <summary>The most primitives one <c>GizmoFrame</c> holds (the topic's <c>DdsBound</c>).</summary>
     internal const int MaxPrimitives = 4096;
@@ -125,8 +126,10 @@ internal sealed class DpsGizmos : IDisposable
             return;
         }
 
-        foreach (var frame in _source.Take())
+        var frames = _source.Take();
+        for (int i = 0; i < frames.Count; i++)   // an index loop: the interface's enumerator would be boxed every frame
         {
+            var frame = frames[i];
             _published.Add(frame.Layer);
             _frames.Send(new DpsItem<D.GizmoFrame>(ToFrame(frame)));
         }
@@ -204,31 +207,8 @@ internal sealed class DpsGizmos : IDisposable
             _log($"dps: gizmo layer '{frame.Layer}' has {frame.Primitives.Count} primitives; one GizmoFrame holds {MaxPrimitives}, so {frame.Primitives.Count - fit} (whole cards at the end of the layer) are not sent (DD-024 section 9)");
         }
 
-        return Build(frame, fit);
+        return _frameBuilder.Build(_producer, frame, fit);
     }
-
-    private D.GizmoFrame Build(GizmoLayerFrame frame, int fit) => new()
-    {
-        Producer = _producer,
-        Layer = frame.Layer.Length > 32 ? frame.Layer[..32] : frame.Layer,
-        SimTime = 0.0,
-        Primitives = [.. frame.Primitives.Take(fit).Select(p => new D.GizmoPrimitive
-        {
-            Shape = (D.GizmoShape)(byte)p.Shape,
-            Points = [.. p.Points.Take(64).Select(x => new D.Vec3d { X = x.X, Y = x.Y, Z = x.Z })],
-            ColourRgba = p.ColourRgba,
-            Width = p.Width,
-            Text = p.Text.Length > 64 ? p.Text[..64] : p.Text,
-            Space = (D.GizmoSpace)(byte)p.Space,
-            AnchorId = p.AnchorId,
-            Row = p.Row,
-            CardX = p.CardX,
-            CardY = p.CardY,
-            CardW = p.CardW,
-            CardH = p.CardH,
-            FillRgba = p.FillRgba,
-        })],
-    };
 
     /// <summary>
     /// The view ends with its transport (a world boundary or the node's teardown): the source stops its projectors. <c>GizmoView</c> is volatile, so the next runtime's

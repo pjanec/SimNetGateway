@@ -412,4 +412,57 @@ public class GizmoHostTests
         Assert.DoesNotContain(labels, p => p.Points.Count > 0);   // no ground point from a card primitive
         Assert.Equal(2 * perMan, h.Host.UnmappedCardPrimitives);   // both unmapped anchors, counted
     }
+
+    /// <summary>
+    /// T-059 (HOT path): a steady 3-layer view of 100 men and 10 commanders (540 primitives, mode 3 + symbols) costs the host's capture nothing: the layer lists, the frame array, the point arrays and the card strings are reused
+    /// (<c>Take</c> 0 B). What a run still allocates (measured 9 840 B, 18 B a primitive) is HROT's own <c>StatelessGizmoSystem.Execute</c> (its projectors format the card names), asserted not to grow past 12 000 B.
+    /// Mutation: the card text made with <c>ToString()</c> per primitive again.
+    /// </summary>
+    [Fact]
+    public void A_steady_three_layer_view_of_110_cards_allocates_only_HROTs_projector_cost()
+    {
+        using var h = new Stage();
+        for (int k = 0; k < 100; k++)
+        {
+            h.AddHrotEntity(10000 + k, new Vector3(k % 10, k / 10, 0), "Man " + k, tkb: 300);
+        }
+
+        for (int k = 0; k < 10; k++)
+        {
+            Commander(h, 20000 + k, new Vector3(k, 0, 0));
+        }
+
+        h.Host.SetView(View(["UnitCards", "UnitSymbols", "Labels"]));
+        double t = 1.0;
+        for (int f = 0; f < 30; f++)
+        {
+            h.Host.Frame(h.World, t);
+            t += 1.0;
+            h.Host.Take();
+        }
+
+        long frameBytes = 0, takeBytes = 0;
+        const int runs = 50;
+        int prims = 0;
+        for (int f = 0; f < runs; f++)
+        {
+            long a = GC.GetAllocatedBytesForCurrentThread();
+            h.Host.Frame(h.World, t);
+            t += 1.0;
+            long b = GC.GetAllocatedBytesForCurrentThread();
+            var frames = h.Host.Take();
+            long c = GC.GetAllocatedBytesForCurrentThread();
+            frameBytes += b - a;
+            takeBytes += c - b;
+            prims = 0;
+            for (int i = 0; i < frames.Count; i++)
+            {
+                prims += frames[i].Primitives.Count;
+            }
+        }
+
+        Assert.Equal(540, prims);
+        Assert.Equal(0L, takeBytes);
+        Assert.InRange(frameBytes / runs, 0, 12_000);
+    }
 }

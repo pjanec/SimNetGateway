@@ -29,7 +29,22 @@ internal sealed class HrotGizmoHost : IGizmoSource
     private readonly HashSet<int> _selected = new();
     private readonly Dictionary<int, HashSet<string>> _pinned = new();
     private readonly Dictionary<AiOverlayFlags, FamilyPolicy> _policies = new();
-    private readonly List<GizmoLayerFrame> _frames = new();
+    // the frame of the layers is built into these, reused every run (hot path: no allocation for a steady frame); the array Take returns is valid until the next Frame
+    private GizmoLayerFrame[] _out = Array.Empty<GizmoLayerFrame>();
+    private readonly Dictionary<byte, List<GizmoPrimitiveData>> _byId = new();
+    private LayerMask256 _mask;
+    private bool _ready;
+    private readonly Dictionary<ulong, TextEntry> _texts = new();
+    private const int MaxPoints = 3;
+    private readonly List<HrotVec3[]>[] _pool = [new(), new(), new(), new()];   // point arrays by length (1 .. 3), handed out in order and reused by the next run
+    private readonly int[] _poolUsed = new int[MaxPoints + 1];
+    private const int MaxCachedTexts = 4096;
+
+    private sealed class TextEntry
+    {
+        public ulong A, B, C, D;
+        public string Text = string.Empty;
+    }
     private GizmoViewRequest? _view;
     private HashSet<string> _layerNames = new(StringComparer.Ordinal);
     private EntityRepository? _builtFor;
@@ -51,7 +66,10 @@ internal sealed class HrotGizmoHost : IGizmoSource
         _selected.Clear();
         _pinned.Clear();
         _layerNames = new HashSet<string>(StringComparer.Ordinal);
-        _frames.Clear();
+        _ready = false;
+        _out = Array.Empty<GizmoLayerFrame>();
+        _byId.Clear();
+        _mask = default;
         if (view is not { } v)
         {
             _next = double.NegativeInfinity;
@@ -85,19 +103,39 @@ internal sealed class HrotGizmoHost : IGizmoSource
             families.Add(string.IsNullOrEmpty(family) ? "*" : family);
         }
 
+        BuildOutputs();
         _next = double.NegativeInfinity;
     }
 
+    /// <summary>The per-layer lists, the sorted frame array and the layer mask, built once per view.</summary>
+    private void BuildOutputs()
+    {
+        var names = _layerNames.ToArray();
+        Array.Sort(names, StringComparer.Ordinal);
+        _out = new GizmoLayerFrame[names.Length];
+        for (int i = 0; i < names.Length; i++)
+        {
+            var list = new List<GizmoPrimitiveData>();
+            _out[i] = new GizmoLayerFrame(names[i], list);
+            byte id = Layers.Value.ByName[names[i]];
+            _mask.SetBit(id);
+            if (Layers.Value.ById.TryGetValue(id, out var owner) && owner == names[i])
+            {
+                _byId[id] = list;   // a layer row two names share belongs to the first; the other's frame stays empty
+            }
+        }
+    }
+
+    /// <summary>The frames drawn since the last call (empty when none is due). The returned array and its lists are REUSED by the next run: read them before it.</summary>
     public IReadOnlyList<GizmoLayerFrame> Take()
     {
-        if (_frames.Count == 0)
+        if (!_ready)
         {
             return Array.Empty<GizmoLayerFrame>();
         }
 
-        var taken = _frames.ToArray();
-        _frames.Clear();
-        return taken;
+        _ready = false;
+        return _out;
     }
 
     /// <summary>Once per host frame: runs the projectors when a view exists and its rate says a frame is due. <paramref name="now"/> is wall seconds.</summary>
@@ -118,13 +156,7 @@ internal sealed class HrotGizmoHost : IGizmoSource
             Build(world);
         }
 
-        var mask = default(LayerMask256);
-        foreach (string name in _layerNames)
-        {
-            mask.SetBit(Layers.Value.ByName[name]);
-        }
-
-        _buffer!.SetActiveLayers(in mask);
+        _buffer!.SetActiveLayers(in _mask);
         _buffer.EndFrame(dt);
         _system!.Execute(world, dt);
         Runs++;
@@ -161,18 +193,19 @@ internal sealed class HrotGizmoHost : IGizmoSource
 
     private void Capture()
     {
-        var byLayer = new Dictionary<string, List<GizmoPrimitiveData>>(StringComparer.Ordinal);
-        foreach (string name in _layerNames)
+        for (int i = 0; i < _out.Length; i++)
         {
-            byLayer[name] = new List<GizmoPrimitiveData>();
+            ((List<GizmoPrimitiveData>)_out[i].Primitives).Clear();
         }
+
+        Array.Clear(_poolUsed);
 
         Ground = Fdp.Toolkit.World.WorldQuery.Of(_builtFor!);   // HROT's own ground height, for the 2-D primitives
         var frame = _buffer!.GetFrame();
         for (int i = 0; i < frame.Length; i++)
         {
             ref readonly var p = ref frame[i];
-            if (!Layers.Value.ById.TryGetValue(p.DebugLayer, out var layer) || !byLayer.TryGetValue(layer, out var list))
+            if (!_byId.TryGetValue(p.DebugLayer, out var list))
             {
                 continue;
             }
@@ -183,11 +216,7 @@ internal sealed class HrotGizmoHost : IGizmoSource
             }
         }
 
-        _frames.Clear();
-        foreach (string name in _layerNames.Order(StringComparer.Ordinal))
-        {
-            _frames.Add(new GizmoLayerFrame(name, byLayer[name]));
-        }
+        _ready = true;
     }
 
     internal GizmoPrimitiveData? Convert(in DebugPrimitive p)
@@ -201,23 +230,74 @@ internal sealed class HrotGizmoHost : IGizmoSource
         switch (p.Shape)
         {
             case DebugPrimitiveShape.Line:
-                return new GizmoPrimitiveData(GizmoPrimitiveShape.LineStrip, [V(p.LineStart), V(p.LineEnd)], colour, p.Thickness, string.Empty);
+                return new GizmoPrimitiveData(GizmoPrimitiveShape.LineStrip, Pts(V(p.LineStart), V(p.LineEnd)), colour, p.Thickness, string.Empty);
             case DebugPrimitiveShape.Arrow:
-                return new GizmoPrimitiveData(GizmoPrimitiveShape.Arrow, [V(p.ArrowFrom), V(p.ArrowTo)], colour, p.Thickness, string.Empty);
+                return new GizmoPrimitiveData(GizmoPrimitiveShape.Arrow, Pts(V(p.ArrowFrom), V(p.ArrowTo)), colour, p.Thickness, string.Empty);
             case DebugPrimitiveShape.Sphere:
-                return new GizmoPrimitiveData(GizmoPrimitiveShape.Circle, [V(p.SphereCenter)], colour, p.SphereRadius, string.Empty);
+                return new GizmoPrimitiveData(GizmoPrimitiveShape.Circle, Pts(V(p.SphereCenter)), colour, p.SphereRadius, string.Empty);
             case DebugPrimitiveShape.FilledTriangle:
                 return new GizmoPrimitiveData(GizmoPrimitiveShape.Polygon,
-                    [new HrotVec3(p.TriA.X, p.TriA.Y, 0), new HrotVec3(p.TriB.X, p.TriB.Y, 0), new HrotVec3(p.TriC.X, p.TriC.Y, 0)], colour, 0f, string.Empty);
+                    Pts(new HrotVec3(p.TriA.X, p.TriA.Y, 0), new HrotVec3(p.TriB.X, p.TriB.Y, 0), new HrotVec3(p.TriC.X, p.TriC.Y, 0)), colour, 0f, string.Empty);
             case DebugPrimitiveShape.Box2D:
                 return new GizmoPrimitiveData(GizmoPrimitiveShape.Box,
-                    [new HrotVec3(p.BoxCenterX, p.BoxCenterY, GroundAt(p.BoxCenterX, p.BoxCenterY)), new HrotVec3(p.BoxExtentX, p.BoxExtentY, p.BoxAngleDeg)], colour, p.Thickness, string.Empty);
+                    Pts(new HrotVec3(p.BoxCenterX, p.BoxCenterY, GroundAt(p.BoxCenterX, p.BoxCenterY)), new HrotVec3(p.BoxExtentX, p.BoxExtentY, p.BoxAngleDeg)), colour, p.Thickness, string.Empty);
             case DebugPrimitiveShape.Text:
-                string text = p.StringHash != 0 ? _buffer!.InternMap.TryResolve(p.StringHash) ?? string.Empty : p.TextContent.ToString();
-                return new GizmoPrimitiveData(GizmoPrimitiveShape.Text, [new HrotVec3(p.TextX, p.TextY, GroundAt(p.TextX, p.TextY))], colour, 0f, text);
+                string text = p.StringHash != 0 ? _buffer!.InternMap.TryResolve(p.StringHash) ?? string.Empty : TextOf(in p.TextContent);
+                return new GizmoPrimitiveData(GizmoPrimitiveShape.Text, Pts(new HrotVec3(p.TextX, p.TextY, GroundAt(p.TextX, p.TextY))), colour, 0f, text);
             default:
                 return null;   // meta primitives (bindings, masks) and shapes a client cannot draw from a point list
         }
+    }
+
+    /// <summary>A reused point array of <paramref name="a"/> (and <paramref name="b"/>, <paramref name="c"/>) for this run.</summary>
+    private HrotVec3[] Pts(HrotVec3 a, HrotVec3? b = null, HrotVec3? c = null)
+    {
+        int n = c is null ? (b is null ? 1 : 2) : 3;
+        var list = _pool[n];
+        int at = _poolUsed[n]++;
+        if (at == list.Count)
+        {
+            list.Add(new HrotVec3[n]);
+        }
+
+        var array = list[at];
+        array[0] = a;
+        if (n > 1)
+        {
+            array[1] = b!.Value;
+        }
+
+        if (n > 2)
+        {
+            array[2] = c!.Value;
+        }
+
+        return array;
+    }
+
+    /// <summary>The string of a primitive's inline text, made once per distinct content (a steady frame draws the same texts).</summary>
+    private unsafe string TextOf(in Fdp.Toolkit.Diagnostics.Gizmos.FixedString32 content)
+    {
+        var local = content;
+        var words = new ReadOnlySpan<ulong>(&local, 4);
+        ulong key = 14695981039346656037UL;
+        for (int i = 0; i < 4; i++)
+        {
+            key = (key ^ words[i]) * 1099511628211UL;
+        }
+
+        if (_texts.TryGetValue(key, out var entry) && entry.A == words[0] && entry.B == words[1] && entry.C == words[2] && entry.D == words[3])
+        {
+            return entry.Text;
+        }
+
+        if (_texts.Count >= MaxCachedTexts)
+        {
+            _texts.Clear();
+        }
+
+        _texts[key] = new TextEntry { A = words[0], B = words[1], C = words[2], D = words[3], Text = local.ToString() };
+        return local.ToString();
     }
 
     private static uint Rgba(Rgba32 c) => ((uint)c.R << 24) | ((uint)c.G << 16) | ((uint)c.B << 8) | c.A;
@@ -247,13 +327,13 @@ internal sealed class HrotGizmoHost : IGizmoSource
         switch (p.Shape)
         {
             case DebugPrimitiveShape.Text:
-                return new GizmoPrimitiveData(GizmoPrimitiveShape.Text, [], colour, p.ThicknessU16, p.TextContent.ToString(),   // a card text's size is in whole pixels, not tenths
+                return new GizmoPrimitiveData(GizmoPrimitiveShape.Text, [], colour, p.ThicknessU16, TextOf(in p.TextContent),   // a card text's size is in whole pixels, not tenths
                     GizmoPrimitiveSpace.EntityCard, anchor, p.ZIndex, p.TextX, p.TextY);
             case DebugPrimitiveShape.Box2D:
                 return new GizmoPrimitiveData(GizmoPrimitiveShape.Box, [], colour, p.Thickness, string.Empty,
                     GizmoPrimitiveSpace.EntityCard, anchor, p.ZIndex, p.BoxCenterX, p.BoxCenterY, p.BoxExtentX, p.BoxExtentY, Rgba(p.FillColor));
             case DebugPrimitiveShape.Icon:
-                return new GizmoPrimitiveData(GizmoPrimitiveShape.Icon, [], colour, 0f, p.TextContent.ToString(),
+                return new GizmoPrimitiveData(GizmoPrimitiveShape.Icon, [], colour, 0f, TextOf(in p.TextContent),
                     GizmoPrimitiveSpace.EntityCard, anchor, p.ZIndex, CardH: p.Thickness);
             default:
                 return null;

@@ -14,6 +14,7 @@ public interface IGizmoSource
 
     /// <summary>
     /// What was drawn since the last call: one frame per requested layer that was produced (a layer with nothing drawn has an empty frame, so a client clears it).
+    /// ⭐ The returned list and the lists inside it may be REUSED by the next run of the source (T-059: a steady frame allocates nothing): read them before the next call of the host's frame.
     /// Empty when no frame is due yet (the view's rate caps how often the projectors run) or there is no view.
     /// </summary>
     IReadOnlyList<GizmoLayerFrame> Take();
