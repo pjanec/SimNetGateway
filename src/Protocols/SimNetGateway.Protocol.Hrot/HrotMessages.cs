@@ -628,3 +628,25 @@ public readonly record struct HrotEntityStatus(
 
 /// <summary>The entity <see cref="Id"/> no longer has a card (it is not on the map any more); its status is withdrawn. An entity that leaves altogether is <see cref="HrotEntityRemoved"/>.</summary>
 public readonly record struct HrotEntityStatusRemoved(int Id) : IHrotToGatewayMessage;
+
+// ---- DPS: what HROT's men shout, report and order (DD-026) ------------------------------------------------------------------------
+
+/// <summary>
+/// A man began saying something new (DD-026; HROT's <c>Utterance</c> component: a change of kind, target or end time): <paramref name="SpeakerId"/> the speaker's network id,
+/// <paramref name="Kind"/> the NAME of HROT's <c>UtteranceKind</c> (CallContact, CmdHandsUp ...), <paramref name="TargetId"/> whom it is about (0 = everyone around / none), <paramref name="SimTime"/> the simulation
+/// time it was noticed.
+/// </summary>
+public readonly record struct HrotUtterance(int SpeakerId, string Kind, int TargetId, double SimTime) : IHrotToGatewayMessage;
+
+/// <summary>
+/// A report entered a unit's command history (DD-026; HROT's <c>CommandReport</c>), once per report. <paramref name="FromId"/> / <paramref name="ToId"/> are the ids HROT stored (<paramref name="ToId"/> 0 = a superior it does not simulate);
+/// the other fields are HROT's own numbers as they are: <paramref name="Kind"/> (0 none, 1 contact, 2 spot, 3 sitrep, 4 lace, 5 progress, 6 request), <paramref name="Sub"/> the progress / request kind,
+/// <paramref name="Count"/>, <paramref name="Size"/> (0 unknown, 1 individual, 2 team, 3 squad, 4 platoon), <paramref name="Activity"/> (0 unknown, 1 firing, 2 moving, 3 static, 4 withdrawing, 5 surrendering),
+/// <paramref name="Equipment"/> (bit flags), <paramref name="Strength"/> and <paramref name="Ammo"/> (0 unknown, 1 green, 2 amber, 3 red, 4 black), <paramref name="Wia"/>, <paramref name="Kia"/>;
+/// <paramref name="Synthetic"/> = injected over the debug HTTP; <paramref name="SimTime"/> the time HROT took it in.
+/// </summary>
+public readonly record struct HrotReport(
+    int FromId, int ToId, byte Kind, byte Sub, byte Count, byte Size, byte Activity, byte Equipment, byte Strength, byte Ammo, byte Wia, byte Kia, bool Synthetic, double SimTime) : IHrotToGatewayMessage;
+
+/// <summary>An order entered a unit's command history (DD-026), once per order (a re-sent order is not news): <paramref name="Name"/> the ordered behaviour's registry NAME, <paramref name="ToId"/> the member ordered.</summary>
+public readonly record struct HrotOrder(int FromId, int ToId, string Name, double SimTime) : IHrotToGatewayMessage;

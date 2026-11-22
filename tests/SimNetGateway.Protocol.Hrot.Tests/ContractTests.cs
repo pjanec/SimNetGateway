@@ -17,8 +17,8 @@ public class ContractTests
         string[] expected =
             [
                 "HrotAnimal", "HrotBuildingDamage", "HrotClockAnchor", "HrotDetonation", "HrotEffect", "HrotEntityRemoved", "HrotEntityState", "HrotEntityStatus", "HrotEntityStatusRemoved", "HrotExercise", "HrotFire", "HrotFireSpots", "HrotFlameJet", "HrotFlameJetRemoved",
-                "HrotGroundMarks", "HrotImpact", "HrotManDowned", "HrotMover", "HrotMoverRemoved", "HrotMoverTracks", "HrotMunitionLook", "HrotOrigin", "HrotPersonAppearance", "HrotPersonDetail", "HrotPlayerMessage", "HrotRound", "HrotSession",
-                "HrotStatus", "HrotStatusRemoved", "HrotStep", "HrotTerrain", "HrotTrafficLight", "HrotTrafficLightRemoved", "HrotTurretPose", "HrotTypeRecord", "HrotVehicleLook", "HrotView",
+                "HrotGroundMarks", "HrotImpact", "HrotManDowned", "HrotMover", "HrotMoverRemoved", "HrotMoverTracks", "HrotMunitionLook", "HrotOrder", "HrotOrigin", "HrotPersonAppearance", "HrotPersonDetail", "HrotPlayerMessage", "HrotReport", "HrotRound", "HrotSession",
+                "HrotStatus", "HrotStatusRemoved", "HrotStep", "HrotTerrain", "HrotTrafficLight", "HrotTrafficLightRemoved", "HrotTurretPose", "HrotTypeRecord", "HrotUtterance", "HrotVehicleLook", "HrotView",
             ];
         var actual = Messages.Where(t => typeof(IHrotToGatewayMessage).IsAssignableFrom(t)).Select(t => t.Name).Order().ToArray();
         Assert.Equal(expected, actual);

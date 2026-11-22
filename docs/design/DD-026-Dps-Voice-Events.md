@@ -89,4 +89,28 @@ Approved with the design (R-148).
 
 ## 9. As-built notes
 
-Not built.
+Built (T-064, `2026-11-22`); HROT pin `e2b43ab4c`: every source exists there (`Civilians/Speech.cs` `Utterance` / `Utterances.Say`, `Squad/Command/CommandHistory.cs` `CommandReportHistory` / `CommandOrderHistory` / `CommandHistoryOf`, `CommandReports.cs` `CommandReport`, the registry on `HrotNodeContext`). The contract (`Utterance`, `Report`, `Order`, the enums) and the IDL are unchanged.
+
+```mermaid
+flowchart LR
+    A[EcsHrotAdapter.GatherEntities] --> V[VoiceGather]
+    V -->|HrotUtterance / HrotReport / HrotOrder pivot| M[DpsVoiceOutbound]
+    M -->|ports dps.Utterance / Report / Order| T[DpsTransport channels, DpsCountKind.Event, world participant]
+    T -->|counted in the render barrier's world events, as Fire| C[every seated client]
+    R[HrotServices.Behaviors registry] --> V
+```
+
+What the picture shows: no second mechanism - the same pivot message, module, port and event channel as a Fire; the only new thing is the gather that turns HROT's STATE into events.
+
+| # | as built |
+|---|---|
+| 1 | **Where:** `VoiceGather` (host, called once per `GatherEntities`, after the others), three pivot messages (`HrotUtterance`, `HrotReport`, `HrotOrder`; the DIS side ignores them), `DpsVoiceOutbound` (the tenth dps module), three channels on `DpsTransport` (`DpsCountKind.Event`, depth 1024 like Fire), three ports. A report is mapped by NUMBER: HROT's `ReportKind` / `ElementSize` / `ElementActivity` / `StatusColour` are numbered as the contract's (a rail pins it); a value out of range is the contract's none (0). |
+| 2 | **A new utterance** is a change of `Kind`, target (network id, 0 = none) or `Until` against what the gather saw. `Utterances.Say` always writes a new `Until`, so an identical shout after the first was over is new and a held one is not. `UtterNone` is never sent. The kind NAME comes from a per-kind string cached once (no allocation per gather). |
+| 3 | **A new history entry:** both histories are newest-first lists of 32; the entries in front of the newest one seen last gather are new, sent oldest first; if the remembered one is gone (more than 32 in one gather) all 32 are sent. HROT writes a report / an order TWICE (outgoing on the sender, incoming on the addressee, each only where a history exists): the gather sends the outgoing entry, and the incoming one only when the sender keeps no history, so it is ONE event. A re-sent order (HROT's `Repeats`) is not news. `Sub` = `CommandReport.Subtype`, `Synthetic` = `Synthetic != 0`; `At` / `Radius` / `Phase` / `ObservedAt` / `Seq` are not carried. |
+| 4 | **`ToId` 0 (measured, D-3):** HROT stores `CommandPictureOps.NetIdOf(Entity.Null)` = **0** for a report to a superior it does not simulate (`Entity.Null` is index 0); an addressee that exists gets its `NetworkIdentity`, and an entity with none gets its SLOT INDEX (`PictureConditions.cs:19-25`, CE-4200) - so an id is a gateway entity id only for a unit with a network id (the units a gateway publishes all have one). The gather writes what HROT stored and adds no rule. Rail `A_report_to_a_superior_hrot_does_not_simulate_has_to_id_zero`. |
+| 5 | **Order names:** `BehaviorRegistry.TryGetName(hash)`; a hash the registry does not know, and a node with no registry, send NO order (names, not numbers; D-2). ⚠ HROT's history also holds "abstract order" hashes; any the registry does not name are silently not sent - measure a scenario before relying on every order being heard. |
+| 6 | **First sight and the boundary (§6):** the first gather of a world and the first after `Clear` (a world boundary: `EcsHrotAdapter.Reset`) only REMEMBER; a unit or speaker first seen later is remembered silently too, except a speaker whose shout is still going (`Until` after now), which is said. So an entry that was already in a unit's history when the gather first looked is never sent - a replay or restore makes no events from old entries (R-11007's rule), at the price that a unit created and reporting within one gather period is missed. |
+| 7 | **Cost:** a steady gather allocates 0 bytes (`GC.GetAllocatedBytesForCurrentThread`, 300 gathers after a tier-up wait); only a new event allocates its pivot message. Replicas (`_replicas`) are skipped, as the other gathers do. |
+| 8 | **Not done:** the client-side mapping of kinds to lines (the Unreal lane's); no gateway rule decides when a man speaks (D-4). |
+
+Rails: `VoiceGatherTests` (12: one event per shout / report / order, held none, identical-after-`Until` new, seeded sequences x3, ids / numbers / `Synthetic`, the dedupe of the two copies, `ToId` 0, 35 reports in one gather, resend, unknown name, first gather and boundary, 0 B, the whole chain with 2 seats) and `DpsVoiceTests` (4: every field and bound, enum numbering, once with 2 seats, a late client hears nothing old). Mutations (each made, the named tests red, restored): an event every gather while held (7 tests); the order hash instead of the name (2); written per seat (3); `Until` ignored (4); the incoming copy not deduped (4); the first gather replaying (1); a per-gather allocation (1); `Synthetic` dropped (1); a re-sent order listed (the steady / order tests).

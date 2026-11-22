@@ -297,6 +297,9 @@ public sealed class DpsTransport : IDisposable
             TkbType = Add(new DpsChannel<TkbType>(_participant, hold: Hold<TkbType>(DpsCountKind.Keyed, key: t => t.TypeId)));
             ManDowned = Add(new DpsChannel<ManDowned>(_participant, hold: Hold<ManDowned>(DpsCountKind.Event, EventDepth)));
             Status = Add(new DpsChannel<Status>(_participant, hold: Hold<Status>(DpsCountKind.Keyed, key: t => t.StatusId)));
+            Utterance = Add(new DpsChannel<Utterance>(_participant, hold: Hold<Utterance>(DpsCountKind.Event, EventDepth)));   // DD-026: events once on the world partition
+            Report = Add(new DpsChannel<Report>(_participant, hold: Hold<Report>(DpsCountKind.Event, EventDepth)));
+            Order = Add(new DpsChannel<Order>(_participant, hold: Hold<Order>(DpsCountKind.Event, EventDepth)));
             Exercise = Add(new DpsChannel<Exercise>(_participant, hold: Hold<Exercise>(DpsCountKind.Keyless)));
             View = Add(new DpsChannel<View>(_participant, hold: Hold<View>(DpsCountKind.Keyless)));
             SimClock = Add(new DpsChannel<SimClock>(_participant));
@@ -386,6 +389,12 @@ public sealed class DpsTransport : IDisposable
     internal DpsChannel<Appearance> Appearance { get; } = null!;
 
     internal DpsChannel<Fire> Fire { get; } = null!;
+
+    internal DpsChannel<Utterance> Utterance { get; } = null!;
+
+    internal DpsChannel<Report> Report { get; } = null!;
+
+    internal DpsChannel<Order> Order { get; } = null!;
 
     internal DpsChannel<Detonation> Detonation { get; } = null!;
 

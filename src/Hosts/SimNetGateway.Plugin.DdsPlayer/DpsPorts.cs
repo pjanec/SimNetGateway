@@ -38,6 +38,9 @@ internal sealed class DpsPorts
         ManDowned = b.RequireOutbound<DpsItem<ManDowned>>("dps.ManDowned");
         PlayerMessage = b.RequireOutbound<DpsItem<PlayerMessage>>("dps.PlayerMessage");
         Status = b.RequireOutbound<DpsItem<Status>>("dps.Status");
+        Utterance = b.RequireOutbound<DpsItem<Utterance>>("dps.Utterance");
+        Report = b.RequireOutbound<DpsItem<Report>>("dps.Report");
+        Order = b.RequireOutbound<DpsItem<Order>>("dps.Order");
         Exercise = b.RequireOutbound<DpsItem<Exercise>>("dps.Exercise");
         View = b.RequireOutbound<DpsItem<View>>("dps.View");
         SimClock = b.RequireOutbound<DpsItem<SimClock>>("dps.SimClock");
@@ -98,6 +101,12 @@ internal sealed class DpsPorts
 
     public IOutboundChannel<DpsItem<Status>> Status { get; }
 
+    public IOutboundChannel<DpsItem<Utterance>> Utterance { get; }
+
+    public IOutboundChannel<DpsItem<Report>> Report { get; }
+
+    public IOutboundChannel<DpsItem<Order>> Order { get; }
+
     public IOutboundChannel<DpsItem<Exercise>> Exercise { get; }
 
     public IOutboundChannel<DpsItem<View>> View { get; }
@@ -139,6 +148,9 @@ internal sealed class DpsPorts
         b.BindOutbound<DpsItem<ManDowned>>("dps.ManDowned", t.ManDowned);
         b.BindOutbound<DpsItem<PlayerMessage>>("dps.PlayerMessage", t.PlayerMessage);
         b.BindOutbound<DpsItem<Status>>("dps.Status", t.Status);
+        b.BindOutbound<DpsItem<Utterance>>("dps.Utterance", t.Utterance);
+        b.BindOutbound<DpsItem<Report>>("dps.Report", t.Report);
+        b.BindOutbound<DpsItem<Order>>("dps.Order", t.Order);
         b.BindOutbound<DpsItem<Exercise>>("dps.Exercise", t.Exercise);
         b.BindOutbound<DpsItem<View>>("dps.View", t.View);
         b.BindOutbound<DpsItem<SimClock>>("dps.SimClock", t.SimClock);

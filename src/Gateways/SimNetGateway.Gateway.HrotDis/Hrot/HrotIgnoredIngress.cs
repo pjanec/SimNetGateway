@@ -43,6 +43,9 @@ public sealed class HrotIgnoredIngress : IGatewayModule
         Ignored<HrotImpact>(),
         Ignored<HrotEntityStatus>(),   // a client's card data goes to the dps side (DD-025); DIS has no place for it
         Ignored<HrotEntityStatusRemoved>(),
+        Ignored<HrotUtterance>(),   // a voice line is a client's (DD-026); DIS has no place for it
+        Ignored<HrotReport>(),
+        Ignored<HrotOrder>(),
     ];
 
     /// <summary>The message types this profile ignores on purpose.</summary>

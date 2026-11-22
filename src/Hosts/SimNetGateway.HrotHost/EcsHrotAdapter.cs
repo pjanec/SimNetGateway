@@ -53,6 +53,8 @@ public sealed class EcsHrotAdapter
     private readonly Dictionary<int, Sent> _sent = new();
     private readonly PersonDetailGather _details = new();
     private readonly EntityStatusGather _status = new();
+    private readonly VoiceGather _voice = new();
+    private readonly Func<int, bool> _isReplica;
     private readonly EffectGather _effects = new();
     private readonly AppearanceGather _appearances = new();
     private readonly VehicleLookGather _vehicleLooks = new();
@@ -81,6 +83,7 @@ public sealed class EcsHrotAdapter
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _config = config ?? throw new ArgumentNullException(nameof(config));
+        _isReplica = _replicas.ContainsKey;
     }
 
     public PackCounters Counters { get; } = new();
@@ -274,6 +277,7 @@ public sealed class EcsHrotAdapter
         _buildings.Gather(world, inbound);
         _traffic.Gather(world, inbound, simTime, _types);
         _view.Gather(world, _services.SuggestedView, inbound, simTime);
+        _voice.Gather(world, inbound, simTime, _services.Behaviors(), _isReplica);   // what the men shout, report and order (DD-026)
         _types.Flush(tkb, inbound);
     }
 
@@ -887,6 +891,7 @@ public sealed class EcsHrotAdapter
         _sent.Clear();
         _details.Clear();
         _status.Clear();
+        _voice.Clear();   // a world boundary forgets: nothing is replayed (DD-026)
         _appearances.Clear();
         _vehicleLooks.Clear();
         _rounds.Clear();
