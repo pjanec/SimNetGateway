@@ -589,8 +589,10 @@ public sealed class EcsHrotAdapter
         }
 
         _queryWorld = world;
-        // record entities (building breaches, craters) carry a transform and a network id but are not units to show
-        _hrotQuery = world.Query().With<SimTransform>().With<TkbIdentity>().With<NetworkIdentity>().Without<ReplicationRoute>().Without<Fdp.Toolkit.Terrain.BuildingDamage>().Without<Fdp.Toolkit.Terrain.GroundDamage>().Build();
+        // record entities (building breaches, craters) carry a transform and a network id but are not units to show; nor are a terrain's
+        // DOORS (T-073): a door is part of its house, which a client builds from the terrain - ~4,430 on Stechovice were gathered every tick,
+        // re-ingested every second and sent to DPS as entities (the Unreal lane's measurement: the gateway halved headless HROT's tick rate)
+        _hrotQuery = world.Query().With<SimTransform>().With<TkbIdentity>().With<NetworkIdentity>().Without<ReplicationRoute>().Without<Fdp.Toolkit.Terrain.BuildingDamage>().Without<Fdp.Toolkit.Terrain.GroundDamage>().Without<Fdp.Toolkit.Terrain.DoorState>().Build();
         _routeQuery = world.Query().With<ReplicationRoute>().Build();
         _turretQuery = world.Query().With<PartMetadata>().With<TurretPose>().Build();
     }

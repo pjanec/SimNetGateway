@@ -188,6 +188,27 @@ public class BuildingDamageAndHeightTests
         Assert.Single(h.Gather(5.0).Of<HrotBuildingDamage>());
     }
 
+    /// <summary>T-073: a terrain's door (an entity carrying <c>DoorState</c>) is part of its house, never an entity to show: not gathered, not sent
+    /// - while a unit beside it still is. Red-proof: the query without <c>Without&lt;DoorState&gt;</c>.</summary>
+    [Fact]
+    public void A_terrain_door_is_not_gathered_as_an_entity_but_a_unit_beside_it_is()
+    {
+        using var h = new Stage();
+        if (!h.World.IsComponentTypeRegistered<DoorState>())
+        {
+            h.World.RegisterComponent<DoorState>();
+        }
+
+        var door = h.AddHrotEntity(7001, new Vector3(5, 5, 0), name: "door", tkb: 8805);
+        h.World.AddComponent(door, new DoorState { State = TerrainDoorState.Closed });
+        h.AddHrotEntity(7002, new Vector3(6, 5, 0), name: "unit", tkb: 100);
+
+        var first = h.Gather(1.0).Of<HrotEntityState>();
+        Assert.DoesNotContain(first, s => s.Id == 7001);
+        Assert.Contains(first, s => s.Id == 7002);
+        Assert.DoesNotContain(h.Gather(3.0).Of<HrotEntityState>(), s => s.Id == 7001);   // nor at the next resend
+    }
+
     [Fact]
     public void A_damage_entity_that_names_no_building_or_a_world_without_terrain_sends_nothing_and_the_entities_are_not_published()
     {
