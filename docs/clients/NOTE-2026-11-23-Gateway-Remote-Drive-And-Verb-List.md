@@ -34,7 +34,8 @@ HROT's whole offered-verb list for your `UseTarget` (what its held-F list shows)
 | `Available` | false = offered but refused now; `Reason` says why (`UseReason`: OutOfReach, SeatTaken, Locked ...) — show it greyed with the reason |
 | `HoldOnly` | shown on the hold list only, never sent by a tap (Drop) |
 
-To use a verb: send your press with the **position of that entry in the list** in `ControlFrame.UseVerb` (the byte) — HROT's brain reads the verb as an
-index into the same list for the same `UseTarget`, so entry 0 is the primary (what a tap sends). ⚠ `ControlFrame.Verb` (the enumeration) is still mapped
-to HROT's verb NUMBER, not to a list position, so a press that names Drive by enumeration is refused by HROT as "nothing to do" — send the position until
-that is aligned (an open point, DD-029 9). The IDL gained lines only (`UseActionEntry`, `OwnUnit.Actions`); the protocol version is unchanged.
+To use a verb: **name it** in `ControlFrame.Verb` (the enumeration; `UseVerbNone` = the primary). The gateway sends HROT that verb's POSITION in the same list
+for your `UseTarget` (HROT's brain reads the verb as an index), so Drive by name now works whatever its position. A verb the list does not offer (or a name HROT
+does not have) is sent past the end of the list and HROT refuses it with its own `NothingToDo` verdict in `OwnUnit.UseOutcome` / `UseReason`. The old
+`ControlFrame.UseVerb` byte (used only when `Verb` is None) is a raw position in that list, 0 = the primary; it is NOT HROT's verb number (that is `OwnUnit.UseVerb`, the other direction).
+The IDL gained lines only (`UseActionEntry`, `OwnUnit.Actions`); the protocol version is unchanged.

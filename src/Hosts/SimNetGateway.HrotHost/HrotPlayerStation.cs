@@ -301,7 +301,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         _useTarget = frame.UseTarget;
         _mount = frame.Mount;
         _firePref = frame.FirePref;
-        byte useVerb = UseVerbOf(in frame);
+        byte useVerb = ResolveVerb(in frame);
         int useTarget = frame.UseTarget;
         byte useSeq = HandOverPress(in frame, ref useVerb, ref useTarget);
         _orders.Control(_flow.UnitId, new Fdp.Toolkit.Behavior.Possession.OperatorControlFrameEvent
@@ -452,13 +452,57 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
 
     private static Vector3 V(HrotVec3 v) => new((float)v.X, (float)v.Y, (float)v.Z);
 
+    /// <summary>The index a press that names no offered verb is sent with: past every list (at most <see cref="OperatorUseActions.MaxActions"/> long), so HROT's brain answers Refused / NothingToDo for it.</summary>
+    internal const byte NotOffered = 255;
+
     /// <summary>
-    /// The use verb of a frame: the verb named by the client (DD-020 3.3) when it names one, else the number it sent. A name HROT has no such verb for is no verb (a
-    /// client must not get a different action than it asked for).
+    /// The verb of a frame as HROT's brain reads it: the POSITION in the list <c>OperatorUseActions.For</c> offers for the frame's target (DD-029 / T-071). A named verb
+    /// (<c>ControlFrame.Verb</c>, DD-020 3.3) is the position of its first entry in <paramref name="offered"/>; one the list does not hold, or a name HROT has no such verb for,
+    /// is <see cref="NotOffered"/> (the brain refuses it with its own reason; a client never gets a different action than it asked for). No name (None) = the old byte,
+    /// which is a raw index (0 = the primary).
     /// </summary>
-    internal static byte UseVerbOf(in PlayerControl frame) =>
-        string.IsNullOrEmpty(frame.UseVerbName) ? frame.UseVerb
-        : Enum.TryParse<UseVerbKind>(frame.UseVerbName, out var verb) && Enum.IsDefined(verb) && verb.ToString() == frame.UseVerbName ? (byte)verb : (byte)0;
+    internal static byte UseVerbIndexOf(in PlayerControl frame, ReadOnlySpan<UseAction> offered)
+    {
+        if (string.IsNullOrEmpty(frame.UseVerbName))
+        {
+            return frame.UseVerb;
+        }
+
+        if (!Enum.TryParse<UseVerbKind>(frame.UseVerbName, out var verb) || !Enum.IsDefined(verb) || verb.ToString() != frame.UseVerbName)
+        {
+            return NotOffered;
+        }
+
+        for (int i = 0; i < offered.Length; i++)
+        {
+            if (offered[i].Verb == verb)
+            {
+                return (byte)i;
+            }
+        }
+
+        return NotOffered;
+    }
+
+    /// <summary>The frame's verb as an index into the list HROT offers for its target: the list is computed only when the frame names a verb.</summary>
+    private byte ResolveVerb(in PlayerControl frame)
+    {
+        if (string.IsNullOrEmpty(frame.UseVerbName))
+        {
+            return frame.UseVerb;
+        }
+
+        var map = _services.EntityMap;
+        var world = _world;
+        int n = 0;
+        if (map is not null && world is not null && map.TryGetEntity(_flow.UnitId, out var unit) && world.IsAlive(unit))
+        {
+            map.TryGetEntity(frame.UseTarget, out var target);
+            n = OperatorUseActions.For(world, unit, target, _pressActions);
+        }
+
+        return UseVerbIndexOf(in frame, _pressActions.AsSpan(0, n));
+    }
 
     private void Refresh()
     {

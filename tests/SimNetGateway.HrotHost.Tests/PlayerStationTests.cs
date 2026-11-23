@@ -357,9 +357,9 @@ public class PlayerStationTests
     private static PlayerControl Move(uint seq, byte useSeq, int target = VehicleId) => Frame() with { Seq = seq, Forward = 1f, UseSeq = useSeq, UseVerb = 0, UseTarget = target, Trigger = false, ShotSeq = 0 };
 
     /// <summary>Runs the whole Drive hand-over: the press, the brain boarding him, the step after each replicated change. Returns when the slot names the vehicle.</summary>
-    private static void DriveIn(Stage h, Entity soldier, Entity vehicle)
+    private static void DriveIn(Stage h, Entity soldier, Entity vehicle, string verbName = "")
     {
-        h.Station.Control(Press(1));
+        h.Station.Control(Press(1) with { UseVerbName = verbName });
         h.Events<OperatorControlFrameEvent>();
         h.Step();                                                    // AwaitBoard: not aboard yet
         Assert.Empty(h.Read<PossessRequestEvent>());
@@ -412,6 +412,38 @@ public class PlayerStationTests
         Assert.Equal((soldier, (byte)2, (byte)0, VehicleId), (first.Unit, first.UseSeq, first.UseVerb, first.UseTarget));
         h.Station.Control(Move(4, useSeq: 2));
         Assert.Equal((byte)2, Assert.Single(h.Events<OperatorControlFrameEvent>()).UseSeq);   // and only once
+    }
+
+    /// <summary>T-071: a press that NAMES its verb (ControlFrame.Verb) reaches HROT as that verb's position in the offered list; naming Drive arms the hand-over exactly like the index does.</summary>
+    [Fact]
+    public void A_drive_press_by_name_arms_the_hand_over_and_reaches_hrot_as_the_verbs_position()
+    {
+        using var h = new Stage();
+        _ = DriveSetup(h);
+        h.Station.Control(Press(1, verb: 7) with { UseVerbName = "Drive" });   // the raw byte is ignored when a verb is named
+        var sent = Assert.Single(h.Events<OperatorControlFrameEvent>());
+        Assert.Equal((byte)0, sent.UseVerb);   // Drive is the first offered verb of an empty vehicle
+
+        using var h2 = new Stage();
+        var (soldier2, vehicle2) = DriveSetup(h2);
+        DriveIn(h2, soldier2, vehicle2, "Drive");
+        Assert.Equal((PlayerSlotState.Playing, VehicleId), (h2.Station.Slot.State, h2.Station.Slot.UnitId));
+    }
+
+    [Fact]
+    public void A_named_verb_not_in_the_offered_list_is_sent_past_the_list_so_hrot_refuses_it_and_arms_nothing()
+    {
+        using var h = new Stage();
+        var (soldier, vehicle) = DriveSetup(h);
+        h.Station.Control(Press(1, verb: 0) with { UseVerbName = "Board" });   // the second offered verb: its position
+        Assert.Equal((byte)1, Assert.Single(h.Events<OperatorControlFrameEvent>()).UseVerb);
+        h.Station.Control(Press(2, verb: 0) with { UseVerbName = "OpenDoor" });   // a verb a vehicle does not offer
+        Assert.Equal(HrotPlayerStation.NotOffered, Assert.Single(h.Events<OperatorControlFrameEvent>()).UseVerb);   // HROT: UseVerb >= n is Refused / NothingToDo
+        h.Station.Control(Press(3, verb: 0) with { UseVerbName = "Levitate" });
+        Assert.Equal(HrotPlayerStation.NotOffered, Assert.Single(h.Events<OperatorControlFrameEvent>()).UseVerb);
+        Assert.Equal(Fdp.Toolkit.Behavior.EmbarkResult.Applied, Fdp.Toolkit.Behavior.Embarkation.TryEmbark(h.World, soldier, vehicle, SeatRole.Driver));
+        h.Steps(5);
+        Assert.Empty(h.Read<PossessRequestEvent>());   // nothing armed
     }
 
     [Fact]

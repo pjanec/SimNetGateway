@@ -236,15 +236,47 @@ public class DpsIntentRateTests(ITestOutputHelper output)
         }
     }
 
-    [Fact]
-    public void A_use_verb_name_wins_and_the_number_is_the_fallback()
+    /// <summary>
+    /// T-071: HROT's brain reads <c>UseVerb</c> as an INDEX into the offered list, so a verb NAME resolves to its position there (this test used to pin name -> HROT's verb
+    /// NUMBER, which the brain refused unless the verb happened to sit at that index). Invariants over seeded random offered lists: a named verb that is offered is found at
+    /// the position of its first entry; one that is not (or a name HROT does not have) is NotOffered (past every list, so HROT answers NothingToDo); None keeps the raw index.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    public void A_use_verb_name_resolves_to_its_position_in_the_offered_list_and_the_number_is_a_raw_index(int seed)
     {
         PlayerControl Frame(byte verb, string name) => new(1, 0, 0, 0, 0, 0, 0, false, 0, default, 0, 0, 0, 0, 0, 1, verb, 0, 0, false, default, default, 0, name);
+        var kinds = Enum.GetValues<Fdp.Toolkit.Behavior.Possession.UseVerbKind>().Where(k => k != Fdp.Toolkit.Behavior.Possession.UseVerbKind.NoVerb).ToArray();
+        var rng = new Random(seed);
+        for (int round = 0; round < 200; round++)
+        {
+            int n = rng.Next(0, 9);
+            var list = new Fdp.Toolkit.Behavior.Possession.UseAction[n];
+            for (int i = 0; i < n; i++)
+            {
+                list[i] = new Fdp.Toolkit.Behavior.Possession.UseAction(kinds[rng.Next(kinds.Length)], "x", 0, true, Fdp.Toolkit.Behavior.Possession.UseReason.Ok, default, 0f);
+            }
 
-        Assert.Equal((byte)Fdp.Toolkit.Behavior.Possession.UseVerbKind.BreachDoor, HrotPlayerStation.UseVerbOf(Frame(2, "BreachDoor")));
-        Assert.Equal((byte)7, HrotPlayerStation.UseVerbOf(Frame(7, string.Empty)));
-        Assert.Equal((byte)0, HrotPlayerStation.UseVerbOf(Frame(7, "Levitate")));   // a verb HROT does not have is not another verb
-        Assert.Equal((byte)0, HrotPlayerStation.UseVerbOf(Frame(7, "5")));   // a number is not a name
+            foreach (var kind in kinds)
+            {
+                byte got = HrotPlayerStation.UseVerbIndexOf(Frame((byte)rng.Next(0, 8), kind.ToString()), list);
+                int first = Array.FindIndex(list, a => a.Verb == kind);
+                Assert.Equal(first < 0 ? HrotPlayerStation.NotOffered : (byte)first, got);
+                if (first >= 0)
+                {
+                    Assert.Equal(kind, list[got].Verb);   // the position names the verb that was asked
+                }
+            }
+
+            byte raw = (byte)rng.Next(0, 8);
+            Assert.Equal(raw, HrotPlayerStation.UseVerbIndexOf(Frame(raw, string.Empty), list));   // None: the old byte, a raw index (0 = the primary)
+            Assert.Equal(HrotPlayerStation.NotOffered, HrotPlayerStation.UseVerbIndexOf(Frame(raw, "Levitate"), list));   // a verb HROT does not have is not another verb
+            Assert.Equal(HrotPlayerStation.NotOffered, HrotPlayerStation.UseVerbIndexOf(Frame(raw, "5"), list));   // a number is not a name
+        }
     }
 
     [Fact]
