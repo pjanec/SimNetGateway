@@ -20,7 +20,6 @@ gateway's seat owns one. You keep sending what you send today (`UseSeq`, the ver
 | the vehicle is destroyed or taken away | HROT lets the soldier go | the slot follows the unit the seat holds |
 
 ⚠ The hand-over takes a few frames (seated → riding → vehicle possessed, each waits for the state to come back): the slot changes a moment after the press.
-⚠ Only the possession flow (a node without a deploy server) follows the vehicle so far; HROT's deploy flow (the editor) keeps its own unit (§ DD-029 9).
 
 ## `OwnUnit.Actions` (appended, `[DdsBound(8)] sequence<UseActionEntry>`)
 
@@ -39,3 +38,10 @@ for your `UseTarget` (HROT's brain reads the verb as an index), so Drive by name
 does not have) is sent past the end of the list and HROT refuses it with its own `NothingToDo` verdict in `OwnUnit.UseOutcome` / `UseReason`. The old
 `ControlFrame.UseVerb` byte (used only when `Verb` is None) is a raw position in that list, 0 = the primary; it is NOT HROT's verb number (that is `OwnUnit.UseVerb`, the other direction).
 The IDL gained lines only (`UseActionEntry`, `OwnUnit.Actions`); the protocol version is unchanged.
+
+## 2. The editor (deploy flow) drives too — T-072
+
+Answers [NOTE-2026-11-23-Unreal-Drive-Blocked-By-Deploy-Flow.md](NOTE-2026-11-23-Unreal-Drive-Blocked-By-Deploy-Flow.md). A seat that deployed through HROT's deploy server (`--mode editor`) now arms and follows the
+hand-over exactly like a possession-flow seat: after a Drive press `PlayerSlot.UnitId` becomes the vehicle (State stays Playing), W frames drive it, and a new press while
+driving it with the soldier aboard is Get out (slot back on the soldier). Nothing changes for you: same press, same slot. The soldier stays HROT's deployed unit (riding), so the
+deploy server's slot does not drop; if the soldier is released HROT frees the seat as before and you are back at choosing.

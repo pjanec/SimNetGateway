@@ -175,7 +175,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         if (deploy != _flow is DeployFlowPlayerFlow)
         {
             _flow.Boundary();
-            _flow = deploy ? new DeployFlowPlayerFlow(_services, () => Orders, Station) : new PossessionFlow(_services, () => Orders, Station, _handOver);
+            _flow = deploy ? new DeployFlowPlayerFlow(_services, () => Orders, Station, _handOver) : new PossessionFlow(_services, () => Orders, Station, _handOver);
             if (_nowMs is not null)
             {
                 _flow.NowMs = _nowMs;
@@ -361,7 +361,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
     {
         var map = _services.EntityMap;
         var world = _world;
-        if (map is null || world is null || _flow is not PossessionFlow || !map.TryGetEntity(_flow.UnitId, out var unit) || !world.IsAlive(unit))
+        if (map is null || world is null || !map.TryGetEntity(_flow.UnitId, out var unit) || !world.IsAlive(unit))
         {
             _clientUseSeq = frame.UseSeq;
             _fwdUseSeq = frame.UseSeq;
@@ -636,6 +636,25 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
 }
 
 /// <summary>
+/// DD-029 D-2, ONE rule for both flows (T-072): the unit a seat that is Playing reports is the unit it DRIVES, the Fps unit HROT's hand-over holds for the seat's station
+/// (<see cref="DriveHandOver.HeldHere(out int)"/>); while nothing is held as Fps (between the hand-over's steps) the flow's own unit stays. The possession flow stores the answer
+/// in its <c>UnitId</c>; the deploy flow, whose unit is HROT's deploy flow's (the soldier it deployed), overlays it.
+/// </summary>
+internal static class SeatDrives
+{
+    public static int UnitOf(DriveHandOver? handOver, int flowUnit)
+    {
+        if (handOver is null || flowUnit == 0)
+        {
+            return flowUnit;
+        }
+
+        var held = handOver.HeldHere(out int id);
+        return !held.IsNull && id != flowUnit ? id : flowUnit;
+    }
+}
+
+/// <summary>
 /// Step 1: the editor node is the station. Offers are the placed units carrying <c>Playable</c>; joining a unit is HROT's <c>EntityOrders.Possess</c> and the
 /// slot follows <c>PossessedBy</c> (TakingControl until this station holds the unit, Playing, Dead when the unit is out of the fight). Roles come with the deploy flow.
 /// </summary>
@@ -788,11 +807,7 @@ internal sealed class PossessionFlow : IPlayerFlow
             return;
         }
 
-        var held = _handOver.HeldHere(out int id);
-        if (!held.IsNull && id != UnitId)
-        {
-            UnitId = id;
-        }
+        UnitId = SeatDrives.UnitOf(_handOver, UnitId);
     }
 
     /// <summary>The slot follows HROT's own possession state of the unit.</summary>

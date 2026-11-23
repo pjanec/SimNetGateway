@@ -118,7 +118,7 @@ public class PlayerStationTests
         }
     }
 
-    private static PlayerControl Frame() => new(
+    internal static PlayerControl Frame() => new(
         Seq: 77, Forward: 1f, Lateral: -0.5f, Steer: 0.25f, Yaw: 0.75f, Vertical: 0.125f, Gait: 2, Trigger: true, Mount: 1, AimPoint: new HrotVec3(10, 20, 30), Stance: 3,
         ShotSeq: 4, CancelSeq: 5, AmmoSeq: 6, ShotTarget: 2002, UseSeq: 7, UseVerb: 1, UseTarget: 2003, Lean: 2f, Binoculars: true, LookFrom: new HrotVec3(1, 2, 3),
         LookDir: new HrotVec3(0, 1, 0), FirePref: 2);
@@ -279,41 +279,15 @@ public class PlayerStationTests
 
     // ---- DD-029: the seat drives what it boards (HROT's DriveHandOver) ----------------------------------------------------------
 
-    private const int VehicleId = 2101;
+    private const int VehicleId = DriveFixtures.VehicleId;
 
     /// <summary>A playing soldier (a person carrier) and an empty two-seat vehicle one metre away, with the components HROT's use rule reads.</summary>
     private static (Entity Soldier, Entity Vehicle) DriveSetup(Stage h)
     {
-        void Reg<T>()
-            where T : unmanaged
-        {
-            if (!h.World.IsComponentTypeRegistered<T>())
-            {
-                h.World.RegisterComponent<T>();
-            }
-        }
-
-        Reg<Fdp.Toolkit.Behavior.Components.PassengerBuffer>();
-        Reg<Fdp.Toolkit.Behavior.Components.CarrierSeats>();
-        Reg<Fdp.Toolkit.Behavior.Components.CarrierStations>();
-        Reg<Fdp.Toolkit.Behavior.Components.OpenPassengerCabin>();
-        Reg<Fdp.Toolkit.Behavior.Components.PersonCarrier>();
-        Reg<Fdp.Toolkit.Behavior.Components.IsEmbarkedTag>();
-        Reg<Fdp.Toolkit.Behavior.Components.IsAssistingTag>();
-        Reg<OperatorUseStatus>();
-        var person = new Fdp.Interfaces.TkbTemplate("person", 310);
-        person.AddDescriptor(CarrierDefDto.PersonCarrier());
-        var truck = new Fdp.Interfaces.TkbTemplate("HMMWV", 311) { DisType = new Fdp.Core.DISEntityType { Kind = 1, Domain = 1, Country = 225, Category = 1 } };
-        truck.AddDescriptor(new CarrierDefDto { Seats = { new SeatDto { Role = SeatRole.Driver }, new SeatDto { Role = SeatRole.Passenger } } });
-        h.TestTkb.Register(person);
-        h.TestTkb.Register(truck);
-        h.World.SetSingletonManaged<Fdp.Interfaces.ITkbDatabase>(h.TestTkb);
-        h.World.SetSingletonManaged(h.Map);   // a HROT node sets its id map as a world singleton; HROT's hand-over reads it there
+        DriveFixtures.Prepare(h);
         var soldier = h.Play();
-        new Fdp.Toolkit.Behavior.Translators.CarrierTkbTranslator().Inject(h.World, soldier, person);
-        var vehicle = h.AddHrotEntity(VehicleId, new Vector3(2, 2, 0), "HMMWV", tkb: 311);
-        new Fdp.Toolkit.Behavior.Translators.CarrierTkbTranslator().Inject(h.World, vehicle, truck);
-        return (soldier, vehicle);
+        DriveFixtures.MakePerson(h, soldier);
+        return (soldier, DriveFixtures.AddVehicle(h));
     }
 
     /// <summary>HROT's possession system as the harness stands in for it: the requests (a new epoch each) then the releases, read from the last step or action.</summary>
@@ -352,9 +326,9 @@ public class PlayerStationTests
         }
     }
 
-    private static PlayerControl Press(byte seq, byte verb = 0, int target = VehicleId) => Frame() with { Seq = seq, UseSeq = seq, UseVerb = verb, UseTarget = target, Trigger = false, ShotSeq = 0 };
+    internal static PlayerControl Press(byte seq, byte verb = 0, int target = VehicleId) => Frame() with { Seq = seq, UseSeq = seq, UseVerb = verb, UseTarget = target, Trigger = false, ShotSeq = 0 };
 
-    private static PlayerControl Move(uint seq, byte useSeq, int target = VehicleId) => Frame() with { Seq = seq, Forward = 1f, UseSeq = useSeq, UseVerb = 0, UseTarget = target, Trigger = false, ShotSeq = 0 };
+    internal static PlayerControl Move(uint seq, byte useSeq, int target = VehicleId) => Frame() with { Seq = seq, Forward = 1f, UseSeq = useSeq, UseVerb = 0, UseTarget = target, Trigger = false, ShotSeq = 0 };
 
     /// <summary>Runs the whole Drive hand-over: the press, the brain boarding him, the step after each replicated change. Returns when the slot names the vehicle.</summary>
     private static void DriveIn(Stage h, Entity soldier, Entity vehicle, string verbName = "")

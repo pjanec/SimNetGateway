@@ -33,6 +33,9 @@ public class PlayerStationDeployTests
 
         public readonly List<(long Tkb, SimTransform At, int NetId)> Spawns = new();
         public readonly List<int> Mens = new();
+        /// <summary>T-072: a seat that drives a vehicle changes hands in the world AFTER the step's gather (the possession system runs last), so the slot may name the vehicle for one step after HROT let it go (Get out); the invariant is then checked on the next step.</summary>
+        public bool DriveLag { get; set; }
+
         public HG.DeployProcessorSystem? Processor;
         private HG.ServerPlayerSlotReaderSystem? _slots;
         private readonly PossessionSystem _possession = new("OperatorControl");
@@ -199,7 +202,7 @@ public class PlayerStationDeployTests
                 if (seat.Slot.State == PlayerSlotState.Playing)
                 {
                     Assert.True(Map.TryGetEntity(seat.Slot.UnitId, out var man), "a Playing seat names a unit that exists");
-                    if (PossessionSystem.Alive(World, man))   // a killed man is released by HROT one step before the slot says Dead
+                    if (PossessionSystem.Alive(World, man) && !(DriveLag && seat.Slot.UnitId == DriveFixtures.VehicleId))   // a killed man is released by HROT one step before the slot says Dead
                     {
                         Assert.Equal(seat.Station, PossessionSystem.HolderOf(World, man));
                     }
@@ -215,6 +218,114 @@ public class PlayerStationDeployTests
             AdvanceMs(1_100);
             RunSteps(2);
         }
+    }
+
+    // ---- T-072: a deploy-flow seat drives what it boards ------------------------------------------------------------------------------
+
+    /// <summary>A deployed seat (HROT's real deploy server and possession system) playing a placed person, with an empty vehicle one metre away.</summary>
+    private static (Deploy H, Entity Soldier, Entity Vehicle) DriveStage()
+    {
+        var h = new Deploy(seats: 1);
+        h.RegisterTemplate(300, 3);
+        DriveFixtures.Prepare(h);
+        var soldier = h.AddPlaced(PlacedId, ForceId.Friend, "Rifleman");
+        DriveFixtures.MakePerson(h, soldier);
+        var vehicle = DriveFixtures.AddVehicle(h);
+        h.World.AddComponent(vehicle, new BehaviorState());   // HROT's possession system applies a request only on the node that runs the unit's brain
+        h.World.SetAuthority<BehaviorState>(vehicle, true);
+        h.RunSteps(3);
+        Assert.IsType<DeployFlowPlayerFlow>(h.Seat(1).Flow);
+        h.Run(() => h.Seat(1).Offers.Any(o => o.UnitId == PlacedId), "the placed unit is offered");
+        Assert.True(h.Seat(1).Join(new PlayerJoin(PlayerJoinKind.Unit, PlacedId, null, Side: 1)));
+        h.Run(() => h.Seat(1).Slot.State == PlayerSlotState.Playing, "the seat plays the placed person");
+        return (h, soldier, vehicle);
+    }
+
+    private static byte DriveInput(Deploy h, Entity unit, Func<OperatorInput, byte> field) => h.World.HasComponent<OperatorInput>(unit) ? field(h.World.GetComponentRO<OperatorInput>(unit)) : (byte)255;
+
+    /// <summary>The T-070 drive test on a deploy-flow seat: a Drive press seats the soldier, HROT's hand-over rides him and possesses the vehicle, the slot names the vehicle, a W frame reaches the vehicle's input, and a new press is Get out: the slot is the soldier again and his first frame carries it.</summary>
+    [Fact]
+    public void A_deploy_flow_seat_drives_what_it_boards_and_gets_out_back_to_the_soldier()
+    {
+        var (h, soldier, vehicle) = DriveStage();
+        using var _ = h;
+        h.DriveLag = true;
+        int station = h.Seat(1).Station;
+        Assert.Equal(PlacedId, h.Seat(1).Slot.UnitId);
+
+        h.Seat(1).Control(PlayerStationTests.Press(1));                                 // Drive: the primary verb on the empty vehicle
+        Assert.Equal(Fdp.Toolkit.Behavior.EmbarkResult.Applied, Fdp.Toolkit.Behavior.Embarkation.TryEmbark(h.World, soldier, vehicle, SeatRole.Driver));   // the brain seated him
+        h.Run(() => h.Seat(1).Slot.UnitId == DriveFixtures.VehicleId, "the slot names the vehicle");
+        Assert.Equal((PlayerSlotState.Playing, station), (h.Seat(1).Slot.State, h.Holder(DriveFixtures.VehicleId)));
+        Assert.Equal(PossessionMode.Riding, h.World.GetComponentRO<PossessedBy>(soldier).Mode);
+
+        h.RunSteps(5);                                                                  // nothing fights it: the deploy flow does not take the slot back to the soldier
+        Assert.Equal((PlayerSlotState.Playing, DriveFixtures.VehicleId), (h.Seat(1).Slot.State, h.Seat(1).Slot.UnitId));
+
+        h.Seat(1).Control(PlayerStationTests.Move(2, useSeq: 1));                       // W: the frame is the vehicle's
+        h.RunSteps(2);
+        Assert.Equal(1f, h.World.GetComponentRO<OperatorInput>(vehicle).Forward);
+
+        h.Seat(1).Control(PlayerStationTests.Press(3));                                 // any new press while driving a vehicle with his soldier aboard: Get out
+        h.Run(() => h.Seat(1).Slot.UnitId == PlacedId, "the slot is the soldier again");
+        Assert.Equal((station, 0), (h.Holder(PlacedId), h.Holder(DriveFixtures.VehicleId)));
+        h.Seat(1).Control(PlayerStationTests.Move(4, useSeq: 3));
+        h.RunSteps(2);
+        Assert.Equal((byte)3, DriveInput(h, soldier, i => i.UseSeq));                   // the soldier's first frame carries the Get-out press
+        Assert.Equal(PlayerSlotState.Playing, h.Seat(1).Slot.State);
+    }
+
+    /// <summary>R-064 on a deploy-flow seat: seeded random presses, frames, boardings and time; after every step the harness invariant (a Playing seat's unit is held by the seat) holds, the slot names only the soldier or the vehicle, and the vehicle is held only while the soldier is.</summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    [InlineData(5)]
+    [InlineData(7)]
+    [InlineData(8)]
+    public void Random_presses_on_a_deploy_flow_seat_keep_the_hand_over_invariants(int seed)
+    {
+        var (h, soldier, vehicle) = DriveStage();
+        using var _ = h;
+        h.DriveLag = true;
+        var rng = new Random(seed);
+        uint seq = 10;
+        byte useSeq = 0;
+        int drove = 0;
+        for (int i = 0; i < 300; i++)
+        {
+            switch (rng.Next(6))
+            {
+                case 0:
+                case 1:
+                    unchecked { useSeq++; }
+                    h.Seat(1).Control(PlayerStationTests.Move(seq++, useSeq));
+                    break;
+                case 2:
+                    h.Seat(1).Control(PlayerStationTests.Move(seq++, useSeq));
+                    break;
+                case 3:
+                    if (!h.World.HasComponent<IsEmbarkedTag>(soldier) && h.World.IsAlive(soldier))
+                    {
+                        Fdp.Toolkit.Behavior.Embarkation.TryEmbark(h.World, soldier, vehicle, SeatRole.Driver);
+                    }
+
+                    break;
+                default:
+                    h.RunSteps(rng.Next(1, 6));
+                    break;
+            }
+
+            h.RunSteps(1);
+            int unit = h.Seat(1).Slot.UnitId;
+            Assert.Contains(unit, new[] { 0, PlacedId, DriveFixtures.VehicleId });
+            if (h.Holder(DriveFixtures.VehicleId) == h.Seat(1).Station)
+            {
+                drove++;
+                Assert.Equal(h.Seat(1).Station, h.Holder(PlacedId));   // the vehicle is only ever driven with the soldier held aboard
+            }
+        }
+
+        Assert.True(drove > 0, "the random run never reached the vehicle");
     }
 
     // ---- (a) two roles of one side ---------------------------------------------------------------------------------------------------

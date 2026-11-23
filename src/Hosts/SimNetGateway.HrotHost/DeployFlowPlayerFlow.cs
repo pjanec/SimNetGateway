@@ -35,6 +35,7 @@ internal sealed class DeployFlowPlayerFlow : IPlayerFlow
     private readonly HrotServices _services;
     private readonly Func<EntityOrders?> _orders;
     private readonly int _station;
+    private readonly DriveHandOver? _handOver;
     private readonly List<PlayerOffer> _scratch = new();
     private readonly Dictionary<int, OutlineCache> _outlines = new();
     private IReadOnlyList<PlayerOffer> _offers = Array.Empty<PlayerOffer>();
@@ -54,8 +55,10 @@ internal sealed class DeployFlowPlayerFlow : IPlayerFlow
         public HrotVec3[] Points = Array.Empty<HrotVec3>();
     }
 
-    public DeployFlowPlayerFlow(HrotServices services, Func<EntityOrders?> orders, int station)
+    /// <param name="handOver">The seat's HROT hand-over (DD-029 / T-072): while the flow is Playing the slot reports the unit the seat DRIVES (<see cref="SeatDrives"/>); HROT's deploy flow keeps the soldier it deployed (the server's slot stays Playing while the station holds him, riding or not).</param>
+    public DeployFlowPlayerFlow(HrotServices services, Func<EntityOrders?> orders, int station, DriveHandOver? handOver = null)
     {
+        _handOver = handOver;
         _services = services;
         _orders = orders;
         _station = station;
@@ -85,7 +88,8 @@ internal sealed class DeployFlowPlayerFlow : IPlayerFlow
         _ => GwState.Waiting,   // DPS Spawning has no twin in the flow and is unused
     };
 
-    public int UnitId => _flow is { State: DeployFlowState.TakingControl or DeployFlowState.Playing or DeployFlowState.Dead } f ? f.UnitNetId : 0;
+    public int UnitId => _flow is { State: DeployFlowState.TakingControl or DeployFlowState.Playing or DeployFlowState.Dead } f
+        ? (f.State == DeployFlowState.Playing ? SeatDrives.UnitOf(_handOver, f.UnitNetId) : f.UnitNetId) : 0;
 
     public double RespawnAt => _flow?.RespawnAtSim ?? 0.0;
 
