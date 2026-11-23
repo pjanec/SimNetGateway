@@ -70,6 +70,98 @@ public class DpsHudTests
         Assert.Equal(32, units.Alive["unit"].UseLabel.Length);
     }
 
+    private static PlayerUseAction Verb(string verb, string label, bool available = true, string reason = "Ok", bool holdOnly = false) => new(verb, label, available, reason, holdOnly);
+
+    /// <summary>DD-029 D-3: <c>OwnUnit.Actions</c> is the producer's whole offered list, in its order, bounded 8 / 32, a refused verb carrying its reason; written on change only, also when the
+    /// station reuses and refills one list; 0 B when nothing changed.</summary>
+    [Fact]
+    public void Own_unit_carries_the_whole_verb_list_in_order_bounded_on_change_only_and_free_when_steady()
+    {
+        uint domain = Watch.NewDomain();
+        var station = new DpsInboundTests.RecordingStation { Slot = new PlayerSlotSnapshot(PlayerSlotState.Playing, 1201, 0.0, 1) };
+        var list = new List<PlayerUseAction>
+        {
+            Verb("Drive", "Drive BMP-2", available: false, reason: "SeatTaken"),
+            Verb("Board", "Board BMP-2"),
+            Verb("Drop", "Drop", holdOnly: true),
+        };
+        station.Unit = new PlayerUnitStatus(80.0, 100.0, [], 0, 55, Actions: list);
+        using var units = new Watch.Watch<D.OwnUnit>(domain, "station-1", u => "unit");
+        using var rig = new Rig(domain, station: station);
+
+        DpsInboundTests.Frames(rig);
+
+        Assert.True(units.Until(w => w.Alive.ContainsKey("unit") && w.Alive["unit"].Actions.Count == 3));
+        var actions = units.Alive["unit"].Actions;
+        Assert.Equal([D.UseVerb.UseVerbDrive, D.UseVerb.UseVerbBoard, D.UseVerb.UseVerbDrop], actions.Select(a => a.Verb));   // HROT's order
+        Assert.Equal(["Drive BMP-2", "Board BMP-2", "Drop"], actions.Select(a => a.Label));
+        Assert.Equal((false, D.UseReason.UseReasonSeatTaken, false), (actions[0].Available, actions[0].Reason, actions[0].HoldOnly));   // a refused verb carries its reason
+        Assert.Equal((true, D.UseReason.UseReasonOk, false), (actions[1].Available, actions[1].Reason, actions[1].HoldOnly));
+        Assert.True(actions[2].HoldOnly);
+        Assert.Equal(1, rig.Transport.OwnUnit.Written);
+
+        // the station reuses ONE list and refills it with the same verbs: nothing the client sees changed, nothing is written
+        list.Clear();
+        list.AddRange([Verb("Drive", "Drive BMP-2", available: false, reason: "SeatTaken"), Verb("Board", "Board BMP-2"), Verb("Drop", "Drop", holdOnly: true)]);
+        DpsInboundTests.Frames(rig);
+        Assert.Equal(1, rig.Transport.OwnUnit.Written);
+
+        // a verb alone changing (the seat is free now), a reorder, and a shorter list are each a change
+        list[0] = Verb("Drive", "Drive BMP-2");
+        DpsInboundTests.Frames(rig);
+        Assert.Equal(2, rig.Transport.OwnUnit.Written);
+        (list[0], list[1]) = (list[1], list[0]);
+        DpsInboundTests.Frames(rig);
+        Assert.Equal(3, rig.Transport.OwnUnit.Written);
+        list.RemoveAt(2);
+        DpsInboundTests.Frames(rig);
+        Assert.Equal(4, rig.Transport.OwnUnit.Written);
+        Assert.True(units.Until(w => w.Alive["unit"].Actions.Count == 2 && w.Alive["unit"].Actions[0].Verb == D.UseVerb.UseVerbBoard));
+
+        // bounds: more than 8 entries are cut to 8, a long label to 32, an unknown verb or reason name is the unknown value
+        list.Clear();
+        for (int i = 0; i < 10; i++)
+        {
+            list.Add(Verb(i == 0 ? "Teleport" : "Drive", new string('l', 40), reason: i == 0 ? "Haunted" : "Ok"));
+        }
+
+        DpsInboundTests.Frames(rig);
+        Assert.True(units.Until(w => w.Alive["unit"].Actions.Count == 8));
+        var cut = units.Alive["unit"].Actions;
+        Assert.Equal((D.UseVerb.UseVerbNone, D.UseReason.UseReasonUnknown, 32), (cut[0].Verb, cut[0].Reason, cut[0].Label.Length));
+
+        // an empty list is a change from a list, and is empty on the wire
+        list.Clear();
+        DpsInboundTests.Frames(rig);
+        Assert.True(units.Until(w => w.Alive["unit"].Actions.Count == 0));
+
+        // steady: nothing changes, no wire value is built and nothing is allocated
+        for (int i = 0; i < 50; i++)
+        {
+            rig.Transport.Pump();
+        }
+
+        int written = rig.Transport.OwnUnit.Written;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 300; i++)
+        {
+            rig.Transport.Pump();
+        }
+
+        Assert.Equal(0L, (GC.GetAllocatedBytesForCurrentThread() - before) / 300);
+        Assert.Equal(written, rig.Transport.OwnUnit.Written);
+        list.Add(Verb("Drive", "Drive BMP-2"));   // and a steady list with entries is free too
+        DpsInboundTests.Frames(rig);
+        Assert.True(units.Until(w => w.Alive["unit"].Actions.Count == 1));
+        before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 300; i++)
+        {
+            rig.Transport.Pump();
+        }
+
+        Assert.Equal(0L, (GC.GetAllocatedBytesForCurrentThread() - before) / 300);
+    }
+
     [Fact]
     public void A_kill_is_an_event_with_ids_state_body_part_and_side()
     {

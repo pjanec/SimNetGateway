@@ -11,6 +11,9 @@ internal sealed class DpsPlayerSlot
 {
     private const float MissileRefreshS = 1f;
 
+    /// <summary>The bound of <c>OwnUnit.Actions</c> (HROT offers at most <c>OperatorUseActions.MaxActions</c> verbs).</summary>
+    private const int MaxActions = 8;
+
     private readonly IPlayerStation? _station;
     private readonly DpsChannel<D.PlayerSlot> _slot;
     private readonly DpsChannel<D.OwnUnit> _unit;
@@ -23,6 +26,8 @@ internal sealed class DpsPlayerSlot
     private int _lastUnitId;
     private PlayerWeapon[] _lastAmmo = Array.Empty<PlayerWeapon>();
     private int _lastAmmoCount;
+    private PlayerUseAction[] _lastActions = Array.Empty<PlayerUseAction>();
+    private int _lastActionCount;
 
     public DpsPlayerSlot(IPlayerStation? station, DpsChannel<D.PlayerSlot> slot, DpsChannel<D.OwnUnit> unit)
     {
@@ -92,6 +97,18 @@ internal sealed class DpsPlayerSlot
             _lastAmmo[i] = status.Ammo[i];
         }
 
+        int actionCount = Math.Min(status.Actions?.Count ?? 0, MaxActions);
+        _lastActionCount = actionCount;
+        if (_lastActions.Length < actionCount)
+        {
+            _lastActions = new PlayerUseAction[actionCount];
+        }
+
+        for (int i = 0; i < actionCount; i++)
+        {
+            _lastActions[i] = status.Actions![i];   // a copy: the station reuses its list
+        }
+
         var unit = new D.OwnUnit
         {
             UnitId = unitId,
@@ -129,6 +146,17 @@ internal sealed class DpsPlayerSlot
                     Busy = a.Busy,
                     Overheated = a.Overheated,
                     HeatPercent = a.HeatPercent,
+                }),
+            ],
+            Actions =
+            [
+                .. status.Actions is null ? [] : status.Actions.Take(MaxActions).Select(a => new D.UseActionEntry
+                {
+                    Verb = LookNames.ByName<D.UseVerb>("UseVerb", a.Verb),
+                    Label = Cut(a.Label, 32),
+                    Available = a.Available,
+                    Reason = LookNames.ByName<D.UseReason>("UseReason", a.Reason),
+                    HoldOnly = a.HoldOnly,
                 }),
             ],
         };
@@ -203,6 +231,20 @@ internal sealed class DpsPlayerSlot
             }
         }
 
+        int actions = Math.Min(b.Actions?.Count ?? 0, MaxActions);
+        if (actions != _lastActionCount)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < actions; i++)
+        {
+            if (_lastActions[i] != b.Actions![i])
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -215,7 +257,9 @@ internal sealed class DpsPlayerSlot
         && a.UseReason == b.UseReason && a.SpreadRad == b.SpreadRad && a.RadarWarning == b.RadarWarning && a.RadarBearingDeg == b.RadarBearingDeg
         && a.MissileLaunch == b.MissileLaunch && a.MissileBearingDeg == b.MissileBearingDeg && a.MissileSeeker == b.MissileSeeker
         && MathF.Abs(a.MissileTimeToImpactS - b.MissileTimeToImpactS) < MissileRefreshS
-        && a.Ammo.Count == b.Ammo.Count
+        && a.Ammo.Count == b.Ammo.Count && a.Actions.Count == b.Actions.Count
+        && a.Actions.Zip(b.Actions).All(p => p.First.Verb == p.Second.Verb && p.First.Label == p.Second.Label && p.First.Available == p.Second.Available
+            && p.First.Reason == p.Second.Reason && p.First.HoldOnly == p.Second.HoldOnly)
         && a.Ammo.Zip(b.Ammo).All(p => p.First.Slot == p.Second.Slot && p.First.Rounds == p.Second.Rounds && p.First.AmmoType == p.Second.AmmoType && p.First.Weapon == p.Second.Weapon
             && p.First.AmmoTypeId == p.Second.AmmoTypeId && p.First.Max == p.Second.Max && p.First.Magazine == p.Second.Magazine && p.First.LoadedRounds == p.Second.LoadedRounds
             && p.First.Busy == p.Second.Busy && p.First.Overheated == p.Second.Overheated && p.First.HeatPercent == p.Second.HeatPercent);

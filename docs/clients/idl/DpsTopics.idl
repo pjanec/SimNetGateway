@@ -511,6 +511,15 @@ module SimNetGateway {
                 int32 HeatPercent;
             };
 
+            @appendable
+            struct UseActionEntry {
+                SimNetGateway::Protocol::DdsPlayer::UseVerb Verb;
+                string<32> Label;
+                boolean Available;
+                SimNetGateway::Protocol::DdsPlayer::UseReason Reason;
+                boolean HoldOnly;
+            };
+
             @topic
             @appendable
             struct OwnUnit {
@@ -535,6 +544,7 @@ module SimNetGateway {
                 float MissileTimeToImpactS;
                 SimNetGateway::Protocol::DdsPlayer::MissileSeeker MissileSeeker;
                 SimNetGateway::Protocol::DdsPlayer::UseVerb Verb;
+                sequence<SimNetGateway::Protocol::DdsPlayer::UseActionEntry, 8> Actions;
             };
 
             @topic

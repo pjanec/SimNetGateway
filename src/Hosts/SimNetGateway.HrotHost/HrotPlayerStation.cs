@@ -1,5 +1,6 @@
 using System.Numerics;
 using Fdp.Core;
+using Fdp.Toolkit.Behavior.Components;
 using Fdp.Toolkit.Behavior.Possession;
 using Fdp.Toolkit.Combat;
 using Fdp.Toolkit.Combat.Components;
@@ -76,6 +77,12 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
     private bool _detached;
     private readonly List<PlayerWeapon> _ammo = new();
     private readonly UseAction[] _actions = new UseAction[OperatorUseActions.MaxActions];
+    private readonly UseAction[] _pressActions = new UseAction[OperatorUseActions.MaxActions];
+    private readonly List<PlayerUseAction> _useList = new();
+    private readonly DriveHandOver _handOver;
+    private long _stepMs = -1;
+    private int _controlUnit;
+    private byte _clientUseSeq, _fwdUseSeq, _getOutSeq;
 
     /// <summary>The station number of seat <paramref name="seat"/> (1 ..) of the node <paramref name="node"/> (DD-023 D-11): the node in the low 16 bits, the seat in the high 16; seat 0 is the node itself (the editor's own user).</summary>
     public static int StationOf(int node, int seat) => node | (seat << 16);
@@ -88,7 +95,9 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         _log = log;
         _services = services ?? throw new ArgumentNullException(nameof(services));
         Station = station;
-        _flow = new PossessionFlow(services, () => Orders, station);
+        // ⭐ DD-029 D-1 — HROT's own hand-over (CE-11041), one per seat, over this seat's orders (its station number is the identity)
+        _handOver = new DriveHandOver(() => _world, () => Orders);
+        _flow = new PossessionFlow(services, () => Orders, station, _handOver);
         _gizmos.AnchorMapped = IsPublishedEntity;
     }
 
@@ -148,6 +157,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
             ChooseFlow(world);
         }
 
+        StepHandOver(live && !replaying);
         _flow.Frame(world, live, replaying);
         _gizmos.Frame(world, System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency);
         _unit = _flow.State == PlayerSlotState.Playing ? ReadUnit(world) : PlayerUnitStatus.None;
@@ -165,7 +175,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         if (deploy != _flow is DeployFlowPlayerFlow)
         {
             _flow.Boundary();
-            _flow = deploy ? new DeployFlowPlayerFlow(_services, () => Orders, Station) : new PossessionFlow(_services, () => Orders, Station);
+            _flow = deploy ? new DeployFlowPlayerFlow(_services, () => Orders, Station) : new PossessionFlow(_services, () => Orders, Station, _handOver);
             if (_nowMs is not null)
             {
                 _flow.NowMs = _nowMs;
@@ -190,6 +200,8 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         _useTarget = 0;
         _mount = 0;
         _firePref = 0;
+        ResetPress();
+        _handOver.Reset();
         _unit = PlayerUnitStatus.None;
         Refresh();
     }
@@ -275,6 +287,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         _useTarget = 0;
         _mount = 0;
         _firePref = 0;
+        ResetPress();
         Refresh();
     }
 
@@ -288,6 +301,9 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         _useTarget = frame.UseTarget;
         _mount = frame.Mount;
         _firePref = frame.FirePref;
+        byte useVerb = UseVerbOf(in frame);
+        int useTarget = frame.UseTarget;
+        byte useSeq = HandOverPress(in frame, ref useVerb, ref useTarget);
         _orders.Control(_flow.UnitId, new Fdp.Toolkit.Behavior.Possession.OperatorControlFrameEvent
         {
             Seq = frame.Seq,
@@ -305,15 +321,96 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
             CancelSeq = frame.CancelSeq,
             AmmoSeq = frame.AmmoSeq,
             ShotTarget = frame.ShotTarget,
-            UseSeq = frame.UseSeq,
-            UseVerb = UseVerbOf(in frame),
-            UseTarget = frame.UseTarget,
+            UseSeq = useSeq,
+            UseVerb = useVerb,
+            UseTarget = useTarget,
             Lean = (byte)Math.Clamp((int)MathF.Round(frame.Lean), 0, 2),
             Binoculars = (byte)(frame.Binoculars ? 1 : 0),
             LookFrom = V(frame.LookFrom),
             LookDir = V(frame.LookDir),
             FirePref = frame.FirePref,
         });
+    }
+
+    /// <summary>Wall seconds since the last step, through the seat's own clock (<see cref="NowMs"/>: tests move it), into HROT's hand-over (DD-029 D-1).</summary>
+    private void StepHandOver(bool running)
+    {
+        long now = _flow.NowMs();
+        float dt = _stepMs < 0 ? 0f : Math.Max(0, now - _stepMs) / 1000f;
+        _stepMs = now;
+        if (running && !_detached)
+        {
+            _handOver.Step(dt);
+        }
+    }
+
+    private void ResetPress()
+    {
+        _controlUnit = 0;
+        _clientUseSeq = 0;
+        _fwdUseSeq = 0;
+    }
+
+    /// <summary>
+    /// The use press of a control frame against HROT's hand-over (DD-029 D-1; the same three rules as HROT's own station, <c>PossessionStation</c> §8h.9):
+    /// a NEW press (the client's <c>UseSeq</c> moved) while the seat drives a vehicle with its soldier aboard is Get out (<see cref="DriveHandOver.TryGetOut"/>) and is not
+    /// forwarded; the soldier's first frame after it carries that press (his only action aboard); a press that resolves to Drive or Pilot arms the hand-over. Returns the
+    /// <c>UseSeq</c> to forward: the client's own, except where a press is withheld or the unit just changed (then the new unit's own counter, so a stale press is not replayed on it).
+    /// </summary>
+    private byte HandOverPress(in PlayerControl frame, ref byte useVerb, ref int useTarget)
+    {
+        var map = _services.EntityMap;
+        var world = _world;
+        if (map is null || world is null || _flow is not PossessionFlow || !map.TryGetEntity(_flow.UnitId, out var unit) || !world.IsAlive(unit))
+        {
+            _clientUseSeq = frame.UseSeq;
+            _fwdUseSeq = frame.UseSeq;
+            return frame.UseSeq;
+        }
+
+        bool press = frame.UseSeq != _clientUseSeq;
+        _clientUseSeq = frame.UseSeq;
+        if (_controlUnit != _flow.UnitId)
+        {
+            // the seat now plays another unit (the vehicle after the hand-over, the soldier after a Get out): its brain counts presses per unit
+            _controlUnit = _flow.UnitId;
+            _fwdUseSeq = world.IsComponentTypeRegistered<OperatorUseStatus>() && world.HasComponent<OperatorUseStatus>(unit)
+                ? world.GetComponentRO<OperatorUseStatus>(unit).UseSeq : (byte)0;
+        }
+
+        if (!_handOver.GetOutRider.IsNull && _handOver.GetOutRider == unit)
+        {
+            // back in the soldier after a Get out: his first frame carries the Get-out press, as HROT's station queues it
+            int vehicle = world.IsComponentTypeRegistered<IsEmbarkedTag>() && world.HasComponent<IsEmbarkedTag>(unit)
+                && map.TryGetNetworkId(world.GetComponentRO<IsEmbarkedTag>(unit).VehicleEntity, out int v) ? v : 0;
+            _handOver.GetOutSent();
+            useVerb = 0;
+            useTarget = vehicle;
+            _fwdUseSeq = _getOutSeq;
+            return _fwdUseSeq;
+        }
+
+        if (!press)
+        {
+            return _fwdUseSeq;
+        }
+
+        if (_handOver.TryGetOut(unit))
+        {
+            _getOutSeq = frame.UseSeq;   // the press is Get out: withheld from the vehicle, sent by the soldier's first frame
+            return _fwdUseSeq;
+        }
+
+        // the action the press resolves to, the way HROT's brain resolves it (the verb is an index into the offered list)
+        map.TryGetEntity(useTarget, out var target);
+        int n = OperatorUseActions.For(world, unit, target, _pressActions);
+        if (useVerb < n && _pressActions[useVerb] is { Available: true, Verb: UseVerbKind.Drive or UseVerbKind.Pilot } drive && !drive.Target.IsNull)
+        {
+            _handOver.Arm(unit, drive.Target);
+        }
+
+        _fwdUseSeq = frame.UseSeq;
+        return _fwdUseSeq;
     }
 
     private static readonly string[] FireModeNames = BuildNames();
@@ -332,6 +429,26 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
 
     /// <summary>The name of a fire mode without the string an enum's <c>ToString</c> makes every call (hot path).</summary>
     private static string NameOf(OperatorFireMode mode) => (int)mode >= 0 && (int)mode < FireModeNames.Length && FireModeNames[(int)mode] is { } n ? n : mode.ToString();
+
+    private static readonly string[] UseVerbNames = NamesOf<UseVerbKind>();
+    private static readonly string[] UseReasonNames = NamesOf<UseReason>();
+
+    private static string[] NamesOf<T>()
+        where T : struct, Enum
+    {
+        var values = Enum.GetValues<T>();
+        var names = new string[values.Max(v => Convert.ToInt32(v)) + 1];
+        foreach (var v in values)
+        {
+            names[Convert.ToInt32(v)] = v.ToString();
+        }
+
+        return names;
+    }
+
+    private static string NameOf(UseVerbKind verb) => (int)verb < UseVerbNames.Length && UseVerbNames[(int)verb] is { } n ? n : verb.ToString();
+
+    private static string NameOf(UseReason reason) => (int)reason < UseReasonNames.Length && UseReasonNames[(int)reason] is { } n ? n : reason.ToString();
 
     private static Vector3 V(HrotVec3 v) => new((float)v.X, (float)v.Y, (float)v.Z);
 
@@ -397,6 +514,14 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         }
 
         int actions = OperatorUseActions.For(world, unit, target, _actions);   // the span overload, into a reused buffer
+        var useList = _useList;   // reused: the whole offered list in HROT's order (DD-029 D-3), the consumer copies what it keeps
+        useList.Clear();
+        for (int i = 0; i < actions; i++)
+        {
+            var offered = _actions[i];
+            useList.Add(new PlayerUseAction(NameOf(offered.Verb), HudWords.Label(world, offered), offered.Available, NameOf(offered.Reason), offered.HoldOnly));
+        }
+
         for (int i = 0; i < actions; i++)
         {
             var action = _actions[i];
@@ -462,7 +587,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         }
 
         return new PlayerUnitStatus(health, max, ammo, verb, useTarget, _mount, fireMode, useLabel, useSeq, outcome, reason, spread, radar, radarBearing, launch, missileBearing,
-            timeToImpact, seeker, verb == 0 ? string.Empty : ((UseVerbKind)verb).ToString());
+            timeToImpact, seeker, verb == 0 ? string.Empty : ((UseVerbKind)verb).ToString(), useList);
     }
 }
 
@@ -477,6 +602,7 @@ internal sealed class PossessionFlow : IPlayerFlow
     private readonly HrotServices _services;
     private readonly Func<EntityOrders?> _orders;
     private readonly int _station;
+    private readonly DriveHandOver? _handOver;
     private readonly List<PlayerOffer> _offers = new();
     private EntityRepository? _world;
     private EntityQuery? _query;
@@ -491,11 +617,13 @@ internal sealed class PossessionFlow : IPlayerFlow
     // (the editor operator possessing a playable unit, or a host where no player plugin is installed).
     private readonly HashSet<int> _joined = new();
 
-    public PossessionFlow(HrotServices services, Func<EntityOrders?> orders, int station)
+    /// <param name="handOver">The seat's HROT hand-over (DD-029 D-2): the unit the slot reports follows the unit the seat DRIVES (<see cref="DriveHandOver.HeldHere(out int)"/>), so after a Drive the slot names the vehicle. Null = the slot only follows its joined unit.</param>
+    public PossessionFlow(HrotServices services, Func<EntityOrders?> orders, int station, DriveHandOver? handOver = null)
     {
         _services = services;
         _orders = orders;
         _station = station;
+        _handOver = handOver;
         NowMs = () => Environment.TickCount64;
     }
 
@@ -573,6 +701,7 @@ internal sealed class PossessionFlow : IPlayerFlow
         _replayObserving = false;
         RefreshOffers(world);
         Sweep(world);
+        FollowDriven();
         Follow(world);
         LetGoOfLateGrant(world);
     }
@@ -600,6 +729,25 @@ internal sealed class PossessionFlow : IPlayerFlow
         {
             _offers.Clear();
             _offers.AddRange(fresh);
+        }
+    }
+
+    /// <summary>
+    /// DD-029 D-2: a seat that is Playing reports the unit it DRIVES. HROT's hand-over (Drive: the soldier rides, the vehicle is possessed; Get out: the other way) moves the Fps
+    /// possession from one unit to another; the slot names whichever unit the station holds as Fps now. While the hand-over is between its steps nothing is held as Fps and the
+    /// slot stays on its unit.
+    /// </summary>
+    private void FollowDriven()
+    {
+        if (_handOver is null || State != PlayerSlotState.Playing || UnitId == 0)
+        {
+            return;
+        }
+
+        var held = _handOver.HeldHere(out int id);
+        if (!held.IsNull && id != UnitId)
+        {
+            UnitId = id;
         }
     }
 
@@ -664,7 +812,7 @@ internal sealed class PossessionFlow : IPlayerFlow
                 {
                     State = PlayerSlotState.Dead;
                 }
-                else if (PossessionSystem.HolderOf(world, unit) != _station)
+                else if (PossessionSystem.HolderOf(world, unit) != _station && _handOver is not { Handing: true })   // a hand-over in progress moves the possession between two units: wait for it
                 {
                     UnitId = 0;   // released by HROT or taken by another station
                     State = PlayerSlotState.Choosing;

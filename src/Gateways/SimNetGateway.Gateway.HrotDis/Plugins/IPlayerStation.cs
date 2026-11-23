@@ -117,16 +117,24 @@ public readonly record struct PlayerWeapon(
     byte Mount, string Weapon, string AmmoName, long AmmoTypeId, int Rounds, int Max, int Magazine, int LoadedRounds, bool Busy, bool Overheated, int HeatPercent);
 
 /// <summary>
+/// One entry of HROT's offered-verb list for the unit's use target (<c>OperatorUseActions.For</c>), in HROT's order (the first is the primary). <see cref="Verb"/> and
+/// <see cref="Reason"/> are the NAMES of HROT's <c>UseVerbKind</c> / <c>UseReason</c>; <see cref="Reason"/> says why an unavailable verb is refused ("" while available or when
+/// HROT states no reason). <see cref="HoldOnly"/> = shown on a hold list only, never sent by a tap.
+/// </summary>
+public readonly record struct PlayerUseAction(string Verb, string Label, bool Available, string Reason, bool HoldOnly);
+
+/// <summary>
 /// The data a HUD needs about the player's own unit: health, ammunition per weapon mount, what the use key does now and the verdict of the last press, the fire mode and
 /// spread of the selected weapon, and the aircraft warnings. HROT's enumerations are the NAMES of the enumeration ("" = none): <see cref="FireMode"/> (Sight, Lock),
 /// <see cref="UseOutcome"/>, <see cref="UseReason"/>, <see cref="RadarWarning"/> (the warning receiver level) and <see cref="MissileSeeker"/>. Bearings are degrees, 0 = north,
 /// clockwise; <see cref="MissileTimeToImpactS"/> is the time left at the moment of reading.
 /// <see cref="UseVerbName"/> is the NAME of HROT's use verb (empty = none), the same verb as the number <see cref="UseVerb"/> (DD-020 3.3).
+/// <see cref="Actions"/> is the whole offered-verb list for the use target in HROT's order (null / empty = none; DD-029 D-3).
 /// </summary>
 public readonly record struct PlayerUnitStatus(
     double Health, double HealthMax, IReadOnlyList<PlayerWeapon> Ammo, byte UseVerb, int UseTarget, byte ActiveMount = 0, string FireMode = "", string UseLabel = "",
     byte UseSeq = 0, string UseOutcome = "", string UseReason = "", float SpreadRad = 0f, string RadarWarning = "", float RadarBearingDeg = 0f, bool MissileLaunch = false,
-    float MissileBearingDeg = 0f, float MissileTimeToImpactS = 0f, string MissileSeeker = "", string UseVerbName = "")
+    float MissileBearingDeg = 0f, float MissileTimeToImpactS = 0f, string MissileSeeker = "", string UseVerbName = "", IReadOnlyList<PlayerUseAction>? Actions = null)
 {
     public static PlayerUnitStatus None { get; } = new(0.0, 0.0, Array.Empty<PlayerWeapon>(), 0, 0);
 }

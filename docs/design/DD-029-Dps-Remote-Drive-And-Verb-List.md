@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | approved (R-151) |
+| **Status** | approved (R-151) - built 2026-11-23 (T-070, review) |
 | **Tasks** | T-070 |
 | **Rulings honoured** | R-151, R-133 (append-only), R-135 (producer-neutral), R-146 (HROT gives meaning, the client the look) |
 | **Related** | HROT `DESIGN_Entity_Control.md` §8h.10 (CE-11041, R-11019 — the shared `DriveHandOver`); the Unreal note `NOTE_UnrealIg_To_Ui_Remote_Drive_Handover.md` (HROT `unreal-ig` `4260bd6f1`); DD-017 (the DPS player station) |
@@ -94,4 +94,19 @@ Approved with the design (R-151).
 
 ## 9. As-built notes
 
-Not built.
+Built 2026-11-23 (T-070) against HROT's `DriveHandOver` (CE-11041, `Hrot.Common/Orders/DriveHandOver.cs`); the classes and sequences above are true.
+
+| part | as built | deviation, and why |
+|---|---|---|
+| the seat | `HrotPlayerStation` owns one `DriveHandOver(() => world, () => its EntityOrders)`; the station number of the seat is the identity (`EntityOrders.Station`), so HROT compares `PossessedBy.StationNodeId` with the seat's number | — |
+| `Step` | called once per `Frame` (every gather), with the wall seconds since the last frame from the seat's own `NowMs` (tests move it); only while a scenario runs live and not while a recording is shown | HROT's local station steps with the frame `dt`; the seat has no frame `dt`, so its clock is wall time (the 15 s timeout is wall time too) |
+| arming | `Control`: a NEW press (`UseSeq` moved) resolves, the way HROT's brain resolves it (`UseVerb` = an index into `OperatorUseActions.For`'s list for the frame's `UseTarget`), and an available Drive or Pilot arms the hand-over on the target vehicle | armed only for the possession flow (`PossessionFlow`), see below |
+| Get out | a new press while the seat holds a vehicle with its soldier aboard (`DriveHandOver.RiderOf`) = `TryGetOut`; the press is not forwarded to the vehicle; once the slot is back on the soldier, his first frame carries it (`UseSeq` of the press, verb 0, the vehicle as target), as HROT's station queues it | ⭐ **the client's own press counter** is kept per unit: after the unit changes the forwarded `UseSeq` is the new unit's `OperatorUseStatus.UseSeq` (0 when it has none), so a press already acted on is not replayed on the vehicle; added, not drawn |
+| the slot | `PossessionFlow(…, handOver)`: while Playing, `UnitId` follows `DriveHandOver.HeldHere` (the unit the seat holds as Fps) before the flow's own follow runs; while a hand-over or a Get out is pending the flow does not drop to Choosing when the unit it names is released (the possession is moving between two units) | the pending-hand-over guard was not drawn: a release can show before the soldier's possession does |
+| `OwnUnit.Actions` | `UseActionEntry { Verb, Label (32), Available, Reason, HoldOnly }`, `[DdsBound(8)]`, appended at the END of `OwnUnit`; filled from `OperatorUseActions.For` in HROT's order (label = `HudWords.Label`); `DpsPlayerSlot` compares it with the last written (a copy: the station reuses its list) so it is sent on change only, 0 B steady. The IDL gained lines only; the protocol version is unchanged (appended fields have not bumped it) | — |
+
+⚠ **Not done / open**
+- HROT's deploy flow (`DeployFlowPlayerFlow`, the editor's) takes its unit from HROT's deploy flow, not from `PossessedBy`: the hand-over is armed for the possession flow only. A deploy-flow seat that drives needs the same follow there (a tracker row to file with HROT).
+- `ControlFrame.Verb` (the enumeration) is mapped to HROT's verb NUMBER (`UseVerbOf`), but HROT's brain reads `UseVerb` as an INDEX into the offered list: a press that names Drive by enumeration is refused as nothing to do unless Drive happens to be at that index. The client can send the entry's position in `UseVerb` (the note says so). Aligning the name with the index (resolve a named verb to its position in the list for the target) is a small follow-up, not built here (it would change `UseVerbOf`'s tested meaning).
+- While the seat drives the vehicle its own `OwnUnit.Actions` is HROT's list for the VEHICLE as the acting unit (usually empty): Get out is any new press, as on HROT's station (E), not a listed verb.
+- A destroyed vehicle: the slot goes Dead on it (HROT's rule for a unit out of the fight) until the soldier is let go and the seat joins again.

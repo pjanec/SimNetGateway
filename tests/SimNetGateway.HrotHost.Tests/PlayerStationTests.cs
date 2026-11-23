@@ -4,7 +4,9 @@ using CarKinem.Core;
 using CarKinem.Spatial;
 using CarKinem.Systems;
 using CarKinem.Trajectory;
+using Fdp.Toolkit.Behavior.Components;
 using Fdp.Toolkit.Behavior.Possession;
+using Fdp.Toolkit.Tkb.Domain;
 using Fdp.Toolkit.Combat.Components;
 using Fdp.Toolkit.Replication.Components;
 using Fdp.Toolkit.Perception.Radar;
@@ -273,6 +275,318 @@ public class PlayerStationTests
         Assert.True(MathF.Sign(toLeft) == MathF.Sign(lateral) && MathF.Abs(toLeft) > 0.5f * MathF.Abs(lateral), $"displaced {toLeft:F2} m to his left for lateral {lateral} (at {pos})");
         Assert.InRange(MathF.Abs(along), 0f, 0.05f);                                                      // not forward or back
         Assert.InRange(MathF.Abs(MathF.IEEERemainder(yaw - heading, 2f * MathF.PI)), 0f, 0.01f);         // the heading did not change
+    }
+
+    // ---- DD-029: the seat drives what it boards (HROT's DriveHandOver) ----------------------------------------------------------
+
+    private const int VehicleId = 2101;
+
+    /// <summary>A playing soldier (a person carrier) and an empty two-seat vehicle one metre away, with the components HROT's use rule reads.</summary>
+    private static (Entity Soldier, Entity Vehicle) DriveSetup(Stage h)
+    {
+        void Reg<T>()
+            where T : unmanaged
+        {
+            if (!h.World.IsComponentTypeRegistered<T>())
+            {
+                h.World.RegisterComponent<T>();
+            }
+        }
+
+        Reg<Fdp.Toolkit.Behavior.Components.PassengerBuffer>();
+        Reg<Fdp.Toolkit.Behavior.Components.CarrierSeats>();
+        Reg<Fdp.Toolkit.Behavior.Components.CarrierStations>();
+        Reg<Fdp.Toolkit.Behavior.Components.OpenPassengerCabin>();
+        Reg<Fdp.Toolkit.Behavior.Components.PersonCarrier>();
+        Reg<Fdp.Toolkit.Behavior.Components.IsEmbarkedTag>();
+        Reg<Fdp.Toolkit.Behavior.Components.IsAssistingTag>();
+        Reg<OperatorUseStatus>();
+        var person = new Fdp.Interfaces.TkbTemplate("person", 310);
+        person.AddDescriptor(CarrierDefDto.PersonCarrier());
+        var truck = new Fdp.Interfaces.TkbTemplate("HMMWV", 311) { DisType = new Fdp.Core.DISEntityType { Kind = 1, Domain = 1, Country = 225, Category = 1 } };
+        truck.AddDescriptor(new CarrierDefDto { Seats = { new SeatDto { Role = SeatRole.Driver }, new SeatDto { Role = SeatRole.Passenger } } });
+        h.TestTkb.Register(person);
+        h.TestTkb.Register(truck);
+        h.World.SetSingletonManaged<Fdp.Interfaces.ITkbDatabase>(h.TestTkb);
+        h.World.SetSingletonManaged(h.Map);   // a HROT node sets its id map as a world singleton; HROT's hand-over reads it there
+        var soldier = h.Play();
+        new Fdp.Toolkit.Behavior.Translators.CarrierTkbTranslator().Inject(h.World, soldier, person);
+        var vehicle = h.AddHrotEntity(VehicleId, new Vector3(2, 2, 0), "HMMWV", tkb: 311);
+        new Fdp.Toolkit.Behavior.Translators.CarrierTkbTranslator().Inject(h.World, vehicle, truck);
+        return (soldier, vehicle);
+    }
+
+    /// <summary>HROT's possession system as the harness stands in for it: the requests (a new epoch each) then the releases, read from the last step or action.</summary>
+    private static void ApplyPossession(Stage h, bool swap = false)
+    {
+        if (swap)
+        {
+            h.World.Bus.SwapBuffers();
+        }
+
+        foreach (var req in h.Read<PossessRequestEvent>())
+        {
+            ApplyRequest(h, req);
+        }
+
+        foreach (var rel in h.Read<ReleasePossessionEvent>())
+        {
+            if (h.World.HasComponent<PossessedBy>(rel.Unit))
+            {
+                h.World.RemoveComponent<PossessedBy>(rel.Unit);
+            }
+        }
+    }
+
+    private static void ApplyRequest(Stage h, PossessRequestEvent req)
+    {
+        uint epoch = h.World.HasComponent<PossessedBy>(req.Unit) ? h.World.GetComponentRO<PossessedBy>(req.Unit).Epoch + 1 : 1;
+        var held = new PossessedBy { StationNodeId = req.StationNodeId, Mode = req.Mode, Epoch = epoch };
+        if (h.World.HasComponent<PossessedBy>(req.Unit))
+        {
+            h.World.SetComponent(req.Unit, held);
+        }
+        else
+        {
+            h.World.AddComponent(req.Unit, held);
+        }
+    }
+
+    private static PlayerControl Press(byte seq, byte verb = 0, int target = VehicleId) => Frame() with { Seq = seq, UseSeq = seq, UseVerb = verb, UseTarget = target, Trigger = false, ShotSeq = 0 };
+
+    private static PlayerControl Move(uint seq, byte useSeq, int target = VehicleId) => Frame() with { Seq = seq, Forward = 1f, UseSeq = useSeq, UseVerb = 0, UseTarget = target, Trigger = false, ShotSeq = 0 };
+
+    /// <summary>Runs the whole Drive hand-over: the press, the brain boarding him, the step after each replicated change. Returns when the slot names the vehicle.</summary>
+    private static void DriveIn(Stage h, Entity soldier, Entity vehicle)
+    {
+        h.Station.Control(Press(1));
+        h.Events<OperatorControlFrameEvent>();
+        h.Step();                                                    // AwaitBoard: not aboard yet
+        Assert.Empty(h.Read<PossessRequestEvent>());
+        Assert.Equal(Fdp.Toolkit.Behavior.EmbarkResult.Applied, Fdp.Toolkit.Behavior.Embarkation.TryEmbark(h.World, soldier, vehicle, SeatRole.Driver));   // the brain boarded him
+        h.Step();                                                    // the driver seat shows: Riding is asked, the vehicle is not
+        var asked = Assert.Single(h.Read<PossessRequestEvent>());
+        Assert.Equal((soldier, PossessionMode.Riding), (asked.Unit, asked.Mode));
+        h.Step();                                                    // his Riding has not replicated: still waiting
+        Assert.Empty(h.Read<PossessRequestEvent>());
+        ApplyRequest(h, asked);
+        h.Step();                                                    // he rides: now the vehicle
+        asked = Assert.Single(h.Read<PossessRequestEvent>());
+        Assert.Equal((vehicle, PossessionMode.Fps), (asked.Unit, asked.Mode));
+        ApplyPossession(h);
+        h.Steps(2);
+    }
+
+    [Fact]
+    public void A_drive_press_on_an_empty_vehicle_moves_the_slot_to_the_vehicle_its_frames_drive_it_and_get_out_returns_the_soldier()
+    {
+        using var h = new Stage();
+        var (soldier, vehicle) = DriveSetup(h);
+        Assert.Equal((PlayerSlotState.Playing, Unit), (h.Station.Slot.State, h.Station.Slot.UnitId));
+
+        DriveIn(h, soldier, vehicle);
+
+        // the slot names the vehicle, the soldier rides (still held), and a frame with W goes to the vehicle
+        Assert.Equal((PlayerSlotState.Playing, VehicleId), (h.Station.Slot.State, h.Station.Slot.UnitId));
+        Assert.Equal(PossessionMode.Riding, h.World.GetComponentRO<PossessedBy>(soldier).Mode);
+        h.Station.Control(Move(2, useSeq: 1));
+        var drive = Assert.Single(h.Events<OperatorControlFrameEvent>());
+        Assert.Equal((vehicle, 1f), (drive.Unit, drive.Forward));
+        Assert.Equal((byte)0, drive.UseSeq);   // the Drive press is not replayed onto the vehicle: it carries the vehicle's own counter (what its brain has seen)
+
+        // Get out: a new press while he drives a vehicle with his soldier aboard hands back to the soldier; the press is withheld from the vehicle
+        h.Station.Control(Press(2));
+        h.World.Bus.SwapBuffers();
+        var withheld = Assert.Single(h.Read<OperatorControlFrameEvent>());
+        Assert.Equal((vehicle, (byte)0), (withheld.Unit, withheld.UseSeq));
+        var back = Assert.Single(h.Read<PossessRequestEvent>());
+        Assert.Equal((soldier, PossessionMode.Fps), (back.Unit, back.Mode));
+        ApplyPossession(h);
+        Assert.False(h.World.HasComponent<PossessedBy>(vehicle));    // one Fps unit per station: HROT's Possess(soldier) let the vehicle go
+        h.Steps(2);
+        Assert.Equal((PlayerSlotState.Playing, Unit), (h.Station.Slot.State, h.Station.Slot.UnitId));
+
+        // the soldier's first frame carries the Get-out press, as HROT's own station sends it
+        h.Station.Control(Move(3, useSeq: 2));
+        var first = Assert.Single(h.Events<OperatorControlFrameEvent>());
+        Assert.Equal((soldier, (byte)2, (byte)0, VehicleId), (first.Unit, first.UseSeq, first.UseVerb, first.UseTarget));
+        h.Station.Control(Move(4, useSeq: 2));
+        Assert.Equal((byte)2, Assert.Single(h.Events<OperatorControlFrameEvent>()).UseSeq);   // and only once
+    }
+
+    [Fact]
+    public void A_press_that_is_not_drive_or_pilot_does_not_arm_the_hand_over()
+    {
+        using var h = new Stage();
+        var (soldier, vehicle) = DriveSetup(h);
+
+        h.Station.Control(Press(1, verb: 1));                        // Board, the second offered verb
+        h.Events<OperatorControlFrameEvent>();
+        Assert.Equal(Fdp.Toolkit.Behavior.EmbarkResult.Applied, Fdp.Toolkit.Behavior.Embarkation.TryEmbark(h.World, soldier, vehicle, SeatRole.Passenger));
+        h.Steps(5);
+
+        Assert.Empty(h.Read<PossessRequestEvent>());
+        Assert.Equal((PlayerSlotState.Playing, Unit), (h.Station.Slot.State, h.Station.Slot.UnitId));
+    }
+
+    [Fact]
+    public void A_hand_over_that_never_gets_the_driver_seat_times_out_and_the_seat_stays_on_the_soldier()
+    {
+        using var h = new Stage();
+        var (soldier, vehicle) = DriveSetup(h);
+        h.Station.Control(Press(1));
+        h.Events<OperatorControlFrameEvent>();
+        h.Steps(2);
+        h.AdvanceMs(14_000);
+        h.Step();
+        h.AdvanceMs(2_000);
+        h.Step();                                                    // 16 s: HROT's hand-over is dropped
+        Assert.Equal(Fdp.Toolkit.Behavior.EmbarkResult.Applied, Fdp.Toolkit.Behavior.Embarkation.TryEmbark(h.World, soldier, vehicle, SeatRole.Driver));
+        h.Steps(3);
+
+        Assert.Empty(h.Read<PossessRequestEvent>());                 // seated late: nothing is asked any more
+        Assert.Equal((PlayerSlotState.Playing, Unit), (h.Station.Slot.State, h.Station.Slot.UnitId));
+    }
+
+    /// <summary>
+    /// R-064: seeded random presses, steps, boardings and delayed replication of the seat's requests; after EVERY operation the invariants hold: the vehicle is never asked as
+    /// Fps while the soldier is not held as Riding, the seat never holds more Fps units than the two there are, the slot names only the soldier or the vehicle, and right after
+    /// a step a slot that names the vehicle while Playing is backed by the seat holding it. A run must reach the vehicle step at least once (seeds chosen so).
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    [InlineData(5)]
+    [InlineData(7)]
+    [InlineData(8)]
+    public void Random_presses_steps_and_delayed_replication_keep_the_hand_over_invariants(int seed)
+    {
+        using var h = new Stage();
+        var (soldier, vehicle) = DriveSetup(h);
+        var rng = new Random(seed);
+        var pending = new List<PossessRequestEvent>();
+        uint seq = 10;
+        byte useSeq = 0;
+        int drives = 0;
+
+        void Collect()
+        {
+            foreach (var req in h.Read<PossessRequestEvent>())
+            {
+                if (req.Unit == vehicle && req.Mode == PossessionMode.Fps)
+                {
+                    drives++;
+                    Assert.True(h.World.HasComponent<PossessedBy>(soldier) && h.World.GetComponentRO<PossessedBy>(soldier).Mode == PossessionMode.Riding, "the vehicle was asked before the soldier rides");
+                }
+
+                pending.Add(req);
+            }
+        }
+
+        void Invariants(bool afterStep)
+        {
+            int fps = 0;
+            foreach (var e in new[] { soldier, vehicle })
+            {
+                if (h.World.HasComponent<PossessedBy>(e) && h.World.GetComponentRO<PossessedBy>(e).Mode == PossessionMode.Fps && (int)h.World.GetComponentRO<PossessedBy>(e).StationNodeId == SeatStation)
+                {
+                    fps++;
+                }
+            }
+
+            Assert.True(fps <= 2);   // a take-over moment may show two (the old one released next); never more than the two units
+            int slotUnit = h.Station.Slot.UnitId;
+            Assert.Contains(slotUnit, new[] { 0, Unit, VehicleId });
+            if (afterStep && h.Station.Slot.State == PlayerSlotState.Playing && slotUnit == VehicleId)   // the slot follows on a step: right after one it is backed by the world
+            {
+                Assert.True(h.World.HasComponent<PossessedBy>(vehicle) && (int)h.World.GetComponentRO<PossessedBy>(vehicle).StationNodeId == SeatStation);
+            }
+        }
+
+        for (int i = 0; i < 300; i++)
+        {
+            bool stepped = false;
+            switch (rng.Next(7))
+            {
+                case 0:   // a Drive press (a new UseSeq), the vehicle as target
+                case 1:   // any press while driving is Get out
+                    unchecked { useSeq++; }
+                    h.Station.Control(Move(seq++, useSeq));
+                    h.World.Bus.SwapBuffers();
+                    h.Read<OperatorControlFrameEvent>();
+                    Collect();
+                    break;
+                case 2:
+                    h.Station.Control(Move(seq++, useSeq));
+                    h.World.Bus.SwapBuffers();
+                    break;
+                case 3:
+                case 4:
+                    h.Step();
+                    Collect();
+                    stepped = true;
+                    break;
+                case 5:   // the brain boards him, once
+                    if (!h.World.HasComponent<IsEmbarkedTag>(soldier))
+                    {
+                        Fdp.Toolkit.Behavior.Embarkation.TryEmbark(h.World, soldier, vehicle, SeatRole.Driver);
+                    }
+
+                    break;
+                default:  // replication catches up with one or all of the seat's requests
+                    if (pending.Count > 0)
+                    {
+                        int n = rng.Next(1, pending.Count + 1);
+                        for (int k = 0; k < n; k++)
+                        {
+                            var req = pending[0];
+                            pending.RemoveAt(0);
+                            ApplyRequest(h, req);
+                            if (req.Mode == PossessionMode.Fps)
+                            {
+                                foreach (var other in new[] { soldier, vehicle }.Where(o => o != req.Unit && h.World.HasComponent<PossessedBy>(o)
+                                    && h.World.GetComponentRO<PossessedBy>(o).Mode == PossessionMode.Fps))
+                                {
+                                    h.World.RemoveComponent<PossessedBy>(other);   // HROT's "one Fps unit per station"
+                                }
+                            }
+                        }
+                    }
+
+                    break;
+            }
+
+            Invariants(stepped);
+        }
+
+        Assert.True(drives > 0, "the random run never reached the vehicle step");
+    }
+
+    [Fact]
+    public void The_unit_status_actions_are_hrots_offered_list_in_its_order_with_a_refused_verbs_reason()
+    {
+        using var h = new Stage();
+        var (soldier, vehicle) = DriveSetup(h);
+        h.Station.Control(Move(2, useSeq: 0));   // no press: only the target (the crosshair rests on the vehicle)
+        h.Events<OperatorControlFrameEvent>();
+        h.Steps(2);
+
+        var expected = Fdp.Toolkit.Behavior.Possession.OperatorUseActions.For(h.World, soldier, vehicle);
+        var list = h.Station.Unit.Actions!;
+        Assert.Equal(expected.Select(a => a.Verb.ToString()), list.Select(a => a.Verb));
+        Assert.Equal(expected.Select(a => a.Available), list.Select(a => a.Available));
+        Assert.Equal(expected.Select(a => a.Reason.ToString()), list.Select(a => a.Reason));
+        Assert.Equal(["Drive", "Board"], list.Select(a => a.Verb));
+        Assert.StartsWith("Drive", list[0].Label);
+
+        // the driver seat taken by someone else: the verb stays in the list, refused with HROT's reason
+        var other = h.AddHrotEntity(2102, new Vector3(3, 2, 0), tkb: 300);
+        new Fdp.Toolkit.Behavior.Translators.CarrierTkbTranslator().Inject(h.World, other, h.TestTkb.GetByType(new TkbTypeId(310))!);
+        Assert.Equal(Fdp.Toolkit.Behavior.EmbarkResult.Applied, Fdp.Toolkit.Behavior.Embarkation.TryEmbark(h.World, other, vehicle, SeatRole.Driver));
+        h.Steps(2);
+        list = h.Station.Unit.Actions!;
+        Assert.Equal(("Board", true, "Ok"), (list[0].Verb, list[0].Available, list[0].Reason));   // HROT's order: the free seat goes first (O-4)
+        Assert.Equal(("Drive", false, "SeatTaken"), (list[1].Verb, list[1].Available, list[1].Reason));
     }
 
     [Fact]

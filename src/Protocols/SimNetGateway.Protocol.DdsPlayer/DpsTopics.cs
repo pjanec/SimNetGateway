@@ -774,6 +774,21 @@ public partial struct AmmoEntry
     public int HeatPercent;
 }
 
+/// <summary>One verb of the producer's offered-verb list for the unit's use target (DD-029), in the producer's order; the first is the primary action.</summary>
+[DdsStruct]
+[DdsManaged]
+public partial struct UseActionEntry
+{
+    public UseVerb Verb;
+    /// <summary>The verb as the producer's HUD words it (for example "Drive BMP-2"); the client may translate by <see cref="Verb"/>.</summary>
+    [MaxLength(32)] public string Label;
+    /// <summary>False = offered but refused now; <see cref="Reason"/> says why.</summary>
+    public bool Available;
+    public UseReason Reason;
+    /// <summary>Shown on a hold list only, never sent by a tap.</summary>
+    public bool HoldOnly;
+}
+
 /// <summary>The data a HUD needs about the player's own unit.</summary>
 [DpsRate(DpsRateClass.Discrete)]
 [DdsTopic(DpsProtocol.OwnUnit)]
@@ -809,6 +824,8 @@ public partial struct OwnUnit
     public MissileSeeker MissileSeeker;
     /// <summary>What the use action does now (replaces <see cref="UseVerb"/>); None = nothing to use.</summary>
     public UseVerb Verb;
+    /// <summary>Every verb the producer offers for the use target, in its order (the first is the primary, as <see cref="Verb"/>); the client sends the chosen verb back in its control frame (DD-029).</summary>
+    [DdsBound(8)] public List<UseActionEntry> Actions;
 }
 
 #endregion
