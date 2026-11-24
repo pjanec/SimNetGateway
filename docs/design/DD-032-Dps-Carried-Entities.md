@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | approved (R-154) - building 2026-11-24 (T-077) |
+| **Status** | approved (R-154), built (T-077, in review) |
 | **Tasks** | T-077 |
 | **Rulings honoured** | R-154, R-133 (append-only), R-135 (producer-neutral), R-146 |
 | **Related** | DD-031 (D-4, the measurement that found it); DD-018 §Riders (`PersonState` seat fields: persons only); HROT `EntityBodyLayer3D.DrawCarried` (`:1734-1739`), `CarryStations.IsConcealed / IsStowed`, `Embarkation`; the Unreal notes on civilian weapons (`653051d4a`) and passenger seats (`af6d4f6cb`) |
@@ -94,4 +94,12 @@ Approved with the design (R-154).
 
 ## 9. As-built notes
 
-(to be filled by T-077)
+Built (T-077) against the pin HROT `037e62a8d`; the classes and sequences of sections 4 and 5 are as drawn.
+
+- **Topic.** `Carried { [key] EntityId, CarrierId, byte SeatIndex, bool Stowed }`, Discrete / Reliable / TransientLocal / KeepLast 1, written once on the world partition like `GroundDamage`; `AllTopics` 54. IDL +9 lines, none removed. Pivot `HrotCarried(Id, CarrierId, Seat, Stowed)`: `CarrierId` 0 means "not carried any more" (the side disposes). Ignored on the DIS side (`HrotIgnoredIngress`). The client keeps it in `DpsWorld.Carried`.
+- **Gather.** `CarriedGather` (host) is called from the entity loop of `EcsHrotAdapter.GatherEntities` for every NON-life-form entity (a person or animal has his seat facts in `PersonDetail`): it reads `IsEmbarkedTag` (carrier network id, seat) and `CarryStations.IsStowed`, sends on change, and sends the end once when the tag goes; the adapter's removal path (`Forget`) ends it too. `DpsCarriedOutbound` dedups once more and disposes on carrier 0. 0 B steady (rail).
+- **Concealed filter.** One place: the entity loop of `GatherEntities` skips a non-life-form for which `CarryStations.IsConcealed` is true, before any bookkeeping. It is then not `Seen`, so the existing removal path sends `HrotEntityRemoved` (every instance of it disposed: `Entity`, `EntityState`, `Articulation`, ...) and `Forget`s its carriage; when drawn again it is new. Articulation follows (`_turretQuery` requires the entity to be in `_sent`; the DPS side drops a turret pose of an unpublished id). Note that the filter sits in the adapter, so the DIS side no longer sees a concealed thing either. Persons are never filtered (a person in a station seat is drawn by HROT).
+- **Measured: (a) a picked-up weapon has a network id** by the code, not by a live run: HROT's pick-up is the `Take` use verb (`OperatorUse.Take`, `PickUpExecutor`) of a LYING portable weapon entity into the man's first open station; the entity is not created or replaced by it (`Embarkation.Board` only adds `IsEmbarkedTag` and the passenger slot), so it keeps the network id it had while lying, and the gateway already published it then. Not checked: a weapon created in a seat from a type's `SeatDto.StartWith` (`SeatPresets`, spawned through the creation pack) - the same pack path as any placed entity, assumed to carry an id.
+- **Measured: (b) a worn concealed charge that bursts** (`Charges.Detonate`): the `DetonationNotification` names as `Shooter` the one who set it off, else its CARRIER (the man wearing it), else the charge itself only when it is not carried; `Target` is empty. So a `Detonation` never references the unpublished charge while it is worn; the charge's own end is a network destroy (`End`), after which it was never published anyway. Nothing changed. Not covered: an event naming a concealed entity as shooter/target (a `Fire` from a stowed seat is gated off by HROT; no such event was found).
+- **D-3 as written** into the client guide ("Things that ride a carrier") with the concealed rule and the Rate-classes row.
+

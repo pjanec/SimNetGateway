@@ -68,6 +68,7 @@ public sealed class EcsHrotAdapter
     private readonly HudGather _hud = new();
     private readonly BuildingDamageGather _buildings = new();
     private readonly GroundDamageGather _craters = new();
+    private readonly CarriedGather _carried = new();
     private readonly TrafficGather _traffic = new();
     private readonly TkbGather _types = new();
     private readonly AnimalGather _animals = new();
@@ -179,6 +180,15 @@ public sealed class EcsHrotAdapter
             }
 
             var state = StateOf(world, e, id, tkb, simTime);
+            bool lifeForm = state.DisType != 0 && DisTypeCode.Unpack(state.DisType).Kind == LifeFormKind;
+
+            // DD-032: a thing carried in a CONCEALED station (a pistol in the hidden seat, a worn charge) is not drawn by HROT and arms nobody. It is not published on any topic: skipped here it is
+            // not Seen, so it is removed like an entity that left (every instance of it disposed), and when it is drawn again it is new
+            if (!lifeForm && Fdp.Toolkit.Behavior.CarryStations.IsConcealed(world, e))
+            {
+                continue;
+            }
+
             bool sendState;
             bool isNew = !_sent.ContainsKey(id);
             if (_sent.TryGetValue(id, out var previous))
@@ -205,6 +215,10 @@ public sealed class EcsHrotAdapter
 
             _types.Reference(state.TkbType);
             ReferenceLoadedAmmo(world, e, isNew);
+            if (!lifeForm)
+            {
+                _carried.Gather(world, e, id, inbound);   // DD-032: what carries it (a person's seat facts are in his PersonDetail)
+            }
 
             // a round with a look: its munition look (once per type) and its round state, after the state so the gateway knows the entity
             if (RoundGather.IsRound(world, e))
@@ -268,6 +282,7 @@ public sealed class EcsHrotAdapter
             _banks.Forget(id);
             _vehicleLooks.Forget(id);
             _status.Forget(id);
+            _carried.Forget(id, inbound);
             inbound.Enqueue(new HrotEntityRemoved(id));
             Counters.RemovalsSent++;
         }
@@ -916,6 +931,7 @@ public sealed class EcsHrotAdapter
         _hud.Clear();
         _buildings.Clear();
         _craters.Clear();
+        _carried.Clear();
         _traffic.Clear();
         _types.Clear();
         _animals.Clear();

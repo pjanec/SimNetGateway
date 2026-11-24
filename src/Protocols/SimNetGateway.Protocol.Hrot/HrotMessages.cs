@@ -302,6 +302,12 @@ public readonly record struct ExternalState(
     double HealthMax) : IGatewayToHrotMessage;
 
 /// <summary>
+/// DD-032 (T-077): what carries a non-person entity - the network id of the carrier, the seat index in its seat list (<c>IsEmbarkedTag.Seat</c>) and whether that seat is a stowed one (on the
+/// back or the hip, not in the hands). <paramref name="CarrierId"/> 0 = the entity is not carried any more (dropped, concealed or gone): the side disposes it.
+/// </summary>
+public readonly record struct HrotCarried(int Id, int CarrierId, byte Seat, bool Stowed) : IHrotToGatewayMessage;
+
+/// <summary>
 /// DD-031 (T-076): what a held weapon LOOKS like, HROT's drawing vocabulary (<c>Hrot.UI.Common.Map3D.HeldLook</c>, finer than the observer's item look), in HROT's order. The producer
 /// fills it by member name, never by number.
 /// </summary>

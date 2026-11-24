@@ -376,6 +376,15 @@ module SimNetGateway {
                 double CollapsedAt;
             };
 
+            @topic
+            @appendable
+            struct Carried {
+                @key int32 EntityId;
+                int32 CarrierId;
+                octet SeatIndex;
+                boolean Stowed;
+            };
+
             @appendable
             struct Crater {
                 SimNetGateway::Protocol::DdsPlayer::Vec3d Centre;

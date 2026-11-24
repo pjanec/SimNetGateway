@@ -25,7 +25,7 @@ namespace SimNetGateway.HrotHost.Tests;
 /// </summary>
 public class PersonHeldLookGatherTests
 {
-    private const long ToyType = 9301, CivilianType = 9302, BareType = 9303;
+    internal const long ToyType = 9301, CivilianType = 9302, BareType = 9303;
 
     private sealed class Capture : IIngressSink
     {
@@ -46,7 +46,7 @@ public class PersonHeldLookGatherTests
         }
     }
 
-    private static double _now = 1000;
+    internal static double _now = 1000;
 
     private static List<HrotPersonDetail> Gather(PackHarness h, double simTime)
     {
@@ -59,7 +59,7 @@ public class PersonHeldLookGatherTests
     }
 
     /// <summary>A harness whose TKB is HROT's built-in catalogue plus a toy gunner and a civilian with no mount of his own; the components of a person's carry seats registered.</summary>
-    private static PackHarness Live()
+    internal static PackHarness Live()
     {
         var h = new PackHarness(dis: true);
         NedTkbCatalog.RegisterAll(h.TestTkb);
@@ -95,7 +95,7 @@ public class PersonHeldLookGatherTests
         h.TestTkb.Register(t);
     }
 
-    private static Entity Man(PackHarness h, int id, long type, int active = 0)
+    internal static Entity Man(PackHarness h, int id, long type, int active = 0)
     {
         var e = h.AddHrotEntity(id, new Vector3(id % 100, 0, 0), tkb: type);
         h.World.AddComponent(e, new WeaponPosture { Kind = WeaponPostureKind.Ready, HeldItem = HeldItemKind.Weapon, ActiveMount = (byte)active });
@@ -121,7 +121,7 @@ public class PersonHeldLookGatherTests
         return w;
     }
 
-    private static void Hold(PackHarness h, Entity man, int mount)
+    internal static void Hold(PackHarness h, Entity man, int mount)
         => h.World.SetComponent(man, new WeaponPosture { Kind = WeaponPostureKind.Ready, HeldItem = HeldItemKind.Weapon, ActiveMount = (byte)mount });
 
     private static HrotPersonDetail Detail(PackHarness h, int id)

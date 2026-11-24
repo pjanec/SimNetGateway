@@ -552,6 +552,26 @@ public partial struct BuildingDamage
     public double CollapsedAt;
 }
 
+/// <summary>
+/// A producer-specific extension, optional for a client (DD-032). What carries a NON-person entity: a weapon in a man's hands or on his back, a gun in a helicopter's door station. The
+/// entity itself stays published (it fires as itself; <c>Fire.Shooter</c> names it) and its <see cref="EntityState"/> is the carrier's reference point, so without this a client would
+/// draw it loose. One instance per carried entity, written when the carrier, the seat or <see cref="Stowed"/> changes and disposed when the entity stops being carried. A person is never
+/// here: his seat facts are <see cref="PersonState"/>'s. An entity the simulation does not draw (concealed in a hidden seat) is not published at all.
+/// </summary>
+[DpsRate(DpsRateClass.Discrete)]
+[DdsTopic(DpsProtocol.Carried)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+public partial struct Carried
+{
+    [DdsKey] public int EntityId;
+    /// <summary>The entity that carries it (its network id, as <see cref="PersonState.SeatVehicleId"/>); the carrier may not be published yet.</summary>
+    public int CarrierId;
+    /// <summary>The index into the carrier's seat list (the same meaning as <see cref="PersonState.SeatIndex"/>): a man's hands, back or hidden seat, a helicopter's door station.</summary>
+    public byte SeatIndex;
+    /// <summary>The seat is a stowed one: on the back or the hip, not in the hands and not ready to fire.</summary>
+    public bool Stowed;
+}
+
 /// <summary>One crater: a bowl of <see cref="Depth"/> m at <see cref="Centre"/> rising to a rim <see cref="Rim"/> m above the ground at <see cref="Radius"/>, falling back to the ground at 1.4 x <see cref="Radius"/> (the simulation's profile).</summary>
 [DdsStruct]
 public partial struct Crater

@@ -226,6 +226,9 @@ public sealed class DpsWorld : IDisposable
     /// <summary>The craters of the ground cells by cell ("cellX,cellY").</summary>
     public Dictionary<string, D.GroundDamage> GroundDamage { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>The non-person entities that ride a carrier, by entity id.</summary>
+    public Dictionary<int, D.Carried> Carried { get; } = new();
+
     /// <summary>The rule statuses by id.</summary>
     public Dictionary<int, D.Status> Statuses { get; } = new();
 
@@ -278,6 +281,7 @@ public sealed class DpsWorld : IDisposable
         Keep(DpsProtocol.EntityStatus, EntityStatuses, (D.EntityStatus s) => s.EntityId);
         Keep(DpsProtocol.TkbType, TkbTypes, (D.TkbType t) => t.TypeId);
         Keep(DpsProtocol.BuildingDamage, BuildingDamage, (D.BuildingDamage b) => b.Building ?? string.Empty);
+        Keep(DpsProtocol.Carried, Carried, (D.Carried c) => c.EntityId);
         Keep(DpsProtocol.GroundDamage, GroundDamage, (D.GroundDamage g) => g.Cell ?? string.Empty);
         Keep(DpsProtocol.Status, Statuses, (D.Status s) => s.StatusId);
         Keep(DpsProtocol.TrafficLights, TrafficLights, (D.TrafficLights l) => l.SignalId);

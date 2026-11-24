@@ -517,6 +517,21 @@ public class DpsTopicTests
         Assert.Equal($"{P}Vec3d Centre;\nfloat Radius;\nfloat Depth;\nfloat Rim;\ndouble BornAt;\n{P}CraterKind Kind;", Body("Crater"));
     }
 
+    /// <summary>T-077 (DD-032): a carriage survives the wire, is a late-join state keyed by the carried entity, and its IDL is a whole addition (no existing struct changed).</summary>
+    [Fact]
+    public void A_carriage_round_trips_is_a_late_join_state_and_its_idl_is_a_pure_addition()
+    {
+        var c = RoundTrip(new Carried { EntityId = 4002, CarrierId = 4001, SeatIndex = 9, Stowed = true }, "t77-carried");
+        Assert.Equal((4002, 4001, (byte)9, true), (c.EntityId, c.CarrierId, c.SeatIndex, c.Stowed));
+        Assert.Equal(4002, LateJoin(new Carried { EntityId = 4002, CarrierId = 4001 }, "t77-late-carried").EntityId);
+
+        string idl = string.Concat(Directory.EnumerateFiles(AppContext.BaseDirectory, "DpsTopics.idl").Select(File.ReadAllText)).Replace("\r", "");
+        int at = idl.IndexOf("struct Carried {", StringComparison.Ordinal);
+        Assert.True(at >= 0);
+        string body = string.Join("\n", idl[(at + "struct Carried {".Length)..idl.IndexOf("};", at, StringComparison.Ordinal)].Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0));
+        Assert.Equal("@key int32 EntityId;\nint32 CarrierId;\noctet SeatIndex;\nboolean Stowed;", body);
+    }
+
     [Fact]
     public void The_traffic_topics_round_trip_with_the_compact_knot_units()
     {
@@ -617,7 +632,8 @@ public class DpsTopicTests
             var type = topic["DPS_".Length..];
             Assert.Contains($"struct {type} ", idl);
         }
-        Assert.Equal(53, DpsProtocol.AllTopics.Count);   // + Utterance, Report, Order, Ambience, Weather (DD-026, DD-028), GroundDamage (DD-030)
+        Assert.Equal(54, DpsProtocol.AllTopics.Count);   // + Utterance, Report, Order, Ambience, Weather (DD-026, DD-028), GroundDamage (DD-030), Carried (DD-032)
+        Assert.Contains("DPS_Carried", DpsProtocol.AllTopics);
         foreach (var name in new[] { "Mover", "MoverTracks", "TrafficLights" })
         {
             Assert.Contains("DPS_" + name, DpsProtocol.AllTopics);

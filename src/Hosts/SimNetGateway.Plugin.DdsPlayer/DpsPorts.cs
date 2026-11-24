@@ -32,6 +32,7 @@ internal sealed class DpsPorts
         Animal = b.RequireOutbound<DpsItem<Animal>>("dps.Animal");
         BuildingDamage = b.RequireOutbound<DpsItem<BuildingDamage>>("dps.BuildingDamage");
         GroundDamage = b.RequireOutbound<DpsItem<GroundDamage>>("dps.GroundDamage");
+        Carried = b.RequireOutbound<DpsItem<Carried>>("dps.Carried");
         Mover = b.RequireOutbound<DpsItem<Mover>>("dps.Mover");
         MoverTracks = b.RequireOutbound<DpsItem<MoverTracks>>("dps.MoverTracks");
         TrafficLights = b.RequireOutbound<DpsItem<TrafficLights>>("dps.TrafficLights");
@@ -92,6 +93,8 @@ internal sealed class DpsPorts
 
     public IOutboundChannel<DpsItem<GroundDamage>> GroundDamage { get; }
 
+    public IOutboundChannel<DpsItem<Carried>> Carried { get; }
+
     public IOutboundChannel<DpsItem<Mover>> Mover { get; }
 
     public IOutboundChannel<DpsItem<MoverTracks>> MoverTracks { get; }
@@ -151,6 +154,7 @@ internal sealed class DpsPorts
         b.BindOutbound<DpsItem<Animal>>("dps.Animal", t.Animal);
         b.BindOutbound<DpsItem<BuildingDamage>>("dps.BuildingDamage", t.BuildingDamage);
         b.BindOutbound<DpsItem<GroundDamage>>("dps.GroundDamage", t.GroundDamage);
+        b.BindOutbound<DpsItem<Carried>>("dps.Carried", t.Carried);
         b.BindOutbound<DpsItem<Mover>>("dps.Mover", t.Mover);
         b.BindOutbound<DpsItem<MoverTracks>>("dps.MoverTracks", t.MoverTracks);
         b.BindOutbound<DpsItem<TrafficLights>>("dps.TrafficLights", t.TrafficLights);
