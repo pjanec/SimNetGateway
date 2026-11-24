@@ -36,4 +36,27 @@ public class DpsCarriedTests
         rig.Send(new HrotCarried(4002, 0, 0, false));     // dropped
         Assert.True(watch.Until(w => !w.Alive.ContainsKey("4002")));
     }
+
+    /// <summary>DD-033 (T-078): a cloud is copied field by field, changes are samples, the end disposes, and the pivot cloud kinds mirror the contract's.</summary>
+    [Fact]
+    public void A_cloud_is_copied_field_by_field_and_disposed_when_it_ends()
+    {
+        Assert.Equal(Enum.GetNames<HrotCloudKind>().Select(n => "CloudKind" + n), Enum.GetNames<D.CloudKind>());
+
+        uint domain = Watch.NewDomain();
+        using var watch = new Watch.Watch<D.Cloud>(domain, "station-1", e => Id(e.CloudId));
+        using var rig = new Rig(domain);
+
+        rig.Send(new HrotCloud(5001, HrotCloudKind.TearGas, 150.0, new HrotVec3(10, 20, 3), new HrotVec3(2, -1, 0), 8f, 6f, 0.25f, 100.0, 90f));
+        Assert.True(watch.Until(w => w.Alive.ContainsKey("5001")));
+        var c = watch.Alive["5001"];
+        Assert.Equal((D.CloudKind.CloudKindTearGas, 150.0, 10.0, 20.0, 3.0, 2f, -1f, 0f, 8f, 6f, 0.25f, 100.0, 90f),
+            (c.Kind, c.SimTime, c.Centre.X, c.Centre.Y, c.Centre.Z, c.Drift.X, c.Drift.Y, c.Drift.Z, c.Radius, c.Height, c.SightTransmittance, c.BornAt, c.Seconds));
+
+        rig.Send(new HrotCloud(5001, HrotCloudKind.TearGas, 151.0, new HrotVec3(12, 19, 3), new HrotVec3(-3, 0, 0), 8f, 6f, 0.25f, 100.0, 90f));   // the wind turned
+        Assert.True(watch.Until(w => w.Alive["5001"].Drift.X == -3f));
+
+        rig.Send(new HrotCloudEnded(5001));
+        Assert.True(watch.Until(w => !w.Alive.ContainsKey("5001")));
+    }
 }

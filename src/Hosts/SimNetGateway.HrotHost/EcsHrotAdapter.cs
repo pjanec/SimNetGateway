@@ -69,6 +69,7 @@ public sealed class EcsHrotAdapter
     private readonly BuildingDamageGather _buildings = new();
     private readonly GroundDamageGather _craters = new();
     private readonly CarriedGather _carried = new();
+    private readonly CloudGather _clouds = new();
     private readonly TrafficGather _traffic = new();
     private readonly TkbGather _types = new();
     private readonly AnimalGather _animals = new();
@@ -171,11 +172,19 @@ public sealed class EcsHrotAdapter
         }
 
         var tkb = _services.Tkb();
+        _clouds.Begin();
         foreach (var e in _hrotQuery!)
         {
             int id = world.GetComponentRO<NetworkIdentity>(e).Value;
             if (id == 0 || _replicas.ContainsKey(id))
             {
+                continue;
+            }
+
+            // DD-033: a gas or smoke cloud has no body - the Cloud topic is its whole truth, so it is not ALSO an entity
+            if (CloudGather.IsCloud(world, e))
+            {
+                _clouds.Gather(world, e, id, simTime, inbound);
                 continue;
             }
 
@@ -262,6 +271,8 @@ public sealed class EcsHrotAdapter
             // what the client draws the entity's card from (DD-025), after the state, for the entities HROT would give a card
             _status.Gather(world, tkb, _services.Behaviors(), e, id, state.TkbType, inbound);
         }
+
+        _clouds.End(inbound);
 
         _scratch.Clear();
         foreach (var (id, s) in _sent)
@@ -932,6 +943,7 @@ public sealed class EcsHrotAdapter
         _buildings.Clear();
         _craters.Clear();
         _carried.Clear();
+        _clouds.Clear();
         _traffic.Clear();
         _types.Clear();
         _animals.Clear();

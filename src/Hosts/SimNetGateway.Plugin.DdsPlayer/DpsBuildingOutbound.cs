@@ -32,7 +32,7 @@ public sealed class DpsBuildingOutbound : IGatewayModule
     private void OnDamage(in HrotBuildingDamage m, IngressContext ctx)
     {
         string key = m.Building is { Length: > MaxKey } k ? k[..MaxKey] : m.Building ?? string.Empty;
-        if (!m.Collapsed && m.Breaches.Count == 0 && m.Windows.Count == 0)
+        if (!m.Collapsed && m.Breaches.Count == 0 && m.Windows.Count == 0 && m.FireSeconds <= 0f)
         {
             if (_written.Remove(key))
             {
@@ -54,6 +54,8 @@ public sealed class DpsBuildingOutbound : IGatewayModule
             Building = key,
             Collapsed = m.Collapsed,
             CollapsedAt = m.CollapsedAt,
+            FireSince = m.FireSince,
+            FireSeconds = m.FireSeconds,
             Breaches =
             [
                 .. m.Breaches.Take(MaxBreaches).Select(b => new D.Breach

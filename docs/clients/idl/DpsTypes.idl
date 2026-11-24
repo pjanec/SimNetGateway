@@ -70,6 +70,13 @@ module SimNetGateway {
             };
 
             @bit_bound(8)
+            enum CloudKind {
+                CloudKindNone,
+                CloudKindTearGas,
+                CloudKindSmoke
+            };
+
+            @bit_bound(8)
             enum Gesture {
                 GestureNone,
                 GestureHandsUp,

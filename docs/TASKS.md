@@ -104,4 +104,4 @@ progress and done.
 | **T-075** | blocked | A breach's cause on DPS: `Breach.Cause` appended (`BreachCause_Unknown = 0 / _Explosion / _Ram / _Blade`), copied from HROT's per-breach record field; blocked on HROT CE-11054 (terrain lane, `HANDOFF_Ui_To_Terrain_Breach_Cause.md`); asked by unreal-ig `NOTE_UnrealIg_To_Ui_Breach_Cause.md`. Extends DD-030. | DD-030 |
 | **T-076** | review | The held-weapon look on DPS (DD-031): `PersonState` appends `HeldLook`, `SlungLook`, `HeldMarking` from HROT's `Hrot.Look.HeldWeapons` (moved by HROT CE-11055); pin bump. | DD-031 |
 | **T-077** | review | Carried entities on DPS (DD-032): a `Carried` topic (carrier, seat, stowed) for a non-person riding a carrier; concealed carried entities not published. | DD-032 |
-| **T-078** | in-progress | A burning house by its key and smoke / gas clouds on DPS (DD-033): `BuildingDamage.FireSince / FireSeconds`; a `Cloud` topic. | DD-033 |
+| **T-078** | review | A burning house by its key and smoke / gas clouds on DPS (DD-033): `BuildingDamage.FireSince / FireSeconds`; a `Cloud` topic. | DD-033 |

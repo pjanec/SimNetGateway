@@ -260,7 +260,7 @@ public class EntityStatusGatherTests
     // ---- only the entities HROT gives a card -------------------------------------------------------------------------------------------
 
     [Fact]
-    public void An_entity_with_no_card_gets_no_status_and_one_that_loses_its_card_is_withdrawn_once()
+    public void An_entity_with_no_card_gets_no_status_and_one_that_becomes_a_cloud_leaves_once()
     {
         using var h = new Stage();
         h.AddMan(Man);
@@ -273,11 +273,16 @@ public class EntityStatusGatherTests
         Assert.Equal([Man, 2052], first.Of<HrotEntityStatus>().Select(s => s.Id).Order().ToArray());
         Assert.Contains(first.Of<HrotEntityState>(), s => s.Id == rule.Index || s.Id == 2050);   // the entity IS published: only its card is not
 
+        // DD-033 (T-078): a cloud is no entity of its own - the Cloud topic is all of it. The cloud 2051 was never published as an entity (so it never had a card), and the entity that
+        // BECOMES a cloud leaves like any entity (HrotEntityRemoved, which the status side disposes with it), then is a cloud
+        Assert.DoesNotContain(first.Of<HrotEntityState>(), s => s.Id == 2051);
+        Assert.Contains(first.Of<HrotCloud>(), c => c.Id == 2051);
         h.World.AddComponent(withCard, new AreaEffectCloud());   // it becomes something that has no card
         var second = h.Gather();
-        Assert.Equal([2052], second.Of<HrotEntityStatusRemoved>().Select(s => s.Id).ToArray());
+        Assert.Equal([2052], second.Of<HrotEntityRemoved>().Select(s => s.Id).ToArray());
+        Assert.Contains(second.Of<HrotCloud>(), c => c.Id == 2052);
         Assert.Empty(second.Of<HrotEntityStatus>());
-        Assert.Empty(h.Gather().Of<HrotEntityStatusRemoved>());   // once
+        Assert.Empty(h.Gather().Of<HrotEntityRemoved>());   // once
     }
 
     [Fact]

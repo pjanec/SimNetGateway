@@ -1,5 +1,6 @@
 using System.Numerics;
 using Fdp.Core;
+using Fdp.Toolkit.Perception.Signatures;
 using Fdp.Toolkit.Terrain;
 using SimNetGateway.Engine.InMemory;
 using SimNetGateway.Protocol.Hrot;
@@ -27,6 +28,41 @@ internal sealed class BuildingDamageGather
         public readonly Stamps Stamps = new();
         public bool Touched;
 
+        // DD-033: HROT's fire on the building (FireState spots with a duration): the earliest start, the latest end, and the one spot's own duration when only one burned
+        public double FireSince, FireEnd;
+        public float FireFirstSeconds;
+        public int FireSpots;
+
+        /// <summary>The fire as sent: since 0 / seconds 0 = never burned; one spot = its own start and duration; several = earliest start to latest end.</summary>
+        public double SentFireSince => FireSpots > 0 ? FireSince : 0d;
+
+        public float SentFireSeconds => FireSpots == 0 ? 0f : FireSpots == 1 ? FireFirstSeconds : (float)(FireEnd - FireSince);
+
+        public bool HasFire => FireSpots > 0;
+
+        public void AddFire(in FireState fire)
+        {
+            int n = Math.Min((int)fire.Count, FireState.Capacity);
+            for (int i = 0; i < n; i++)
+            {
+                var spot = fire.Get(i);
+                if (spot.Seconds <= 0f)
+                {
+                    continue;   // a slot that never burned
+                }
+
+                double since = spot.Since.Seconds, end = since + spot.Seconds;
+                if (FireSpots == 0 || since < FireSince)
+                {
+                    FireSince = since;
+                    FireFirstSeconds = spot.Seconds;
+                }
+
+                FireEnd = FireSpots == 0 ? end : Math.Max(FireEnd, end);
+                FireSpots++;
+            }
+        }
+
         public void Reset()
         {
             Saved.Breaches.Clear();
@@ -34,6 +70,9 @@ internal sealed class BuildingDamageGather
             Saved.Collapsed = false;
             Stamps.Clear();
             Touched = false;
+            FireSince = FireEnd = 0d;
+            FireFirstSeconds = 0f;
+            FireSpots = 0;
         }
     }
 
@@ -44,6 +83,7 @@ internal sealed class BuildingDamageGather
     private EntityQuery? _breachQuery, _windowQuery;
     private TerrainWorld? _keysFor;
     private Slot?[] _byGroup = [];
+    private bool _fireRegistered;
 
     public void Clear() => _sent.Clear();
 
@@ -62,7 +102,7 @@ internal sealed class BuildingDamageGather
 
         foreach (var slot in _slots.Values)
         {
-            if (!slot.Touched || slot.Saved.IsEmpty)   // an entity that holds nothing is no damage
+            if (!slot.Touched || (slot.Saved.IsEmpty && !slot.HasFire))   // an entity that holds nothing is no damage
             {
                 continue;
             }
@@ -81,7 +121,7 @@ internal sealed class BuildingDamageGather
         _gone.Clear();
         foreach (string key in _sent.Keys)
         {
-            if (!_slots.TryGetValue(key, out var slot) || !slot.Touched || slot.Saved.IsEmpty)
+            if (!_slots.TryGetValue(key, out var slot) || !slot.Touched || (slot.Saved.IsEmpty && !slot.HasFire))
             {
                 _gone.Add(key);
             }
@@ -143,6 +183,11 @@ internal sealed class BuildingDamageGather
                         slot.Saved.AddDistinct(within);
                         slot.Stamps.AddBreach(within, d.MadeAtOf(i).Seconds, d.BlastOf(i));
                     }
+                }
+
+                if (_fireRegistered && world.HasComponent<FireState>(e))
+                {
+                    slot.AddFire(in world.GetComponentRO<FireState>(e));   // DD-033: the same record's fire
                 }
 
                 if (d.Collapsed != 0)
@@ -217,14 +262,14 @@ internal sealed class BuildingDamageGather
             windows[i] = WindowOf(saved.Windows[i], slot.Stamps);
         }
 
-        return new HrotBuildingDamage(slot.Key, saved.Collapsed, breaches, windows, saved.Collapsed ? slot.Stamps.CollapsedAt : 0d);
+        return new HrotBuildingDamage(slot.Key, saved.Collapsed, breaches, windows, saved.Collapsed ? slot.Stamps.CollapsedAt : 0d, slot.SentFireSince, slot.SentFireSeconds);
     }
 
     /// <summary>Whether what was sent is what this gather united - the same fields <see cref="Map"/> builds, compared without building them.</summary>
     private static bool Matches(in HrotBuildingDamage p, Slot slot)
     {
         var saved = slot.Saved;
-        if (p.Collapsed != saved.Collapsed || p.CollapsedAt != (saved.Collapsed ? slot.Stamps.CollapsedAt : 0d) || p.Breaches.Count != saved.Breaches.Count || p.Windows.Count != saved.Windows.Count)
+        if (p.Collapsed != saved.Collapsed || p.CollapsedAt != (saved.Collapsed ? slot.Stamps.CollapsedAt : 0d) || p.FireSince != slot.SentFireSince || p.FireSeconds != slot.SentFireSeconds || p.Breaches.Count != saved.Breaches.Count || p.Windows.Count != saved.Windows.Count)
         {
             return false;
         }
@@ -289,13 +334,14 @@ internal sealed class BuildingDamageGather
 
     private void Bind(EntityRepository world)
     {
-        bool breaches = world.IsComponentTypeRegistered<BuildingDamage>(), windows = world.IsComponentTypeRegistered<WindowDamage>();
-        if (ReferenceEquals(_queryWorld, world) && (_breachQuery is not null || !breaches) && (_windowQuery is not null || !windows))
+        bool breaches = world.IsComponentTypeRegistered<BuildingDamage>(), windows = world.IsComponentTypeRegistered<WindowDamage>(), fire = world.IsComponentTypeRegistered<FireState>();
+        if (ReferenceEquals(_queryWorld, world) && (_breachQuery is not null || !breaches) && (_windowQuery is not null || !windows) && _fireRegistered == fire)
         {
             return;
         }
 
         _queryWorld = world;
+        _fireRegistered = fire;
         _breachQuery = breaches ? world.Query().With<BuildingDamage>().Build() : null;
         _windowQuery = windows ? world.Query().With<WindowDamage>().Build() : null;
     }

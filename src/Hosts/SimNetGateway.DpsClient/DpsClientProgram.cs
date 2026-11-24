@@ -17,7 +17,7 @@ public static class DpsClientProgram
         [DpsProtocol.Entity, DpsProtocol.EntityState, DpsProtocol.PersonState, DpsProtocol.PersonAim, DpsProtocol.Appearance, DpsProtocol.VehicleLook, DpsProtocol.Fire, DpsProtocol.Detonation,
          DpsProtocol.Effect, DpsProtocol.Articulation,
          DpsProtocol.Round, DpsProtocol.MunitionLook, DpsProtocol.FlameJet, DpsProtocol.FireSpots, DpsProtocol.GroundMarks, DpsProtocol.Animal, DpsProtocol.TkbType,
-         DpsProtocol.BuildingDamage, DpsProtocol.GroundDamage, DpsProtocol.Carried, DpsProtocol.ManDowned, DpsProtocol.PlayerMessage, DpsProtocol.Status, DpsProtocol.Exercise, DpsProtocol.Mover, DpsProtocol.MoverTracks,
+         DpsProtocol.BuildingDamage, DpsProtocol.GroundDamage, DpsProtocol.Carried, DpsProtocol.Cloud, DpsProtocol.ManDowned, DpsProtocol.PlayerMessage, DpsProtocol.Status, DpsProtocol.Exercise, DpsProtocol.Mover, DpsProtocol.MoverTracks,
          DpsProtocol.TrafficLights];
 
     public static int Run(string[] args, TextWriter output, TextWriter error)

@@ -25,6 +25,9 @@ public enum HeldLook : byte
 /// <summary>What a held weapon's colour must tell the truth about: a toy fires nothing (drawn orange), a less-lethal launcher fires only non-lethal rounds (a yellow band).</summary>
 public enum HeldMarking : byte { HeldMarkingNone = 0, HeldMarkingToy, HeldMarkingLessLethal }
 
+/// <summary>What a cloud is made of: tear gas irritates every person inside and thins sight, smoke blocks sight and is harmless.</summary>
+public enum CloudKind : byte { CloudKindNone = 0, CloudKindTearGas, CloudKindSmoke }
+
 public enum Gesture : byte
 {
     GestureNone = 0, GestureHandsUp, GestureFistRaised, GestureHoldSign, GestureWaving, GestureThrowing, GestureWarning,

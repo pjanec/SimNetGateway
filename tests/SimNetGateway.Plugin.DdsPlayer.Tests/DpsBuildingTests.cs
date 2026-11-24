@@ -41,6 +41,25 @@ public class DpsBuildingTests
         Assert.Single(damage.Alive);
     }
 
+    /// <summary>DD-033 (T-078): the fire fields are copied, a fire alone is a record that exists (no breaches, no windows), and its end disposes the instance.</summary>
+    [Fact]
+    public void A_buildings_fire_is_copied_and_a_fire_alone_is_damage()
+    {
+        uint domain = Watch.NewDomain();
+        using var damage = new Watch.Watch<D.BuildingDamage>(domain, "station-1", b => b.Building);
+        using var rig = new Rig(domain);
+
+        rig.Send(new HrotBuildingDamage("range/H1", false, [], [], 0d, 15.0, 240f));
+        Assert.True(damage.Until(w => w.Alive.ContainsKey("range/H1")));
+        Assert.Equal((15.0, 240f), (damage.Alive["range/H1"].FireSince, damage.Alive["range/H1"].FireSeconds));
+
+        rig.Send(new HrotBuildingDamage("range/H1", false, [], [], 0d, 15.0, 500f));
+        Assert.True(damage.Until(w => w.Alive["range/H1"].FireSeconds == 500f));
+
+        rig.Send(new HrotBuildingDamage("range/H1", false, [], []));   // no damage and no fire any more
+        Assert.True(damage.Until(w => !w.Alive.ContainsKey("range/H1")));
+    }
+
     [Fact]
     public void The_bounds_are_64_breaches_and_256_windows_and_a_long_key_is_cut()
     {

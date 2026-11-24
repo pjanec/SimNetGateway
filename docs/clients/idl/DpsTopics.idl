@@ -374,6 +374,8 @@ module SimNetGateway {
                 sequence<SimNetGateway::Protocol::DdsPlayer::Breach, 64> Breaches;
                 sequence<SimNetGateway::Protocol::DdsPlayer::WindowDamage, 256> Windows;
                 double CollapsedAt;
+                double FireSince;
+                float FireSeconds;
             };
 
             @topic
@@ -383,6 +385,21 @@ module SimNetGateway {
                 int32 CarrierId;
                 octet SeatIndex;
                 boolean Stowed;
+            };
+
+            @topic
+            @appendable
+            struct Cloud {
+                @key int32 CloudId;
+                SimNetGateway::Protocol::DdsPlayer::CloudKind Kind;
+                double SimTime;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d Centre;
+                SimNetGateway::Protocol::DdsPlayer::Vec3f Drift;
+                float Radius;
+                float Height;
+                float SightTransmittance;
+                double BornAt;
+                float Seconds;
             };
 
             @appendable

@@ -229,6 +229,9 @@ public sealed class DpsWorld : IDisposable
     /// <summary>The non-person entities that ride a carrier, by entity id.</summary>
     public Dictionary<int, D.Carried> Carried { get; } = new();
 
+    /// <summary>The gas and smoke clouds by cloud id.</summary>
+    public Dictionary<int, D.Cloud> Clouds { get; } = new();
+
     /// <summary>The rule statuses by id.</summary>
     public Dictionary<int, D.Status> Statuses { get; } = new();
 
@@ -282,6 +285,7 @@ public sealed class DpsWorld : IDisposable
         Keep(DpsProtocol.TkbType, TkbTypes, (D.TkbType t) => t.TypeId);
         Keep(DpsProtocol.BuildingDamage, BuildingDamage, (D.BuildingDamage b) => b.Building ?? string.Empty);
         Keep(DpsProtocol.Carried, Carried, (D.Carried c) => c.EntityId);
+        Keep(DpsProtocol.Cloud, Clouds, (D.Cloud c) => c.CloudId);
         Keep(DpsProtocol.GroundDamage, GroundDamage, (D.GroundDamage g) => g.Cell ?? string.Empty);
         Keep(DpsProtocol.Status, Statuses, (D.Status s) => s.StatusId);
         Keep(DpsProtocol.TrafficLights, TrafficLights, (D.TrafficLights l) => l.SignalId);

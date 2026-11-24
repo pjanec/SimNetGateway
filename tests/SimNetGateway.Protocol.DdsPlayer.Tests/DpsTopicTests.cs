@@ -512,7 +512,7 @@ public class DpsTopicTests
         string old = $"int32 Panel;\nfloat From;\nfloat To;\nfloat Bottom;\nfloat Top;\n{P}BreachKind Kind;";
         Assert.Equal(old + $"\ndouble MadeAt;\n{P}Vec3d Blast;", Body("Breach"));
         Assert.Equal("int32 Panel;\nint32 Opening;\noctet Hits;\noctet U0;\noctet V0;\noctet U1;\noctet V1;\ndouble HitAt;", Body("WindowDamage"));
-        Assert.Equal($"@key string<256> Building;\nboolean Collapsed;\nsequence<{P}Breach, 64> Breaches;\nsequence<{P}WindowDamage, 256> Windows;\ndouble CollapsedAt;", Body("BuildingDamage"));
+        Assert.Equal($"@key string<256> Building;\nboolean Collapsed;\nsequence<{P}Breach, 64> Breaches;\nsequence<{P}WindowDamage, 256> Windows;\ndouble CollapsedAt;\ndouble FireSince;\nfloat FireSeconds;", Body("BuildingDamage"));   // + the fire fields (T-078, DD-033)
         Assert.Equal($"@key string<32> Cell;\nsequence<{P}Crater, 16> Craters;", Body("GroundDamage"));
         Assert.Equal($"{P}Vec3d Centre;\nfloat Radius;\nfloat Depth;\nfloat Rim;\ndouble BornAt;\n{P}CraterKind Kind;", Body("Crater"));
     }
@@ -530,6 +530,30 @@ public class DpsTopicTests
         Assert.True(at >= 0);
         string body = string.Join("\n", idl[(at + "struct Carried {".Length)..idl.IndexOf("};", at, StringComparison.Ordinal)].Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0));
         Assert.Equal("@key int32 EntityId;\nint32 CarrierId;\noctet SeatIndex;\nboolean Stowed;", body);
+    }
+
+    /// <summary>T-078 (DD-033): a cloud survives the wire and is a late-join state; the building fire fields append to BuildingDamage's end; the IDL only gained lines.</summary>
+    [Fact]
+    public void A_cloud_round_trips_and_the_building_fire_fields_are_appended_at_the_end()
+    {
+        var c = RoundTrip(new Cloud { CloudId = 5001, Kind = CloudKind.CloudKindSmoke, SimTime = 150.0, Centre = new Vec3d { X = 1, Y = 2, Z = 3 }, Drift = new Vec3f { X = 2, Y = -1, Z = 0 }, Radius = 8f, Height = 6f, SightTransmittance = 0.25f, BornAt = 100.0, Seconds = 90f }, "t78-cloud");
+        Assert.Equal((5001, CloudKind.CloudKindSmoke, 150.0, 3.0, -1f, 8f, 6f, 0.25f, 100.0, 90f), (c.CloudId, c.Kind, c.SimTime, c.Centre.Z, c.Drift.Y, c.Radius, c.Height, c.SightTransmittance, c.BornAt, c.Seconds));
+        Assert.Equal(5001, LateJoin(new Cloud { CloudId = 5001 }, "t78-late-cloud").CloudId);
+
+        var b = RoundTrip(new BuildingDamage { Building = "range/H3", Breaches = [], Windows = [], FireSince = 15.0, FireSeconds = 240f }, "t78-fire");
+        Assert.Equal((15.0, 240f), (b.FireSince, b.FireSeconds));
+
+        string idl = string.Concat(Directory.EnumerateFiles(AppContext.BaseDirectory, "DpsTopics.idl").Select(File.ReadAllText)).Replace("\r", "");
+        string Body(string name)
+        {
+            int at = idl.IndexOf($"struct {name} {{", StringComparison.Ordinal);
+            Assert.True(at >= 0, name);
+            return string.Join("\n", idl[(at + $"struct {name} {{".Length)..idl.IndexOf("};", at, StringComparison.Ordinal)].Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0));
+        }
+
+        string P = "SimNetGateway::Protocol::DdsPlayer::";
+        Assert.EndsWith("double CollapsedAt;\ndouble FireSince;\nfloat FireSeconds;", Body("BuildingDamage"));
+        Assert.Equal($"@key int32 CloudId;\n{P}CloudKind Kind;\ndouble SimTime;\n{P}Vec3d Centre;\n{P}Vec3f Drift;\nfloat Radius;\nfloat Height;\nfloat SightTransmittance;\ndouble BornAt;\nfloat Seconds;", Body("Cloud"));
     }
 
     [Fact]
@@ -632,7 +656,8 @@ public class DpsTopicTests
             var type = topic["DPS_".Length..];
             Assert.Contains($"struct {type} ", idl);
         }
-        Assert.Equal(54, DpsProtocol.AllTopics.Count);   // + Utterance, Report, Order, Ambience, Weather (DD-026, DD-028), GroundDamage (DD-030), Carried (DD-032)
+        Assert.Equal(55, DpsProtocol.AllTopics.Count);   // + Utterance, Report, Order, Ambience, Weather (DD-026, DD-028), GroundDamage (DD-030), Carried (DD-032), Cloud (DD-033)
+        Assert.Contains("DPS_Cloud", DpsProtocol.AllTopics);
         Assert.Contains("DPS_Carried", DpsProtocol.AllTopics);
         foreach (var name in new[] { "Mover", "MoverTracks", "TrafficLights" })
         {

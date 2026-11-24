@@ -1,5 +1,6 @@
 using System.Numerics;
 using Fdp.Core;
+using Fdp.Toolkit.Perception.Signatures;
 using Fdp.Toolkit.Replication.Components;
 using Fdp.Toolkit.Terrain;
 using Fdp.Toolkit.Diagnostics.Gizmos;
@@ -673,6 +674,102 @@ public class BuildingDamageAndHeightTests
 
         long perGather = (GC.GetAllocatedBytesForCurrentThread() - before) / 300;
         Assert.Equal(0L, perGather);
+        Assert.Equal(0, inbound.Drain(new Capture(), int.MaxValue));
+    }
+
+    // ---- fire (DD-033, T-078) -------------------------------------------------------------------------------------------------
+
+    /// <summary>A damage record of <paramref name="building"/> that also holds HROT's FireState, one spot per <c>(since, seconds)</c>, as <c>BuildingDamageSystem.ApplyFire</c> writes it.</summary>
+    private static Entity Burning(Stage h, int building, params (double Since, float Seconds)[] spots)
+    {
+        if (!h.World.IsComponentTypeRegistered<FireState>())
+        {
+            h.World.RegisterComponent<FireState>();
+        }
+
+        var fire = new FireState();
+        foreach (var (since, seconds) in spots)
+        {
+            Assert.True(fire.TryAdd(new FireSpot(1f, 2f, 3f, 2f, new SimInstant(since), seconds, 1f), since));
+        }
+
+        var e = h.World.CreateEntity();
+        h.World.AddComponent(e, new BuildingDamage { Building = building });
+        h.World.AddComponent(e, fire);
+        return e;
+    }
+
+    [Fact]
+    public void A_house_alight_carries_its_fire_spots_start_and_duration_and_one_never_burned_carries_none()
+    {
+        using var h = new Stage();
+        Burning(h, 0, (15.0, 240f));
+        h.Breaches(1, new WallBreach(h.Panel(1, 0), 1f, 2f, 0f, 2f, BreachKind.Hole));   // the other house: damaged, never burned
+
+        var all = h.Gather().Of<HrotBuildingDamage>();
+
+        var burnt = Assert.Single(all, d => d.Building.EndsWith("H1"));   // a record that holds only a fire is damage too
+        Assert.Equal((15.0, 240f), (burnt.FireSince, burnt.FireSeconds));
+        var brick = Assert.Single(all, d => d.Building.EndsWith("H2"));
+        Assert.Equal((0d, 0f), (brick.FireSince, brick.FireSeconds));
+        Assert.Empty(h.Gather(2.0).Of<HrotBuildingDamage>());   // steady: nothing
+    }
+
+    [Fact]
+    public void Several_spots_or_records_of_one_building_give_the_earliest_start_to_the_latest_end_and_a_spot_that_never_burned_counts_for_nothing()
+    {
+        using var h = new Stage();
+        Burning(h, 0, (30.0, 100f), (10.0, 50f));   // ends 130 and 60
+        Burning(h, 0, (20.0, 300f));                 // another record of the same house: ends 320
+
+        var sent = Assert.Single(h.Gather().Of<HrotBuildingDamage>());
+
+        Assert.Equal((10.0, 310f), (sent.FireSince, sent.FireSeconds));   // 10 .. 320
+
+        using var g = new Stage();
+        Burning(g, 0, (0.0, 0f));   // a slot that never burned
+        Assert.Empty(g.Gather().Of<HrotBuildingDamage>());
+    }
+
+    [Fact]
+    public void A_fire_alone_changing_sends_the_building_again_and_a_record_that_goes_disposes_it()
+    {
+        using var h = new Stage();
+        var e = Burning(h, 0, (15.0, 240f));
+        Assert.Single(h.Gather().Of<HrotBuildingDamage>());
+
+        var spread = h.World.GetComponentRO<FireState>(e);
+        Assert.True(spread.TryAdd(new FireSpot(0f, 0f, 0f, 1f, new SimInstant(15.0), 500f, 1f), 16.0));   // burns longer now
+        h.World.SetComponent(e, spread);
+        var again = Assert.Single(h.Gather(2.0).Of<HrotBuildingDamage>());
+        Assert.Equal((15.0, 500f), (again.FireSince, again.FireSeconds));
+
+        h.World.DestroyEntity(e);
+        var gone = Assert.Single(h.Gather(3.0).Of<HrotBuildingDamage>());
+        Assert.Equal((false, 0, 0d, 0f), (gone.Collapsed, gone.Breaches.Count, gone.FireSince, gone.FireSeconds));
+    }
+
+    [Fact]
+    public void A_steady_gather_of_a_burning_building_allocates_nothing()
+    {
+        using var h = new Stage();
+        Burning(h, 0, (15.0, 240f));
+        var inbound = new InMemoryInbound(new SourceId(99), "steady");
+        var buildings = new BuildingDamageGather();
+        buildings.Gather(h.World, inbound);
+        Assert.Equal(1, inbound.Drain(new Capture(), int.MaxValue));
+        for (int i = 0; i < 50; i++)
+        {
+            buildings.Gather(h.World, inbound);
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 300; i++)
+        {
+            buildings.Gather(h.World, inbound);
+        }
+
+        Assert.Equal(0L, (GC.GetAllocatedBytesForCurrentThread() - before) / 300);
         Assert.Equal(0, inbound.Drain(new Capture(), int.MaxValue));
     }
 

@@ -129,6 +129,8 @@ public class ProfileTests
             new HrotBuildingDamage("range/H1", true, [], []),
             new HrotGroundDamage("0,0", []),
             new HrotCarried(1, 2, 3, true),
+            new HrotCloud(1, HrotCloudKind.Smoke, 1.0, HrotVec3.Zero, HrotVec3.Zero, 5f, 6f, 0.1f, 0.0, 60f),
+            new HrotCloudEnded(1),
             new HrotMover(1, "Car", 8851, 0xFF, 0, 4f, 2f, "Sumo"),
             new HrotMoverRemoved(1),
             new HrotMoverTracks(1.0, []),
@@ -182,6 +184,8 @@ public class ProfileTests
                 case HrotBuildingDamage m: h.HrotStep(m); break;
                 case HrotGroundDamage m: h.HrotStep(m); break;
                 case HrotCarried m: h.HrotStep(m); break;
+                case HrotCloud m: h.HrotStep(m); break;
+                case HrotCloudEnded m: h.HrotStep(m); break;
                 case HrotMover m: h.HrotStep(m); break;
                 case HrotMoverRemoved m: h.HrotStep(m); break;
                 case HrotMoverTracks m: h.HrotStep(m); break;

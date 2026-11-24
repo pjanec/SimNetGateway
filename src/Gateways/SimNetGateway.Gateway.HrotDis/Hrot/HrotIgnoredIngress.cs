@@ -36,6 +36,8 @@ public sealed class HrotIgnoredIngress : IGatewayModule
         Ignored<HrotBuildingDamage>(),
         Ignored<HrotGroundDamage>(),
         Ignored<HrotCarried>(),
+        Ignored<HrotCloud>(),
+        Ignored<HrotCloudEnded>(),
         Ignored<HrotMover>(),
         Ignored<HrotMoverRemoved>(),
         Ignored<HrotMoverTracks>(),

@@ -550,6 +550,10 @@ public partial struct BuildingDamage
     [DdsBound(256)] public List<WindowDamage> Windows;
     /// <summary>When the building collapsed, simulation seconds; 0 = not collapsed, or collapsed in a loaded save (then <see cref="Collapsed"/> is still true: draw the rubble, never animate). Appended (T-074).</summary>
     public double CollapsedAt;
+    /// <summary>When the fire on this building started, simulation seconds (the simulation's own record, DD-033; if several spots burned: the earliest start); 0 = it never burned. Burning = <c>FireSince &lt;= now &lt; FireSince + FireSeconds</c>, burnt out after. The flames themselves are <see cref="FireSpots"/>. Appended (T-078).</summary>
+    public double FireSince;
+    /// <summary>How long the fire burns from <see cref="FireSince"/>, seconds (several spots: to the latest end); 0 = it never burned. Appended (T-078).</summary>
+    public float FireSeconds;
 }
 
 /// <summary>
@@ -570,6 +574,30 @@ public partial struct Carried
     public byte SeatIndex;
     /// <summary>The seat is a stowed one: on the back or the hip, not in the hands and not ready to fire.</summary>
     public bool Stowed;
+}
+
+/// <summary>
+/// A producer-specific extension, optional for a client (DD-033). A gas or smoke cloud: a vertical cylinder of <see cref="Radius"/> x <see cref="Height"/> standing on <see cref="Centre"/>
+/// (its base centre at <see cref="SimTime"/>, in the simulation frame), drifting by <see cref="Drift"/> (m/s, the wind the simulation drifts it on, zero while it sits on its source), so
+/// the client moves it itself (position = Centre + Drift x (now - SimTime), a moving value as a start and a rate, DD-020). <see cref="SightTransmittance"/> is the share of light a line
+/// keeps crossing it while dense (0 = opaque); it stays that for the first two thirds of its life and thins linearly to 1 over the last third (life = <see cref="BornAt"/> ..
+/// <see cref="BornAt"/> + <see cref="Seconds"/>). The cloud has no body and is not an <see cref="Entity"/>. One instance per cloud, written when it appears and when its drift, size, kind or
+/// transmittance changes (its radius and height do not grow over time), disposed when it ends.
+/// </summary>
+[DpsRate(DpsRateClass.Discrete)]
+[DdsTopic(DpsProtocol.Cloud)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+public partial struct Cloud
+{
+    [DdsKey] public int CloudId;
+    public CloudKind Kind;
+    public double SimTime;
+    public Vec3d Centre;
+    public Vec3f Drift;
+    public float Radius, Height;
+    public float SightTransmittance;
+    public double BornAt;
+    public float Seconds;
 }
 
 /// <summary>One crater: a bowl of <see cref="Depth"/> m at <see cref="Centre"/> rising to a rim <see cref="Rim"/> m above the ground at <see cref="Radius"/>, falling back to the ground at 1.4 x <see cref="Radius"/> (the simulation's profile).</summary>

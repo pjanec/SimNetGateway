@@ -597,9 +597,28 @@ public readonly record struct HrotWindowDamage(int Panel, int Opening, byte Hits
 /// <summary>
 /// The damage of one building, all of HROT's damage entities of it merged, sent when it changes. <paramref name="Building"/> is the terrain object label
 /// "terrain/building label". Not collapsed and no breaches and no windows = the building has no damage any more (a reload). <paramref name="CollapsedAt"/>: HROT's time the
-/// building collapsed (sim seconds; 0 = not collapsed, or collapsed in a loaded save).
+/// building collapsed (sim seconds; 0 = not collapsed, or collapsed in a loaded save). <paramref name="FireSince"/> / <paramref name="FireSeconds"/> (DD-033): when HROT's fire on this
+/// building started and how long it burns (the record's <c>FireState</c> spot; several spots: the earliest start to the latest end); 0 = never burned.
 /// </summary>
-public readonly record struct HrotBuildingDamage(string Building, bool Collapsed, IReadOnlyList<HrotBreach> Breaches, IReadOnlyList<HrotWindowDamage> Windows, double CollapsedAt = 0d) : IHrotToGatewayMessage;
+public readonly record struct HrotBuildingDamage(string Building, bool Collapsed, IReadOnlyList<HrotBreach> Breaches, IReadOnlyList<HrotWindowDamage> Windows, double CollapsedAt = 0d, double FireSince = 0d, float FireSeconds = 0f) : IHrotToGatewayMessage;
+
+/// <summary>What a cloud is made of (HROT's cloud kind, in its order; DD-033).</summary>
+public enum HrotCloudKind : byte
+{
+    None = 0, TearGas, Smoke,
+}
+
+/// <summary>
+/// A gas or smoke cloud (DD-033): a vertical cylinder of <paramref name="Radius"/> x <paramref name="Height"/> standing on <paramref name="Centre"/> (its base, local ENU metres) at
+/// <paramref name="SimTime"/>, drifting by <paramref name="Drift"/> (m/s, the wind HROT drifts it on; zero while it sits on its source). <paramref name="SightTransmittance"/> is the share of light a
+/// line keeps crossing it while dense; it thins to 1 over its last third (born <paramref name="BornAt"/>, lives <paramref name="Seconds"/>). Sent when it appears and when anything but its
+/// steady drift changes.
+/// </summary>
+public readonly record struct HrotCloud(
+    int Id, HrotCloudKind Kind, double SimTime, HrotVec3 Centre, HrotVec3 Drift, float Radius, float Height, float SightTransmittance, double BornAt, float Seconds) : IHrotToGatewayMessage;
+
+/// <summary>The cloud ended (DD-033): the side disposes it.</summary>
+public readonly record struct HrotCloudEnded(int Id) : IHrotToGatewayMessage;
 
 /// <summary>
 /// One crater (DD-030): <paramref name="Centre"/> x, y in HROT's local frame and z the BARE ground height under it (0 when the world has no terrain); <paramref name="Kind"/> the NAME
