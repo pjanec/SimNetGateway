@@ -16,6 +16,15 @@ public enum WeaponPosture : byte { WeaponPostureAtEase = 0, WeaponPostureReady, 
 
 public enum HeldItem : byte { HeldItemNone = 0, HeldItemWeapon, HeldItemThrowable, HeldItemPhone, HeldItemBinoculars }
 
+/// <summary>What a held weapon looks like, the producer's own drawing vocabulary (finer than an observer's "rifle"): a machine gun, an RPG and a missile tube are named, not filed under Rifle.</summary>
+public enum HeldLook : byte
+{
+    HeldLookRifle = 0, HeldLookPistol, HeldLookMachineGun, HeldLookScopedRifle, HeldLookRpg, HeldLookMissileTube, HeldLookManpads, HeldLookMortar, HeldLookBow, HeldLookCrossbow,
+}
+
+/// <summary>What a held weapon's colour must tell the truth about: a toy fires nothing (drawn orange), a less-lethal launcher fires only non-lethal rounds (a yellow band).</summary>
+public enum HeldMarking : byte { HeldMarkingNone = 0, HeldMarkingToy, HeldMarkingLessLethal }
+
 public enum Gesture : byte
 {
     GestureNone = 0, GestureHandsUp, GestureFistRaised, GestureHoldSign, GestureWaving, GestureThrowing, GestureWarning,

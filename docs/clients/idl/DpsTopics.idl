@@ -148,6 +148,9 @@ module SimNetGateway {
                 double StanceChangedAt;
                 float StanceSeconds;
                 SimNetGateway::Protocol::DdsPlayer::Stance StanceFrom;
+                SimNetGateway::Protocol::DdsPlayer::HeldLook HeldLook;
+                SimNetGateway::Protocol::DdsPlayer::HeldLook SlungLook;
+                SimNetGateway::Protocol::DdsPlayer::HeldMarking HeldMarking;
             };
 
             @topic

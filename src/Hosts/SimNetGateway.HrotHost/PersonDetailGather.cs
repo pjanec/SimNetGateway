@@ -147,6 +147,18 @@ internal sealed class PersonDetailGather
             mount = posture.ActiveMount;
         }
 
+        // DD-031: what is in his hands and slung, and its marking - the SAME calls HROT's renderer makes (EntityBodyLayer3D), so the client draws what HROT draws
+        var heldLook = HrotHeldLook.Rifle;
+        var slungLook = HrotHeldLook.Rifle;
+        var marking = HrotHeldMarking.None;
+        if (world.HasComponent<WeaponPosture>(e))
+        {
+            var (inHands, slung) = HeldWeapons.Of(world, e, tkb, out _);
+            heldLook = HeldLookOf(inHands);
+            slungLook = HeldLookOf(slung);
+            marking = MarkingOf(HeldWeapons.MarkingOf(world, HeldWeapons.OwnMountInHands(world, e)));
+        }
+
         var lookTarget = HrotVec3.Zero;
         bool hasLook = false;
         float headYaw = 0f;
@@ -249,8 +261,30 @@ internal sealed class PersonDetailGather
 
         return new HrotPersonDetail(id, target, progress, held, mount, lookTarget, hasLook, headYaw, gesture, action, actionTarget, actionState, started, seatVehicle,
             seatRole, carry, burning, fear, anger, mode, carriage.SeatIndex, carriage.SeatExposed, carriage.SeatPose, carriage.Role, carriage.Other, carriage.Partner,
-            stanceStart, stanceSeconds, lookTargetId, stanceFrom);
+            stanceStart, stanceSeconds, lookTargetId, stanceFrom, heldLook, slungLook, marking);
     }
+
+    // HROT's look enums by NAME, so a member HROT appends or reorders is never silently mislabelled (an unknown one falls back to the rifle / none)
+    private static HrotHeldLook HeldLookOf(HeldLook look) => look switch
+    {
+        HeldLook.Pistol => HrotHeldLook.Pistol,
+        HeldLook.MachineGun => HrotHeldLook.MachineGun,
+        HeldLook.ScopedRifle => HrotHeldLook.ScopedRifle,
+        HeldLook.Rpg => HrotHeldLook.Rpg,
+        HeldLook.MissileTube => HrotHeldLook.MissileTube,
+        HeldLook.Manpads => HrotHeldLook.Manpads,
+        HeldLook.Mortar => HrotHeldLook.Mortar,
+        HeldLook.Bow => HrotHeldLook.Bow,
+        HeldLook.Crossbow => HrotHeldLook.Crossbow,
+        _ => HrotHeldLook.Rifle,
+    };
+
+    private static HrotHeldMarking MarkingOf(HeldMarking marking) => marking switch
+    {
+        HeldMarking.Toy => HrotHeldMarking.Toy,
+        HeldMarking.LessLethal => HrotHeldMarking.LessLethal,
+        _ => HrotHeldMarking.None,
+    };
 
     /// <summary>The carriage facts of one person (DD-018 3.5c), in network ids.</summary>
     internal readonly record struct CarriageFacts(HrotCarryRole Role, int Other, int Partner, byte SeatIndex, bool SeatExposed, string SeatPose)

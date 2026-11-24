@@ -49,6 +49,27 @@ module SimNetGateway {
             };
 
             @bit_bound(8)
+            enum HeldLook {
+                HeldLookRifle,
+                HeldLookPistol,
+                HeldLookMachineGun,
+                HeldLookScopedRifle,
+                HeldLookRpg,
+                HeldLookMissileTube,
+                HeldLookManpads,
+                HeldLookMortar,
+                HeldLookBow,
+                HeldLookCrossbow
+            };
+
+            @bit_bound(8)
+            enum HeldMarking {
+                HeldMarkingNone,
+                HeldMarkingToy,
+                HeldMarkingLessLethal
+            };
+
+            @bit_bound(8)
             enum Gesture {
                 GestureNone,
                 GestureHandsUp,

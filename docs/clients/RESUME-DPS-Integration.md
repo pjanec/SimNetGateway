@@ -4,6 +4,14 @@ State of 2026-11-20, for the next session that continues the DPS (DDS Player Sta
 gateway side or the client side. Everything needed is in two public repositories. Read this first, then the documents it names; the
 design docs and the client guide are the canon, this file is only the map.
 
+## 00. ⭐ Current state, 2026-11-24 (read this first; §0 below is history)
+
+**Branches:** gateway `ccr-458b1360-afzl8f`; HROT `ui`. **The gateway builds against HROT `ui` `037e62a8d`** (the worktree
+`/home/user/hrot-c5f8c1971`, `HROT_ROOT`). Built since §0: T-061 .. T-074 (DD-021 .. DD-030: entity status, voice and bursts, ambience,
+remote drive and the verb list, damage times and craters), T-073 doors filtered out, **T-076 the held-weapon look (DD-031)**. **Open:**
+T-075 a breach's cause (blocked on HROT CE-11054), T-069 flaky steady-allocation rails, a carried entity's carrier and seat on the wire
+(proposed, awaiting the user). The client guide [DPS-Client-Guide.md](DPS-Client-Guide.md) is current as of this date.
+
 ## 0. ⭐ RESUME HERE — state at the end of 2026-11-21
 
 **Branches:** gateway `ccr-458b1360-afzl8f` (pushed, clean); HROT `ui` (pushed through `d611a7336`, clean); the gateway builds against the

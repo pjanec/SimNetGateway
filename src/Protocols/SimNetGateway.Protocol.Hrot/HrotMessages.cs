@@ -301,6 +301,21 @@ public readonly record struct ExternalState(
     double HealthCurrent,
     double HealthMax) : IGatewayToHrotMessage;
 
+/// <summary>
+/// DD-031 (T-076): what a held weapon LOOKS like, HROT's drawing vocabulary (<c>Hrot.UI.Common.Map3D.HeldLook</c>, finer than the observer's item look), in HROT's order. The producer
+/// fills it by member name, never by number.
+/// </summary>
+public enum HrotHeldLook : byte
+{
+    Rifle = 0, Pistol, MachineGun, ScopedRifle, Rpg, MissileTube, Manpads, Mortar, Bow, Crossbow,
+}
+
+/// <summary>DD-031 (T-076): what a held weapon's colour must tell the truth about (HROT's <c>HeldMarking</c>): none, a toy that fires nothing, a less-lethal launcher.</summary>
+public enum HrotHeldMarking : byte
+{
+    None = 0, Toy, LessLethal,
+}
+
 /// <summary>What a person holds in his hand (<see cref="HrotHeldItem.None"/> = his own weapon is not singled out, or not a life form).</summary>
 public enum HrotHeldItem : byte
 {
@@ -415,7 +430,8 @@ public readonly record struct HrotPersonDetail(
     HrotGesture Gesture, HrotAction Action, int ActionTarget, HrotActionState ActionState, double ActionStartedAt, int SeatVehicle, HrotSeatRole SeatRole,
     HrotCarryMode Carry, bool Burning = false, byte Fear = 0, byte Anger = 0, string CivilianMode = "", byte SeatIndex = HrotPersonDetail.NoSeat, bool SeatExposed = false,
     string SeatPose = "", HrotCarryRole CarryRole = HrotCarryRole.None, int CarryOther = 0, int Partner = 0, double StanceChangedAt = 0.0, float StanceSeconds = 0f,
-    int LookTargetId = 0, HrotStance StanceFrom = HrotStance.Unknown) : IHrotToGatewayMessage
+    int LookTargetId = 0, HrotStance StanceFrom = HrotStance.Unknown, HrotHeldLook HeldLook = HrotHeldLook.Rifle, HrotHeldLook SlungLook = HrotHeldLook.Rifle,
+    HrotHeldMarking HeldMarking = HrotHeldMarking.None) : IHrotToGatewayMessage
 {
     /// <summary><see cref="SeatIndex"/> of a person who is not in a vehicle seat.</summary>
     public const byte NoSeat = 255;

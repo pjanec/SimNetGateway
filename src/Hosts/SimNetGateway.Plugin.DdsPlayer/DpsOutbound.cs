@@ -334,6 +334,9 @@ public sealed class DpsOutbound : IGatewayModule
             Fear = d.Fear,
             Anger = d.Anger,
             CivilianMode = LookNames.CivilianModeOf(d.CivilianMode),
+            HeldLook = (D.HeldLook)(byte)d.HeldLook,   // the pivot enums mirror the contract's in order (a rail pins it)
+            SlungLook = (D.HeldLook)(byte)d.SlungLook,
+            HeldMarking = (D.HeldMarking)(byte)d.HeldMarking,
         };
         if (b.HasSentPerson && !PersonDue(b, in person))
         {
@@ -355,7 +358,8 @@ public sealed class DpsOutbound : IGatewayModule
             || p.ActionState != o.ActionState || p.ActionStartSimTime != o.ActionStartSimTime || p.SeatVehicleId != o.SeatVehicleId || p.SeatRole != o.SeatRole
             || p.CarryMode != o.CarryMode || p.CarryOtherId != o.CarryOtherId || p.CarryRole != o.CarryRole || p.PartnerId != o.PartnerId
             || p.SeatIndex != o.SeatIndex || p.SeatExposed != o.SeatExposed || p.SeatPose != o.SeatPose || p.StanceChangedAt != o.StanceChangedAt || p.StanceSeconds != o.StanceSeconds || p.StanceFrom != o.StanceFrom
-            || p.Burning != o.Burning || p.Fear != o.Fear || p.Anger != o.Anger || p.CivilianMode != o.CivilianMode;
+            || p.Burning != o.Burning || p.Fear != o.Fear || p.Anger != o.Anger || p.CivilianMode != o.CivilianMode
+            || p.HeldLook != o.HeldLook || p.SlungLook != o.SlungLook || p.HeldMarking != o.HeldMarking;
     }
 
     // ---- aim and look intent (DD-020 3.2) -----------------------------------------------------------------------------

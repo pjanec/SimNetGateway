@@ -193,6 +193,12 @@ public partial struct PersonState
     public float StanceSeconds;
     /// <summary>The stance the current transition leaves (equal to <see cref="TargetStance"/> when none is stated), so a client that first sees a man mid-transition knows what to blend from.</summary>
     public Stance StanceFrom;
+    /// <summary>What is in his hands, as the producer draws it (DD-031): the look of the weapon he holds, a picked-up pistol or rifle included. Meaningful only while <see cref="Held"/> is Weapon.</summary>
+    public HeldLook HeldLook;
+    /// <summary>The weapon slung on his back that is not in his hands, where the producer shows one (a tube or a mortar; Rifle = none shown). Sent as the producer states it.</summary>
+    public HeldLook SlungLook;
+    /// <summary>A toy (looks like a rifle or pistol, fires nothing) or a less-lethal launcher; None otherwise.</summary>
+    public HeldMarking HeldMarking;
 }
 
 /// <summary>

@@ -104,6 +104,44 @@ public class DpsRoundFlameTests
     }
 
     [Fact]
+    public void The_pivot_look_enums_mirror_the_contracts_by_name_and_order()
+    {
+        // the outbound copies by number: a member added or reordered on one side only would mislabel every weapon
+        Assert.Equal(Enum.GetNames<HrotHeldLook>().Select(n => "HeldLook" + n), Enum.GetNames<D.HeldLook>());
+        Assert.Equal(Enum.GetNames<HrotHeldMarking>().Select(n => "HeldMarking" + n), Enum.GetNames<D.HeldMarking>());
+    }
+
+    [Fact]
+    public void A_held_look_slung_look_and_marking_are_copied_and_each_alone_is_a_change_that_is_sent()
+    {
+        uint domain = Watch.NewDomain();
+        using var watch = new Watch.Watch<D.PersonState>(domain, "station-1", e => Id(e.EntityId));
+        using var rig = new Rig(domain);
+        rig.Send(State(1201, dis: PersonDis));
+
+        // every look maps to its contract name (property over the whole enumeration)
+        foreach (var look in Enum.GetValues<HrotHeldLook>())
+        {
+            var want = Enum.Parse<D.HeldLook>("HeldLook" + look);
+            rig.Send(Detail(1201) with { HeldLook = look, SlungLook = look == HrotHeldLook.Rifle ? HrotHeldLook.Mortar : HrotHeldLook.Rifle, HeldMarking = HrotHeldMarking.Toy });
+            Assert.True(watch.Until(w => w.Alive.TryGetValue("1201", out var p) && p.HeldLook == want), $"held look {look}");
+            var p = watch.Alive["1201"];
+            Assert.Equal(look == HrotHeldLook.Rifle ? D.HeldLook.HeldLookMortar : D.HeldLook.HeldLookRifle, p.SlungLook);
+            Assert.Equal(D.HeldMarking.HeldMarkingToy, p.HeldMarking);
+        }
+
+        // each field alone is sent, not held back to the heartbeat (one field differs per step, the rest as the last sample)
+        rig.Send(Detail(1201) with { HeldLook = HrotHeldLook.Crossbow, SlungLook = HrotHeldLook.Rifle, HeldMarking = HrotHeldMarking.None });
+        Assert.True(watch.Until(w => w.Alive["1201"].HeldLook == D.HeldLook.HeldLookCrossbow && w.Alive["1201"].HeldMarking == D.HeldMarking.HeldMarkingNone));
+        rig.Send(Detail(1201) with { HeldLook = HrotHeldLook.Crossbow, SlungLook = HrotHeldLook.Manpads, HeldMarking = HrotHeldMarking.None });
+        Assert.True(watch.Until(w => w.Alive["1201"].SlungLook == D.HeldLook.HeldLookManpads));
+        rig.Send(Detail(1201) with { HeldLook = HrotHeldLook.Crossbow, SlungLook = HrotHeldLook.Manpads, HeldMarking = HrotHeldMarking.LessLethal });
+        Assert.True(watch.Until(w => w.Alive["1201"].HeldMarking == D.HeldMarking.HeldMarkingLessLethal));
+        rig.Send(Detail(1201) with { HeldLook = HrotHeldLook.Bow, SlungLook = HrotHeldLook.Manpads, HeldMarking = HrotHeldMarking.LessLethal });
+        Assert.True(watch.Until(w => w.Alive["1201"].HeldLook == D.HeldLook.HeldLookBow));
+    }
+
+    [Fact]
     public void Vehicle_look_carries_rotor_speed_and_crew_exposed_openings()
     {
         uint domain = Watch.NewDomain();
