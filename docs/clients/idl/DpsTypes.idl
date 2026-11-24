@@ -443,6 +443,13 @@ module SimNetGateway {
             };
 
             @bit_bound(8)
+            enum CraterKind {
+                CraterKindUnknown,
+                CraterKindSmall,
+                CraterKindLarge
+            };
+
+            @bit_bound(8)
             enum MoverKind {
                 MoverKindUnknown,
                 MoverKindCar,

@@ -507,6 +507,10 @@ public partial struct Breach
     public int Panel;
     public float From, To, Bottom, Top;
     public BreachKind Kind;
+    /// <summary>When the breach was made or last WIDENED, simulation seconds (the simulation's own record, never a gateway stamp; DD-030). 0 = it was there when the scenario was loaded (a save): its age is unknown, draw it and never animate it. Appended (T-074).</summary>
+    public double MadeAt;
+    /// <summary>The blast point that made (or last widened) the breach, in the simulation frame (a hull's ram or a blade: the hull's centre); debris flies away from it. Meaningless (zero) when <see cref="MadeAt"/> is 0. Appended (T-074).</summary>
+    public Vec3d Blast;
 }
 
 /// <summary>A hit window: <see cref="Hits"/> 1..2 = cracked with up to two crack points (bytes 0..255 across the pane), 3 = broken.</summary>
@@ -519,6 +523,8 @@ public partial struct WindowDamage
     public int Opening;
     public byte Hits;
     public byte U0, V0, U1, V1;
+    /// <summary>When the window was last hit (a crack or the break), simulation seconds; 0 = it was already damaged when the scenario was loaded (unknown age: draw, never animate). Appended (T-074).</summary>
+    public double HitAt;
 }
 
 /// <summary>
@@ -536,6 +542,36 @@ public partial struct BuildingDamage
     public bool Collapsed;
     [DdsBound(64)] public List<Breach> Breaches;
     [DdsBound(256)] public List<WindowDamage> Windows;
+    /// <summary>When the building collapsed, simulation seconds; 0 = not collapsed, or collapsed in a loaded save (then <see cref="Collapsed"/> is still true: draw the rubble, never animate). Appended (T-074).</summary>
+    public double CollapsedAt;
+}
+
+/// <summary>One crater: a bowl of <see cref="Depth"/> m at <see cref="Centre"/> rising to a rim <see cref="Rim"/> m above the ground at <see cref="Radius"/>, falling back to the ground at 1.4 x <see cref="Radius"/> (the simulation's profile).</summary>
+[DdsStruct]
+public partial struct Crater
+{
+    /// <summary>X and Y are the simulation frame; Z is the bare ground (without any crater) under the centre, 0 when the simulation has no terrain.</summary>
+    public Vec3d Centre;
+    public float Radius, Depth, Rim;
+    /// <summary>When the crater was made, simulation seconds; 0 = from a loaded save (unknown age: draw, never animate).</summary>
+    public double BornAt;
+    public CraterKind Kind;
+}
+
+/// <summary>
+/// A producer-specific extension, optional for a client (DD-030). The craters of one ground cell of the simulation (64 m squares), at most 16, in the simulation's order: a
+/// burst on open ground leaves one. State, written once on the world partition when a cell's craters change; the instance exists while the cell has craters and is disposed when it has
+/// none (a reload). A joining client gets the current craters with their <see cref="Crater.BornAt"/> times and compares them with the simulation time to know they are not live.
+/// </summary>
+[DpsRate(DpsRateClass.Discrete)]
+[DdsTopic(DpsProtocol.GroundDamage)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+[DdsManaged]
+public partial struct GroundDamage
+{
+    /// <summary>The cell, "&lt;cellX&gt;,&lt;cellY&gt;" (the simulation's own cell numbers: floor(x / 64), floor(y / 64)).</summary>
+    [DdsKey, MaxLength(32)] public string Cell;
+    [DdsBound(16)] public List<Crater> Craters;
 }
 
 /// <summary>

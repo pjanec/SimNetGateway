@@ -468,6 +468,55 @@ public class DpsTopicTests
         Assert.Equal("range/H1", LateJoin(new BuildingDamage { Building = "range/H1", Breaches = [], Windows = [] }, "t2-late-building").Building);
     }
 
+    /// <summary>T-074 (DD-030): the appended times and blast point survive the wire; a crater cell round-trips with its 16 craters and is a late-join state keyed by the cell.</summary>
+    [Fact]
+    public void Damage_times_blast_points_and_crater_cells_round_trip_and_the_cell_is_a_late_join_state()
+    {
+        var damage = RoundTrip(new BuildingDamage
+        {
+            Building = "range/H2", Collapsed = true, CollapsedAt = 401.25,
+            Breaches = [new Breach { Panel = 1, From = 1f, To = 2f, Bottom = 0f, Top = 2f, Kind = BreachKind.BreachKindHole, MadeAt = 312.4, Blast = new Vec3d { X = 10.5, Y = -20.25, Z = 3.75 } }],
+            Windows = [new WindowDamage { Panel = 2, Opening = 1, Hits = 3, HitAt = 99.5 }],
+        }, "t74-building");
+        Assert.Equal((401.25, 312.4, 10.5, -20.25, 3.75, 99.5), (damage.CollapsedAt, damage.Breaches[0].MadeAt, damage.Breaches[0].Blast.X, damage.Breaches[0].Blast.Y, damage.Breaches[0].Blast.Z, damage.Windows[0].HitAt));
+
+        var cell = RoundTrip(new GroundDamage
+        {
+            Cell = "-3,12",
+            Craters = Enumerable.Range(0, 16).Select(i => new Crater { Centre = new Vec3d { X = i, Y = -i, Z = 7.5 }, Radius = 2.5f, Depth = 0.75f, Rim = 0.25f, BornAt = 100 + i, Kind = i % 2 == 0 ? CraterKind.CraterKindSmall : CraterKind.CraterKindLarge }).ToList(),
+        }, "t74-ground");
+        Assert.Equal(("-3,12", 16), (cell.Cell, cell.Craters.Count));
+        Assert.Equal((15.0, -15.0, 7.5, 2.5f, 0.75f, 0.25f, 115.0, CraterKind.CraterKindLarge),
+            (cell.Craters[15].Centre.X, cell.Craters[15].Centre.Y, cell.Craters[15].Centre.Z, cell.Craters[15].Radius, cell.Craters[15].Depth, cell.Craters[15].Rim, cell.Craters[15].BornAt, cell.Craters[15].Kind));
+        Assert.Equal("5,5", LateJoin(new GroundDamage { Cell = "5,5", Craters = [] }, "t74-late-ground").Cell);
+    }
+
+    /// <summary>
+    /// T-074 (DD-030, R-133 append-only): the generated IDL only GAINED lines - each changed struct still starts with the members it had before (same order, same types) and the new members
+    /// come after them; the new topic and enum are whole additions. Mutation: a new member inserted before an old one (or an old one retyped) fails the prefix.
+    /// </summary>
+    [Fact]
+    public void The_idl_of_the_damage_times_only_gained_lines_at_the_end_of_each_struct()
+    {
+        string idl = string.Concat(Directory.EnumerateFiles(AppContext.BaseDirectory, "DpsTopics.idl").Select(File.ReadAllText)).Replace("\r", "");
+        string P = "SimNetGateway::Protocol::DdsPlayer::";
+
+        string Body(string name)
+        {
+            int at = idl.IndexOf($"struct {name} {{", StringComparison.Ordinal);
+            Assert.True(at >= 0, name);
+            int end = idl.IndexOf("};", at, StringComparison.Ordinal);
+            return string.Join("\n", idl[(at + $"struct {name} {{".Length)..end].Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0));
+        }
+
+        string old = $"int32 Panel;\nfloat From;\nfloat To;\nfloat Bottom;\nfloat Top;\n{P}BreachKind Kind;";
+        Assert.Equal(old + $"\ndouble MadeAt;\n{P}Vec3d Blast;", Body("Breach"));
+        Assert.Equal("int32 Panel;\nint32 Opening;\noctet Hits;\noctet U0;\noctet V0;\noctet U1;\noctet V1;\ndouble HitAt;", Body("WindowDamage"));
+        Assert.Equal($"@key string<256> Building;\nboolean Collapsed;\nsequence<{P}Breach, 64> Breaches;\nsequence<{P}WindowDamage, 256> Windows;\ndouble CollapsedAt;", Body("BuildingDamage"));
+        Assert.Equal($"@key string<32> Cell;\nsequence<{P}Crater, 16> Craters;", Body("GroundDamage"));
+        Assert.Equal($"{P}Vec3d Centre;\nfloat Radius;\nfloat Depth;\nfloat Rim;\ndouble BornAt;\n{P}CraterKind Kind;", Body("Crater"));
+    }
+
     [Fact]
     public void The_traffic_topics_round_trip_with_the_compact_knot_units()
     {
@@ -568,7 +617,7 @@ public class DpsTopicTests
             var type = topic["DPS_".Length..];
             Assert.Contains($"struct {type} ", idl);
         }
-        Assert.Equal(52, DpsProtocol.AllTopics.Count);   // + Utterance, Report, Order, Ambience, Weather (DD-026, DD-028)
+        Assert.Equal(53, DpsProtocol.AllTopics.Count);   // + Utterance, Report, Order, Ambience, Weather (DD-026, DD-028), GroundDamage (DD-030)
         foreach (var name in new[] { "Mover", "MoverTracks", "TrafficLights" })
         {
             Assert.Contains("DPS_" + name, DpsProtocol.AllTopics);
@@ -580,7 +629,8 @@ public class DpsTopicTests
         }
 
         Assert.Contains("DPS_BuildingDamage", DpsProtocol.AllTopics);
-        foreach (var enumerator in new[] { "BreachKindPassage" })
+        Assert.Contains("DPS_GroundDamage", DpsProtocol.AllTopics);
+        foreach (var enumerator in new[] { "BreachKindPassage", "CraterKindSmall", "CraterKindLarge", "CraterKindUnknown" })
         {
             Assert.Contains(enumerator, idl);
         }

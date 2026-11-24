@@ -291,6 +291,7 @@ public sealed class DpsTransport : IDisposable
             GroundMarks = Add(new DpsChannel<GroundMarks>(_participant, hold: Hold<GroundMarks>(DpsCountKind.Keyed, key: e => e.EntityId)));
             Animal = Add(new DpsChannel<Animal>(_participant, hold: Hold<Animal>(DpsCountKind.Keyed, key: e => e.EntityId)));
             BuildingDamage = Add(new DpsChannel<BuildingDamage>(_participant, hold: Hold<BuildingDamage>(DpsCountKind.Keyed, key: b => KeyOf(b.Building))));
+            GroundDamage = Add(new DpsChannel<GroundDamage>(_participant, hold: Hold<GroundDamage>(DpsCountKind.Keyed, key: g => KeyOf(g.Cell))));   // DD-030: state once on the world partition
             Mover = Add(new DpsChannel<Mover>(_participant, hold: Hold<Mover>(DpsCountKind.Keyed, key: m => m.MoverId)));
             MoverTracks = Add(new DpsChannel<MoverTracks>(_participant, hold: Hold<MoverTracks>(DpsCountKind.Event, 16)));
             TrafficLights = Add(new DpsChannel<TrafficLights>(_participant, hold: Hold<TrafficLights>(DpsCountKind.Keyed, key: t => t.SignalId)));
@@ -423,6 +424,8 @@ public sealed class DpsTransport : IDisposable
     internal DpsChannel<Animal> Animal { get; } = null!;
 
     internal DpsChannel<BuildingDamage> BuildingDamage { get; } = null!;
+
+    internal DpsChannel<GroundDamage> GroundDamage { get; } = null!;
 
     internal DpsChannel<Mover> Mover { get; } = null!;
 

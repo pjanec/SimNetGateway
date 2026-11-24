@@ -127,6 +127,7 @@ public class ProfileTests
             new HrotTypeRecord(501, "T", "a/b", "1:1:225:1:1:3:0", "{}"),
             new HrotAnimal(1, "Calm", 0, false, false, false, 0, 0, 0, ""),
             new HrotBuildingDamage("range/H1", true, [], []),
+            new HrotGroundDamage("0,0", []),
             new HrotMover(1, "Car", 8851, 0xFF, 0, 4f, 2f, "Sumo"),
             new HrotMoverRemoved(1),
             new HrotMoverTracks(1.0, []),
@@ -178,6 +179,7 @@ public class ProfileTests
                 case HrotTypeRecord m: h.HrotStep(m); break;
                 case HrotAnimal m: h.HrotStep(m); break;
                 case HrotBuildingDamage m: h.HrotStep(m); break;
+                case HrotGroundDamage m: h.HrotStep(m); break;
                 case HrotMover m: h.HrotStep(m); break;
                 case HrotMoverRemoved m: h.HrotStep(m); break;
                 case HrotMoverTracks m: h.HrotStep(m); break;

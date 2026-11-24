@@ -97,6 +97,56 @@ public class BuildingDamageAndHeightTests
             return e;
         }
 
+        /// <summary>A damage entity whose breaches carry HROT's stamps (T-074): each is (breach, MadeAt, blast point); <paramref name="collapsedAt"/> &gt; 0 also collapses the building.</summary>
+        public Entity Stamped(int building, double collapsedAt, params (WallBreach Breach, double At, Vector3 Blast)[] breaches)
+        {
+            var d = new BuildingDamage { Building = building };
+            foreach (var (b, at, blast) in breaches)
+            {
+                BuildingDamages.Add(ref d, in b, null, at, blast);
+            }
+
+            if (collapsedAt > 0)
+            {
+                d.Collapsed = 1;
+                d.CollapsedAt = collapsedAt;
+            }
+
+            var e = World.CreateEntity();
+            World.AddComponent(e, d);
+            return e;
+        }
+
+        /// <summary>A window entity whose entries carry the times of their last hit.</summary>
+        public Entity StampedWindows(int building, params (WindowEntry Window, double HitAt)[] windows)
+        {
+            var w = new WindowDamage { Building = building };
+            foreach (var (x, at) in windows)
+            {
+                w.Set(w.Count, x);
+                w.SetHitAt(w.Count, at);
+                w.Count++;
+            }
+
+            var e = World.CreateEntity();
+            World.AddComponent(e, w);
+            return e;
+        }
+
+        /// <summary>A ground-cell entity holding <paramref name="craters"/> in this order.</summary>
+        public Entity Craters(int cellX, int cellY, params Crater[] craters)
+        {
+            var d = new GroundDamage { CellX = cellX, CellY = cellY };
+            foreach (var c in craters)
+            {
+                GroundDamages.Add(ref d, in c, out _);
+            }
+
+            var e = World.CreateEntity();
+            World.AddComponent(e, d);
+            return e;
+        }
+
         public Entity Windows(int building, params WindowEntry[] windows)
         {
             var w = new WindowDamage { Building = building };
@@ -222,6 +272,408 @@ public class BuildingDamageAndHeightTests
         using var bare = new Stage(withTerrain: false);
         bare.Breaches(0, new WallBreach(0, 1f, 2f, 0f, 2f, BreachKind.Hole));
         Assert.Empty(bare.Gather().Of<HrotBuildingDamage>());
+    }
+
+    // ---- T-074 (DD-030): HROT's times and blast points, and the craters -------------------------------------------------------------
+
+    /// <summary>T-074: every stamp HROT records (a breach's MadeAt and blast point, a window's HitAt, the collapse time) reaches the pivot message exactly; 0 (from a save) stays 0.</summary>
+    [Fact]
+    public void Hrots_times_and_blast_points_are_copied_exactly_and_a_save_stays_zero()
+    {
+        using var h = new Stage();
+        var passage = new WallBreach(h.Panel(1, 2), 1f, 3f, 0f, 2.2f, BreachKind.Passage);
+        var hole = new WallBreach(h.Panel(1, 0), 4f, 4.6f, 1.1f, 1.6f, BreachKind.Hole);
+        var fromSave = new WallBreach(h.Panel(1, 3), 0f, 1f, 0f, 1f, BreachKind.Hole);
+        h.Stamped(1, 401.25, (passage, 312.4, new Vector3(10.5f, -20.25f, 3.75f)), (hole, 99.125, new Vector3(-1f, 2f, 3f)), (fromSave, 0d, default));
+        h.StampedWindows(1, (new WindowEntry(h.Panel(1, 1), 0, 1, 40, 50, 0, 0), 55.5), (new WindowEntry(h.Panel(1, 3), 2, 3, 0, 0, 0, 0), 0d));
+
+        var sent = Assert.Single(h.Gather().Of<HrotBuildingDamage>());
+
+        Assert.Equal((true, 401.25), (sent.Collapsed, sent.CollapsedAt));
+        Assert.Equal(
+            [new HrotBreach(0, 4f, 4.6f, 1.1f, 1.6f, "Hole", 99.125, new HrotVec3(-1, 2, 3)), new HrotBreach(2, 1f, 3f, 0f, 2.2f, "Passage", 312.4, new HrotVec3(10.5, -20.25, 3.75)),
+             new HrotBreach(3, 0f, 1f, 0f, 1f, "Hole", 0d, HrotVec3.Zero)], sent.Breaches);
+        Assert.Equal([new HrotWindowDamage(1, 0, 1, 40, 50, 0, 0, 55.5), new HrotWindowDamage(3, 2, 3, 0, 0, 0, 0, 0d)], sent.Windows);
+        Assert.Empty(h.Gather(2.0).Of<HrotBuildingDamage>());   // nothing changed: nothing sent
+    }
+
+    /// <summary>T-074: a change of a time alone (a breach widened, a window hit again) is a change - the building is sent again; merged entities keep the later breach time and the stamp of the harder-hit window.</summary>
+    [Fact]
+    public void A_time_alone_is_a_change_and_merged_entities_keep_the_later_breach_and_the_harder_hit_window()
+    {
+        using var h = new Stage();
+        var breach = new WallBreach(h.Panel(1, 0), 1f, 2f, 0f, 2f, BreachKind.Hole);
+        var first = h.Stamped(1, 0d, (breach, 10.0, new Vector3(1, 1, 1)));
+        h.StampedWindows(1, (new WindowEntry(h.Panel(1, 1), 0, 1, 40, 50, 0, 0), 20.0));
+        Assert.Equal(10.0, Assert.Single(Assert.Single(h.Gather().Of<HrotBuildingDamage>()).Breaches).MadeAt);
+
+        // the same breach in a second entity, made later: the later time and its blast point win
+        h.Stamped(1, 0d, (breach, 30.0, new Vector3(9, 8, 7)));
+        var merged = Assert.Single(h.Gather(2.0).Of<HrotBuildingDamage>());
+        var kept = Assert.Single(merged.Breaches);
+        Assert.Equal((30.0, new HrotVec3(9, 8, 7)), (kept.MadeAt, kept.Blast));
+
+        // the window is hit harder in another entity: its stamp follows the entry that wins; an equal hit keeps the first
+        h.StampedWindows(1, (new WindowEntry(h.Panel(1, 1), 0, 3, 0, 0, 0, 0), 77.0));
+        Assert.Equal((byte)3, Assert.Single(Assert.Single(h.Gather(3.0).Of<HrotBuildingDamage>()).Windows).Hits);
+        h.StampedWindows(1, (new WindowEntry(h.Panel(1, 1), 0, 3, 0, 0, 0, 0), 99.0));
+        Assert.Empty(h.Gather(4.0).Of<HrotBuildingDamage>());   // an equal hit changes nothing the pivot says
+        var after = h.World.GetComponentRO<BuildingDamage>(first);
+        Assert.Equal(10.0, after.MadeAtOf(0).Seconds);   // (HROT's own entity was not touched)
+
+        // the first entity's time moves alone (a widening HROT records): sent again
+        var moved = h.World.GetComponentRO<BuildingDamage>(first);
+        moved.SetStamp(0, 40.0, new Vector3(5, 5, 5));
+        h.World.SetComponent(first, moved);
+        Assert.Equal(40.0, Assert.Single(Assert.Single(h.Gather(5.0).Of<HrotBuildingDamage>()).Breaches).MadeAt);
+    }
+
+    /// <summary>T-074: a collapse time alone is a change; a building not collapsed sends 0 whatever a stale value says.</summary>
+    [Fact]
+    public void The_collapse_time_travels_and_a_standing_building_sends_zero()
+    {
+        using var h = new Stage();
+        var e = h.Stamped(0, 0d);
+        var standing = h.World.GetComponentRO<BuildingDamage>(e);
+        standing.CollapsedAt = 55.0;   // stale: HROT clears it when the building is not collapsed, the gateway does not trust it either
+        h.World.SetComponent(e, standing);
+        h.Breaches(0, new WallBreach(h.Panel(0, 1), 1f, 2f, 0f, 2f, BreachKind.Hole));
+        var first = Assert.Single(h.Gather().Of<HrotBuildingDamage>());
+        Assert.Equal((false, 0d), (first.Collapsed, first.CollapsedAt));
+
+        var c = h.World.GetComponentRO<BuildingDamage>(e);
+        c.Collapsed = 1;
+        c.CollapsedAt = 123.5;
+        h.World.SetComponent(e, c);
+        var second = Assert.Single(h.Gather(2.0).Of<HrotBuildingDamage>());
+        Assert.Equal((true, 123.5), (second.Collapsed, second.CollapsedAt));
+    }
+
+    private static Crater Hole(float x, float y, double born = 0d, CraterKind kind = CraterKind.Small, float radius = 2f) =>
+        new(new Vector2(x, y), radius, 0.75f, 0.25f, new SimInstant(born), kind);
+
+    /// <summary>T-074 (DD-030 D-2): a cell with craters is ONE message with the craters in HROT's slot order, z = the BARE ground under each centre; unchanged = nothing; a changed cell is sent whole again.</summary>
+    [Fact]
+    public void A_crater_cell_is_one_message_with_its_craters_in_hrots_order_standing_on_the_bare_ground()
+    {
+        using var h = new Stage(ground: 7.5f);
+        var cell = h.Craters(1, -1, Hole(70f, -10f, 312.4, CraterKind.Large, 3.5f), Hole(65f, -20f, 100.0), Hole(66f, -21f, 0d));   // HROT's order is the order they were made in: NOT sorted by anything
+
+        var sent = Assert.Single(h.Gather().Of<HrotGroundDamage>());
+
+        Assert.Equal("1,-1", sent.Cell);
+        Assert.Equal(
+            [new HrotCrater(new HrotVec3(70, -10, 7.5), 3.5f, 0.75f, 0.25f, 312.4, "Large"), new HrotCrater(new HrotVec3(65, -20, 7.5), 2f, 0.75f, 0.25f, 100.0, "Small"),
+             new HrotCrater(new HrotVec3(66, -21, 7.5), 2f, 0.75f, 0.25f, 0d, "Small")], sent.Craters);
+        Assert.Empty(h.Gather(2.0).Of<HrotGroundDamage>());   // nothing changed: nothing sent
+
+        var more = h.World.GetComponentRO<GroundDamage>(cell);
+        GroundDamages.Add(ref more, Hole(80f, -30f, 500.0), out _);
+        h.World.SetComponent(cell, more);
+        var again = Assert.Single(h.Gather(3.0).Of<HrotGroundDamage>());
+        Assert.Equal(4, again.Craters.Count);
+        Assert.Equal(new HrotVec3(80, -30, 7.5), again.Craters[3].Centre);
+    }
+
+    /// <summary>T-074: two cells are two messages; the cell key is the record's own (negative cells included); no terrain = z 0; the z is the bare ground, a crater's bowl is not in it.</summary>
+    [Fact]
+    public void Cells_are_apart_a_world_without_terrain_has_z_zero_and_the_z_is_bare_ground()
+    {
+        using var h = new Stage(ground: 7.5f);
+        h.Craters(0, 0, Hole(10f, 10f));
+        h.Craters(-2, 5, Hole(-100f, 330f));
+        var sent = h.Gather().Of<HrotGroundDamage>().OrderBy(g => g.Cell, StringComparer.Ordinal).ToList();
+        Assert.Equal(["-2,5", "0,0"], sent.Select(g => g.Cell).ToArray());
+        Assert.All(sent, g => Assert.Equal(7.5, Assert.Single(g.Craters).Centre.Z));   // the bowl (0.75 m deep) is not subtracted
+
+        using var bare = new Stage(withTerrain: false);
+        bare.Craters(0, 0, Hole(10f, 10f));
+        Assert.Equal(0.0, Assert.Single(Assert.Single(bare.Gather().Of<HrotGroundDamage>()).Craters).Centre.Z);
+    }
+
+    /// <summary>T-074: a cell several entities hold (an overflow, another node's craters) is ONE message, content-sorted, a crater held twice once; the visiting order of the entities does not matter.</summary>
+    [Fact]
+    public void A_cell_held_by_several_entities_is_united_sorted_and_without_a_crater_twice()
+    {
+        using var h = new Stage();
+        var late = Hole(5f, 5f, 300.0);
+        var early = Hole(9f, 9f, 100.0);
+        h.Craters(0, 0, late, early);
+        h.Craters(0, 0, early, Hole(1f, 1f, 200.0));   // `early` again: the same crater
+
+        var sent = Assert.Single(h.Gather().Of<HrotGroundDamage>());
+
+        Assert.Equal([100.0, 200.0, 300.0], sent.Craters.Select(c => c.BornAt).ToArray());
+        Assert.Equal(3, sent.Craters.Count);
+    }
+
+    /// <summary>T-074: a cell whose craters are gone is sent empty once; a world boundary sends everything again.</summary>
+    [Fact]
+    public void A_cell_that_is_emptied_is_sent_empty_once_and_everything_is_sent_again_after_a_boundary()
+    {
+        using var h = new Stage();
+        var cell = h.Craters(3, 4, Hole(200f, 270f));
+        Assert.Single(h.Gather().Of<HrotGroundDamage>());
+
+        h.World.DestroyEntity(cell);   // a reload
+        var gone = Assert.Single(h.Gather(2.0).Of<HrotGroundDamage>());
+        Assert.Equal(("3,4", 0), (gone.Cell, gone.Craters.Count));
+        Assert.Empty(h.Gather(3.0).Of<HrotGroundDamage>());
+
+        h.Craters(3, 4, Hole(200f, 270f));
+        Assert.Single(h.Gather(4.0).Of<HrotGroundDamage>());
+        h.Adapter.Reset(h.World);   // a world boundary: the gateway is new
+        Assert.Single(h.Gather(5.0).Of<HrotGroundDamage>());
+    }
+
+    /// <summary>T-074: an entity with no crater is no cell; the ground entities are still not entities to show.</summary>
+    [Fact]
+    public void An_empty_ground_entity_sends_nothing_and_the_entities_are_not_published()
+    {
+        using var h = new Stage();
+        h.Craters(0, 0);
+        var sent = h.Gather();
+        Assert.Empty(sent.Of<HrotGroundDamage>());
+        Assert.Empty(sent.Of<HrotEntityState>());
+    }
+
+    /// <summary>
+    /// T-074, invariants (R-064), seeded: whatever the entities hold, the building message equals the brute-force union - per distinct breach the LATEST time and its blast point, per window the stamp of the
+    /// entry with most hits, the collapse time the latest of the collapsed entities - and after it a steady gather sends nothing.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(6)]
+    [InlineData(7)]
+    [InlineData(8)]
+    public void Random_damage_entities_unite_to_the_brute_force_union_of_their_stamps(int seed)
+    {
+        var rnd = new Random(seed);
+        using var h = new Stage();
+        double clock = 1;   // every stamp distinct, so "the latest" is unambiguous
+        // the candidate breaches of building 1: 4 panels x 2 slots, never overlapping within a panel, the same geometry in every entity
+        WallBreach Candidate(int panel, int slot) => new(h.Panel(1, panel), slot == 0 ? 1f : 4f, slot == 0 ? 2f : 5f, 0f, 2f, BreachKind.Hole);
+        var expectedBreach = new Dictionary<(int, int), (double At, Vector3 Blast)>();
+        var expectedWindow = new Dictionary<(int, int), (int Hits, List<double> Ats)>();
+        double collapsedAt = 0;
+        int entities = rnd.Next(1, 5);
+        for (int n = 0; n < entities; n++)
+        {
+            var list = new List<(WallBreach, double, Vector3)>();
+            for (int panel = 0; panel < 4; panel++)
+            {
+                for (int slot = 0; slot < 2; slot++)
+                {
+                    if (rnd.Next(3) != 0)
+                    {
+                        continue;
+                    }
+
+                    double at = rnd.Next(4) == 0 ? 0d : clock++;
+                    var blast = at == 0 ? default : new Vector3(rnd.Next(100), rnd.Next(100), rnd.Next(10));
+                    list.Add((Candidate(panel, slot), at, blast));
+                    if (!expectedBreach.TryGetValue((panel, slot), out var have) || at > have.At)
+                    {
+                        expectedBreach[(panel, slot)] = (at, blast);
+                    }
+                }
+            }
+
+            double collapse = rnd.Next(3) == 0 ? clock++ : 0d;
+            collapsedAt = Math.Max(collapsedAt, collapse);
+            h.Stamped(1, collapse, [.. list]);
+
+            var windows = new List<(WindowEntry, double)>();
+            for (int panel = 0; panel < 4; panel++)
+            {
+                for (int opening = 0; opening < 2; opening++)
+                {
+                    if (rnd.Next(3) != 0)
+                    {
+                        continue;
+                    }
+
+                    int hits = rnd.Next(1, 4);
+                    double at = rnd.Next(4) == 0 ? 0d : clock++;
+                    windows.Add((new WindowEntry(h.Panel(1, panel), (byte)opening, (byte)hits, 0, 0, 0, 0), at));
+                    var key = (panel, opening);
+                    if (!expectedWindow.TryGetValue(key, out var w) || hits > w.Hits)
+                    {
+                        expectedWindow[key] = (hits, [at]);
+                    }
+                    else if (hits == w.Hits)
+                    {
+                        w.Ats.Add(at);   // equal hits: HROT's save rule keeps one of them, whichever the query visits first
+                    }
+                }
+            }
+
+            h.StampedWindows(1, [.. windows]);
+        }
+
+        var sent = h.Gather().Of<HrotBuildingDamage>();
+        if (expectedBreach.Count == 0 && expectedWindow.Count == 0 && collapsedAt == 0)
+        {
+            Assert.Empty(sent);
+            return;
+        }
+
+        var message = Assert.Single(sent);
+        Assert.Equal(expectedBreach.Count, message.Breaches.Count);
+        foreach (var b in message.Breaches)
+        {
+            int panel = Enumerable.Range(0, 4).First(p => h.Panel(1, p) == h.Panel(1, b.Panel));
+            var want = expectedBreach[(panel, b.From < 3f ? 0 : 1)];
+            Assert.Equal((want.At, new HrotVec3(want.Blast.X, want.Blast.Y, want.Blast.Z)), (b.MadeAt, b.Blast));
+        }
+
+        Assert.Equal(expectedWindow.Count, message.Windows.Count);
+        foreach (var w in message.Windows)
+        {
+            var want = expectedWindow[(w.Panel, w.Opening)];
+            Assert.Equal(want.Hits, w.Hits);
+            Assert.Contains(w.HitAt, want.Ats);
+        }
+
+        Assert.Equal(message.Collapsed ? collapsedAt : 0d, message.CollapsedAt);
+        Assert.Empty(h.Gather(2.0).Of<HrotBuildingDamage>());   // steady: nothing
+    }
+
+    /// <summary>
+    /// T-074, invariants (R-064), seeded: per cell the message is the brute-force union of its entities' craters (a crater held twice once, a multi-entity cell content-sorted), nothing is sent while nothing
+    /// changes, and after entities are removed exactly the cells that changed are sent again - a cell left with none empty, once.
+    /// </summary>
+    [Theory]
+    [InlineData(11)]
+    [InlineData(12)]
+    [InlineData(13)]
+    [InlineData(14)]
+    [InlineData(15)]
+    [InlineData(16)]
+    [InlineData(17)]
+    [InlineData(18)]
+    public void Random_ground_entities_unite_per_cell_and_only_changed_cells_are_sent(int seed)
+    {
+        var rnd = new Random(seed);
+        using var h = new Stage();
+        double born = 1;
+        var held = new List<(Entity Entity, (int X, int Y) Cell, Crater[] Craters)>();
+        var pool = new Dictionary<(int, int), Crater[]>();
+        Crater[] Pool((int X, int Y) cell)
+        {
+            if (!pool.TryGetValue(cell, out var p))
+            {
+                pool[cell] = p = [.. Enumerable.Range(0, 20).Select(k => Hole(cell.X * 64f + 1f + k * 3f, cell.Y * 64f + 5f, born++, k % 3 == 0 ? CraterKind.Large : CraterKind.Small, 1f + k * 0.1f))];
+            }
+
+            return p;
+        }
+
+        for (int n = rnd.Next(1, 9); n > 0; n--)
+        {
+            var cell = (rnd.Next(-2, 3), rnd.Next(-2, 3));
+            var craters = Pool(cell).OrderBy(_ => rnd.Next()).Take(rnd.Next(1, 7)).ToArray();
+            held.Add((h.Craters(cell.Item1, cell.Item2, craters), cell, craters));
+        }
+
+        Dictionary<string, HrotCrater[]> Expected()
+        {
+            var result = new Dictionary<string, HrotCrater[]>();
+            foreach (var group in held.GroupBy(x => x.Cell))
+            {
+                var union = group.SelectMany(x => x.Craters).Distinct().ToList();
+                if (group.Count() > 1)
+                {
+                    union = [.. union.OrderBy(c => c.BornAt.Seconds)];   // distinct births: the content order is the birth order
+                }
+
+                result[GroundDamageKey(group.Key)] = [.. union.Select(c => new HrotCrater(new HrotVec3(c.Centre.X, c.Centre.Y, 7.5), c.Radius, c.Depth, c.Rim, c.BornAt.Seconds, c.Kind.ToString()))];
+            }
+
+            return result;
+        }
+
+        var want = Expected();
+        var sent = h.Gather().Of<HrotGroundDamage>();
+        Assert.Equal(want.Count, sent.Count);
+        foreach (var m in sent)
+        {
+            Assert.Equal(want[m.Cell], m.Craters);
+        }
+
+        Assert.Empty(h.Gather(2.0).Of<HrotGroundDamage>());   // steady
+
+        // remove some entities: only the cells they were in change
+        var before = want;
+        var removed = held.Where(_ => rnd.Next(2) == 0).ToList();
+        foreach (var r in removed)
+        {
+            h.World.DestroyEntity(r.Entity);
+            held.Remove(r);
+        }
+
+        want = Expected();
+        var after = h.Gather(3.0).Of<HrotGroundDamage>();
+        foreach (string cell in before.Keys.Union(want.Keys))
+        {
+            bool changed = !want.TryGetValue(cell, out var now) ? true : !before.TryGetValue(cell, out var was) || !was.SequenceEqual(now);
+            var got = after.Where(m => m.Cell == cell).ToList();
+            if (!changed)
+            {
+                Assert.Empty(got);
+            }
+            else
+            {
+                Assert.Equal(want.TryGetValue(cell, out var expected) ? expected : [], Assert.Single(got).Craters);   // a cell left with none: empty, once
+            }
+        }
+
+        Assert.Empty(h.Gather(4.0).Of<HrotGroundDamage>());
+    }
+
+    private static string GroundDamageKey((int X, int Y) cell) => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{cell.X},{cell.Y}");
+
+    /// <summary>
+    /// T-074 (HOT path, 0 B steady): with damage and craters standing and nothing changing, a gather of the buildings and of the ground allocates nothing and sends nothing - the union is compared with
+    /// what was sent without building a message (measured before: 2.3 KB a gather for one building). Mutation: build the message first and compare it (allocates), or name a kind with ToString (boxes).
+    /// </summary>
+    [Fact]
+    public void A_steady_gather_of_building_damage_and_craters_allocates_nothing_and_sends_nothing()
+    {
+        using var h = new Stage();
+        h.Stamped(1, 61.5, (new WallBreach(h.Panel(1, 0), 1f, 2f, 0f, 2f, BreachKind.Hole), 5.0, new Vector3(1, 2, 3)), (new WallBreach(h.Panel(1, 2), 3f, 5f, 0f, 2f, BreachKind.Passage), 6.0, new Vector3(4, 5, 6)));
+        h.StampedWindows(1, (new WindowEntry(h.Panel(1, 1), 0, 1, 40, 50, 0, 0), 20.0));
+        h.Craters(0, 0, Hole(1f, 1f, 3.0, CraterKind.Large), Hole(2f, 2f, 4.0));
+        h.Craters(0, 0, Hole(9f, 9f, 8.0));   // a second entity of the same cell: the sorted union is compared too
+        var inbound = new InMemoryInbound(new SourceId(99), "steady");
+        var buildings = new BuildingDamageGather();
+        var ground = new GroundDamageGather();
+        buildings.Gather(h.World, inbound);
+        ground.Gather(h.World, inbound);
+        var first = new Capture();
+        Assert.Equal(2, inbound.Drain(first, int.MaxValue));   // the building and the cell, once
+        Assert.Equal(3, first.Of<HrotGroundDamage>().Single().Craters.Count);
+
+        for (int i = 0; i < 50; i++)
+        {
+            buildings.Gather(h.World, inbound);
+            ground.Gather(h.World, inbound);
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 300; i++)
+        {
+            buildings.Gather(h.World, inbound);
+            ground.Gather(h.World, inbound);
+        }
+
+        long perGather = (GC.GetAllocatedBytesForCurrentThread() - before) / 300;
+        Assert.Equal(0L, perGather);
+        Assert.Equal(0, inbound.Drain(new Capture(), int.MaxValue));
     }
 
     // ---- heights --------------------------------------------------------------------------------------------------------------

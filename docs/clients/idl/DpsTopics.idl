@@ -347,6 +347,8 @@ module SimNetGateway {
                 float Bottom;
                 float Top;
                 SimNetGateway::Protocol::DdsPlayer::BreachKind Kind;
+                double MadeAt;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d Blast;
             };
 
             @appendable
@@ -358,6 +360,7 @@ module SimNetGateway {
                 octet V0;
                 octet U1;
                 octet V1;
+                double HitAt;
             };
 
             @topic
@@ -367,6 +370,24 @@ module SimNetGateway {
                 boolean Collapsed;
                 sequence<SimNetGateway::Protocol::DdsPlayer::Breach, 64> Breaches;
                 sequence<SimNetGateway::Protocol::DdsPlayer::WindowDamage, 256> Windows;
+                double CollapsedAt;
+            };
+
+            @appendable
+            struct Crater {
+                SimNetGateway::Protocol::DdsPlayer::Vec3d Centre;
+                float Radius;
+                float Depth;
+                float Rim;
+                double BornAt;
+                SimNetGateway::Protocol::DdsPlayer::CraterKind Kind;
+            };
+
+            @topic
+            @appendable
+            struct GroundDamage {
+                @key string<32> Cell;
+                sequence<SimNetGateway::Protocol::DdsPlayer::Crater, 16> Craters;
             };
 
             @topic

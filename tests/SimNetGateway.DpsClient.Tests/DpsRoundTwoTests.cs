@@ -46,6 +46,7 @@ public class DpsRoundTwoTests
             Animal = new DdsWriter<D.Animal>(_participant);
             Type = new DdsWriter<D.TkbType>(_participant);
             Building = new DdsWriter<D.BuildingDamage>(_participant);
+            Ground = new DdsWriter<D.GroundDamage>(_participant);
             Status = new DdsWriter<D.Status>(_participant);
             Exercise = new DdsWriter<D.Exercise>(_participant);
             Lights = new DdsWriter<D.TrafficLights>(_participant);
@@ -78,6 +79,8 @@ public class DpsRoundTwoTests
         public DdsWriter<D.TkbType> Type { get; }
 
         public DdsWriter<D.BuildingDamage> Building { get; }
+
+        public DdsWriter<D.GroundDamage> Ground { get; }
 
         public DdsWriter<D.Status> Status { get; }
 
@@ -126,12 +129,13 @@ public class DpsRoundTwoTests
         gw.Animal.Write(new D.Animal { EntityId = 3001, Mode = D.AnimalMode.AnimalModeAlert });
         gw.Type.Write(new D.TkbType { TypeId = 5_000_000_001L, Name = "T-72", CategoryPath = "", DisType = "", Schema = "hrot/1", Json = "{}" });
         gw.Building.Write(new D.BuildingDamage { Building = "range/H2", Collapsed = true, Breaches = [], Windows = [] });
+        gw.Ground.Write(new D.GroundDamage { Cell = "0,1", Craters = [new D.Crater { Radius = 2f, BornAt = 5.5, Kind = D.CraterKind.CraterKindLarge }] });
         gw.Status.Write(Rule(3001));
         gw.Exercise.Write(new D.Exercise { Phase = D.ExercisePhase.ExercisePhaseEnded, Reason = "Time is up" });
         gw.Lights.Write(new D.TrafficLights { SignalId = 4, State = D.TrafficLightState.TrafficLightStateRed });
 
         Assert.True(Until(world, () => world.Rounds.Count == 1 && world.MunitionLooks.Count == 1 && world.FlameJets.Count == 2 && world.FireSpots.Count == 1 && world.GroundMarks.Count == 1
-            && world.Animals.Count == 1 && world.TkbTypes.Count == 1 && world.BuildingDamage.Count == 1 && world.Statuses.Count == 1 && world.Exercise is not null && world.TrafficLights.Count == 1));
+            && world.Animals.Count == 1 && world.TkbTypes.Count == 1 && world.BuildingDamage.Count == 1 && world.GroundDamage.Count == 1 && world.Statuses.Count == 1 && world.Exercise is not null && world.TrafficLights.Count == 1));
         Assert.Equal((12, 6L), (world.Rounds[21].ShooterId, world.Rounds[21].MunitionTypeId));
         Assert.True(world.MunitionLooks[6].Tracer);
         Assert.Equal(60f, world.FlameJets[(12, 0)].RangeM);   // a jet is keyed by entity and mount
@@ -139,9 +143,10 @@ public class DpsRoundTwoTests
         Assert.Equal(D.AnimalMode.AnimalModeAlert, world.Animals[3001].Mode);
         Assert.Equal("T-72", world.TkbTypes[5_000_000_001L].Name);
         Assert.True(world.BuildingDamage["range/H2"].Collapsed);
+        Assert.Equal((5.5, D.CraterKind.CraterKindLarge), (world.GroundDamage["0,1"].Craters[0].BornAt, world.GroundDamage["0,1"].Craters[0].Kind));
         Assert.Equal(D.ExercisePhase.ExercisePhaseEnded, world.Exercise!.Value.Phase);
         Assert.Equal(D.TrafficLightState.TrafficLightStateRed, world.TrafficLights[4].State);
-        foreach (var topic in new[] { DpsProtocol_Round, "DPS_MunitionLook", "DPS_FlameJet", "DPS_FireSpots", "DPS_GroundMarks", "DPS_Animal", "DPS_TkbType", "DPS_BuildingDamage", "DPS_Status", "DPS_Exercise", "DPS_TrafficLights" })
+        foreach (var topic in new[] { DpsProtocol_Round, "DPS_MunitionLook", "DPS_FlameJet", "DPS_FireSpots", "DPS_GroundMarks", "DPS_Animal", "DPS_TkbType", "DPS_BuildingDamage", "DPS_GroundDamage", "DPS_Status", "DPS_Exercise", "DPS_TrafficLights" })
         {
             Assert.True(world.Received[topic] >= 1, topic);   // the headless summary counts them
         }
@@ -150,10 +155,12 @@ public class DpsRoundTwoTests
         gw.Round.DisposeInstance(new D.Round { EntityId = 21 });
         gw.Jet.DisposeInstance(new D.FlameJet { EntityId = 12, Mount = 0 });
         gw.Building.DisposeInstance(new D.BuildingDamage { Building = "range/H2", Breaches = [], Windows = [] });
+        gw.Ground.DisposeInstance(new D.GroundDamage { Cell = "0,1", Craters = [] });
         gw.Status.DisposeInstance(Rule(3001));
         Assert.True(Until(world, () => world.Rounds.Count == 0), "round");
         Assert.True(Until(world, () => world.FlameJets.Count == 1), "jet");
         Assert.True(Until(world, () => world.BuildingDamage.Count == 0), "building");
+        Assert.True(Until(world, () => world.GroundDamage.Count == 0), "ground");
         Assert.True(Until(world, () => world.Statuses.Count == 0), "status");
         Assert.True(world.FlameJets.ContainsKey((12, 1)));
     }

@@ -438,7 +438,7 @@ Buildings in HROT are destructible, and the damage is replicated state like the 
 - **Chunks.** Only the touched chunks are rebuilt, off the frame thread. The old mesh is drawn until the new one is ready.
 - **For Unreal.** Rebuild the affected wall panel's mesh with the breach rectangles cut out, rather than overlaying decals, so that the holes really see through. Replace a collapsed building's model with a debris mound. Debris and dust at the moment of the breach are local effects; HROT draws none beyond the detonation's own explosion.
 
-**On the wire** (DD-018 §3.6a, built): one `BuildingDamage` instance per damaged building, keyed by its terrain label (`<terrain>/<building label>`). It carries `Collapsed`, up to 64 breaches (panel index within the building, from, to, bottom, top, kind Hole or Passage) and up to 256 hit windows. The instance is disposed when the damage goes, for example on a reload. **For the terrain importer:** keep the building labels and the panel order within each building as HROT's terrain files define them, so breaches land on the right wall.
+**On the wire** (DD-018 §3.6a, built): one `BuildingDamage` instance per damaged building, keyed by its terrain label (`<terrain>/<building label>`). It carries `Collapsed`, up to 64 breaches (panel index within the building, from, to, bottom, top, kind Hole or Passage) and up to 256 hit windows. The instance is disposed when the damage goes, for example on a reload. Since T-074 (DD-030) it also carries **when and from where**: `Breach.MadeAt` and `Breach.Blast`, `WindowDamage.HitAt`, `BuildingDamage.CollapsedAt`, HROT's own sim times (0 = from a loaded save: draw, never animate) - see [NOTE-2026-11-24-Gateway-Damage-Times-And-Craters.md](NOTE-2026-11-24-Gateway-Damage-Times-And-Craters.md); craters travel in the new `GroundDamage` topic, one instance per 64 m cell, keyed `"<cellX>,<cellY>"`. **For the terrain importer:** keep the building labels and the panel order within each building as HROT's terrain files define them, so breaches land on the right wall.
 
 **Other terrain changes** that HROT replicates and DPS does not carry yet: felled and damaged trees ([TreeDamage.cs](https://github.com/pjanec/HROT/blob/coordinator/FDP/Toolkits/Fdp.Toolkits/Terrain/TreeDamage.cs)), ground patches such as craters and road blockage ([DESIGN\_Ground\_Patches\_And\_Road\_Blockage.md](https://github.com/pjanec/HROT/blob/coordinator/docs/DESIGN_Ground_Patches_And_Road_Blockage.md)), and door open or closed states. HROT's own outsider view of its wire is [NED\_DDS\_Protocol.md](https://github.com/pjanec/HROT/blob/coordinator/docs/reference/NED_DDS_Protocol.md); it is the place to look for what other state exists.
 
@@ -497,7 +497,7 @@ Every topic belongs to one rate class, stated on its C# type by the `[DpsRate]` 
 | Class | Changes | Topics | What a client does |
 | --- | --- | --- | --- |
 | Fixed | once per instance or type | `Entity`, `Appearance`, `TkbType`, `MunitionLook`, `Mover` | Cache; never expect a re-send unless the thing itself changed |
-| Discrete | on events | `Session`, `EntityStatus`, `PersonState`, `VehicleLook`, `Animal`, `Round`, `Status`, `Exercise`, `BuildingDamage`, `FireSpots`, `GroundMarks`, `OwnUnit`, `PlayerSlot`, `TrafficLights`, `View`, `JoinRequest`, `Leave`, `GizmoView` | No continuous field: a value that moves over time is a start time + target + duration; animate it yourself |
+| Discrete | on events | `Session`, `EntityStatus`, `PersonState`, `VehicleLook`, `Animal`, `Round`, `Status`, `Exercise`, `BuildingDamage`, `GroundDamage`, `FireSpots`, `GroundMarks`, `OwnUnit`, `PlayerSlot`, `TrafficLights`, `View`, `JoinRequest`, `Leave`, `GizmoView` | No continuous field: a value that moves over time is a start time + target + duration; animate it yourself |
 | Continuous | by threshold plus a heartbeat | `EntityState`, `Articulation`, `PersonAim`, `MoverTracks`, `FlameJet`, `ControlFrame`, `GizmoFrame` | Small samples; extrapolate between them |
 | Event | as they happen | `Fire`, `Detonation`, `Effect`, `Impact`, `ManDowned`, `PlayerMessage` | A reader keeps up to 1024 samples |
 
@@ -531,7 +531,7 @@ The wire is standalone, but part of its vocabulary comes from the simulation tha
 
 Today's placed-unit join (no deploy server on the node): only `OfferKindUnit` offers, `Kits` and `Outline` empty.
 
-**Producer-specific extensions, optional for a client:** `TkbType` (its `Json` is tagged by `Schema`, `hrot/1`) and `BuildingDamage` (keyed by the HROT terrain export, `Session.TerrainFormat`). A client that renders another terrain, or does not need the type data, ignores both topics.
+**Producer-specific extensions, optional for a client:** `TkbType` (its `Json` is tagged by `Schema`, `hrot/1`), `BuildingDamage` (keyed by the HROT terrain export, `Session.TerrainFormat`) and `GroundDamage` (craters per ground cell). A client that renders another terrain, or does not need the type data, ignores both topics.
 
 **The old fields stay.** Where a raw number became an enumeration (`ControlFrame.Gait`, `Stance`, `UseVerb`, `OwnUnit.UseVerb`, `ManDowned.BodyPart`, `Articulation.Kind`), the new field is appended and the old one stays equal to it and is superseded. On the way in, a new enumeration that is set wins and a new enumeration at 0 falls back to the old byte, so a client may fill either or both.
 

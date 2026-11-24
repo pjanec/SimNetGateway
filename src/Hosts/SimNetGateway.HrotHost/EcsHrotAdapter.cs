@@ -67,6 +67,7 @@ public sealed class EcsHrotAdapter
     private readonly GroundMarkGather _groundMarks = new();
     private readonly HudGather _hud = new();
     private readonly BuildingDamageGather _buildings = new();
+    private readonly GroundDamageGather _craters = new();
     private readonly TrafficGather _traffic = new();
     private readonly TkbGather _types = new();
     private readonly AnimalGather _animals = new();
@@ -277,6 +278,7 @@ public sealed class EcsHrotAdapter
         _groundMarks.Gather(world, inbound);
         _hud.GatherState(world, inbound);
         _buildings.Gather(world, inbound);
+        _craters.Gather(world, inbound);
         _traffic.Gather(world, inbound, simTime, _types);
         _view.Gather(world, _services.SuggestedView, inbound, simTime);
         _voice.Gather(world, inbound, simTime, _services.Behaviors(), _isReplica);   // what the men shout, report and order (DD-026)
@@ -913,6 +915,7 @@ public sealed class EcsHrotAdapter
         _groundMarks.Clear();
         _hud.Clear();
         _buildings.Clear();
+        _craters.Clear();
         _traffic.Clear();
         _types.Clear();
         _animals.Clear();

@@ -165,6 +165,9 @@ public enum FlockMode : byte { FlockModeUnknown = 0, FlockModeFlying, FlockModeL
 /// <summary>What kind of hole a wall breach is: a Hole is a gap to see or shoot through, a Passage is one to walk through; Unknown = a kind this contract does not name.</summary>
 public enum BreachKind : byte { BreachKindUnknown = 0, BreachKindHole, BreachKindPassage }
 
+/// <summary>A crater's size class (the simulation's: its radius against its large-crater limit); Unknown = a class this contract does not name.</summary>
+public enum CraterKind : byte { CraterKindUnknown = 0, CraterKindSmall = 1, CraterKindLarge = 2 }
+
 /// <summary>What an ambient mover is.</summary>
 public enum MoverKind : byte { MoverKindUnknown = 0, MoverKindCar, MoverKindPedestrian }
 

@@ -53,14 +53,16 @@ public sealed class DpsBuildingOutbound : IGatewayModule
         {
             Building = key,
             Collapsed = m.Collapsed,
+            CollapsedAt = m.CollapsedAt,
             Breaches =
             [
                 .. m.Breaches.Take(MaxBreaches).Select(b => new D.Breach
                 {
                     Panel = b.Panel, From = b.From, To = b.To, Bottom = b.Bottom, Top = b.Top, Kind = LookNames.ByName<D.BreachKind>("BreachKind", b.Kind),
+                    MadeAt = b.MadeAt, Blast = new D.Vec3d { X = b.Blast.X, Y = b.Blast.Y, Z = b.Blast.Z },
                 }),
             ],
-            Windows = [.. m.Windows.Take(MaxWindows).Select(w => new D.WindowDamage { Panel = w.Panel, Opening = w.Opening, Hits = w.Hits, U0 = w.U0, V0 = w.V0, U1 = w.U1, V1 = w.V1 })],
+            Windows = [.. m.Windows.Take(MaxWindows).Select(w => new D.WindowDamage { Panel = w.Panel, Opening = w.Opening, Hits = w.Hits, U0 = w.U0, V0 = w.V0, U1 = w.U1, V1 = w.V1, HitAt = w.HitAt })],
         }));
     }
 }

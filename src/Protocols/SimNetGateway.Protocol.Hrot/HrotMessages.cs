@@ -562,17 +562,33 @@ public readonly record struct HrotAnimal(
 
 // ---- DPS round 2 (DD-018 3.6a): building damage -------------------------------------------------------------------------
 
-/// <summary>One wall breach. <paramref name="Panel"/> is the panel's index WITHIN its building, <paramref name="Kind"/> the NAME of HROT's breach kind (Hole, Passage).</summary>
-public readonly record struct HrotBreach(int Panel, float From, float To, float Bottom, float Top, string Kind);
+/// <summary>
+/// One wall breach. <paramref name="Panel"/> is the panel's index WITHIN its building, <paramref name="Kind"/> the NAME of HROT's breach kind (Hole, Passage).
+/// <paramref name="MadeAt"/> is HROT's own record of when the breach was made or last widened (sim seconds; 0 = loaded from a save), <paramref name="Blast"/> the blast point
+/// that made it (HROT's local frame; meaningless when <paramref name="MadeAt"/> is 0) - copied, never stamped by the gateway (DD-030).
+/// </summary>
+public readonly record struct HrotBreach(int Panel, float From, float To, float Bottom, float Top, string Kind, double MadeAt = 0d, HrotVec3 Blast = default);
 
-/// <summary>One hit window: <paramref name="Panel"/> within the building, hits 1..2 cracked (crack points as bytes 0..255), 3 broken.</summary>
-public readonly record struct HrotWindowDamage(int Panel, int Opening, byte Hits, byte U0, byte V0, byte U1, byte V1);
+/// <summary>One hit window: <paramref name="Panel"/> within the building, hits 1..2 cracked (crack points as bytes 0..255), 3 broken. <paramref name="HitAt"/>: HROT's time of its last hit (sim seconds; 0 = from a save).</summary>
+public readonly record struct HrotWindowDamage(int Panel, int Opening, byte Hits, byte U0, byte V0, byte U1, byte V1, double HitAt = 0d);
 
 /// <summary>
 /// The damage of one building, all of HROT's damage entities of it merged, sent when it changes. <paramref name="Building"/> is the terrain object label
-/// "terrain/building label". Not collapsed and no breaches and no windows = the building has no damage any more (a reload).
+/// "terrain/building label". Not collapsed and no breaches and no windows = the building has no damage any more (a reload). <paramref name="CollapsedAt"/>: HROT's time the
+/// building collapsed (sim seconds; 0 = not collapsed, or collapsed in a loaded save).
 /// </summary>
-public readonly record struct HrotBuildingDamage(string Building, bool Collapsed, IReadOnlyList<HrotBreach> Breaches, IReadOnlyList<HrotWindowDamage> Windows) : IHrotToGatewayMessage;
+public readonly record struct HrotBuildingDamage(string Building, bool Collapsed, IReadOnlyList<HrotBreach> Breaches, IReadOnlyList<HrotWindowDamage> Windows, double CollapsedAt = 0d) : IHrotToGatewayMessage;
+
+/// <summary>
+/// One crater (DD-030): <paramref name="Centre"/> x, y in HROT's local frame and z the BARE ground height under it (0 when the world has no terrain); <paramref name="Kind"/> the NAME
+/// of HROT's crater kind (Small, Large); <paramref name="BornAt"/> sim seconds (0 = from a save).
+/// </summary>
+public readonly record struct HrotCrater(HrotVec3 Centre, float Radius, float Depth, float Rim, double BornAt, string Kind);
+
+/// <summary>
+/// The craters of one HROT ground cell (64 m), sent when they change (DD-030). <paramref name="Cell"/> is "&lt;cellX&gt;,&lt;cellY&gt;". No craters = the cell has none any more (a reload).
+/// </summary>
+public readonly record struct HrotGroundDamage(string Cell, IReadOnlyList<HrotCrater> Craters) : IHrotToGatewayMessage;
 
 // ---- DPS round 2 (DD-018 3.6b): ambient traffic -----------------------------------------------------------------------
 
