@@ -47,7 +47,8 @@ internal sealed class CloudGather
 
         ref readonly var cloud = ref world.GetComponentRO<AreaEffectCloud>(e);
         var at = world.GetComponentRO<SimTransform>(e).Position;
-        var wind = SitsOnItsSource(world, in cloud) ? Vector2.Zero : AreaEffectClouds.DriftWind(world, at, cloud.Height);
+        var wind = AreaEffectClouds.SitsOnSource(world, in cloud) ? Vector2.Zero   // HROT's one rule (CE-11056)
+            : AreaEffectClouds.DriftWind(world, at, cloud.Height);
         var now = new HrotCloud(id, KindOf(cloud.Kind), simTime, new HrotVec3(at.X, at.Y, at.Z), new HrotVec3(wind.X, wind.Y, 0d), cloud.Radius, cloud.Height, cloud.SightTransmittance,
             cloud.BornAtSimSeconds.Seconds, cloud.Seconds.Seconds);
         if (_sent.TryGetValue(id, out var sent))
@@ -109,25 +110,4 @@ internal sealed class CloudGather
         CloudKind.Smoke => HrotCloudKind.Smoke,
         _ => HrotCloudKind.None,
     };
-
-    /// <summary>
-    /// Whether the cloud still sits on its venting canister (so HROT does not drift it): the read-only half of <c>AreaEffectCloudSystem.SitsOnItsSource</c> (the system also clears the field once the source is
-    /// known gone; the gateway only reads). A source that resolves holds it; one not yet seen here holds it too, unless this world has no entity map at all.
-    /// </summary>
-    private static bool SitsOnItsSource(EntityRepository world, in AreaEffectCloud cloud)
-    {
-        int source = cloud.SourceNetworkId;
-        if (source <= 0)
-        {
-            return false;
-        }
-
-        if (!Fdp.Toolkit.Replication.Services.NetworkIdResolver.ResolveNetworkId(world, source).IsNull)
-        {
-            return true;
-        }
-
-        bool mapless = !world.HasSingletonManaged<Fdp.Toolkit.Replication.Services.NetworkEntityMap>();
-        return !mapless && !Fdp.Toolkit.Replication.Services.NetworkIdResolver.IsKnownDeadAnchor(world, source);
-    }
 }
