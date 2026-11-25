@@ -420,21 +420,24 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
 
     /// <summary>
     /// The verb of a frame as HROT's brain reads it: the POSITION in the list <c>OperatorUseActions.For</c> offers for the frame's target (DD-029 / T-071). A named verb
-    /// (<c>ControlFrame.Verb</c>, DD-020 3.3) is the position of its first entry in <paramref name="offered"/>; one the list does not hold, or a name HROT has no such verb for,
+    /// (<c>ControlFrame.Verb</c>, DD-020 3.3) is the position of its first entry in <paramref name="offered"/>; one the list does not hold, or a verb HROT has no such member for,
     /// is <see cref="NotOffered"/> (the brain refuses it with its own reason; a client never gets a different action than it asked for). No name (None) = the old byte,
     /// which is a raw index (0 = the primary).
     /// </summary>
     internal static byte UseVerbIndexOf(in PlayerControl frame, ReadOnlySpan<UseAction> offered)
     {
-        if (string.IsNullOrEmpty(frame.UseVerbName))
+        if (frame.Verb == HrotUseVerb.None)
         {
             return frame.UseVerb;
         }
 
-        if (!Enum.TryParse<UseVerbKind>(frame.UseVerbName, out var verb) || !Enum.IsDefined(verb) || verb.ToString() != frame.UseVerbName)
+        // the pivot verb into HROT's by member name (a table built once, 0 B); one HROT has no member for is not another verb
+        if (!HrotEnum<UseVerbKind>.Has(frame.Verb))
         {
             return NotOffered;
         }
+
+        var verb = HrotEnum<UseVerbKind>.Of(frame.Verb);
 
         for (int i = 0; i < offered.Length; i++)
         {
@@ -450,7 +453,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
     /// <summary>The frame's verb as an index into the list HROT offers for its target: the list is computed only when the frame names a verb.</summary>
     private byte ResolveVerb(in PlayerControl frame)
     {
-        if (string.IsNullOrEmpty(frame.UseVerbName))
+        if (frame.Verb == HrotUseVerb.None)
         {
             return frame.UseVerb;
         }

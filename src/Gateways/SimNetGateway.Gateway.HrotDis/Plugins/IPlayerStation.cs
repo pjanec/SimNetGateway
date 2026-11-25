@@ -143,9 +143,9 @@ public readonly record struct PlayerUnitStatus(
 /// One control frame; the fields of the product's operator control frame. <see cref="Seq"/> grows (the newest wins); the press counters
 /// (<see cref="ShotSeq"/>, <see cref="CancelSeq"/>, <see cref="AmmoSeq"/>, <see cref="UseSeq"/>) are passed through unchanged. <see cref="Lean"/> is 0 none,
 /// 1 left, 2 right; <see cref="Stance"/> is the wanted stance + 1 (0 = no request).
-/// <see cref="UseVerbName"/> is the NAME of HROT's use verb the client asked for (empty = use the number <see cref="UseVerb"/>); the host maps a known name to the verb and ignores an unknown one (DD-020 3.3).
+/// <see cref="Verb"/> is the use verb the client asked for as the pivot's enum (None = use the number <see cref="UseVerb"/>); the host maps it to HROT's verb by member name and answers NotOffered for one HROT has no such verb for (DD-020 3.3, T-081).
 /// </summary>
 public readonly record struct PlayerControl(
     uint Seq, float Forward, float Lateral, float Steer, float Yaw, float Vertical, byte Gait, bool Trigger, byte Mount, HrotVec3 AimPoint, byte Stance,
     byte ShotSeq, byte CancelSeq, byte AmmoSeq, int ShotTarget, byte UseSeq, byte UseVerb, int UseTarget, float Lean, bool Binoculars, HrotVec3 LookFrom,
-    HrotVec3 LookDir, byte FirePref, string UseVerbName = "");
+    HrotVec3 LookDir, byte FirePref, HrotUseVerb Verb = HrotUseVerb.None);

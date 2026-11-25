@@ -250,17 +250,41 @@ internal sealed class DpsPlayerSlot
 
     private static string Cut(string? s, int max) => s is null ? string.Empty : s.Length <= max ? s : s[..max];
 
-    // everything but the time to impact, which counts down: it only matters when it moved by a second (the client counts down from the sample it has)
-    private static bool SameUnit(in D.OwnUnit a, in D.OwnUnit b) =>
-        a.UnitId == b.UnitId && a.Health == b.Health && a.MaxHealth == b.MaxHealth && a.ActiveSlot == b.ActiveSlot && a.CanUse == b.CanUse && a.UseVerb == b.UseVerb && a.Verb == b.Verb
-        && a.UseTargetId == b.UseTargetId && a.UseLabel == b.UseLabel && a.FireMode == b.FireMode && a.UseSeq == b.UseSeq && a.UseOutcome == b.UseOutcome
-        && a.UseReason == b.UseReason && a.SpreadRad == b.SpreadRad && a.RadarWarning == b.RadarWarning && a.RadarBearingDeg == b.RadarBearingDeg
-        && a.MissileLaunch == b.MissileLaunch && a.MissileBearingDeg == b.MissileBearingDeg && a.MissileSeeker == b.MissileSeeker
-        && MathF.Abs(a.MissileTimeToImpactS - b.MissileTimeToImpactS) < MissileRefreshS
-        && a.Ammo.Count == b.Ammo.Count && a.Actions.Count == b.Actions.Count
-        && a.Actions.Zip(b.Actions).All(p => p.First.Verb == p.Second.Verb && p.First.Label == p.Second.Label && p.First.Available == p.Second.Available
-            && p.First.Reason == p.Second.Reason && p.First.HoldOnly == p.Second.HoldOnly)
-        && a.Ammo.Zip(b.Ammo).All(p => p.First.Slot == p.Second.Slot && p.First.Rounds == p.Second.Rounds && p.First.AmmoType == p.Second.AmmoType && p.First.Weapon == p.Second.Weapon
-            && p.First.AmmoTypeId == p.Second.AmmoTypeId && p.First.Max == p.Second.Max && p.First.Magazine == p.Second.Magazine && p.First.LoadedRounds == p.Second.LoadedRounds
-            && p.First.Busy == p.Second.Busy && p.First.Overheated == p.Second.Overheated && p.First.HeatPercent == p.Second.HeatPercent);
+    // everything but the time to impact, which counts down: it only matters when it moved by a second (the client counts down from the sample it has).
+    // Index loops, no LINQ and no enumerator (T-081: 0 B).
+    internal static bool SameUnit(in D.OwnUnit a, in D.OwnUnit b)
+    {
+        if (!(a.UnitId == b.UnitId && a.Health == b.Health && a.MaxHealth == b.MaxHealth && a.ActiveSlot == b.ActiveSlot && a.CanUse == b.CanUse && a.UseVerb == b.UseVerb && a.Verb == b.Verb
+            && a.UseTargetId == b.UseTargetId && a.UseLabel == b.UseLabel && a.FireMode == b.FireMode && a.UseSeq == b.UseSeq && a.UseOutcome == b.UseOutcome
+            && a.UseReason == b.UseReason && a.SpreadRad == b.SpreadRad && a.RadarWarning == b.RadarWarning && a.RadarBearingDeg == b.RadarBearingDeg
+            && a.MissileLaunch == b.MissileLaunch && a.MissileBearingDeg == b.MissileBearingDeg && a.MissileSeeker == b.MissileSeeker
+            && MathF.Abs(a.MissileTimeToImpactS - b.MissileTimeToImpactS) < MissileRefreshS
+            && a.Ammo.Count == b.Ammo.Count && a.Actions.Count == b.Actions.Count))
+        {
+            return false;
+        }
+
+        for (int i = 0; i < a.Actions.Count; i++)
+        {
+            var x = a.Actions[i];
+            var y = b.Actions[i];
+            if (x.Verb != y.Verb || x.Label != y.Label || x.Available != y.Available || x.Reason != y.Reason || x.HoldOnly != y.HoldOnly)
+            {
+                return false;
+            }
+        }
+
+        for (int i = 0; i < a.Ammo.Count; i++)
+        {
+            var x = a.Ammo[i];
+            var y = b.Ammo[i];
+            if (x.Slot != y.Slot || x.Rounds != y.Rounds || x.AmmoType != y.AmmoType || x.Weapon != y.Weapon || x.AmmoTypeId != y.AmmoTypeId || x.Max != y.Max || x.Magazine != y.Magazine
+                || x.LoadedRounds != y.LoadedRounds || x.Busy != y.Busy || x.Overheated != y.Overheated || x.HeatPercent != y.HeatPercent)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }

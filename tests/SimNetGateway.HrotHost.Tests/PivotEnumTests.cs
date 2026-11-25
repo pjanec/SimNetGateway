@@ -122,4 +122,53 @@ public class PivotEnumTests
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.True(allocated == 0L, $"{allocated} B");
     }
+
+    private static object Reverse(Type hrot, Type pivot, object value) =>
+        typeof(HrotEnum<>).MakeGenericType(hrot).GetMethod("Of")!.MakeGenericMethod(pivot).Invoke(null, [value])!;
+
+    /// <summary>T-081: the reverse mapper, pivot to HROT BY NAME, inverts the forward one: a pivot member reached by a HROT member goes back to a HROT member that maps to it (the same-named one when there is one), and one HROT has no member for is not found.</summary>
+    [Fact]
+    public void The_reverse_mapper_inverts_the_forward_one_by_name()
+    {
+        var hasMethod = typeof(HrotEnum<>);
+        foreach (var (hrot, pivot) in Pairs)
+        {
+            foreach (var value in Enum.GetValues(pivot))
+            {
+                string name = value.ToString()!;
+                var back = Reverse(hrot, pivot, value);
+                bool has = (bool)hasMethod.MakeGenericType(hrot).GetMethod("Has")!.MakeGenericMethod(pivot).Invoke(null, [value])!;
+                var sources = Enum.GetValues(hrot).Cast<object>().Where(h => Map(hrot, pivot, h).ToString() == name && !(Equals(Map(hrot, pivot, h), Enum.ToObject(pivot, 0)) && h.ToString() != name)).ToList();
+                Assert.Equal(sources.Count > 0, has);
+                if (has)
+                {
+                    Assert.Contains(back, sources);
+                    Assert.Equal(name, Map(hrot, pivot, back).ToString());   // there and back is the identity on the pivot
+                    if (sources.Any(h => h.ToString() == name))
+                    {
+                        Assert.Equal(name, back.ToString());   // a same-named member always wins over a renamed one
+                    }
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void A_reverse_lookup_allocates_nothing()
+    {
+        PivotEnum<HrotUseVerb>.Of(Fdp.Toolkit.Behavior.Possession.UseVerbKind.Board);
+        HrotEnum<Fdp.Toolkit.Behavior.Possession.UseVerbKind>.Of(HrotUseVerb.Board);
+        HrotEnum<Fdp.Toolkit.Behavior.Possession.UseVerbKind>.Has(HrotUseVerb.Board);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 1000; i++)
+        {
+            HrotEnum<Fdp.Toolkit.Behavior.Possession.UseVerbKind>.Of(HrotUseVerb.Board);
+            HrotEnum<Fdp.Toolkit.Behavior.Possession.UseVerbKind>.Has(HrotUseVerb.Drop);
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.True(allocated == 0L, $"{allocated} B");
+        Assert.Equal(Fdp.Toolkit.Behavior.Possession.UseVerbKind.Board, HrotEnum<Fdp.Toolkit.Behavior.Possession.UseVerbKind>.Of(HrotUseVerb.Board));
+        Assert.False(HrotEnum<Fdp.Toolkit.Behavior.Possession.UseVerbKind>.Has((HrotUseVerb)200));
+    }
 }

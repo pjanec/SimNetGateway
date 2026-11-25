@@ -259,4 +259,48 @@ public class DpsHudTests
         Assert.Equal(D.SideOutcome.SideOutcomeNone, e.Neutral.Outcome);   // an outcome HROT appends later: not a different one
     }
 
+
+    /// <summary>T-081: the change check of the own unit (index loops, no LINQ) is equal for equal values, unequal for a change in any one verb / label / ammo field, and allocates nothing.</summary>
+    [Fact]
+    public void The_own_unit_compare_sees_every_field_and_allocates_nothing()
+    {
+        static D.OwnUnit Make() => new()
+        {
+            UnitId = 7, Health = 80f, UseLabel = "Drive",
+            Actions = [new D.UseActionEntry { Verb = D.UseVerb.UseVerbDrive, Label = "Drive BMP-2", Available = true }, new D.UseActionEntry { Verb = D.UseVerb.UseVerbBoard, Label = "Board", Available = true }],
+            Ammo = [new D.AmmoEntry { Slot = 1, Weapon = "AK", AmmoType = "5.45", Rounds = 30, Max = 90 }, new D.AmmoEntry { Slot = 2, Weapon = "PK", AmmoType = "7.62", Rounds = 100, Max = 200 }],
+        };
+
+        var a = Make();
+        var b = Make();
+        Assert.True(DpsPlayerSlot.SameUnit(in a, in b));
+        for (int field = 0; field < 4; field++)
+        {
+            b = Make();
+            var act = b.Actions[1];
+            var ammo0 = b.Ammo[0];
+            var ammo1 = b.Ammo[1];
+            switch (field)
+            {
+                case 0: act.Verb = D.UseVerb.UseVerbMan; b.Actions[1] = act; break;
+                case 1: act.Label = "Board it"; b.Actions[1] = act; break;
+                case 2: ammo1.Rounds = 99; b.Ammo[1] = ammo1; break;
+                default: ammo0.Weapon = "AKM"; b.Ammo[0] = ammo0; break;
+            }
+
+            Assert.False(DpsPlayerSlot.SameUnit(in a, in b), $"field {field}");
+        }
+
+        b = Make();
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        bool same = true;
+        for (int i = 0; i < 1000; i++)
+        {
+            same &= DpsPlayerSlot.SameUnit(in a, in b);
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.True(same);
+        Assert.True(allocated == 0L, $"{allocated} B");
+    }
 }

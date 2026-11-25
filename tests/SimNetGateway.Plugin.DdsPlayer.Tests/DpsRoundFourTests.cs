@@ -209,8 +209,8 @@ public class DpsRoundFourTests
     public void The_use_verb_rule_names_the_new_verb_and_keeps_the_old_byte_for_the_fallback()
     {
         var named = DpsInbound.ToControl(new D.ControlFrame { Verb = D.UseVerb.UseVerbBreachDoor, UseVerb = 2 });
-        Assert.Equal(("BreachDoor", (byte)2), (named.UseVerbName, named.UseVerb));
+        Assert.Equal((HrotUseVerb.BreachDoor, (byte)2), (named.Verb, named.UseVerb));
         var old = DpsInbound.ToControl(new D.ControlFrame { UseVerb = 4 });
-        Assert.Equal(("", (byte)4), (old.UseVerbName, old.UseVerb));
+        Assert.Equal((HrotUseVerb.None, (byte)4), (old.Verb, old.UseVerb));
     }
 }

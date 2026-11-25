@@ -311,12 +311,12 @@ internal sealed class DpsInbound : IDisposable
     /// <summary>
     /// The one rule for the control frame's old and new fields (DD-020 3.3): a new enumeration that is set (not 0) wins, one that is 0 falls back to the old byte, so a client
     /// that fills only the old bytes (or only the new enumerations) works. The new gait and stance are written as the numbers the simulation takes (walk 1, run 0; stance + 1);
-    /// the use verb crosses as its name, the host maps it.
+    /// the use verb crosses as the pivot enum (T-081), the host maps it by member name.
     /// </summary>
     internal static PlayerControl ToControl(in D.ControlFrame f) => new(
         f.Seq, f.Forward, f.Lateral, f.Steer, f.Yaw, f.Vertical, GaitOf(in f), f.Trigger != 0, f.Mount, new HrotVec3(f.AimPoint.X, f.AimPoint.Y, f.AimPoint.Z), StanceOf(in f),
         f.ShotSeq, f.CancelSeq, f.AmmoSeq, f.ShotTarget, f.UseSeq, f.UseVerb, f.UseTarget, f.Lean, f.Binoculars != 0, new HrotVec3(f.LookFrom.X, f.LookFrom.Y, f.LookFrom.Z),
-        new HrotVec3(f.LookDir.X, f.LookDir.Y, f.LookDir.Z), f.FirePref, VerbNameOf(in f));
+        new HrotVec3(f.LookDir.X, f.LookDir.Y, f.LookDir.Z), f.FirePref, VerbOf(in f));
 
     private static byte GaitOf(in D.ControlFrame f) => f.GaitMode switch
     {
@@ -333,8 +333,9 @@ internal sealed class DpsInbound : IDisposable
         _ => f.Stance,
     };
 
-    private static string VerbNameOf(in D.ControlFrame f) =>
-        f.Verb == D.UseVerb.UseVerbNone || !Enum.IsDefined(f.Verb) ? string.Empty : f.Verb.ToString()["UseVerb".Length..];
+    /// <summary>The verb the frame names as the pivot's enum (T-081: a cast, the pivot mirrors the DPS enum member for member); a value the contract does not define falls back to the old byte, like None.</summary>
+    private static HrotUseVerb VerbOf(in D.ControlFrame f) =>
+        Enum.IsDefined(f.Verb) ? (HrotUseVerb)(byte)f.Verb : HrotUseVerb.None;
 
     public void Dispose()
     {

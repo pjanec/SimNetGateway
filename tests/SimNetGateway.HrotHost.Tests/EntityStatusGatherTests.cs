@@ -152,7 +152,7 @@ public class EntityStatusGatherTests
         }
     }
 
-    private static HrotEntityStatus StatusOf(Capture c, int id) => Assert.Single(c.Of<HrotEntityStatus>().Where(s => s.Id == id));
+    private static HrotEntityStatus StatusOf(Capture c, int id) => Assert.Single(c.Of<HrotEntityStatus>(), s => s.Id == id);
 
     private static string Wire(Stage h, long type, ForceId side)
     {
@@ -426,7 +426,7 @@ public class EntityStatusGatherTests
         Assert.Equal((string.Empty, string.Empty), (noRegistry.Behaviour, noRegistry.Task));
 
         h.Registry();
-        var noState = h.AddMan(2020);   // a registry but no BehaviorState
+        _ = h.AddMan(2020);   // a registry but no BehaviorState
         var hashZero = h.AddMan(2021);
         h.SetThink(hashZero, 0, BehaviorOrigin.Superior);
         var unknown = h.AddMan(2022);
@@ -440,7 +440,6 @@ public class EntityStatusGatherTests
 
         var back = StatusOf(c, Man);   // the registry arrived (after composition): the names appear, sent once
         Assert.Equal(("Patrol", "Patrol"), (back.Behaviour, back.Task));
-        Assert.NotNull(noState);
     }
 
     [Fact]

@@ -249,7 +249,7 @@ public class DpsIntentRateTests(ITestOutputHelper output)
     [InlineData(5)]
     public void A_use_verb_name_resolves_to_its_position_in_the_offered_list_and_the_number_is_a_raw_index(int seed)
     {
-        PlayerControl Frame(byte verb, string name) => new(1, 0, 0, 0, 0, 0, 0, false, 0, default, 0, 0, 0, 0, 0, 1, verb, 0, 0, false, default, default, 0, name);
+        PlayerControl Frame(byte verb, HrotUseVerb named) => new(1, 0, 0, 0, 0, 0, 0, false, 0, default, 0, 0, 0, 0, 0, 1, verb, 0, 0, false, default, default, 0, named);
         var kinds = Enum.GetValues<Fdp.Toolkit.Behavior.Possession.UseVerbKind>().Where(k => k != Fdp.Toolkit.Behavior.Possession.UseVerbKind.NoVerb).ToArray();
         var rng = new Random(seed);
         for (int round = 0; round < 200; round++)
@@ -263,7 +263,7 @@ public class DpsIntentRateTests(ITestOutputHelper output)
 
             foreach (var kind in kinds)
             {
-                byte got = HrotPlayerStation.UseVerbIndexOf(Frame((byte)rng.Next(0, 8), kind.ToString()), list);
+                byte got = HrotPlayerStation.UseVerbIndexOf(Frame((byte)rng.Next(0, 8), PivotEnum<HrotUseVerb>.Of(kind)), list);
                 int first = Array.FindIndex(list, a => a.Verb == kind);
                 Assert.Equal(first < 0 ? HrotPlayerStation.NotOffered : (byte)first, got);
                 if (first >= 0)
@@ -273,10 +273,61 @@ public class DpsIntentRateTests(ITestOutputHelper output)
             }
 
             byte raw = (byte)rng.Next(0, 8);
-            Assert.Equal(raw, HrotPlayerStation.UseVerbIndexOf(Frame(raw, string.Empty), list));   // None: the old byte, a raw index (0 = the primary)
-            Assert.Equal(HrotPlayerStation.NotOffered, HrotPlayerStation.UseVerbIndexOf(Frame(raw, "Levitate"), list));   // a verb HROT does not have is not another verb
-            Assert.Equal(HrotPlayerStation.NotOffered, HrotPlayerStation.UseVerbIndexOf(Frame(raw, "5"), list));   // a number is not a name
+            Assert.Equal(raw, HrotPlayerStation.UseVerbIndexOf(Frame(raw, HrotUseVerb.None), list));   // None: the old byte, a raw index (0 = the primary)
+            Assert.Equal(HrotPlayerStation.NotOffered, HrotPlayerStation.UseVerbIndexOf(Frame(raw, (HrotUseVerb)200), list));   // a verb HROT does not have is not another verb
         }
+    }
+
+    /// <summary>T-081: every DPS <c>UseVerb</c> member crosses DpsInbound as the pivot verb and reaches HROT as the same-named <c>UseVerbKind</c> (found at its position in an offered list that holds it); None keeps the raw index.</summary>
+    [Fact]
+    public void Every_dps_use_verb_maps_to_the_same_named_hrot_verb_or_is_not_offered()
+    {
+        var hrotKinds = Enum.GetValues<Fdp.Toolkit.Behavior.Possession.UseVerbKind>().ToDictionary(k => k.ToString());
+        foreach (var dps in Enum.GetValues<SimNetGateway.Protocol.DdsPlayer.UseVerb>())
+        {
+            var frame = DpsInbound.ToControl(new SimNetGateway.Protocol.DdsPlayer.ControlFrame { Verb = dps, UseVerb = 9 });
+            string name = dps.ToString()["UseVerb".Length..];
+            Assert.Equal(name, frame.Verb.ToString());
+            if (dps == SimNetGateway.Protocol.DdsPlayer.UseVerb.UseVerbNone)
+            {
+                Assert.Equal((byte)9, HrotPlayerStation.UseVerbIndexOf(in frame, ReadOnlySpan<Fdp.Toolkit.Behavior.Possession.UseAction>.Empty));
+                continue;
+            }
+
+            var offered = new Fdp.Toolkit.Behavior.Possession.UseAction[1];
+            if (hrotKinds.TryGetValue(name, out var kind))
+            {
+                Assert.Equal(kind, HrotEnum<Fdp.Toolkit.Behavior.Possession.UseVerbKind>.Of(frame.Verb));
+                offered[0] = new Fdp.Toolkit.Behavior.Possession.UseAction(kind, "x", 0, true, Fdp.Toolkit.Behavior.Possession.UseReason.Ok, default, 0f);
+                Assert.Equal((byte)0, HrotPlayerStation.UseVerbIndexOf(in frame, offered));
+            }
+            else
+            {
+                Assert.Equal(HrotPlayerStation.NotOffered, HrotPlayerStation.UseVerbIndexOf(in frame, offered));   // HROT lacks the verb: not another one
+            }
+        }
+    }
+
+    /// <summary>T-081: a steady control frame that names a verb (DpsInbound.ToControl, then the name resolved against an offered list) allocates nothing.</summary>
+    [Fact]
+    public void A_steady_control_frame_with_a_named_verb_allocates_nothing()
+    {
+        var wire = new SimNetGateway.Protocol.DdsPlayer.ControlFrame { Seq = 1, Verb = SimNetGateway.Protocol.DdsPlayer.UseVerb.UseVerbBoard, UseVerb = 3 };
+        var offered = new Fdp.Toolkit.Behavior.Possession.UseAction[2];
+        offered[0] = new Fdp.Toolkit.Behavior.Possession.UseAction(Fdp.Toolkit.Behavior.Possession.UseVerbKind.Drive, "x", 0, true, Fdp.Toolkit.Behavior.Possession.UseReason.Ok, default, 0f);
+        offered[1] = new Fdp.Toolkit.Behavior.Possession.UseAction(Fdp.Toolkit.Behavior.Possession.UseVerbKind.Board, "x", 0, true, Fdp.Toolkit.Behavior.Possession.UseReason.Ok, default, 0f);
+        Assert.Equal((byte)1, HrotPlayerStation.UseVerbIndexOf(DpsInbound.ToControl(in wire), offered));   // warm up: the tables are built here
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        byte sum = 0;
+        for (int i = 0; i < 1000; i++)
+        {
+            var frame = DpsInbound.ToControl(in wire);
+            sum += HrotPlayerStation.UseVerbIndexOf(in frame, offered);
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(unchecked((byte)1000), sum);
+        Assert.True(allocated == 0L, $"{allocated} B");
     }
 
     [Fact]

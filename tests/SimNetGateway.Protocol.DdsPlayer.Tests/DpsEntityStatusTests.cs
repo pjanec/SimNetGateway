@@ -81,12 +81,13 @@ public class DpsEntityStatusTests
     public void The_committed_idl_declares_the_topic_and_its_enumeration()
     {
         string root = AppContext.BaseDirectory;
-        string dir = root;
+        string? dir = root;
         while (dir is not null && !Directory.Exists(Path.Combine(dir, "docs", "clients", "idl")))
         {
-            dir = Path.GetDirectoryName(dir)!;
+            dir = Path.GetDirectoryName(dir);
         }
 
+        Assert.NotNull(dir);
         string topics = File.ReadAllText(Path.Combine(dir, "docs", "clients", "idl", "DpsTopics.idl"));
         string types = File.ReadAllText(Path.Combine(dir, "docs", "clients", "idl", "DpsTypes.idl"));
         Assert.Contains("struct EntityStatus {", topics);

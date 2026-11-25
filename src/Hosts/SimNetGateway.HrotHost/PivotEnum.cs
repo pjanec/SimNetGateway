@@ -56,6 +56,87 @@ internal static class PivotEnum<TPivot>
     }
 }
 
+/// <summary>
+/// T-081: the reverse of <see cref="PivotEnum{TPivot}"/>, the pivot's enum into HROT's BY NAME (the client to HROT direction), through a table built ONCE (an array read: 0 B). It uses the same
+/// <see cref="PivotEnums.Renames"/> list inverted: the HROT member whose name IS the pivot member's wins, else the first HROT member (lowest value) a rename row points at the pivot member (several HROT
+/// members may share one pivot member, e.g. Tracer / Flare / Chaff to Omitted). A pivot member HROT has no member for (and a value no member has) is HROT's value 0 - callers that must tell it from a real
+/// value 0 check <see cref="Has"/>.
+/// </summary>
+internal static class HrotEnum<THrot>
+    where THrot : struct, Enum
+{
+    /// <summary>The HROT member of the pivot value <paramref name="value"/> (HROT's value 0 when HROT has none).</summary>
+    public static THrot Of<TPivot>(TPivot value)
+        where TPivot : struct, Enum
+    {
+        var table = Cache<TPivot>.Table;
+        int index = Unsafe.SizeOf<TPivot>() switch
+        {
+            1 => Unsafe.As<TPivot, byte>(ref value),
+            2 => Unsafe.As<TPivot, short>(ref value),
+            _ => Unsafe.As<TPivot, int>(ref value),
+        };
+        return (uint)index < (uint)table.Length ? table[index].Value : default;
+    }
+
+    /// <summary>Whether HROT has a member for the pivot value <paramref name="value"/>.</summary>
+    public static bool Has<TPivot>(TPivot value)
+        where TPivot : struct, Enum
+    {
+        var table = Cache<TPivot>.Table;
+        int index = Unsafe.SizeOf<TPivot>() switch
+        {
+            1 => Unsafe.As<TPivot, byte>(ref value),
+            2 => Unsafe.As<TPivot, short>(ref value),
+            _ => Unsafe.As<TPivot, int>(ref value),
+        };
+        return (uint)index < (uint)table.Length && table[index].Found;
+    }
+
+    private static class Cache<TPivot>
+        where TPivot : struct, Enum
+    {
+        public static readonly (THrot Value, bool Found)[] Table = Build();
+
+        private static (THrot, bool)[] Build()
+        {
+            var pivotValues = Enum.GetValues<TPivot>();
+            int max = 0;
+            foreach (var v in pivotValues)
+            {
+                max = Math.Max(max, Convert.ToInt32(v));
+            }
+
+            var table = new (THrot, bool)[max + 1];
+            var exact = new bool[max + 1];
+            foreach (var h in Enum.GetValues<THrot>())
+            {
+                string name = h.ToString();
+                bool renamed = PivotEnums.Renames.TryGetValue((typeof(TPivot), name), out var target);
+                string mapped = renamed ? target! : name;
+                if (!Enum.TryParse<TPivot>(mapped, out var p) || !Enum.IsDefined(p) || p.ToString() != mapped)
+                {
+                    continue;
+                }
+
+                int at = Convert.ToInt32(p);
+                // a same-named member always wins; a renamed one only fills a slot nothing has taken (lowest HROT value first, as Enum.GetValues orders)
+                if (!renamed)
+                {
+                    table[at] = (h, true);
+                    exact[at] = true;
+                }
+                else if (!table[at].Item2)
+                {
+                    table[at] = (h, true);
+                }
+            }
+
+            return table;
+        }
+    }
+}
+
 /// <summary>The places where HROT's member name and the contract's differ, and the pivot enums whose unknown value is not their value 0.</summary>
 internal static class PivotEnums
 {
