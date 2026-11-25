@@ -515,14 +515,29 @@ public sealed class DpsTransport : IDisposable
             return;
         }
 
-        foreach (var (id, entity) in _entities.ToArray())
+        ResendChangedPlayable();
+    }
+
+    /// <summary>Resends every entity whose Playable flag no longer matches the offered set (T-082: no copy of the dictionary; 0 B when nothing differs).</summary>
+    internal void ResendChangedPlayable()
+    {
+        // T-082: the entities to resend are collected into a reused buffer first (Send may reach the observer, which changes _entities), no copy of the dictionary per Pump
+        _resendBuffer.Clear();
+        foreach (var pair in _entities)
         {
-            if (entity.Playable != IsOffered(id))
+            if (pair.Value.Playable != IsOffered(pair.Key))
             {
-                EntityTopic.Send(new DpsItem<Entity>(entity));
+                _resendBuffer.Add(pair.Value);
             }
         }
+
+        for (int i = 0; i < _resendBuffer.Count; i++)
+        {
+            EntityTopic.Send(new DpsItem<Entity>(_resendBuffer[i]));
+        }
     }
+
+    private readonly List<Entity> _resendBuffer = new();
 
     /// <summary>
     /// Rebuilds the set of offerable units - the union of every seat's offers (the seats share one world, so it is one list for all of them, D-8) - and says whether it differs from the

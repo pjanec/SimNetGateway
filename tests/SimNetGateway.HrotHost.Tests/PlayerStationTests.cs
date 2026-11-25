@@ -388,6 +388,43 @@ public class PlayerStationTests
         Assert.Equal((byte)2, Assert.Single(h.Events<OperatorControlFrameEvent>()).UseSeq);   // and only once
     }
 
+    /// <summary>
+    /// T-082: the station's step REBUILDS the offers every frame (a reused buffer, an insertion sort, an index-loop compare, slot names turned into strings once): a steady frame with several playable units allocates
+    /// nothing, the offers come out sorted by unit id and equal to the ones before, and a change (a unit added, one removed) is seen at once.
+    /// </summary>
+    [Fact]
+    public void The_offers_are_rebuilt_every_step_sorted_without_allocating_and_a_change_is_seen()
+    {
+        using var h = new Stage();
+        h.AddPlayable(Unit + 5, slot: "Gunner");
+        h.AddPlayable(Unit + 2, side: ForceId.Hostile);
+        var third = h.AddPlayable(Unit + 9, slot: "");
+        h.Station.Frame(h.World, true, false);
+        Assert.Equal(new[] { Unit + 2, Unit + 5, Unit + 9 }, h.Station.Offers.Select(o => o.UnitId));
+        Assert.Equal(new[] { 2, 1, 1 }, h.Station.Offers.Select(o => o.Force));
+        Assert.Equal(new string?[] { "Rifleman", "Gunner", null }, h.Station.Offers.Select(o => o.Role));
+        var before0 = h.Station.Offers[0];
+        for (int i = 0; i < 20; i++)
+        {
+            h.Station.Frame(h.World, true, false);
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 300; i++)
+        {
+            h.Station.Frame(h.World, true, false);
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.True(allocated == 0L, $"{allocated} B per 300 steady frames");
+        Assert.Equal(before0, h.Station.Offers[0]);
+
+        h.World.DestroyEntity(third);
+        h.AddPlayable(Unit + 1);
+        h.Station.Frame(h.World, true, false);
+        Assert.Equal(new[] { Unit + 1, Unit + 2, Unit + 5 }, h.Station.Offers.Select(o => o.UnitId));
+    }
+
     /// <summary>T-071: a press that NAMES its verb (ControlFrame.Verb) reaches HROT as that verb's position in the offered list; naming Drive arms the hand-over exactly like the index does.</summary>
     [Fact]
     public void A_drive_press_by_name_arms_the_hand_over_and_reaches_hrot_as_the_verbs_position()

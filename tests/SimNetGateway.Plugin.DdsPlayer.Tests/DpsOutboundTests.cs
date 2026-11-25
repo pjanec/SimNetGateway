@@ -259,6 +259,38 @@ public class DpsOutboundTests
         Assert.True(watch.Until(w => !w.Alive["1201"].Playable && w.Alive["1202"].Playable));
     }
 
+    /// <summary>T-082: checking the held entities against the offered set (no copy of the dictionary) allocates nothing when no Playable flag differs, and still resends exactly the ones that do.</summary>
+    [Fact]
+    public void Checking_the_playable_flags_allocates_nothing_and_resends_only_the_changed()
+    {
+        uint domain = NewDomain();
+        var station = new FakeStation();
+        station.OfferList.Add(new PlayerOffer(1201, "Rifleman", 1));
+        using var watch = new Watch<D.Entity>(domain, "station-1", e => Id(e.EntityId));
+        using var rig = new Rig(domain, station: station);
+        for (int id = 1201; id < 1221; id++)
+        {
+            rig.Send(State(id, dis: PersonDis));
+        }
+
+        Assert.True(watch.Until(w => w.Alive.Count == 20));
+        rig.Transport.RefreshPlayable();
+        rig.Transport.ResendChangedPlayable();   // warm up
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 1000; i++)
+        {
+            rig.Transport.ResendChangedPlayable();
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.True(allocated == 0L, $"{allocated} B");
+
+        station.OfferList.Clear();
+        station.OfferList.Add(new PlayerOffer(1205, "Sniper", 1));
+        rig.Step();
+        Assert.True(watch.Until(w => !w.Alive["1201"].Playable && w.Alive["1205"].Playable));
+    }
+
     /// <summary>T-053: a role or a spawn area is an entity of the world (its id is a network id) but no unit to take: <c>Entity.Playable</c> is for the placed units of the offers only.</summary>
     [Fact]
     public void Playable_ignores_role_and_area_offers()

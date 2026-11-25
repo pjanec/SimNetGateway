@@ -5,6 +5,9 @@
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- T-069 / T-082: the steady 0-byte rails (GC.GetAllocatedBytesForCurrentThread) flaked in ~35 % of full runs while a BACKGROUND (concurrent) GC ran; measured cause, see docs/TASKS.md T-069.
+         Test projects only: the product keeps its own GC settings. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
   </PropertyGroup>
 
   <ItemGroup>

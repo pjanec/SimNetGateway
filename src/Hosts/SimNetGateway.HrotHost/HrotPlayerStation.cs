@@ -738,9 +738,15 @@ internal sealed class PossessionFlow : IPlayerFlow
 
     private bool _replayObserving;
 
+    // T-082: the buffer the offers are rebuilt into every step (grown, never shrunk) and the slot names already turned into strings (a name is a string once, not per step)
+    private readonly List<PlayerOffer> _fresh = new();
+    private readonly Dictionary<FixedString32, string?> _slotNames = new();
+
+    /// <summary>Rebuilds the offers every step into a reused buffer, sorted by unit id (an insertion sort: the set is small and nearly sorted), and replaces <c>_offers</c> only when it differs. 0 B in the steady state.</summary>
     private void RefreshOffers(EntityRepository world)
     {
-        var fresh = new List<PlayerOffer>();
+        var fresh = _fresh;
+        fresh.Clear();
         foreach (var e in _query!)
         {
             if (!world.IsAlive(e))
@@ -750,12 +756,31 @@ internal sealed class PossessionFlow : IPlayerFlow
 
             var playable = world.GetComponentRO<Playable>(e);
             int force = playable.Side switch { ForceId.Friend => 1, ForceId.Hostile => 2, _ => 3 };
-            string name = playable.SlotName.ToString();
-            fresh.Add(new PlayerOffer(world.GetComponentRO<NetworkIdentity>(e).Value, string.IsNullOrEmpty(name) ? null : name, force));
+            if (!_slotNames.TryGetValue(playable.SlotName, out var name))
+            {
+                string text = playable.SlotName.ToString();
+                _slotNames[playable.SlotName] = name = string.IsNullOrEmpty(text) ? null : text;
+            }
+
+            var offer = new PlayerOffer(world.GetComponentRO<NetworkIdentity>(e).Value, name, force);
+            int at = fresh.Count;
+            fresh.Add(offer);
+            while (at > 0 && fresh[at - 1].UnitId > offer.UnitId)
+            {
+                fresh[at] = fresh[at - 1];
+                at--;
+            }
+
+            fresh[at] = offer;
         }
 
-        fresh.Sort((a, b) => a.UnitId.CompareTo(b.UnitId));
-        if (!fresh.SequenceEqual(_offers))
+        bool same = fresh.Count == _offers.Count;
+        for (int i = 0; same && i < fresh.Count; i++)
+        {
+            same = fresh[i].Equals(_offers[i]);
+        }
+
+        if (!same)
         {
             _offers.Clear();
             _offers.AddRange(fresh);
