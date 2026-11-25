@@ -633,7 +633,7 @@ git clone -b ui https://github.com/pjanec/HROT.git hrot
 git clone -b ccr-458b1360-afzl8f https://github.com/pjanec/SimNetGateway.git
 ```
 
-The gateway is tested against a specific HROT commit (currently `037e62a8d` on `ui`), recorded in [DD-017 §10](https://github.com/pjanec/SimNetGateway/blob/ccr-458b1360-afzl8f/docs/design/DD-017-Dds-Player-Station.md#spike-task-1-dds-features-and-hrot-entry-points). If the newest `ui` does not build with the gateway, check out that commit.
+The gateway is tested against a specific HROT commit (currently `c6ed1c7e9` on `ui`), recorded in [DD-017 §10](https://github.com/pjanec/SimNetGateway/blob/ccr-458b1360-afzl8f/docs/design/DD-017-Dds-Player-Station.md#spike-task-1-dds-features-and-hrot-entry-points). If the newest `ui` does not build with the gateway, check out that commit.
 
 **2. Build HROT** (Release; the editor and every node run from the cluster runner):
 
