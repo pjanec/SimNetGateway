@@ -222,6 +222,12 @@ public class DpsRoundFlameTests
 
         rig.Send(new HrotVehicleLook(2001, "None", false, false, false, 0, [], [], FlailActive: false));
         Assert.True(watch.Until(w => !w.Alive["2001"].FlailActive));
+
+        // T-079: the flight state travels with the look; a change alone replaces the instance
+        rig.Send(new HrotVehicleLook(2001, "None", false, false, false, 0, [], [], Airborne: true));
+        Assert.True(watch.Until(w => w.Alive["2001"].Airborne));
+        rig.Send(new HrotVehicleLook(2001, "None", false, false, false, 0, [], [], Airborne: false));
+        Assert.True(watch.Until(w => !w.Alive["2001"].Airborne));
     }
 
     [Fact]

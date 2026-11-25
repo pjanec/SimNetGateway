@@ -219,6 +219,37 @@ public class CarriageGatherTests
 
     // ---- the flail --------------------------------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// T-079: <c>VehicleLook.Airborne</c> is HROT's one rule (<c>Hrot.Look.Airborne.Of</c>) for any flyer - a dragon or a helicopter with <c>FlightState</c> - and false for a ground vehicle; a change of it alone
+    /// sends the look again, a steady gather sends nothing. Mutation: not copied from the rule (always false) fails the airborne row.
+    /// </summary>
+    [Fact]
+    public void Airborne_on_the_vehicle_look_follows_the_flight_state_of_any_flyer_and_a_change_alone_is_sent()
+    {
+        using var h = Live();
+        if (!h.World.IsComponentTypeRegistered<Fdp.Toolkit.Motion.FlightState>())
+        {
+            h.World.RegisterComponent<Fdp.Toolkit.Motion.FlightState>();
+        }
+
+        var flyer = h.AddHrotEntity(2100, Vector3.Zero);
+        var ground = h.AddHrotEntity(2101, new Vector3(50, 0, 0));
+        h.World.AddComponent(flyer, new Fdp.Toolkit.Motion.FlightState { Airborne = 1 });
+
+        var first = Gather(h, 1.0).Of<HrotVehicleLook>();
+        Assert.True(Assert.Single(first, l => l.Id == 2100).Airborne);
+        Assert.False(Assert.Single(first, l => l.Id == 2101).Airborne);   // a ground vehicle
+        Assert.Empty(Gather(h, 2.0).Of<HrotVehicleLook>());                // steady
+
+        h.World.SetComponent(flyer, new Fdp.Toolkit.Motion.FlightState { Airborne = 0 });   // landed: the change alone is sent
+        var landed = Assert.Single(Gather(h, 3.0).Of<HrotVehicleLook>());
+        Assert.Equal((2100, false), (landed.Id, landed.Airborne));
+        Assert.Empty(Gather(h, 4.0).Of<HrotVehicleLook>());
+
+        h.World.SetComponent(flyer, new Fdp.Toolkit.Motion.FlightState { Airborne = 1 });
+        Assert.True(Assert.Single(Gather(h, 5.0).Of<HrotVehicleLook>()).Airborne);
+    }
+
     [Fact]
     public void The_flail_flag_follows_the_active_flail_of_the_mine_clearer_only()
     {

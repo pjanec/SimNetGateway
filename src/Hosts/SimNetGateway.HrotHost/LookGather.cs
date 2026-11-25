@@ -264,6 +264,7 @@ internal sealed class VehicleLookGather
         string destruction = VehicleLook.Destruction(world, e).ToString();   // HROT's destruction kind by name
         bool turret = VehicleLook.TurretThrown(world, e), burning = VehicleLook.Burning(world, e, now), smoking = VehicleLook.Smoking(world, e, now);
         uint lights = VehicleLook.Lights(world, e, now, _brakes);
+        bool airborne = Airborne.Of(world, e);   // T-079: HROT's one flight-state rule (the same call the animal gather makes)
         bool flail = Hrot.UI.Common.Map3D.FlailActivity.IsOn(world, e);   // HROT's own reader (the drum and the loop ask the same place)
 
         // the rotor / engine level spools at a constant rate: HROT's spool is sent as data (target, level at the change, when, seconds per full scale) and only a change of it
@@ -274,14 +275,14 @@ internal sealed class VehicleLookGather
         if (known && string.Equals(previous.Destruction, destruction, StringComparison.Ordinal) && previous.TurretThrown == turret && previous.Burning == burning
             && previous.Smoking == smoking && previous.Lights == lights && previous.Parts.SequenceEqual(_parts) && SameMotions(previous.OpeningMotions, _motions)
             && previous.RotorTarget == rotorTarget && previous.RotorFrom == rotorFrom && previous.RotorChangedAt == rotorAt && previous.RotorSpoolSeconds == rotorSeconds
-            && (previous.CrewExposed ?? []).SequenceEqual(_crew) && previous.FlailActive == flail)
+            && (previous.CrewExposed ?? []).SequenceEqual(_crew) && previous.FlailActive == flail && previous.Airborne == airborne)
         {
             message = default;
             return false;   // the steady path allocates nothing
         }
 
         message = new HrotVehicleLook(id, destruction, turret, burning, smoking, lights, _parts.ToArray(), _openings.ToArray(), rotor, _crew.Count == 0 ? null : _crew.ToArray(), flail,
-            rotorTarget, rotorFrom, rotorAt, rotorSeconds, _motions.ToArray());
+            rotorTarget, rotorFrom, rotorAt, rotorSeconds, _motions.ToArray(), airborne);
         _sent[id] = message;
         return true;
     }

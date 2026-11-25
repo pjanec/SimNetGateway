@@ -234,6 +234,7 @@ module SimNetGateway {
                 float RotorFrom;
                 double RotorChangedAt;
                 float RotorSpoolSeconds;
+                boolean Airborne;
             };
 
             @topic

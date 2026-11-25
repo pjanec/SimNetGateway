@@ -105,3 +105,4 @@ progress and done.
 | **T-076** | review | The held-weapon look on DPS (DD-031): `PersonState` appends `HeldLook`, `SlungLook`, `HeldMarking` from HROT's `Hrot.Look.HeldWeapons` (moved by HROT CE-11055); pin bump. | DD-031 |
 | **T-077** | review | Carried entities on DPS (DD-032): a `Carried` topic (carrier, seat, stowed) for a non-person riding a carrier; concealed carried entities not published. | DD-032 |
 | **T-078** | review | A burning house by its key and smoke / gas clouds on DPS (DD-033): `BuildingDamage.FireSince / FireSeconds`; a `Cloud` topic. | DD-033 |
+| **T-079** | review | Airborne on `VehicleLook` for any flyer (dragon, helicopters), HROT `Airborne.Of`: a client folds a landed dragon's wings. Appended `bool Airborne`; DD-018 section 9 as-built. | DD-018 |

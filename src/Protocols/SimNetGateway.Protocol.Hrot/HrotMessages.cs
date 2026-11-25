@@ -476,13 +476,15 @@ public readonly record struct HrotPersonAppearance(
 /// centre, which only a renderer knows, so burning is the vehicle's.
 /// <paramref name="RotorSpeed"/> is HROT's rotor / engine level 0..1 (sent on a change of 0.05 and on reaching 0 or 1); <paramref name="CrewExposed"/> lists the ids of the
 /// openings a crewman's head is out of (null = none). <paramref name="FlailActive"/> is a mine clearer's flail turning (HROT's terrain mine-clearing state, DD-018 3.5c).
+/// T-079: <paramref name="Airborne"/> is HROT's own flight state (<c>Hrot.Look.Airborne.Of</c>: a flyer airborne - a dragon, a helicopter - false on the ground or for a ground vehicle).
 /// DD-020 3.2: <paramref name="RotorTarget"/>, <paramref name="RotorFrom"/>, <paramref name="RotorChangedAt"/> and <paramref name="RotorSpoolSeconds"/> are HROT's spool rule as data (the speed it moves to, the speed at the change, the sim time of the change and seconds per full scale),
 /// <paramref name="OpeningMotions"/> the same per opening; a new message is sent when one of them changes, not as the value moves (<paramref name="RotorSpeed"/> and the progress are the values at the time of sending).
 /// </summary>
 public readonly record struct HrotVehicleLook(
     int Id, string Destruction, bool TurretThrown, bool Burning, bool Smoking, uint Lights, IReadOnlyList<(byte Part, byte State)> Parts,
     IReadOnlyList<(byte Opening, float Progress)> Openings, float RotorSpeed = 0f, IReadOnlyList<byte>? CrewExposed = null, bool FlailActive = false,
-    float RotorTarget = 0f, float RotorFrom = 0f, double RotorChangedAt = 0.0, float RotorSpoolSeconds = 0f, IReadOnlyList<HrotOpeningMotion>? OpeningMotions = null) : IHrotToGatewayMessage;
+    float RotorTarget = 0f, float RotorFrom = 0f, double RotorChangedAt = 0.0, float RotorSpoolSeconds = 0f, IReadOnlyList<HrotOpeningMotion>? OpeningMotions = null,
+    bool Airborne = false) : IHrotToGatewayMessage;
 
 /// <summary>One opening's timed motion (DD-020 3.2): it moves at a constant rate to <paramref name="Target"/> (1 open, 0 closed) from the other end, starting at sim time <paramref name="ChangedAt"/> and taking <paramref name="Seconds"/> for the whole way (0 = instant).</summary>
 public readonly record struct HrotOpeningMotion(byte Opening, float Target, double ChangedAt, float Seconds);

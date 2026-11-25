@@ -209,6 +209,7 @@ should not have to derive it.
   the seat fields tell it) and it reports a man in an enclosed seat too (HROT draws nobody there, a renderer may still want the seat).
 - **`VehicleLook` appended `FlailActive`:** terrain's `MineClearing` is active with the flail tool (HROT `FlailActivity.IsOn`; a plough or a line charge never turns the
   drum). It travels with the look, so a change of the flag sends the look again.
+- **`VehicleLook` appended `Airborne` (T-079):** HROT's one flight-state rule `Hrot.Look.Airborne.Of` (a flyer with `FlightState`: aircraft, helicopters, the dragon) - so any flyer says flying or landed, not only an entity with `AnimalState` (the `Animal` topic's `Airborne`, unchanged). False on the ground and for a ground vehicle; a change alone sends the look again.
 - Rejected: one combined "held by" id for pairs (a stretcher needs both the load and the partner); carrying the rule in the client (the owner).
 
 ### 3.6 Gizmo heights (P-6)

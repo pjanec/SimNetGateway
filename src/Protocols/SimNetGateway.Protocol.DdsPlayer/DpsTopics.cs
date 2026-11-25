@@ -335,6 +335,8 @@ public partial struct VehicleLook
     public double RotorChangedAt;
     /// <summary>Seconds for a full scale (0 to 1 or 1 to 0) at the spool's rate; 0 = instant.</summary>
     public float RotorSpoolSeconds;
+    /// <summary>The producer's own flight state: a flyer (a dragon, a helicopter) airborne, false on the ground or for a ground vehicle (a dragon folds its wings when landed). Appended (T-079).</summary>
+    public bool Airborne;
 }
 
 /// <summary>

@@ -446,6 +446,7 @@ public sealed class DpsOutbound : IGatewayModule
             Smoking = m.Smoking,
             LightMask = m.Lights,
             FlailActive = m.FlailActive,
+            Airborne = m.Airborne,
             Parts = [.. m.Parts.Take(32).Select(p => new D.PartLook { PartId = p.Part, State = (D.PartCondition)Math.Min(p.State, (byte)2) })],
             RotorSpeed = float.IsFinite(m.RotorSpeed) ? Math.Clamp(m.RotorSpeed, 0f, 1f) : 0f,
             RotorTarget = Unit(m.RotorTarget),

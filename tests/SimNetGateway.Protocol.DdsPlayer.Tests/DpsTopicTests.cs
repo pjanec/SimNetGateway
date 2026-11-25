@@ -255,10 +255,11 @@ public class DpsTopicTests
         Assert.Equal((byte)4, person.Anger);
         Assert.Equal(CivilianMode.CivilianModeArmedHostile, person.CivilianMode);
 
-        var look = RoundTrip(new VehicleLook { EntityId = 11, RotorSpeed = 0.55f, FlailActive = true, Parts = [], Openings = [new OpeningLook { OpeningId = 9, Progress = 1f, CrewExposed = true }] }, "t2-vlook");
+        var look = RoundTrip(new VehicleLook { EntityId = 11, RotorSpeed = 0.55f, FlailActive = true, Airborne = true, Parts = [], Openings = [new OpeningLook { OpeningId = 9, Progress = 1f, CrewExposed = true }] }, "t2-vlook");
         Assert.Equal(0.55f, look.RotorSpeed);
         Assert.True(look.Openings[0].CrewExposed);
         Assert.True(look.FlailActive);
+        Assert.True(look.Airborne);
 
         var fire = RoundTrip(new Fire { ShooterId = 12, MunitionTypeId = 7_000_000_077L, WeaponCategory = WeaponCategory.WeaponCategoryMachineGun }, "t2-fire");
         Assert.Equal(7_000_000_077L, fire.MunitionTypeId);
