@@ -36,7 +36,7 @@ internal sealed class ViewGather
         else if (_active)
         {
             _active = false;
-            inbound.Enqueue(new HrotView("None", string.Empty, 0, 0f, 0f, HrotVec3.Zero, HrotQuat.Identity, 0f, string.Empty, simTime));
+            inbound.Enqueue(new HrotView(HrotViewSource.None, HrotViewMode.Unknown, 0, 0f, 0f, HrotVec3.Zero, HrotQuat.Identity, 0f, string.Empty, simTime));
         }
     }
 }

@@ -413,43 +413,6 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         return _fwdUseSeq;
     }
 
-    private static readonly string[] FireModeNames = BuildNames();
-
-    private static string[] BuildNames()
-    {
-        var values = Enum.GetValues<OperatorFireMode>();
-        var names = new string[values.Max(v => (int)v) + 1];
-        foreach (var v in values)
-        {
-            names[(int)v] = v.ToString();
-        }
-
-        return names;
-    }
-
-    /// <summary>The name of a fire mode without the string an enum's <c>ToString</c> makes every call (hot path).</summary>
-    private static string NameOf(OperatorFireMode mode) => (int)mode >= 0 && (int)mode < FireModeNames.Length && FireModeNames[(int)mode] is { } n ? n : mode.ToString();
-
-    private static readonly string[] UseVerbNames = NamesOf<UseVerbKind>();
-    private static readonly string[] UseReasonNames = NamesOf<UseReason>();
-
-    private static string[] NamesOf<T>()
-        where T : struct, Enum
-    {
-        var values = Enum.GetValues<T>();
-        var names = new string[values.Max(v => Convert.ToInt32(v)) + 1];
-        foreach (var v in values)
-        {
-            names[Convert.ToInt32(v)] = v.ToString();
-        }
-
-        return names;
-    }
-
-    private static string NameOf(UseVerbKind verb) => (int)verb < UseVerbNames.Length && UseVerbNames[(int)verb] is { } n ? n : verb.ToString();
-
-    private static string NameOf(UseReason reason) => (int)reason < UseReasonNames.Length && UseReasonNames[(int)reason] is { } n ? n : reason.ToString();
-
     private static Vector3 V(HrotVec3 v) => new((float)v.X, (float)v.Y, (float)v.Z);
 
     /// <summary>The index a press that names no offered verb is sent with: past every list (at most <see cref="OperatorUseActions.MaxActions"/> long), so HROT's brain answers Refused / NothingToDo for it.</summary>
@@ -563,7 +526,7 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
         for (int i = 0; i < actions; i++)
         {
             var offered = _actions[i];
-            useList.Add(new PlayerUseAction(NameOf(offered.Verb), HudWords.Label(world, offered), offered.Available, NameOf(offered.Reason), offered.HoldOnly));
+            useList.Add(new PlayerUseAction(PivotEnum<HrotUseVerb>.Of(offered.Verb), HudWords.Label(world, offered), offered.Available, PivotEnum<HrotUseReason>.Of(offered.Reason), offered.HoldOnly));
         }
 
         for (int i = 0; i < actions; i++)
@@ -584,39 +547,40 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
 
         // the selected weapon: a controlled weapon system's mount 0 for a slot of 32 or more, else the unit's own mount
         var (holder, local) = HudMounts.Resolve(world, unit, _mount);
-        string fireMode = nameof(OperatorFireMode.Sight);
+        var fireMode = HrotFireMode.Sight;
         float spread = 0f;
         if (!holder.IsNull && world.IsAlive(holder))
         {
             var mount = CombatTkb.MountOf(world, holder, local);
-            fireMode = NameOf(OperatorFireModes.Of(world, holder, mount, 0L, _firePref));
+            fireMode = PivotEnum<HrotFireMode>.Of(OperatorFireModes.Of(world, holder, mount, 0L, _firePref));
             spread = HitModel.Sigma(world, holder, mount, now);
         }
 
         // the use press the brain last answered, shown by the client when it is its own last press
         byte useSeq = 0;
-        string outcome = string.Empty, reason = string.Empty;
+        var outcome = HrotUseOutcome.None;
+        var reason = HrotUseReason.Unknown;
         if (world.IsComponentTypeRegistered<OperatorUseStatus>() && world.HasComponent<OperatorUseStatus>(unit))
         {
             var status = world.GetComponentRO<OperatorUseStatus>(unit);
             useSeq = status.UseSeq;
-            outcome = status.Outcome.ToString();
-            reason = status.Reason.ToString();
+            outcome = PivotEnum<HrotUseOutcome>.Of(status.Outcome);
+            reason = PivotEnum<HrotUseReason>.Of(status.Reason);
         }
 
         // the aircraft warnings; a missile warning is a launch cue while its time to impact (counted from its arrival) has not run out, as HROT's fighter HUD reads it
-        string radar = string.Empty;
+        var radar = HrotRadarWarningLevel.None;
         float radarBearing = 0f;
         if (world.IsComponentTypeRegistered<RadarWarning>() && world.HasComponent<RadarWarning>(unit))
         {
             var warning = world.GetComponentRO<RadarWarning>(unit);
-            radar = warning.Level.ToString();
+            radar = PivotEnum<HrotRadarWarningLevel>.Of(warning.Level);
             radarBearing = warning.BearingDeg;
         }
 
         bool launch = false;
         float missileBearing = 0f, timeToImpact = 0f;
-        string seeker = string.Empty;
+        var seeker = HrotMissileSeeker.Unknown;
         if (world.IsComponentTypeRegistered<MissileWarning>() && world.HasComponent<MissileWarning>(unit))
         {
             var warning = world.GetComponentRO<MissileWarning>(unit);
@@ -626,12 +590,12 @@ public sealed class HrotPlayerStation : IPlayerStation, IGizmoSource
                 launch = true;
                 missileBearing = warning.BearingDeg;
                 timeToImpact = left;
-                seeker = warning.Seeker.ToString();
+                seeker = PivotEnum<HrotMissileSeeker>.Of(warning.Seeker);
             }
         }
 
         return new PlayerUnitStatus(health, max, ammo, verb, useTarget, _mount, fireMode, useLabel, useSeq, outcome, reason, spread, radar, radarBearing, launch, missileBearing,
-            timeToImpact, seeker, verb == 0 ? string.Empty : ((UseVerbKind)verb).ToString(), useList);
+            timeToImpact, seeker, verb == 0 ? HrotUseVerb.None : PivotEnum<HrotUseVerb>.Of((UseVerbKind)verb), useList);
     }
 }
 

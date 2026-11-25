@@ -188,7 +188,7 @@ public readonly record struct HrotEntityRemoved(int Id) : IHrotToGatewayMessage;
 public readonly record struct HrotTurretPose(int Id, int PartId, double Azimuth, double Elevation) : IHrotToGatewayMessage;
 
 /// <summary>
-/// <see cref="TargetId"/> 0 = none. <see cref="Origin"/> and <see cref="Velocity"/> are ENU. <see cref="WeaponCategory"/> is the NAME of HROT's weapon category of the shooter's
+/// <see cref="TargetId"/> 0 = none. <see cref="Origin"/> and <see cref="Velocity"/> are ENU. <see cref="WeaponCategory"/> is HROT's weapon category of the shooter's
 /// mount ("" = not known), written by the host from the enumeration. <see cref="BurstId"/> is the planned burst the round belongs to (DD-027; 0 = none: a single shot or a player's round),
 /// <see cref="BurstRounds"/> its planned rounds and <see cref="BurstIndex"/> this round's place, 0-BASED (HROT stamps it 1-based; the host shifts it).
 /// </summary>
@@ -200,7 +200,7 @@ public readonly record struct HrotFire(
     HrotVec3 Origin,
     HrotVec3 Velocity,
     int Quantity,
-    string WeaponCategory = "",
+    HrotWeaponCategory WeaponCategory = HrotWeaponCategory.Unknown,
     uint BurstId = 0,
     byte BurstRounds = 0,
     byte BurstIndex = 0) : IHrotToGatewayMessage;
@@ -421,10 +421,10 @@ public enum HrotCarryRole : byte
 /// The semantic state of a person's body beyond <see cref="HrotEntityState"/> (DD-017 3.5), sent for life forms when any field changes. Ids are HROT network
 /// ids (0 = none). <see cref="LookTarget"/> is a local ENU point, <see cref="HeadYaw"/> radians, + to his left. <see cref="StanceProgress"/> is 0..1 (1 when
 /// the stance is settled). <see cref="ActionStartedAt"/> is the simulation time the gateway first saw the action running (0 = no action).
-/// <see cref="Burning"/> is HROT's person-on-fire reading, <see cref="Fear"/> and <see cref="Anger"/> are quarters 0..4 and <see cref="CivilianMode"/> the NAME of HROT's
+/// <see cref="Burning"/> is HROT's person-on-fire reading, <see cref="Fear"/> and <see cref="Anger"/> are quarters 0..4 and <see cref="CivilianMode"/> HROT's
 /// civilian mode ("" or "None" = none), all from the person's demeanour (DD-018 3.4, 3.5).
 /// DD-018 3.5c: <see cref="SeatIndex"/> is the seat slot of a man seated in a vehicle (<see cref="NoSeat"/> = none), <see cref="SeatExposed"/> whether he rides in the open,
-/// <see cref="SeatPose"/> the NAME of HROT's seat pose from the TKB seat ("" = unknown). <see cref="CarryRole"/> classifies the man by HROT's carriage rule;
+/// <see cref="SeatPose"/> HROT's seat pose from the TKB seat (Unknown = none). <see cref="CarryRole"/> classifies the man by HROT's carriage rule;
 /// <see cref="CarryOther"/> is the network id of his holder (a man held by a person or seated in a vehicle) or of what he carries (the casualty or the load; 0 = none);
 /// DD-020 9 Round 6: <see cref="StanceChangedAt"/> is the sim time HROT's muscle began the current blend (StanceStatus.TransitionStartedAt), <see cref="StanceSeconds"/> its duration (TransitionSeconds) and <see cref="StanceFrom"/> the stance it leaves (Unknown = not stated, no blend run); <see cref="StanceProgress"/> is 0 once a
 /// transition began and 1 when settled (never streamed in between). <see cref="LookTargetId"/> is the network id of the entity he looks at (0 = a point look or none); a look is reported only while his head is turned off
@@ -434,8 +434,8 @@ public enum HrotCarryRole : byte
 public readonly record struct HrotPersonDetail(
     int Id, HrotStance TargetStance, float StanceProgress, HrotHeldItem HeldItem, byte ActiveMount, HrotVec3 LookTarget, bool HasLookTarget, float HeadYaw,
     HrotGesture Gesture, HrotAction Action, int ActionTarget, HrotActionState ActionState, double ActionStartedAt, int SeatVehicle, HrotSeatRole SeatRole,
-    HrotCarryMode Carry, bool Burning = false, byte Fear = 0, byte Anger = 0, string CivilianMode = "", byte SeatIndex = HrotPersonDetail.NoSeat, bool SeatExposed = false,
-    string SeatPose = "", HrotCarryRole CarryRole = HrotCarryRole.None, int CarryOther = 0, int Partner = 0, double StanceChangedAt = 0.0, float StanceSeconds = 0f,
+    HrotCarryMode Carry, bool Burning = false, byte Fear = 0, byte Anger = 0, HrotCivilianMode CivilianMode = HrotCivilianMode.Unknown, byte SeatIndex = HrotPersonDetail.NoSeat, bool SeatExposed = false,
+    HrotSeatPose SeatPose = HrotSeatPose.Unknown, HrotCarryRole CarryRole = HrotCarryRole.None, int CarryOther = 0, int Partner = 0, double StanceChangedAt = 0.0, float StanceSeconds = 0f,
     int LookTargetId = 0, HrotStance StanceFrom = HrotStance.Unknown, HrotHeldLook HeldLook = HrotHeldLook.Rifle, HrotHeldLook SlungLook = HrotHeldLook.Rifle,
     HrotHeldMarking HeldMarking = HrotHeldMarking.None) : IHrotToGatewayMessage
 {
@@ -453,7 +453,7 @@ public readonly record struct HrotPersonDetail(
 /// <c>EffectSpec.StartedAt</c>; 0 = not stated). Local ENU metres, seconds.
 /// </summary>
 public readonly record struct HrotEffect(
-    string Kind, string SizeClass, string Surface, ulong MunitionDis, long EffectType, HrotVec3 At, HrotQuat Rotation, int AnchorEntity, byte AnchorMount, float Lifetime,
+    HrotEffectKind Kind, HrotEffectSize SizeClass, HrotEffectSurface Surface, ulong MunitionDis, long EffectType, HrotVec3 At, HrotQuat Rotation, int AnchorEntity, byte AnchorMount, float Lifetime,
     float Size, double StartedAt = 0.0) : IHrotToGatewayMessage;
 
 /// <summary>
@@ -469,7 +469,7 @@ public readonly record struct HrotPersonAppearance(
     float EyeSpacing, float MouthHalfWidth, float BrowHalfHeight, uint EyeColour, uint Lips) : IHrotToGatewayMessage;
 
 /// <summary>
-/// How a vehicle looks (HROT's vehicle look), sent when it changes. <paramref name="Destruction"/> is the NAME of HROT's destruction kind (its "none" value while
+/// How a vehicle looks (HROT's vehicle look), sent when it changes. <paramref name="Destruction"/> is HROT's destruction kind (its "none" value while
 /// the vehicle is not destroyed), written by the host from the enumeration; <paramref name="Parts"/> lists the
 /// parts that are not intact (part id, 1 damaged / 2 destroyed; an absent part is intact); <paramref name="Openings"/> every opening of the vehicle's type (opening id,
 /// progress 0 closed .. 1 open, in steps of 1/50); <paramref name="Lights"/> the effective light mask (brake lights included). A part's burning needs the part's
@@ -481,7 +481,7 @@ public readonly record struct HrotPersonAppearance(
 /// <paramref name="OpeningMotions"/> the same per opening; a new message is sent when one of them changes, not as the value moves (<paramref name="RotorSpeed"/> and the progress are the values at the time of sending).
 /// </summary>
 public readonly record struct HrotVehicleLook(
-    int Id, string Destruction, bool TurretThrown, bool Burning, bool Smoking, uint Lights, IReadOnlyList<(byte Part, byte State)> Parts,
+    int Id, HrotKillKind Destruction, bool TurretThrown, bool Burning, bool Smoking, uint Lights, IReadOnlyList<(byte Part, byte State)> Parts,
     IReadOnlyList<(byte Opening, float Progress)> Openings, float RotorSpeed = 0f, IReadOnlyList<byte>? CrewExposed = null, bool FlailActive = false,
     float RotorTarget = 0f, float RotorFrom = 0f, double RotorChangedAt = 0.0, float RotorSpoolSeconds = 0f, IReadOnlyList<HrotOpeningMotion>? OpeningMotions = null,
     bool Airborne = false) : IHrotToGatewayMessage;
@@ -502,10 +502,10 @@ public readonly record struct HrotRound(
 
 /// <summary>
 /// How a munition type's round looks (HROT's resolved munition look, the built-in looks included), sent once per munition type per runtime. <paramref name="Shape"/> is
-/// the NAME of HROT's munition shape; colours are 0xRRGGBBAA.
+/// HROT's munition shape; colours are 0xRRGGBBAA.
 /// </summary>
 public readonly record struct HrotMunitionLook(
-    long MunitionTkb, string Shape, float Length, float Diameter, uint Colour, bool SmokeTrail, bool Tracer, uint TracerColour, bool Sticks, bool Bolt) : IHrotToGatewayMessage;
+    long MunitionTkb, HrotMunitionShape Shape, float Length, float Diameter, uint Colour, bool SmokeTrail, bool Tracer, uint TracerColour, bool Sticks, bool Bolt) : IHrotToGatewayMessage;
 
 /// <summary>A lit flame jet of mount <see cref="Mount"/> of entity <see cref="Id"/>; sent when it lights and when it changes while lit. <see cref="TargetId"/> 0 = the aim point only.</summary>
 public readonly record struct HrotFlameJet(
@@ -524,7 +524,7 @@ public readonly record struct HrotFireSpots(int Id, IReadOnlyList<HrotFireSpot> 
 /// One ground heat mark. <see cref="Kind"/> and <see cref="HotEnd"/> are the NAMES of HROT's enumerations. <see cref="Centre"/>.Z is the ground height when the host
 /// has it, else 0.
 /// </summary>
-public readonly record struct HrotGroundMark(string Kind, HrotVec3 Centre, float Heading, float Length, float Width, string HotEnd, double StandSince, double LeftAt);
+public readonly record struct HrotGroundMark(HrotHeatMarkKind Kind, HrotVec3 Centre, float Heading, float Length, float Width, HrotHeatMarkEnd HotEnd, double StandSince, double LeftAt);
 
 /// <summary>The heat marks of terrain cell record <see cref="Id"/>; sent when the set changes, an empty set = the cell holds none any more.</summary>
 public readonly record struct HrotGroundMarks(int Id, IReadOnlyList<HrotGroundMark> Marks) : IHrotToGatewayMessage;
@@ -532,18 +532,18 @@ public readonly record struct HrotGroundMarks(int Id, IReadOnlyList<HrotGroundMa
 // ---- DPS round 2 (DD-018 3.1): kills, player messages, rule statuses, the exercise result ------------------------------
 
 /// <summary>
-/// A man went out of the fight (HROT's man-downed event, local or remote). Ids are HROT network ids (0 = unknown). <paramref name="State"/> is the NAME of HROT's injury
-/// state (Incapacitated, Dead). <paramref name="BodyPart"/> is 0 = unknown, else HROT's body part id + 1; <paramref name="BodyPartName"/> is the NAME of HROT's person part ("" = unknown). <paramref name="VictimSide"/> is the DIS force (1 friendly,
+/// A man went out of the fight (HROT's man-downed event, local or remote). Ids are HROT network ids (0 = unknown). <paramref name="State"/> is HROT's injury
+/// state (Incapacitated, Dead). <paramref name="BodyPart"/> is 0 = unknown, else HROT's body part id + 1; <paramref name="BodyPartName"/> is HROT's person part (Unknown = none). <paramref name="VictimSide"/> is the DIS force (1 friendly,
 /// 2 opposing, 3 neutral).
 /// </summary>
-public readonly record struct HrotManDowned(double SimTime, int VictimId, int SourceId, int OriginalSourceId, string State, int BodyPart, int VictimSide, string BodyPartName = "") : IHrotToGatewayMessage;
+public readonly record struct HrotManDowned(double SimTime, int VictimId, int SourceId, int OriginalSourceId, HrotInjury State, int BodyPart, int VictimSide, HrotBodyPart BodyPartName = HrotBodyPart.Unknown) : IHrotToGatewayMessage;
 
 /// <summary>
-/// A message to the players (HROT's player-message event) with its addressing: <paramref name="To"/> is the NAME of its address kind (All, Side, Station, Unit,
+/// A message to the players (HROT's player-message event) with its addressing: <paramref name="To"/> is its address kind (All, Side, Station, Unit,
 /// Instructor), <paramref name="ToValue"/> the side (DIS force numbering), station or unit network id it names. <paramref name="OriginNode"/> 0 = raised on this node.
 /// </summary>
 public readonly record struct HrotPlayerMessage(
-    int MessageId, int OriginNode, string To, int ToValue, string Text, float Seconds, byte Priority, double SentAt, int SourceId) : IHrotToGatewayMessage;
+    int MessageId, int OriginNode, HrotMessageAddress To, int ToValue, string Text, float Seconds, byte Priority, double SentAt, int SourceId) : IHrotToGatewayMessage;
 
 /// <summary>
 /// An objective, measure or trigger of the scenario rules (HROT's objective status plus its links), sent when it changes. <paramref name="Id"/> is the rule entity's network
@@ -551,7 +551,7 @@ public readonly record struct HrotPlayerMessage(
 /// <paramref name="Challenger"/> are DIS force numbers (0 = none for the challenger), <paramref name="VisibleSides"/> a mask with bit n = DIS force n.
 /// </summary>
 public readonly record struct HrotStatus(
-    int Id, string Role, string State, string TriggerState, bool Closed, byte Owner, int ProgressCur, int ProgressNeed, float Value, float Target, float Score, float Pass,
+    int Id, HrotObjectiveRole Role, HrotObjectiveState State, HrotTriggerState TriggerState, bool Closed, byte Owner, int ProgressCur, int ProgressNeed, float Value, float Target, float Score, float Pass,
     float Points, double ChangedAt, string Reason, string Title, string Kind, string Group, byte Phase, bool Required, bool Scored, float Weight, byte VisibleSides,
     byte StepCur, byte StepCount, float HoldFor, float Deadline, double ExpectedAt, bool Capture, byte Challenger, HrotVec3 AreaCentre, float AreaRadius, bool EndsExercise,
     int SubjectId, int ParentId) : IHrotToGatewayMessage;
@@ -559,14 +559,14 @@ public readonly record struct HrotStatus(
 /// <summary>The rule entity <see cref="Id"/> is gone.</summary>
 public readonly record struct HrotStatusRemoved(int Id) : IHrotToGatewayMessage;
 
-/// <summary>One side's result: <paramref name="Outcome"/> is the NAME of HROT's side outcome.</summary>
-public readonly record struct HrotSideResult(string Outcome, float Points, float Score);
+/// <summary>One side's result: <paramref name="Outcome"/> is HROT's side outcome.</summary>
+public readonly record struct HrotSideResult(HrotSideOutcome Outcome, float Points, float Score);
 
 /// <summary>
-/// The exercise's result (HROT's exercise result), sent when it changes. <paramref name="Phase"/> is the NAME of HROT's exercise phase; the sides are friendly, opposing and
+/// The exercise's result (HROT's exercise result), sent when it changes. <paramref name="Phase"/> is HROT's exercise phase; the sides are friendly, opposing and
 /// neutral (HROT's Friend, Hostile, Neutral).
 /// </summary>
-public readonly record struct HrotExercise(string Phase, double EndedAt, string Reason, HrotSideResult Friendly, HrotSideResult Opposing, HrotSideResult Neutral) : IHrotToGatewayMessage;
+public readonly record struct HrotExercise(HrotExercisePhase Phase, double EndedAt, string Reason, HrotSideResult Friendly, HrotSideResult Opposing, HrotSideResult Neutral) : IHrotToGatewayMessage;
 
 // ---- DPS round 2 (DD-018 3.2, 3.5a): type records and animals ---------------------------------------------------------
 
@@ -581,21 +581,21 @@ public readonly record struct HrotTypeRecord(long TypeId, string Name, string Ca
 /// enumerations; <paramref name="FlockMode"/> is "" for a single body (<paramref name="FlockCount"/> 0). <paramref name="Airborne"/> is HROT's flying state: a flock whose mode is Flying.
 /// </summary>
 public readonly record struct HrotAnimal(
-    int Id, string Mode, byte FearBand, bool Bolting, bool Dangerous, bool Calling, int FlockCount, int FlockInitialCount, uint FlockSeed, string FlockMode,
+    int Id, HrotAnimalMode Mode, byte FearBand, bool Bolting, bool Dangerous, bool Calling, int FlockCount, int FlockInitialCount, uint FlockSeed, HrotFlockMode FlockMode,
     bool Airborne = false) : IHrotToGatewayMessage;
 
 // ---- DPS round 2 (DD-018 3.6a): building damage -------------------------------------------------------------------------
 
 /// <summary>
-/// One wall breach. <paramref name="Panel"/> is the panel's index WITHIN its building, <paramref name="Kind"/> the NAME of HROT's breach kind (Hole, Passage).
+/// One wall breach. <paramref name="Panel"/> is the panel's index WITHIN its building, <paramref name="Kind"/> HROT's breach kind (Hole, Passage).
 /// <paramref name="MadeAt"/> is HROT's own record of when the breach was made or last widened (sim seconds; 0 = loaded from a save), <paramref name="Blast"/> the blast point
-/// that made it (HROT's local frame; meaningless when <paramref name="MadeAt"/> is 0) - copied, never stamped by the gateway (DD-030). DD-034: <paramref name="Cause"/> is the NAME of HROT's
+/// that made it (HROT's local frame; meaningless when <paramref name="MadeAt"/> is 0) - copied, never stamped by the gateway (DD-030). DD-034: <paramref name="Cause"/> is HROT's
 /// <c>BreachCause</c> (Unknown, Detonation, Ram, Blade, Push), <paramref name="ExplosiveKg"/> the charge its breach rule used (0 for contact), <paramref name="Actor"/> the network id of the vehicle
 /// that rammed / cut it (0 = none); <paramref name="Centre"/> the hole's middle and <paramref name="Normal"/> the wall's outward normal (z 0), both from HROT's own rules in the same local frame as
 /// <paramref name="Blast"/>.
 /// </summary>
-public readonly record struct HrotBreach(int Panel, float From, float To, float Bottom, float Top, string Kind, double MadeAt = 0d, HrotVec3 Blast = default,
-    string Cause = "Unknown", float ExplosiveKg = 0f, int Actor = 0, HrotVec3 Centre = default, HrotVec3 Normal = default);
+public readonly record struct HrotBreach(int Panel, float From, float To, float Bottom, float Top, HrotBreachKind Kind, double MadeAt = 0d, HrotVec3 Blast = default,
+    HrotBreachCause Cause = HrotBreachCause.Unknown, float ExplosiveKg = 0f, int Actor = 0, HrotVec3 Centre = default, HrotVec3 Normal = default);
 
 /// <summary>One hit window: <paramref name="Panel"/> within the building, hits 1..2 cracked (crack points as bytes 0..255), 3 broken. <paramref name="HitAt"/>: HROT's time of its last hit (sim seconds; 0 = from a save).
 /// DD-034: <paramref name="Centre"/> the opening's middle and <paramref name="Normal"/> its wall's outward normal (z 0), in HROT's local frame.</summary>
@@ -609,7 +609,7 @@ public readonly record struct HrotWindowDamage(int Panel, int Opening, byte Hits
 /// what collapsed it (Unknown while standing or from an old save), <paramref name="CollapseBlast"/> its blast point (local frame; 0 from a save), <paramref name="CollapseKg"/> the charge's kg.
 /// </summary>
 public readonly record struct HrotBuildingDamage(string Building, bool Collapsed, IReadOnlyList<HrotBreach> Breaches, IReadOnlyList<HrotWindowDamage> Windows, double CollapsedAt = 0d, double FireSince = 0d, float FireSeconds = 0f,
-    string CollapseCause = "Unknown", HrotVec3 CollapseBlast = default, float CollapseKg = 0f) : IHrotToGatewayMessage;
+    HrotBreachCause CollapseCause = HrotBreachCause.Unknown, HrotVec3 CollapseBlast = default, float CollapseKg = 0f) : IHrotToGatewayMessage;
 
 /// <summary>What a cloud is made of (HROT's cloud kind, in its order; DD-033).</summary>
 public enum HrotCloudKind : byte
@@ -633,7 +633,7 @@ public readonly record struct HrotCloudEnded(int Id) : IHrotToGatewayMessage;
 /// One crater (DD-030): <paramref name="Centre"/> x, y in HROT's local frame and z the BARE ground height under it (0 when the world has no terrain); <paramref name="Kind"/> the NAME
 /// of HROT's crater kind (Small, Large); <paramref name="BornAt"/> sim seconds (0 = from a save).
 /// </summary>
-public readonly record struct HrotCrater(HrotVec3 Centre, float Radius, float Depth, float Rim, double BornAt, string Kind);
+public readonly record struct HrotCrater(HrotVec3 Centre, float Radius, float Depth, float Rim, double BornAt, HrotCraterKind Kind);
 
 /// <summary>
 /// The craters of one HROT ground cell (64 m), sent when they change (DD-030). <paramref name="Cell"/> is "&lt;cellX&gt;,&lt;cellY&gt;". No craters = the cell has none any more (a reload).
@@ -646,7 +646,7 @@ public readonly record struct HrotGroundDamage(string Cell, IReadOnlyList<HrotCr
 /// An ambient mover (a car or pedestrian of the simulation's traffic), sent at its spawn. <paramref name="Kind"/> and <paramref name="Source"/> are names ("Car" or
 /// "Pedestrian", "Sumo"). <paramref name="Colour"/> is 0xRRGGBBAA (0 for a pedestrian), <paramref name="Seed"/> the pedestrian's clothes-and-face seed.
 /// </summary>
-public readonly record struct HrotMover(int Id, string Kind, long TypeId, uint Colour, uint Seed, float Length, float Width, string Source) : IHrotToGatewayMessage;
+public readonly record struct HrotMover(int Id, HrotMoverKind Kind, long TypeId, uint Colour, uint Seed, float Length, float Width, HrotMoverSource Source) : IHrotToGatewayMessage;
 
 /// <summary>The mover <see cref="Id"/> is gone (despawned, or turned into an entity of its own).</summary>
 public readonly record struct HrotMoverRemoved(int Id) : IHrotToGatewayMessage;
@@ -658,7 +658,7 @@ public readonly record struct HrotMoverKnot(int MoverId, float Dt, float X, floa
 public readonly record struct HrotMoverTracks(double SimTime, IReadOnlyList<HrotMoverKnot> Knots) : IHrotToGatewayMessage;
 
 /// <summary>One signal head: <paramref name="State"/> is the lamp ("Red", "Yellow", "Green", "Off"); <paramref name="HeadingDeg"/> is the controlled lane's direction of travel at the stop line.</summary>
-public readonly record struct HrotTrafficLight(int SignalId, HrotVec3 Position, float HeadingDeg, string State) : IHrotToGatewayMessage;
+public readonly record struct HrotTrafficLight(int SignalId, HrotVec3 Position, float HeadingDeg, HrotTrafficLightState State) : IHrotToGatewayMessage;
 
 /// <summary>The signal head <see cref="SignalId"/> is gone.</summary>
 public readonly record struct HrotTrafficLightRemoved(int SignalId) : IHrotToGatewayMessage;
@@ -674,7 +674,7 @@ public readonly record struct HrotTrafficLightRemoved(int SignalId) : IHrotToGat
 /// (0 bottom, 1 top, 2 middle; <see cref="NoSubtitlePosition"/> = the source states none), <paramref name="SubtitleAlpha"/> its opacity 0..1; every other source sends 0, "", <see cref="NoSubtitlePosition"/>, 0.
 /// </summary>
 public readonly record struct HrotView(
-    string Source, string Mode, int TargetId, float Distance, float Side, HrotVec3 Position, HrotQuat Orientation, float FovDeg, string Shot, double SimTime, int Cut = 0,
+    HrotViewSource Source, HrotViewMode Mode, int TargetId, float Distance, float Side, HrotVec3 Position, HrotQuat Orientation, float FovDeg, string Shot, double SimTime, int Cut = 0,
     float Fade = 0f, string Subtitle = "", byte SubtitlePosition = HrotView.NoSubtitlePosition, float SubtitleAlpha = 0f) : IHrotToGatewayMessage
 {
     /// <summary>The <see cref="SubtitlePosition"/> of a source that states no subtitle placement.</summary>
@@ -682,12 +682,12 @@ public readonly record struct HrotView(
 }
 
 /// <summary>
-/// A round marked a surface of the static world (HROT's round-impact event). <paramref name="Kind"/> is the NAME of HROT's impact kind (Entry, Exit, Stop);
-/// <paramref name="Surface"/> is the NAME of HROT's effect surface by its own impact rule ("" when HROT draws no effect for the round); <paramref name="Normal"/> all 0
+/// A round marked a surface of the static world (HROT's round-impact event). <paramref name="Kind"/> is HROT's impact kind (Entry, Exit, Stop);
+/// <paramref name="Surface"/> is HROT's effect surface by its own impact rule ("" when HROT draws no effect for the round); <paramref name="Normal"/> all 0
 /// = unknown; <paramref name="Material"/> is the name of HROT's impact material ("" = Unknown). Ids are HROT network ids (0 = unknown).
 /// </summary>
 public readonly record struct HrotImpact(
-    double SimTime, HrotVec3 Position, HrotVec3 Normal, string Surface, string Kind, long MunitionTkb, int ShooterId, string Material) : IHrotToGatewayMessage;
+    double SimTime, HrotVec3 Position, HrotVec3 Normal, HrotEffectSurface Surface, HrotImpactKind Kind, long MunitionTkb, int ShooterId, string Material) : IHrotToGatewayMessage;
 
 // ---- DPS: the status a client draws its entity cards from (DD-025) ----------------------------------------------------------------
 

@@ -57,7 +57,7 @@ public sealed class DpsGroundOutbound : IGatewayModule
                 .. m.Craters.Take(MaxCraters).Select(c => new D.Crater
                 {
                     Centre = new D.Vec3d { X = c.Centre.X, Y = c.Centre.Y, Z = c.Centre.Z },
-                    Radius = c.Radius, Depth = c.Depth, Rim = c.Rim, BornAt = c.BornAt, Kind = LookNames.ByName<D.CraterKind>("CraterKind", c.Kind),
+                    Radius = c.Radius, Depth = c.Depth, Rim = c.Rim, BornAt = c.BornAt, Kind = (D.CraterKind)(byte)c.Kind,
                 }),
             ],
         }));

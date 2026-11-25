@@ -65,8 +65,8 @@ public class DpsTypeAnimalBankTests
         rig.Send(State(3003, Dis(3, 199)));   // a person
         rig.Send(State(3004, Dis(3, 210)));   // a person
         rig.Send(State(3005, Dis(1, 200)));   // a platform whose category happens to be 200
-        rig.Send(new HrotAnimal(3001, "Alert", 2, false, true, true, 0, 0, 0, string.Empty));
-        rig.Send(new HrotAnimal(3002, "Flee", 3, true, false, false, 12, 20, 777, "Flying"));
+        rig.Send(new HrotAnimal(3001, HrotAnimalMode.Alert, 2, false, true, true, 0, 0, 0, HrotFlockMode.Unknown));
+        rig.Send(new HrotAnimal(3002, HrotAnimalMode.Flee, 3, true, false, false, 12, 20, 777, HrotFlockMode.Flying));
         rig.Send(Detail(3003));
         rig.Send(Detail(3001));   // a detail of an animal is not a person state
 
@@ -90,23 +90,6 @@ public class DpsTypeAnimalBankTests
 
     private static HrotPersonDetail Detail(int id) =>
         new(id, HrotStance.Standing, 1f, HrotHeldItem.None, 0, HrotVec3.Zero, false, 0f, HrotGesture.None, HrotAction.None, 0, HrotActionState.None, 0, 0, HrotSeatRole.None, HrotCarryMode.None);
-
-    [Fact]
-    public void Animal_names_map_to_the_contract_and_an_unknown_name_to_its_unknown_value()
-    {
-        foreach (var name in new[] { "Calm", "Alert", "Flee", "Recover", "Rest", "Guard", "Crouch" })
-        {
-            Assert.NotEqual(D.AnimalMode.AnimalModeUnknown, LookNames.ByName<D.AnimalMode>("AnimalMode", name));
-        }
-
-        Assert.Equal(D.AnimalMode.AnimalModeUnknown, LookNames.ByName<D.AnimalMode>("AnimalMode", "Hunt"));
-        foreach (var name in new[] { "Flying", "Landed", "Perched" })
-        {
-            Assert.NotEqual(D.FlockMode.FlockModeUnknown, LookNames.ByName<D.FlockMode>("FlockMode", name));
-        }
-
-        Assert.Equal(D.FlockMode.FlockModeUnknown, LookNames.ByName<D.FlockMode>("FlockMode", string.Empty));
-    }
 
     [Fact]
     public void The_bank_goes_to_the_entity_state_and_a_change_of_a_degree_sends_one()

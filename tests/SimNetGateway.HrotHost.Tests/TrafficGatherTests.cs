@@ -87,9 +87,9 @@ public class TrafficGatherTests
 
         var movers = first.Of<HrotMover>().OrderBy(m => m.Id).ToList();
         Assert.Equal([101, 102, 205], movers.Select(m => m.Id).ToArray());
-        Assert.Equal(("Car", (long)TkbEntityTypes.TrafficCar, 0xB02A2AFFu, 0u, 4.5f, 1.8f, "Sumo"), (movers[0].Kind, movers[0].TypeId, movers[0].Colour, movers[0].Seed, movers[0].Length, movers[0].Width, movers[0].Source));   // type 0 is HROT's generic traffic car
+        Assert.Equal((HrotMoverKind.Car, (long)TkbEntityTypes.TrafficCar, 0xB02A2AFFu, 0u, 4.5f, 1.8f, HrotMoverSource.Sumo), (movers[0].Kind, movers[0].TypeId, movers[0].Colour, movers[0].Seed, movers[0].Length, movers[0].Width, movers[0].Source));   // type 0 is HROT's generic traffic car
         Assert.Equal((7777L, 0x1B1B1DFFu), (movers[1].TypeId, movers[1].Colour));   // SUMO's own type; the colour HROT already painted, with alpha
-        Assert.Equal(("Pedestrian", TrafficReplicas.PedestrianTypeOf(205), 0u, 205u, "Sumo"), (movers[2].Kind, movers[2].TypeId, movers[2].Colour, movers[2].Seed, movers[2].Source));
+        Assert.Equal((HrotMoverKind.Pedestrian, TrafficReplicas.PedestrianTypeOf(205), 0u, 205u, HrotMoverSource.Sumo), (movers[2].Kind, movers[2].TypeId, movers[2].Colour, movers[2].Seed, movers[2].Source));
         Assert.Equal(CivilianTkbCatalog.TkbCivilianAdultFemale, movers[2].TypeId);   // 205 % 10 = 5: the id types him
         Assert.Contains(first.Of<HrotTypeRecord>(), r => r.TypeId == TkbEntityTypes.TrafficCar);   // the car type is a TKB type a client can read
 
@@ -272,14 +272,14 @@ public class TrafficGatherTests
         var first = h.Gather(1.0).Of<HrotTrafficLight>().OrderBy(l => l.SignalId).ToList();
 
         Assert.Equal([0, 1], first.Select(l => l.SignalId).ToArray());
-        Assert.Equal((new HrotVec3(100, -1.7f, 5), 0f, "Green"), (first[0].Position, first[0].HeadingDeg, first[0].State));   // east: heading 0 (+x)
+        Assert.Equal((new HrotVec3(100, -1.7f, 5), 0f, HrotTrafficLightState.Green), (first[0].Position, first[0].HeadingDeg, first[0].State));   // east: heading 0 (+x)
         Assert.Equal(90f, first[1].HeadingDeg, 3);   // north: heading 90
-        Assert.Equal((new HrotVec3(51.7f, 150, 5), "Red"), (first[1].Position, first[1].State));
+        Assert.Equal((new HrotVec3(51.7f, 150, 5), HrotTrafficLightState.Red), (first[1].Position, first[1].State));
         Assert.Empty(h.Gather(1.1).Of<HrotTrafficLight>());   // nothing changed
 
         h.Show([Car(101, 1, 0)], lights: new Dictionary<int, byte> { [0] = (byte)'y' });   // lane 1 has no signal byte any more: its lamp is off
         var changed = h.Gather(1.2).Of<HrotTrafficLight>().OrderBy(l => l.SignalId).ToList();
-        Assert.Equal([(0, "Yellow"), (1, "Off")], changed.Select(l => (l.SignalId, l.State)).ToArray());
+        Assert.Equal([(0, HrotTrafficLightState.Yellow), (1, HrotTrafficLightState.Off)], changed.Select(l => (l.SignalId, l.State)).ToArray());
         Assert.Equal(new HrotVec3(100, -1.7f, 5), changed[0].Position);   // a lamp change carries the same place
 
         // the traffic goes: the heads are withdrawn
@@ -296,7 +296,7 @@ public class TrafficGatherTests
     [Fact]
     public void Lamp_names_are_hrots_lamps()
     {
-        Assert.Equal(["Green", "Yellow", "Red", "Off"], new[] { 2, 1, 0, -1 }.Select(TrafficGather.LampName).ToArray());
+        Assert.Equal([HrotTrafficLightState.Green, HrotTrafficLightState.Yellow, HrotTrafficLightState.Red, HrotTrafficLightState.Off], new[] { 2, 1, 0, -1 }.Select(TrafficGather.LampState).ToArray());
         Assert.Equal([2, 2, 1, 1, 0, 0, 0, -1], new[] { 'G', 'g', 'y', 'Y', 'r', 'R', 'u', 'o' }.Select(c => TrafficFrame.LampOf((byte)c)).ToArray());
     }
 }

@@ -60,7 +60,7 @@ public sealed class DpsRoundFlameOutbound : IGatewayModule
         _ports.MunitionLook.Send(new DpsItem<D.MunitionLook>(new D.MunitionLook
         {
             MunitionTypeId = m.MunitionTkb,
-            Shape = LookNames.MunitionShapeOf(m.Shape),
+            Shape = (D.MunitionShape)(byte)m.Shape,
             Length = m.Length,
             Diameter = m.Diameter,
             ColourRgba = m.Colour,
@@ -143,12 +143,12 @@ public sealed class DpsRoundFlameOutbound : IGatewayModule
             [
                 .. m.Marks.Where(k => Finite(k.Centre)).Take(MaxMarks).Select(k => new D.GroundMark
                 {
-                    Kind = LookNames.HeatMarkKindOf(k.Kind),
+                    Kind = (D.HeatMarkKind)(byte)k.Kind,
                     Centre = V3d(k.Centre),
                     Heading = k.Heading,
                     Length = k.Length,
                     Width = k.Width,
-                    HotEnd = LookNames.HeatMarkEndOf(k.HotEnd),
+                    HotEnd = (D.HeatMarkEnd)(byte)k.HotEnd,
                     StandSince = k.StandSince,
                     LeftAt = k.LeftAt,
                 }),

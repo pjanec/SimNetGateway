@@ -99,7 +99,7 @@ internal sealed class MunitionLookGather
         }
 
         _sent.Add(munition);
-        message = new HrotMunitionLook(munition, look.Shape.ToString(), look.Length, look.Diameter, Rgba(look.ColorHex, 0x4B5320FF), look.SmokeTrail, look.Tracer,
+        message = new HrotMunitionLook(munition, PivotEnum<HrotMunitionShape>.Of(look.Shape), look.Length, look.Diameter, Rgba(look.ColorHex, 0x4B5320FF), look.SmokeTrail, look.Tracer,
             Rgba(look.TracerColorHex, 0xFF9A30FF), look.Sticks, look.Bolt);
         return true;
     }
@@ -483,7 +483,7 @@ internal sealed class GroundMarkGather
                 continue;
             }
 
-            _marks.Add(new HrotGroundMark(m.Kind.ToString(), new HrotVec3(m.At.X, m.At.Y, height?.GroundHeightAt(m.At.X, m.At.Y) ?? 0f), m.Heading, m.Length, m.Width, m.HotEnd.ToString(), m.StandSince.Seconds, m.LeftAt.Seconds));
+            _marks.Add(new HrotGroundMark(PivotEnum<HrotHeatMarkKind>.Of(m.Kind), new HrotVec3(m.At.X, m.At.Y, height?.GroundHeightAt(m.At.X, m.At.Y) ?? 0f), m.Heading, m.Length, m.Width, PivotEnum<HrotHeatMarkEnd>.Of(m.HotEnd), m.StandSince.Seconds, m.LeftAt.Seconds));
         }
     }
 

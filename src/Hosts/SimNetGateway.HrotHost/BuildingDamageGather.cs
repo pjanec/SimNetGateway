@@ -251,22 +251,15 @@ internal sealed class BuildingDamageGather
 
     private static HrotVec3 Wire(Vector2 v) => new(v.X, v.Y, 0d);
 
-    /// <summary>The cause's NAME without boxing; a cause HROT appends later is named the slow way (the outbound maps an unknown name to Unknown).</summary>
-    private static string CauseName(BreachCause c) => c switch
-    {
-        BreachCause.Unknown => nameof(BreachCause.Unknown), BreachCause.Detonation => nameof(BreachCause.Detonation), BreachCause.Ram => nameof(BreachCause.Ram),
-        BreachCause.Blade => nameof(BreachCause.Blade), BreachCause.Push => nameof(BreachCause.Push), _ => c.ToString(),
-    };
+    /// <summary>What collapsed the building (Unknown while it stands, whatever a stale record says).</summary>
+    private static HrotBreachCause CollapseCauseOf(SavedBuildingDamage saved) => saved.Collapsed ? PivotEnum<HrotBreachCause>.Of(saved.CollapseCause) : HrotBreachCause.Unknown;
 
     private static HrotBreach BreachOf(WallBreach b, Slot slot)
     {
         var t = slot.Stamps.Breach(b);
         slot.Saved.Origins.TryGetValue(b, out var origin);
-        return new HrotBreach(b.Panel, b.From, b.To, b.Bottom, b.Top, KindName(b.Kind), t.At, Wire(t.Blast), CauseName(origin.Cause), origin.Kg, t.Actor, Wire(t.Centre), Wire(t.Normal));
+        return new HrotBreach(b.Panel, b.From, b.To, b.Bottom, b.Top, PivotEnum<HrotBreachKind>.Of(b.Kind), t.At, Wire(t.Blast), PivotEnum<HrotBreachCause>.Of(origin.Cause), origin.Kg, t.Actor, Wire(t.Centre), Wire(t.Normal));
     }
-
-    /// <summary>The kind's NAME without boxing it (<c>Enum.ToString()</c> boxes: a steady frame must allocate nothing); a kind HROT appends later is named the slow way.</summary>
-    private static string KindName(BreachKind kind) => kind switch { BreachKind.Hole => nameof(BreachKind.Hole), BreachKind.Passage => nameof(BreachKind.Passage), _ => kind.ToString() };
 
     private static HrotWindowDamage WindowOf(WindowEntry w, Stamps t)
     {
@@ -290,7 +283,7 @@ internal sealed class BuildingDamageGather
         }
 
         return new HrotBuildingDamage(slot.Key, saved.Collapsed, breaches, windows, saved.Collapsed ? slot.Stamps.CollapsedAt : 0d, slot.SentFireSince, slot.SentFireSeconds,
-            saved.Collapsed ? CauseName(saved.CollapseCause) : nameof(BreachCause.Unknown), saved.Collapsed ? Wire(slot.Stamps.CollapseBlast) : default, saved.Collapsed ? saved.CollapseKg : 0f);
+            CollapseCauseOf(saved), saved.Collapsed ? Wire(slot.Stamps.CollapseBlast) : default, saved.Collapsed ? saved.CollapseKg : 0f);
     }
 
     /// <summary>Whether what was sent is what this gather united - the same fields <see cref="Map"/> builds, compared without building them.</summary>
@@ -298,7 +291,7 @@ internal sealed class BuildingDamageGather
     {
         var saved = slot.Saved;
         if (p.Collapsed != saved.Collapsed || p.CollapsedAt != (saved.Collapsed ? slot.Stamps.CollapsedAt : 0d) || p.FireSince != slot.SentFireSince || p.FireSeconds != slot.SentFireSeconds
-            || p.CollapseCause != (saved.Collapsed ? CauseName(saved.CollapseCause) : nameof(BreachCause.Unknown)) || p.CollapseBlast != (saved.Collapsed ? Wire(slot.Stamps.CollapseBlast) : default) || p.CollapseKg != (saved.Collapsed ? saved.CollapseKg : 0f)
+            || p.CollapseCause != CollapseCauseOf(saved) || p.CollapseBlast != (saved.Collapsed ? Wire(slot.Stamps.CollapseBlast) : default) || p.CollapseKg != (saved.Collapsed ? saved.CollapseKg : 0f)
             || p.Breaches.Count != saved.Breaches.Count || p.Windows.Count != saved.Windows.Count)
         {
             return false;

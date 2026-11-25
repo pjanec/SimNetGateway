@@ -179,13 +179,13 @@ internal sealed class PersonDetailGather
 
         // fear, anger (quarters) and the civilian mode by name: HROT's demeanour; burning: HROT's own person look
         byte fear = 0, anger = 0;
-        string mode = string.Empty;
+        var mode = HrotCivilianMode.Unknown;
         if (world.HasComponent<Demeanour>(e))
         {
             var demeanour = world.GetComponentRO<Demeanour>(e);
             fear = demeanour.Fear;
             anger = demeanour.Anger;
-            mode = demeanour.Mode == CivilianMode.None ? string.Empty : demeanour.Mode.ToString();
+            mode = PivotEnum<HrotCivilianMode>.Of(demeanour.Mode);   // HROT's "None" is the contract's unknown / no mode
         }
 
         bool burning = world.IsComponentTypeRegistered<EffectState>() && PersonLook.IsBurning(world, e, simTime);
@@ -287,9 +287,9 @@ internal sealed class PersonDetailGather
     };
 
     /// <summary>The carriage facts of one person (DD-018 3.5c), in network ids.</summary>
-    internal readonly record struct CarriageFacts(HrotCarryRole Role, int Other, int Partner, byte SeatIndex, bool SeatExposed, string SeatPose)
+    internal readonly record struct CarriageFacts(HrotCarryRole Role, int Other, int Partner, byte SeatIndex, bool SeatExposed, HrotSeatPose SeatPose)
     {
-        public static readonly CarriageFacts Free = new(HrotCarryRole.None, 0, 0, HrotPersonDetail.NoSeat, false, string.Empty);
+        public static readonly CarriageFacts Free = new(HrotCarryRole.None, 0, 0, HrotPersonDetail.NoSeat, false, HrotSeatPose.Unknown);
     }
 
     /// <summary>
@@ -336,7 +336,7 @@ internal sealed class PersonDetailGather
     {
         var tag = world.GetComponentRO<IsEmbarkedTag>(e);
         var seat = Carriage.SeatOf(world, holder, tag.Seat, tkb);
-        return new CarriageFacts(HrotCarryRole.None, NetworkIdOf(world, holder), 0, tag.Seat, tag.Exposed != 0, seat?.Pose.ToString() ?? string.Empty);
+        return new CarriageFacts(HrotCarryRole.None, NetworkIdOf(world, holder), 0, tag.Seat, tag.Exposed != 0, seat is { } seatPose ? PivotEnum<HrotSeatPose>.Of(seatPose.Pose) : HrotSeatPose.Unknown);
     }
 
     // the casualty a carrier holds: the first man (not a weapon system) in his passenger list

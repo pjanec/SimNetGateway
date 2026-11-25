@@ -41,7 +41,7 @@ internal sealed class HudGather
                 ref readonly var m = ref downed[i];
                 int part = m.HasBodyPart != 0 ? m.BodyPart + 1 : 0;
                 inbound.Enqueue(new HrotManDowned(simTime, LookIds.NetworkIdOf(world, m.Victim), LookIds.NetworkIdOf(world, m.Source), LookIds.NetworkIdOf(world, m.OriginalSource),
-                    m.State.ToString(), part, DisForce(m.VictimSide), m.HasBodyPart != 0 ? Fdp.Toolkit.Physics.BodyParts.PersonPart.NameOf(m.BodyPart) : string.Empty));
+                    PivotEnum<HrotInjury>.Of(m.State), part, DisForce(m.VictimSide), m.HasBodyPart != 0 ? BodyPartOf(m.BodyPart) : HrotBodyPart.Unknown));
             }
         }
 
@@ -53,9 +53,10 @@ internal sealed class HudGather
                 var m = messages[i];
                 string text = m.Text ?? string.Empty;
                 string to = m.ToKind ?? string.Empty;
+                var address = AddressOf(to);
                 // a message to a side names HROT's force id: it crosses as the contract's force number like every side
                 int value = string.Equals(to, "Side", StringComparison.Ordinal) ? DisForce((ForceId)(byte)m.ToValue) : m.ToValue;
-                inbound.Enqueue(new HrotPlayerMessage(m.MessageId, m.OriginNodeId.Value, to, value, text.Length <= MaxText ? text : text[..MaxText], m.Seconds.Seconds, m.Priority,
+                inbound.Enqueue(new HrotPlayerMessage(m.MessageId, m.OriginNodeId.Value, address, value, text.Length <= MaxText ? text : text[..MaxText], m.Seconds.Seconds, m.Priority,
                     m.SentAt.Seconds, m.Source));
             }
         }
@@ -110,7 +111,7 @@ internal sealed class HudGather
             foreach (var e in _exerciseQuery)
             {
                 var r = world.GetComponentRO<ExerciseResult>(e);
-                var message = new HrotExercise(r.Phase.ToString(), r.EndedAt.Seconds, r.Reason.ToString(), Side(r.Friend), Side(r.Hostile), Side(r.Neutral));
+                var message = new HrotExercise(PivotEnum<HrotExercisePhase>.Of(r.Phase), r.EndedAt.Seconds, r.Reason.ToString(), Side(r.Friend), Side(r.Hostile), Side(r.Neutral));
                 if (!_hasExercise || !_exercise.Equals(message))
                 {
                     _exercise = message;
@@ -123,10 +124,37 @@ internal sealed class HudGather
         }
     }
 
-    private static HrotSideResult Side(in SideResult r) => new(r.Outcome.ToString(), r.Points, r.Score);
+    /// <summary>HROT's address kind (a name on its event) as the contract's address; an unknown name is the unknown value.</summary>
+    private static HrotMessageAddress AddressOf(string name) => name switch
+    {
+        "All" => HrotMessageAddress.All,
+        "Side" => HrotMessageAddress.Side,
+        "Station" => HrotMessageAddress.Station,
+        "Unit" => HrotMessageAddress.Unit,
+        "Instructor" => HrotMessageAddress.Instructor,
+        _ => HrotMessageAddress.Unknown,
+    };
+
+    private static HrotSideResult Side(in SideResult r) => new(PivotEnum<HrotSideOutcome>.Of(r.Outcome), r.Points, r.Score);
+
+    /// <summary>HROT's person part id (<c>PersonPart</c>, a block figure's order) as the contract's part, by NAME: a part this contract does not know is the unknown value.</summary>
+    private static HrotBodyPart BodyPartOf(byte part) => part switch
+    {
+        Fdp.Toolkit.Physics.BodyParts.PersonPart.Head => HrotBodyPart.Head,
+        Fdp.Toolkit.Physics.BodyParts.PersonPart.Torso => HrotBodyPart.Torso,
+        Fdp.Toolkit.Physics.BodyParts.PersonPart.UpperArmL => HrotBodyPart.UpperArmL,
+        Fdp.Toolkit.Physics.BodyParts.PersonPart.ForearmL => HrotBodyPart.ForearmL,
+        Fdp.Toolkit.Physics.BodyParts.PersonPart.UpperArmR => HrotBodyPart.UpperArmR,
+        Fdp.Toolkit.Physics.BodyParts.PersonPart.ForearmR => HrotBodyPart.ForearmR,
+        Fdp.Toolkit.Physics.BodyParts.PersonPart.ThighL => HrotBodyPart.ThighL,
+        Fdp.Toolkit.Physics.BodyParts.PersonPart.ShinL => HrotBodyPart.ShinL,
+        Fdp.Toolkit.Physics.BodyParts.PersonPart.ThighR => HrotBodyPart.ThighR,
+        Fdp.Toolkit.Physics.BodyParts.PersonPart.ShinR => HrotBodyPart.ShinR,
+        _ => HrotBodyPart.Unknown,
+    };
 
     private static HrotStatus Map(int id, in ObjectiveStatus s, int subject, int parent) =>
-        new(id, s.Role.ToString(), s.State.ToString(), s.TriggerState.ToString(), s.Closed != 0, DisForce(s.Owner), s.ProgressCur, s.ProgressNeed, s.Value, s.Target, s.Score, s.Pass,
+        new(id, PivotEnum<HrotObjectiveRole>.Of(s.Role), PivotEnum<HrotObjectiveState>.Of(s.State), PivotEnum<HrotTriggerState>.Of(s.TriggerState), s.Closed != 0, DisForce(s.Owner), s.ProgressCur, s.ProgressNeed, s.Value, s.Target, s.Score, s.Pass,
             s.Points, s.ChangedAt.Seconds, s.Reason.ToString(), s.Title.ToString(), s.Kind.ToString(), s.Group.ToString(), s.Phase, s.Required != 0, s.Scored != 0, s.Weight,
             DisMask(s.VisibleSides), s.StepCur, s.StepCount, s.HoldFor, s.Deadline, s.ExpectedAt.Seconds, s.Capture != 0, s.Challenger == ForceId.Neutral ? (byte)0 : DisForce(s.Challenger),
             new HrotVec3(s.AreaCenter.X, s.AreaCenter.Y, s.AreaCenter.Z), s.AreaRadius, s.EndsExercise != 0, subject, parent);

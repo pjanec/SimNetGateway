@@ -90,8 +90,8 @@ public class LookGatherTests
 
         Assert.NotEmpty(effects);
         var boom = effects[0];
-        Assert.Equal(nameof(Hrot.Look.Effects.EffectSurface.Ground), boom.Surface);   // HROT's enumerations go by name
-        Assert.Equal(nameof(Hrot.Core.Tkb.EffectTkbCatalog.CalibreClass.Large), boom.SizeClass);
+        Assert.Equal(HrotEffectSurface.Ground, boom.Surface);   // HROT's enumerations go by name
+        Assert.Equal(HrotEffectSize.Large, boom.SizeClass);
         Assert.Equal((ulong)munition.DisType.Value, boom.MunitionDis);
         Assert.Equal(new HrotVec3(50, 20, 0.4f), boom.At);
         Assert.Equal(0, boom.AnchorEntity);
@@ -111,10 +111,10 @@ public class LookGatherTests
 
         var effects = h.GatherEffects(10.2);
 
-        var flash = Assert.Single(effects, e => e.Kind == nameof(Fdp.Toolkit.Tkb.Domain.EffectKind.MuzzleFlash));
+        var flash = Assert.Single(effects, e => e.Kind == HrotEffectKind.MuzzleFlash);
         Assert.Equal(2001, flash.AnchorEntity);
         Assert.Equal((byte)0, flash.AnchorMount);
-        Assert.Equal(nameof(Hrot.Look.Effects.EffectSurface.Air), flash.Surface);
+        Assert.Equal(HrotEffectSurface.Air, flash.Surface);
         Assert.True(flash.Lifetime > 0f);
     }
 
@@ -134,7 +134,7 @@ public class LookGatherTests
         }
 
         h.SpawnEffects(11.0, specs => Hrot.Look.Effects.EffectRules.ForShot(in fire, h.World, h.TestTkb, specs));   // the next shot is a new effect
-        Assert.Single(h.GatherEffects(11.0), e => e.Kind == nameof(Fdp.Toolkit.Tkb.Domain.EffectKind.MuzzleFlash));
+        Assert.Single(h.GatherEffects(11.0), e => e.Kind == HrotEffectKind.MuzzleFlash);
     }
 
     [Fact]
@@ -252,7 +252,7 @@ public class LookGatherTests
 
         var first = Assert.Single(h.Gather(10.75).Of<HrotVehicleLook>());
         Assert.Contains(((byte)VehiclePart.RunningGearL, (byte)2), first.Parts);
-        Assert.Equal(nameof(DestructionKind.None), first.Destruction);
+        Assert.Equal(HrotKillKind.None, first.Destruction);
         Assert.False(first.Burning);
         Assert.Contains(((byte)2, 0.5f), first.Openings);
 
@@ -314,7 +314,7 @@ public class LookGatherTests
 
         var look = Assert.Single(h.Gather(130.0).Of<HrotVehicleLook>());
 
-        Assert.Equal(nameof(DestructionKind.Catastrophic), look.Destruction);
+        Assert.Equal(HrotKillKind.Catastrophic, look.Destruction);
         Assert.True(look.TurretThrown);
         Assert.True(look.Burning);
     }

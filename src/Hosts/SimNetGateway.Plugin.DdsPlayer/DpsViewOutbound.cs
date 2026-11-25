@@ -66,8 +66,8 @@ public sealed class DpsViewOutbound : IGatewayModule
 
         var view = new D.View
         {
-            Source = LookNames.ByName<D.ViewSource>("ViewSource", m.Source),
-            Mode = LookNames.ByName<D.ViewMode>("ViewMode", m.Mode),
+            Source = (D.ViewSource)(byte)m.Source,
+            Mode = (D.ViewMode)(byte)m.Mode,
             TargetId = m.TargetId,
             Distance = m.Distance,
             Side = m.Side,
@@ -223,8 +223,8 @@ public sealed class DpsViewOutbound : IGatewayModule
             SimTime = m.SimTime,
             Position = new D.Vec3d { X = m.Position.X, Y = m.Position.Y, Z = m.Position.Z },
             Normal = new D.Vec3f { X = (float)m.Normal.X, Y = (float)m.Normal.Y, Z = (float)m.Normal.Z },
-            Surface = LookNames.EffectSurfaceOf(m.Surface),
-            Kind = LookNames.ImpactKindOf(m.Kind),
+            Surface = (D.EffectSurface)(byte)m.Surface,
+            Kind = (D.ImpactKind)(byte)m.Kind,
             MunitionTypeId = m.MunitionTkb,
             ShooterId = m.ShooterId,
             Material = m.Material is { Length: > 32 } material ? material[..32] : m.Material ?? string.Empty,

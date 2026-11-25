@@ -11,7 +11,7 @@ namespace SimNetGateway.Plugin.DdsPlayer.Tests;
 /// </summary>
 public class DpsGroundTests
 {
-    private static HrotCrater Crater(double x, double y, double z, double born, string kind = "Small", float radius = 2f) => new(new HrotVec3(x, y, z), radius, 0.75f, 0.25f, born, kind);
+    private static HrotCrater Crater(double x, double y, double z, double born, HrotCraterKind kind = HrotCraterKind.Small, float radius = 2f) => new(new HrotVec3(x, y, z), radius, 0.75f, 0.25f, born, kind);
 
     [Fact]
     public void A_building_samples_carry_hrots_times_and_blast_points_exactly_and_zero_stays_zero()
@@ -21,7 +21,7 @@ public class DpsGroundTests
         using var rig = new Rig(domain);
 
         rig.Send(new HrotBuildingDamage("range/H2", true,
-            [new HrotBreach(0, 4f, 4.6f, 1.1f, 1.6f, "Hole", 312.4, new HrotVec3(10.5, -20.25, 3.75)), new HrotBreach(2, 1f, 3f, 0f, 2.2f, "Passage", 0d, HrotVec3.Zero)],
+            [new HrotBreach(0, 4f, 4.6f, 1.1f, 1.6f, HrotBreachKind.Hole, 312.4, new HrotVec3(10.5, -20.25, 3.75)), new HrotBreach(2, 1f, 3f, 0f, 2.2f, HrotBreachKind.Passage, 0d, HrotVec3.Zero)],
             [new HrotWindowDamage(1, 0, 1, 40, 50, 60, 70, 55.5), new HrotWindowDamage(3, 2, 3, 0, 0, 0, 0, 0d)], 401.25));
         rig.Send(new HrotBuildingDamage("range/H1", false, [], [new HrotWindowDamage(0, 0, 3, 0, 0, 0, 0, 7.25)]));   // CollapsedAt defaults to 0
 
@@ -41,7 +41,7 @@ public class DpsGroundTests
         using var cells = new Watch.Watch<D.GroundDamage>(domain, "station-1", g => g.Cell);
         using var rig = new Rig(domain);
 
-        rig.Send(new HrotGroundDamage("1,-1", [Crater(70, -10, 7.5, 312.4, "Large", 3.5f), Crater(65, -20, 8.25, 100.0), Crater(66, -21, 0, 0d, "Huge")]));
+        rig.Send(new HrotGroundDamage("1,-1", [Crater(70, -10, 7.5, 312.4, HrotCraterKind.Large, 3.5f), Crater(65, -20, 8.25, 100.0), Crater(66, -21, 0, 0d, HrotCraterKind.Unknown)]));
         rig.Send(new HrotGroundDamage("0,0", [Crater(1, 2, 3, 4)]));
 
         Assert.True(cells.Until(w => w.Alive.Count == 2));

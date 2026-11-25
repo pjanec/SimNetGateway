@@ -327,13 +327,13 @@ public sealed class DpsOutbound : IGatewayModule
             CarryOtherId = d.CarryOther,
             SeatIndex = d.SeatIndex,
             SeatExposed = d.SeatExposed,
-            SeatPose = LookNames.SeatPoseOf(d.SeatPose),
+            SeatPose = (D.SeatPose)(byte)d.SeatPose,
             CarryRole = (D.CarryRole)(byte)d.CarryRole,
             PartnerId = d.Partner,
             Burning = d.Burning,
             Fear = d.Fear,
             Anger = d.Anger,
-            CivilianMode = LookNames.CivilianModeOf(d.CivilianMode),
+            CivilianMode = (D.CivilianMode)(byte)d.CivilianMode,
             HeldLook = (D.HeldLook)(byte)d.HeldLook,   // the pivot enums mirror the contract's in order (a rail pins it)
             SlungLook = (D.HeldLook)(byte)d.SlungLook,
             HeldMarking = (D.HeldMarking)(byte)d.HeldMarking,
@@ -440,7 +440,7 @@ public sealed class DpsOutbound : IGatewayModule
         var look = new D.VehicleLook
         {
             EntityId = m.Id,
-            KillKind = LookNames.KillKindOf(m.Destruction),
+            KillKind = (D.KillKind)(byte)m.Destruction,
             TurretThrown = m.TurretThrown,
             Burning = m.Burning,
             Smoking = m.Smoking,
@@ -471,7 +471,7 @@ public sealed class DpsOutbound : IGatewayModule
             WeaponSlot = 0,
             Origin = V3d(m.Origin),
             Velocity = V3f(m.Velocity),
-            WeaponCategory = LookNames.WeaponCategoryOf(m.WeaponCategory),
+            WeaponCategory = (D.WeaponCategory)(byte)m.WeaponCategory,
             BurstId = m.BurstId,
             BurstRounds = m.BurstId == 0 ? (byte)0 : m.BurstRounds,
             BurstIndex = m.BurstId == 0 ? (byte)0 : m.BurstIndex,
@@ -492,17 +492,17 @@ public sealed class DpsOutbound : IGatewayModule
 
     private void OnEffect(in HrotEffect m, IngressContext ctx)
     {
-        if (!LookNames.TryEffectKindOf(m.Kind, out var kind))
+        if (m.Kind == HrotEffectKind.Omitted)
         {
-            return;   // a kind DPS deliberately does not carry
+            return;   // a kind DPS deliberately does not carry (tracer, flare, chaff)
         }
 
         _ports.Effect.Send(new DpsItem<D.Effect>(new D.Effect
         {
             SimTime = m.StartedAt > 0.0 ? m.StartedAt : _simTime,
-            Kind = kind,
-            SizeClass = LookNames.EffectSizeOf(m.SizeClass),
-            Surface = LookNames.EffectSurfaceOf(m.Surface),
+            Kind = (D.EffectKind)(byte)m.Kind,
+            SizeClass = (D.EffectSize)(byte)m.SizeClass,
+            Surface = (D.EffectSurface)(byte)m.Surface,
             MunitionDis = ToDis(DisTypeCode.Unpack(unchecked((long)m.MunitionDis))),
             EffectType = unchecked((int)m.EffectType),
             Position = V3d(m.At),

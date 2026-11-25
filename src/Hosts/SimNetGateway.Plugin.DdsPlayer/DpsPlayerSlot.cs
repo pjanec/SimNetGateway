@@ -118,19 +118,19 @@ internal sealed class DpsPlayerSlot
             CanUse = status.UseVerb != 0,
             UseTargetId = status.UseTarget,
             UseVerb = status.UseVerb,
-            Verb = LookNames.ByName<D.UseVerb>("UseVerb", status.UseVerbName),
+            Verb = (D.UseVerb)(byte)status.UseVerbKind,
             UseLabel = Cut(status.UseLabel, 32),
-            FireMode = LookNames.ByName<D.FireMode>("FireMode", status.FireMode),
+            FireMode = (D.FireMode)(byte)status.FireMode,
             UseSeq = status.UseSeq,
-            UseOutcome = LookNames.ByName<D.UseOutcome>("UseOutcome", status.UseOutcome),
-            UseReason = LookNames.ByName<D.UseReason>("UseReason", status.UseReason),
+            UseOutcome = (D.UseOutcome)(byte)status.UseOutcome,
+            UseReason = (D.UseReason)(byte)status.UseReason,
             SpreadRad = status.SpreadRad,
-            RadarWarning = LookNames.ByName<D.RadarWarningLevel>("RadarWarningLevel", status.RadarWarning),
+            RadarWarning = (D.RadarWarningLevel)(byte)status.RadarWarning,
             RadarBearingDeg = status.RadarBearingDeg,
             MissileLaunch = status.MissileLaunch,
             MissileBearingDeg = status.MissileBearingDeg,
             MissileTimeToImpactS = status.MissileTimeToImpactS,
-            MissileSeeker = LookNames.ByName<D.MissileSeeker>("MissileSeeker", status.MissileSeeker),
+            MissileSeeker = (D.MissileSeeker)(byte)status.MissileSeeker,
             Ammo =
             [
                 .. status.Ammo.Take(16).Select(a => new D.AmmoEntry
@@ -152,10 +152,10 @@ internal sealed class DpsPlayerSlot
             [
                 .. status.Actions is null ? [] : status.Actions.Take(MaxActions).Select(a => new D.UseActionEntry
                 {
-                    Verb = LookNames.ByName<D.UseVerb>("UseVerb", a.Verb),
+                    Verb = (D.UseVerb)(byte)a.Verb,
                     Label = Cut(a.Label, 32),
                     Available = a.Available,
-                    Reason = LookNames.ByName<D.UseReason>("UseReason", a.Reason),
+                    Reason = (D.UseReason)(byte)a.Reason,
                     HoldOnly = a.HoldOnly,
                 }),
             ],
@@ -212,7 +212,7 @@ internal sealed class DpsPlayerSlot
         if (a.Health != b.Health || a.HealthMax != b.HealthMax || a.UseVerb != b.UseVerb || a.UseTarget != b.UseTarget || a.ActiveMount != b.ActiveMount || a.FireMode != b.FireMode
             || a.UseLabel != b.UseLabel || a.UseSeq != b.UseSeq || a.UseOutcome != b.UseOutcome || a.UseReason != b.UseReason || a.SpreadRad != b.SpreadRad || a.RadarWarning != b.RadarWarning
             || a.RadarBearingDeg != b.RadarBearingDeg || a.MissileLaunch != b.MissileLaunch || a.MissileBearingDeg != b.MissileBearingDeg || a.MissileSeeker != b.MissileSeeker
-            || a.UseVerbName != b.UseVerbName || MathF.Abs(a.MissileTimeToImpactS - b.MissileTimeToImpactS) >= MissileRefreshS)
+            || a.UseVerbKind != b.UseVerbKind || MathF.Abs(a.MissileTimeToImpactS - b.MissileTimeToImpactS) >= MissileRefreshS)
         {
             return false;
         }

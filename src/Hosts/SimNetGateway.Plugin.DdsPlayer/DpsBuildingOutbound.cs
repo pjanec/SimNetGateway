@@ -60,16 +60,16 @@ public sealed class DpsBuildingOutbound : IGatewayModule
             CollapsedAt = m.CollapsedAt,
             FireSince = m.FireSince,
             FireSeconds = m.FireSeconds,
-            CollapseCause = LookNames.ByName<D.BreachCause>("BreachCause", m.CollapseCause),
+            CollapseCause = (D.BreachCause)(byte)m.CollapseCause,
             CollapseBlast = Vec3d(m.CollapseBlast),
             CollapseKg = m.CollapseKg,
             Breaches =
             [
                 .. m.Breaches.Take(MaxBreaches).Select(b => new D.Breach
                 {
-                    Panel = b.Panel, From = b.From, To = b.To, Bottom = b.Bottom, Top = b.Top, Kind = LookNames.ByName<D.BreachKind>("BreachKind", b.Kind),
+                    Panel = b.Panel, From = b.From, To = b.To, Bottom = b.Bottom, Top = b.Top, Kind = (D.BreachKind)(byte)b.Kind,
                     MadeAt = b.MadeAt, Blast = Vec3d(b.Blast),
-                    Cause = LookNames.ByName<D.BreachCause>("BreachCause", b.Cause), ExplosiveKg = b.ExplosiveKg, Actor = b.Actor, Centre = Vec3d(b.Centre), Normal = Vec3f(b.Normal),
+                    Cause = (D.BreachCause)(byte)b.Cause, ExplosiveKg = b.ExplosiveKg, Actor = b.Actor, Centre = Vec3d(b.Centre), Normal = Vec3f(b.Normal),
                 }),
             ],
             Windows = [.. m.Windows.Take(MaxWindows).Select(w => new D.WindowDamage { Panel = w.Panel, Opening = w.Opening, Hits = w.Hits, U0 = w.U0, V0 = w.V0, U1 = w.U1, V1 = w.V1, HitAt = w.HitAt, Centre = Vec3d(w.Centre), Normal = Vec3f(w.Normal) })],

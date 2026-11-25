@@ -87,7 +87,7 @@ internal sealed class AnimalGather
         var state = world.GetComponentRO<AnimalState>(e);
         int count = 0, initial = 0;
         uint seed = 0;
-        string flockMode = string.Empty;
+        var flockMode = HrotFlockMode.Unknown;
         bool airborne = Airborne.Of(world, e);   // HROT's own reader: a flock flying, a lone bird in flight, a flyer's flight state
         if (world.IsComponentTypeRegistered<FlockState>() && world.HasComponent<FlockState>(e))
         {
@@ -95,10 +95,10 @@ internal sealed class AnimalGather
             count = flock.Count;
             initial = flock.InitialCount;
             seed = flock.Seed;
-            flockMode = flock.Mode.ToString();
+            flockMode = PivotEnum<HrotFlockMode>.Of(flock.Mode);
         }
 
-        message = new HrotAnimal(id, state.Mode.ToString(), state.FearBand, (state.Flags & AnimalFlags.Bolting) != 0, (state.Flags & AnimalFlags.Dangerous) != 0,
+        message = new HrotAnimal(id, PivotEnum<HrotAnimalMode>.Of(state.Mode), state.FearBand, (state.Flags & AnimalFlags.Bolting) != 0, (state.Flags & AnimalFlags.Dangerous) != 0,
             (state.Flags & AnimalFlags.Calling) != 0, count, initial, seed, flockMode, airborne);
         if (_sent.TryGetValue(id, out var previous) && previous.Equals(message))
         {

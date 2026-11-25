@@ -115,7 +115,7 @@ internal sealed class EffectGather
 
         var at = (Vector3)world.GetComponentRO<SimTransform>(e).Position;
         types?.Reference(cause.Ammo);
-        inbound.Enqueue(new HrotImpact(bornAt, new HrotVec3(at.X, at.Y, at.Z), new HrotVec3(cause.Normal.X, cause.Normal.Y, cause.Normal.Z), ((EffectSurface)cause.Surface).ToString(), ((ImpactKind)(cause.Impact - 1)).ToString(), cause.Ammo,
+        inbound.Enqueue(new HrotImpact(bornAt, new HrotVec3(at.X, at.Y, at.Z), new HrotVec3(cause.Normal.X, cause.Normal.Y, cause.Normal.Z), PivotEnum<HrotEffectSurface>.Of((EffectSurface)cause.Surface), PivotEnum<HrotImpactKind>.Of((ImpactKind)(cause.Impact - 1)), cause.Ammo,
             LookIds.NetworkIdOf(world, cause.Shooter), MaterialOf(cause.Material)));
     }
 
@@ -133,8 +133,8 @@ internal sealed class EffectGather
             mount = (byte)a.WeaponIndex;
         }
 
-        // HROT's enumerations go as their names (the plugins never decode HROT's numbers)
-        var msg = new HrotEffect(s.Kind.ToString(), s.SizeClass.ToString(), s.Surface.ToString(), (ulong)s.MunitionDis.Value, s.EffectType, new HrotVec3(s.At.X, s.At.Y, s.At.Z),
+        // HROT's enumerations go as the pivot's enums, mapped by member name (the plugins never decode HROT's numbers)
+        var msg = new HrotEffect(PivotEnum<HrotEffectKind>.Of(s.Kind), PivotEnum<HrotEffectSize>.Of(s.SizeClass), PivotEnum<HrotEffectSurface>.Of(s.Surface), (ulong)s.MunitionDis.Value, s.EffectType, new HrotVec3(s.At.X, s.At.Y, s.At.Z),
             new HrotQuat(s.Rotation.X, s.Rotation.Y, s.Rotation.Z, s.Rotation.W), anchor, mount, s.Lifetime, s.Size, s.StartedAt);
         inbound.Enqueue(in msg);
     }
@@ -261,7 +261,7 @@ internal sealed class VehicleLookGather
             }
         }
 
-        string destruction = VehicleLook.Destruction(world, e).ToString();   // HROT's destruction kind by name
+        var destruction = PivotEnum<HrotKillKind>.Of(VehicleLook.Destruction(world, e));   // HROT's destruction kind, by member name
         bool turret = VehicleLook.TurretThrown(world, e), burning = VehicleLook.Burning(world, e, now), smoking = VehicleLook.Smoking(world, e, now);
         uint lights = VehicleLook.Lights(world, e, now, _brakes);
         bool airborne = Airborne.Of(world, e);   // T-079: HROT's one flight-state rule (the same call the animal gather makes)
@@ -272,10 +272,10 @@ internal sealed class VehicleLookGather
         float rotor = VehicleLook.RotorSpeed(world, e, now);
         var (rotorTarget, rotorFrom, rotorAt, rotorSeconds) = SpoolOf(world, tkb, e, id, now);
         bool known = _sent.TryGetValue(id, out var previous);
-        if (known && string.Equals(previous.Destruction, destruction, StringComparison.Ordinal) && previous.TurretThrown == turret && previous.Burning == burning
-            && previous.Smoking == smoking && previous.Lights == lights && previous.Parts.SequenceEqual(_parts) && SameMotions(previous.OpeningMotions, _motions)
+        if (known && previous.Destruction == destruction && previous.TurretThrown == turret && previous.Burning == burning
+            && previous.Smoking == smoking && previous.Lights == lights && SameParts(previous.Parts, _parts) && SameMotions(previous.OpeningMotions, _motions)
             && previous.RotorTarget == rotorTarget && previous.RotorFrom == rotorFrom && previous.RotorChangedAt == rotorAt && previous.RotorSpoolSeconds == rotorSeconds
-            && (previous.CrewExposed ?? []).SequenceEqual(_crew) && previous.FlailActive == flail && previous.Airborne == airborne)
+            && SameCrew(previous.CrewExposed, _crew) && previous.FlailActive == flail && previous.Airborne == airborne)
         {
             message = default;
             return false;   // the steady path allocates nothing
@@ -308,6 +308,42 @@ internal sealed class VehicleLookGather
         var s = openings.Slots[slot];
         float target = s.State is Fdp.Toolkit.Behavior.Components.OpeningState.Opening or Fdp.Toolkit.Behavior.Components.OpeningState.Open ? 1f : 0f;
         return new HrotOpeningMotion(opening.Id, target, s.Since, opening.OpenSeconds);
+    }
+
+    private static bool SameParts(IReadOnlyList<(byte Part, byte State)> a, List<(byte Part, byte State)> b)
+    {
+        if (a.Count != b.Count)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < b.Count; i++)
+        {
+            if (a[i] != b[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool SameCrew(IReadOnlyList<byte>? a, List<byte> b)
+    {
+        if ((a?.Count ?? 0) != b.Count)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < b.Count; i++)
+        {
+            if (a![i] != b[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool SameMotions(IReadOnlyList<HrotOpeningMotion>? a, List<HrotOpeningMotion> b)

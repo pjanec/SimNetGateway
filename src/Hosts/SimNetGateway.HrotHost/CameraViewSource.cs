@@ -21,8 +21,6 @@ public sealed class HrotCameraViewSource : ISuggestedViewSource
     private string _text = string.Empty;
     private FixedString64 _take;
     private string _takeName = string.Empty;
-    private readonly string?[] _sourceNames = new string?[256];   // an enum's ToString allocates: made once per value
-    private readonly string?[] _modeNames = new string?[256];
 
     /// <summary>How many times the caption text was read from HROT (a rail pins it to the serial changes).</summary>
     public int TextReads { get; private set; }
@@ -71,8 +69,8 @@ public sealed class HrotCameraViewSource : ISuggestedViewSource
         // the director names its follow unit by network id; the other drivers bind an entity
         int target = s.BoundNetId != 0 ? s.BoundNetId : LookIds.NetworkIdOf(world, s.Bound);
         view = new HrotView(
-            _sourceNames[(byte)s.Source] ??= s.Source.ToString(),
-            _modeNames[(byte)s.Mode] ??= s.Mode == CameraMode.FixedKey ? "Fixed" : s.Mode.ToString(),   // the contract's name for HROT's FixedKey
+            PivotEnum<HrotViewSource>.Of(s.Source),
+            PivotEnum<HrotViewMode>.Of(s.Mode),   // by member name; the contract's name for HROT's FixedKey is a rename row in PivotEnums
             target,
             s.Distance,
             s.ShoulderSide,

@@ -18,7 +18,7 @@ public class DpsRoundFlameTests
     private static HrotEntityState State(int id, long tkb = 103, long? dis = null) =>
         new(id, tkb, dis ?? TankDis, "X", 2, 0, new HrotVec3(10, 20, 3), HrotQuat.Identity, HrotVec3.Zero, HrotVec3.Zero, 100, 100, 1.0);
 
-    private static HrotPersonDetail Detail(int id, bool burning = false, byte fear = 0, byte anger = 0, string mode = "") =>
+    private static HrotPersonDetail Detail(int id, bool burning = false, byte fear = 0, byte anger = 0, HrotCivilianMode mode = HrotCivilianMode.Unknown) =>
         new(id, HrotStance.Standing, 1f, HrotHeldItem.None, 0, HrotVec3.Zero, false, 0f, HrotGesture.None, HrotAction.None, 0, HrotActionState.None, 0, 0, HrotSeatRole.None,
             HrotCarryMode.None, burning, fear, anger, mode);
 
@@ -65,8 +65,8 @@ public class DpsRoundFlameTests
 
         Assert.True(fires.Until(w =>
         {
-            rig.Send(new HrotFire(2001, 0, 501, MunitionDis, HrotVec3.Zero, HrotVec3.Zero, 1, "MachineGun"));
-            rig.Send(new HrotFire(2001, 0, 501, MunitionDis, HrotVec3.Zero, HrotVec3.Zero, 1, "Railgun"));
+            rig.Send(new HrotFire(2001, 0, 501, MunitionDis, HrotVec3.Zero, HrotVec3.Zero, 1, HrotWeaponCategory.MachineGun));
+            rig.Send(new HrotFire(2001, 0, 501, MunitionDis, HrotVec3.Zero, HrotVec3.Zero, 1, HrotWeaponCategory.Unknown));
             rig.Send(new HrotFire(2001, 0, 501, MunitionDis, HrotVec3.Zero, HrotVec3.Zero, 1));
             return w.Events.Count >= 3;
         }));
@@ -84,7 +84,7 @@ public class DpsRoundFlameTests
         using var rig = new Rig(domain);
         rig.Send(State(1201, dis: PersonDis));
 
-        rig.Send(Detail(1201, burning: true, fear: 3, anger: 2, mode: "Panic"));
+        rig.Send(Detail(1201, burning: true, fear: 3, anger: 2, mode: HrotCivilianMode.Panic));
         Assert.True(watch.Until(w => w.Alive.TryGetValue("1201", out var p) && p.Burning));
         var p = watch.Alive["1201"];
         Assert.Equal((byte)3, p.Fear);
@@ -92,13 +92,13 @@ public class DpsRoundFlameTests
         Assert.Equal(D.CivilianMode.CivilianModePanic, p.CivilianMode);
 
         // each of the new fields alone is a change that is sent (not held back to the heartbeat)
-        rig.Send(Detail(1201, burning: true, fear: 3, anger: 2, mode: "Riot"));
+        rig.Send(Detail(1201, burning: true, fear: 3, anger: 2, mode: HrotCivilianMode.Riot));
         Assert.True(watch.Until(w => w.Alive["1201"].CivilianMode == D.CivilianMode.CivilianModeRiot));
-        rig.Send(Detail(1201, burning: false, fear: 3, anger: 2, mode: "Riot"));
+        rig.Send(Detail(1201, burning: false, fear: 3, anger: 2, mode: HrotCivilianMode.Riot));
         Assert.True(watch.Until(w => !w.Alive["1201"].Burning));
-        rig.Send(Detail(1201, burning: false, fear: 4, anger: 2, mode: "Riot"));
+        rig.Send(Detail(1201, burning: false, fear: 4, anger: 2, mode: HrotCivilianMode.Riot));
         Assert.True(watch.Until(w => w.Alive["1201"].Fear == 4));
-        rig.Send(Detail(1201, burning: false, fear: 4, anger: 1, mode: "Mood"));
+        rig.Send(Detail(1201, burning: false, fear: 4, anger: 1, mode: HrotCivilianMode.Unknown));
         Assert.True(watch.Until(w => w.Alive["1201"].Anger == 1));
         Assert.Equal(D.CivilianMode.CivilianModeUnknown, watch.Alive["1201"].CivilianMode);
     }
@@ -149,7 +149,7 @@ public class DpsRoundFlameTests
         using var rig = new Rig(domain);
         rig.Send(State(2001));
 
-        rig.Send(new HrotVehicleLook(2001, "None", false, false, false, 0, [], [(2, 1f), (3, 0f)], 0.75f, [2]));
+        rig.Send(new HrotVehicleLook(2001, HrotKillKind.None, false, false, false, 0, [], [(2, 1f), (3, 0f)], 0.75f, [2]));
 
         Assert.True(watch.Until(w => w.Alive.ContainsKey("2001")));
         var v = watch.Alive["2001"];
@@ -157,7 +157,7 @@ public class DpsRoundFlameTests
         Assert.Equal([(2, true), (3, false)], v.Openings.Select(o => (o.OpeningId, o.CrewExposed)).ToArray());
 
         // a vehicle look from before round 2 (no crew list, no rotor) maps to nothing exposed and a stopped rotor
-        rig.Send(new HrotVehicleLook(2001, "None", false, false, false, 0, [], [(2, 1f)]));
+        rig.Send(new HrotVehicleLook(2001, HrotKillKind.None, false, false, false, 0, [], [(2, 1f)]));
         Assert.True(watch.Until(w => w.Alive["2001"].RotorSpeed == 0f));
         Assert.False(watch.Alive["2001"].Openings[0].CrewExposed);
     }
@@ -171,7 +171,7 @@ public class DpsRoundFlameTests
         rig.Send(State(1201, dis: PersonDis));
 
         // a rider astride a seat of a vehicle
-        rig.Send(Detail(1201) with { SeatVehicle = 2100, SeatIndex = 2, SeatExposed = true, SeatPose = "Ride", CarryOther = 2100 });
+        rig.Send(Detail(1201) with { SeatVehicle = 2100, SeatIndex = 2, SeatExposed = true, SeatPose = HrotSeatPose.Ride, CarryOther = 2100 });
         Assert.True(watch.Until(w => w.Alive.TryGetValue("1201", out var s) && s.SeatPose == D.SeatPose.SeatPoseRide));
         var rider = watch.Alive["1201"];
         Assert.Equal(2, rider.SeatIndex);
@@ -197,13 +197,6 @@ public class DpsRoundFlameTests
     [Fact]
     public void The_roles_and_poses_map_by_name_and_value()
     {
-        Assert.Equal(D.SeatPose.SeatPoseSit, LookNames.SeatPoseOf("Sit"));
-        Assert.Equal(D.SeatPose.SeatPoseSitLegsOut, LookNames.SeatPoseOf("SitLegsOut"));
-        Assert.Equal(D.SeatPose.SeatPoseStand, LookNames.SeatPoseOf("Stand"));
-        Assert.Equal(D.SeatPose.SeatPoseKneel, LookNames.SeatPoseOf("Kneel"));
-        Assert.Equal(D.SeatPose.SeatPoseRide, LookNames.SeatPoseOf("Ride"));
-        Assert.Equal(D.SeatPose.SeatPoseUnknown, LookNames.SeatPoseOf(""));
-        Assert.Equal(D.SeatPose.SeatPoseUnknown, LookNames.SeatPoseOf("Hover"));
         // the contract's roles are the message's roles, by name and value
         Assert.Equal(Enum.GetNames<HrotCarryRole>().Select(n => "CarryRole" + n), Enum.GetNames<D.CarryRole>());
         Assert.Equal(Enum.GetValues<HrotCarryRole>().Select(v => (byte)v), Enum.GetValues<D.CarryRole>().Select(v => (byte)v));
@@ -217,16 +210,16 @@ public class DpsRoundFlameTests
         using var rig = new Rig(domain);
         rig.Send(State(2001));
 
-        rig.Send(new HrotVehicleLook(2001, "None", false, false, false, 0, [], [], FlailActive: true));
+        rig.Send(new HrotVehicleLook(2001, HrotKillKind.None, false, false, false, 0, [], [], FlailActive: true));
         Assert.True(watch.Until(w => w.Alive.TryGetValue("2001", out var v) && v.FlailActive));
 
-        rig.Send(new HrotVehicleLook(2001, "None", false, false, false, 0, [], [], FlailActive: false));
+        rig.Send(new HrotVehicleLook(2001, HrotKillKind.None, false, false, false, 0, [], [], FlailActive: false));
         Assert.True(watch.Until(w => !w.Alive["2001"].FlailActive));
 
         // T-079: the flight state travels with the look; a change alone replaces the instance
-        rig.Send(new HrotVehicleLook(2001, "None", false, false, false, 0, [], [], Airborne: true));
+        rig.Send(new HrotVehicleLook(2001, HrotKillKind.None, false, false, false, 0, [], [], Airborne: true));
         Assert.True(watch.Until(w => w.Alive["2001"].Airborne));
-        rig.Send(new HrotVehicleLook(2001, "None", false, false, false, 0, [], [], Airborne: false));
+        rig.Send(new HrotVehicleLook(2001, HrotKillKind.None, false, false, false, 0, [], [], Airborne: false));
         Assert.True(watch.Until(w => !w.Alive["2001"].Airborne));
     }
 
@@ -239,7 +232,7 @@ public class DpsRoundFlameTests
         using var rig = new Rig(domain);
         rig.Send(State(3001, tkb: 6_000_000_001L, dis: MunitionDis));
 
-        rig.Send(new HrotMunitionLook(6_000_000_001L, "Shell", 0.13f, 0.025f, 0x2F2F2FFF, false, true, 0xFF8A30FF, false, false));
+        rig.Send(new HrotMunitionLook(6_000_000_001L, HrotMunitionShape.Shell, 0.13f, 0.025f, 0x2F2F2FFF, false, true, 0xFF8A30FF, false, false));
         rig.Send(new HrotRound(3001, 6_000_000_001L, 2001, new HrotVec3(1, 2, 3), true, -1f, true));
 
         Assert.True(rounds.Until(w => w.Alive.ContainsKey("3001")));
@@ -261,7 +254,7 @@ public class DpsRoundFlameTests
         Assert.Equal(0xFF8A30FFu, look.TracerColourRgba);
 
         // a shape HROT appends later is sent as unknown, never as another shape
-        rig.Send(new HrotMunitionLook(6_000_000_002L, "Cannonball", 1f, 1f, 0, false, false, 0, false, false));
+        rig.Send(new HrotMunitionLook(6_000_000_002L, HrotMunitionShape.Unknown, 1f, 1f, 0, false, false, 0, false, false));
         Assert.True(looks.Until(w => w.Alive.ContainsKey("6000000002")));
         Assert.Equal(D.MunitionShape.MunitionShapeUnknown, looks.Alive["6000000002"].Shape);
 
@@ -313,7 +306,7 @@ public class DpsRoundFlameTests
         rig.Send(new HrotFireSpots(2001, [.. Enumerable.Range(0, 12).Select(i => new HrotFireSpot(new HrotVec3(i, 2, 3), 1.5f, 0.5f, 10.0 + i, 60f))]));
         rig.Send(new HrotGroundMarks(5001,
         [
-            .. Enumerable.Range(0, 20).Select(i => new HrotGroundMark(i == 0 ? "BurnedArea" : "VehicleStand", new HrotVec3(i, 2, 0), 0.5f, 6f, 3f, i == 0 ? "Rear" : "Front", 5.0, 9.0)),
+            .. Enumerable.Range(0, 20).Select(i => new HrotGroundMark(i == 0 ? HrotHeatMarkKind.BurnedArea : HrotHeatMarkKind.VehicleStand, new HrotVec3(i, 2, 0), 0.5f, 6f, 3f, i == 0 ? HrotHeatMarkEnd.Rear : HrotHeatMarkEnd.Front, 5.0, 9.0)),
         ]));
 
         Assert.True(spots.Until(w => w.Alive.ContainsKey("2001")));
@@ -372,11 +365,11 @@ public class DpsRoundFlameTests
         using var looks = new Watch.Watch<D.MunitionLook>(domain, "station-1", l => l.MunitionTypeId.ToString());
         var rig = new Rig(domain);
         rig.Send(State(3001, tkb: 6, dis: MunitionDis));
-        rig.Send(new HrotMunitionLook(6, "Bullet", 0.02f, 0.006f, 0xFFFFFFFF, false, true, 0xFF6A30FF, false, false));
+        rig.Send(new HrotMunitionLook(6, HrotMunitionShape.Bullet, 0.02f, 0.006f, 0xFFFFFFFF, false, true, 0xFF6A30FF, false, false));
         rig.Send(new HrotRound(3001, 6, 0, HrotVec3.Zero, false, -1f, false));
         rig.Send(new HrotFlameJet(1201, 0, HrotVec3.Zero, 0, 10f, 0.1f, 1f, 0.0, 0f));
         rig.Send(new HrotFireSpots(2001, [new HrotFireSpot(HrotVec3.Zero, 1f, 1f, 1.0, 60f)]));
-        rig.Send(new HrotGroundMarks(5001, [new HrotGroundMark("BurnedArea", HrotVec3.Zero, 0f, 1f, 1f, "NoHotEnd", 0.0, 0.0)]));
+        rig.Send(new HrotGroundMarks(5001, [new HrotGroundMark(HrotHeatMarkKind.BurnedArea, HrotVec3.Zero, 0f, 1f, 1f, HrotHeatMarkEnd.Unknown, 0.0, 0.0)]));
         Assert.True(rounds.Until(w => w.Alive.Count == 1));
         Assert.True(jets.Until(w => w.Alive.Count == 1));
         Assert.True(spots.Until(w => w.Alive.Count == 1));
@@ -392,44 +385,62 @@ public class DpsRoundFlameTests
         Assert.True(looks.Until(w => w.Alive.Count == 0));
     }
 
+
+    /// <summary>
+    /// T-080: every pivot enum mirrors the DPS enum it ends in - the same members in the same ORDER (the DPS enumerator is the enum's name + the member), so the outbound is a cast. <c>HrotEffectKind</c> has ONE more member after the
+    /// mirrored ones, <c>Omitted</c> (a kind DPS does not carry: the effect is not sent). Mutation: reorder or rename a pivot member and this fails.
+    /// </summary>
     [Fact]
-    public void Round_two_names_map_to_the_contract_and_an_unknown_name_to_its_unknown_value()
+    public void Every_pivot_enum_mirrors_its_dps_enum_in_names_and_order()
     {
-        Assert.Equal(D.CivilianMode.CivilianModeWatch, LookNames.CivilianModeOf("Watch"));
-        Assert.Equal(D.CivilianMode.CivilianModeArmedHostile, LookNames.CivilianModeOf("ArmedHostile"));
-        Assert.Equal(D.CivilianMode.CivilianModeUnknown, LookNames.CivilianModeOf("None"));
-        Assert.Equal(D.CivilianMode.CivilianModeUnknown, LookNames.CivilianModeOf(""));
-        Assert.Equal(D.CivilianMode.CivilianModeUnknown, LookNames.CivilianModeOf(null));
-        Assert.Equal(D.CivilianMode.CivilianModeUnknown, LookNames.CivilianModeOf("Stampede"));
-
-        Assert.Equal(D.WeaponCategory.WeaponCategoryFlamethrower, LookNames.WeaponCategoryOf("Flamethrower"));
-        Assert.Equal(D.WeaponCategory.WeaponCategoryAutocannon, LookNames.WeaponCategoryOf("Autocannon"));
-        Assert.Equal(D.WeaponCategory.WeaponCategoryUnknown, LookNames.WeaponCategoryOf("Unknown"));
-        Assert.Equal(D.WeaponCategory.WeaponCategoryUnknown, LookNames.WeaponCategoryOf("Railgun"));
-
-        Assert.Equal(D.MunitionShape.MunitionShapeGrenade, LookNames.MunitionShapeOf("Grenade"));   // HROT's value 0 is a real shape
-        Assert.Equal(D.MunitionShape.MunitionShapeArrow, LookNames.MunitionShapeOf("Arrow"));
-        Assert.Equal(D.MunitionShape.MunitionShapeUnknown, LookNames.MunitionShapeOf("Cannonball"));
-
-        Assert.Equal(D.HeatMarkKind.HeatMarkKindBodyImprint, LookNames.HeatMarkKindOf("BodyImprint"));
-        Assert.Equal(D.HeatMarkKind.HeatMarkKindUnknown, LookNames.HeatMarkKindOf("NoMark"));
-        Assert.Equal(D.HeatMarkEnd.HeatMarkEndFront, LookNames.HeatMarkEndOf("Front"));
-        Assert.Equal(D.HeatMarkEnd.HeatMarkEndUnknown, LookNames.HeatMarkEndOf("NoHotEnd"));
-
-        // every name HROT has today (the HrotHost guard lists them) maps to a non-unknown contract value, except HROT's own "none" values
-        foreach (var name in Enum.GetNames<D.CivilianMode>().Select(n => n["CivilianMode".Length..]).Where(n => n != "Unknown"))
+        (Type Pivot, Type Dps, string Prefix)[] pairs =
+        [
+        (typeof(HrotBodyPart), typeof(D.BodyPart), "BodyPart"),
+        (typeof(HrotMessageAddress), typeof(D.MessageAddress), "MessageAddress"),
+        (typeof(HrotObjectiveRole), typeof(D.ObjectiveRole), "ObjectiveRole"),
+        (typeof(HrotObjectiveState), typeof(D.ObjectiveState), "ObjectiveState"),
+        (typeof(HrotTriggerState), typeof(D.TriggerState), "TriggerState"),
+        (typeof(HrotExercisePhase), typeof(D.ExercisePhase), "ExercisePhase"),
+        (typeof(HrotSideOutcome), typeof(D.SideOutcome), "SideOutcome"),
+        (typeof(HrotAnimalMode), typeof(D.AnimalMode), "AnimalMode"),
+        (typeof(HrotFlockMode), typeof(D.FlockMode), "FlockMode"),
+        (typeof(HrotBreachKind), typeof(D.BreachKind), "BreachKind"),
+        (typeof(HrotBreachCause), typeof(D.BreachCause), "BreachCause"),
+        (typeof(HrotCraterKind), typeof(D.CraterKind), "CraterKind"),
+        (typeof(HrotMoverKind), typeof(D.MoverKind), "MoverKind"),
+        (typeof(HrotMoverSource), typeof(D.MoverSource), "MoverSource"),
+        (typeof(HrotTrafficLightState), typeof(D.TrafficLightState), "TrafficLightState"),
+        (typeof(HrotViewSource), typeof(D.ViewSource), "ViewSource"),
+        (typeof(HrotViewMode), typeof(D.ViewMode), "ViewMode"),
+        (typeof(HrotCivilianMode), typeof(D.CivilianMode), "CivilianMode"),
+        (typeof(HrotWeaponCategory), typeof(D.WeaponCategory), "WeaponCategory"),
+        (typeof(HrotMunitionShape), typeof(D.MunitionShape), "MunitionShape"),
+        (typeof(HrotSeatPose), typeof(D.SeatPose), "SeatPose"),
+        (typeof(HrotHeatMarkKind), typeof(D.HeatMarkKind), "HeatMarkKind"),
+        (typeof(HrotHeatMarkEnd), typeof(D.HeatMarkEnd), "HeatMarkEnd"),
+        (typeof(HrotEffectSize), typeof(D.EffectSize), "EffectSize"),
+        (typeof(HrotEffectSurface), typeof(D.EffectSurface), "EffectSurface"),
+        (typeof(HrotImpactKind), typeof(D.ImpactKind), "ImpactKind"),
+        (typeof(HrotKillKind), typeof(D.KillKind), "KillKind"),
+        (typeof(HrotEffectKind), typeof(D.EffectKind), "EffectKind"),
+        (typeof(HrotUseVerb), typeof(D.UseVerb), "UseVerb"),
+        (typeof(HrotFireMode), typeof(D.FireMode), "FireMode"),
+        (typeof(HrotUseOutcome), typeof(D.UseOutcome), "UseOutcome"),
+        (typeof(HrotUseReason), typeof(D.UseReason), "UseReason"),
+        (typeof(HrotRadarWarningLevel), typeof(D.RadarWarningLevel), "RadarWarningLevel"),
+        (typeof(HrotMissileSeeker), typeof(D.MissileSeeker), "MissileSeeker"),
+        (typeof(HrotInjury), typeof(D.Injury), "Injury"),
+        ];
+        foreach (var (pivot, dps, prefix) in pairs)
         {
-            Assert.Equal(name, LookNames.CivilianModeOf(name).ToString()["CivilianMode".Length..]);
-        }
-
-        foreach (var name in Enum.GetNames<D.WeaponCategory>().Select(n => n["WeaponCategory".Length..]).Where(n => n != "Unknown"))
-        {
-            Assert.Equal(name, LookNames.WeaponCategoryOf(name).ToString()["WeaponCategory".Length..]);
-        }
-
-        foreach (var name in Enum.GetNames<D.MunitionShape>().Select(n => n["MunitionShape".Length..]).Where(n => n != "Unknown"))
-        {
-            Assert.Equal(name, LookNames.MunitionShapeOf(name).ToString()["MunitionShape".Length..]);
+            var want = Enum.GetNames(dps).Select(n => n[prefix.Length..]).ToArray();
+            var have = Enum.GetNames(pivot).Take(want.Length).ToArray();
+            Assert.True(want.SequenceEqual(have), $"{pivot.Name} does not mirror {dps.Name}");
+            Assert.True(Enum.GetNames(dps).All(n => n.StartsWith(prefix, StringComparison.Ordinal)), dps.Name);
+            Assert.True(pivot == typeof(HrotEffectKind) ? Enum.GetNames(pivot).Length == want.Length + 1 : Enum.GetNames(pivot).Length == want.Length, $"{pivot.Name} has members the DPS enum has not");
+            // and the values are the same numbers, so a cast is the mapping
+            var dpsValues = Enum.GetValues(dps).Cast<object>().Select(v => Convert.ToInt32(v)).ToArray();
+            Assert.True(dpsValues.SequenceEqual(Enum.GetValues(pivot).Cast<object>().Take(dpsValues.Length).Select(v => Convert.ToInt32(v))), $"{pivot.Name} values");
         }
     }
 }

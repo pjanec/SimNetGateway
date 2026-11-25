@@ -61,7 +61,7 @@ public sealed class DpsTypeCatalog : IGatewayModule
         _ports.Animal.Send(new DpsItem<D.Animal>(new D.Animal
         {
             EntityId = m.Id,
-            Mode = LookNames.ByName<D.AnimalMode>("AnimalMode", m.Mode),
+            Mode = (D.AnimalMode)(byte)m.Mode,
             FearBand = m.FearBand,
             Bolting = m.Bolting,
             Dangerous = m.Dangerous,
@@ -69,7 +69,7 @@ public sealed class DpsTypeCatalog : IGatewayModule
             FlockCount = m.FlockCount,
             FlockInitialCount = m.FlockInitialCount,
             FlockSeed = m.FlockSeed,
-            FlockMode = LookNames.ByName<D.FlockMode>("FlockMode", m.FlockMode),
+            FlockMode = (D.FlockMode)(byte)m.FlockMode,
             Airborne = m.Airborne,
         }));
     }

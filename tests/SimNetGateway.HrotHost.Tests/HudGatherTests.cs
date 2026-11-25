@@ -104,14 +104,14 @@ public class HudGatherTests
 
         var kill = Assert.Single(h.GatherEvents().Of<HrotManDowned>());
 
-        Assert.Equal((1201, 1202, 1203, "Dead", 4, 2), (kill.VictimId, kill.SourceId, kill.OriginalSourceId, kill.State, kill.BodyPart, kill.VictimSide));
-        Assert.Equal("ShinR", kill.BodyPartName);   // HROT's own name of its part 3, which the gateway passes on by name
+        Assert.Equal((1201, 1202, 1203, HrotInjury.Dead, 4, 2), (kill.VictimId, kill.SourceId, kill.OriginalSourceId, kill.State, kill.BodyPart, kill.VictimSide));
+        Assert.Equal(HrotBodyPart.ShinR, kill.BodyPartName);   // HROT's own name of its part 3, which the gateway passes on by name
 
         // a remote kill (it arrived over the network: the source may be unknown, the part not stated)
         h.PublishForNextFrame(new ManDownedEvent { Victim = victim, Source = Entity.Null, OriginalSource = Entity.Null, State = InjuryState.Incapacitated, HasBodyPart = 0, VictimSide = ForceId.Neutral, IsRemote = true });
         var remote = Assert.Single(h.GatherEvents().Of<HrotManDowned>());
-        Assert.Equal((1201, 0, 0, "Incapacitated", 0, 3), (remote.VictimId, remote.SourceId, remote.OriginalSourceId, remote.State, remote.BodyPart, remote.VictimSide));
-        Assert.Equal(string.Empty, remote.BodyPartName);
+        Assert.Equal((1201, 0, 0, HrotInjury.Incapacitated, 0, 3), (remote.VictimId, remote.SourceId, remote.OriginalSourceId, remote.State, remote.BodyPart, remote.VictimSide));
+        Assert.Equal(HrotBodyPart.Unknown, remote.BodyPartName);
 
         // a frame without events sends none
         h.World.Bus.SwapBuffers();
@@ -128,13 +128,13 @@ public class HudGatherTests
         });
 
         var first = Assert.Single(h.GatherEvents().Of<HrotPlayerMessage>());
-        Assert.Equal((7, 12, "Side", 2, "Hold the line", 4f, (byte)2, 90.5, 3001), (first.MessageId, first.OriginNode, first.To, first.ToValue, first.Text, first.Seconds, first.Priority, first.SentAt,
+        Assert.Equal((7, 12, HrotMessageAddress.Side, 2, "Hold the line", 4f, (byte)2, 90.5, 3001), (first.MessageId, first.OriginNode, first.To, first.ToValue, first.Text, first.Seconds, first.Priority, first.SentAt,
             first.SourceId));   // a side crosses as the contract's force number: Hostile is 2
 
         h.PublishMessage(new PlayerMessageEvent { MessageId = 8, ToKind = "Unit", ToValue = 1201, Text = new string('t', 300) });
 
         var second = Assert.Single(h.GatherEvents().Of<HrotPlayerMessage>());
-        Assert.Equal(("Unit", 1201, 256), (second.To, second.ToValue, second.Text.Length));
+        Assert.Equal((HrotMessageAddress.Unit, 1201, 256), (second.To, second.ToValue, second.Text.Length));
         h.World.Bus.SwapBuffers();
         Assert.Empty(h.GatherEvents().Of<HrotPlayerMessage>());
     }
@@ -149,7 +149,7 @@ public class HudGatherTests
 
         var first = Assert.Single(h.Gather(10.0).Of<HrotStatus>());
 
-        Assert.Equal((3001, "Objective", "Active", "Armed", false, (byte)1), (first.Id, first.Role, first.State, first.TriggerState, first.Closed, first.Owner));
+        Assert.Equal((3001, HrotObjectiveRole.Objective, HrotObjectiveState.Active, HrotTriggerState.Armed, false, (byte)1), (first.Id, first.Role, first.State, first.TriggerState, first.Closed, first.Owner));
         Assert.Equal((3, 10, 0.5f, 1f, 0.25f, 0.8f, 5f, 12.5), (first.ProgressCur, first.ProgressNeed, first.Value, first.Target, first.Score, first.Pass, first.Points, first.ChangedAt));
         Assert.Equal(("held 3 s", "Hold the bridge", "HoldArea", "mission", (byte)2, true, true, 2f), (first.Reason, first.Title, first.Kind, first.Group, first.Phase, first.Required, first.Scored, first.Weight));
         Assert.Equal((60f, 900f, 130.0, true, (byte)2, 50f, false, (byte)1, (byte)3, 77, 5), (first.HoldFor, first.Deadline, first.ExpectedAt, first.Capture, first.Challenger, first.AreaRadius,
@@ -166,7 +166,7 @@ public class HudGatherTests
         changed.ProgressCur = 10;
         h.World.SetComponent(rule, changed);
         var update = Assert.Single(h.Gather(12.0).Of<HrotStatus>());
-        Assert.Equal(("Achieved", 10), (update.State, update.ProgressCur));
+        Assert.Equal((HrotObjectiveState.Achieved, 10), (update.State, update.ProgressCur));
 
         h.World.SetComponent(rule, new ObjectiveLinks { Subject = new EntityRef(78), Parent = new EntityRef(5) });   // a link alone is a change
         Assert.Equal(78, Assert.Single(h.Gather(13.0).Of<HrotStatus>()).SubjectId);
@@ -199,7 +199,7 @@ public class HudGatherTests
         h.World.AddComponent(e, new ExerciseResult { Phase = ExercisePhase.Running });
 
         var first = Assert.Single(h.Gather(10.0).Of<HrotExercise>());
-        Assert.Equal(("Running", 0.0, string.Empty, "None"), (first.Phase, first.EndedAt, first.Reason, first.Friendly.Outcome));
+        Assert.Equal((HrotExercisePhase.Running, 0.0, string.Empty, HrotSideOutcome.None), (first.Phase, first.EndedAt, first.Reason, first.Friendly.Outcome));
         Assert.Empty(h.Gather(11.0).Of<HrotExercise>());
 
         h.World.SetComponent(e, new ExerciseResult
@@ -208,9 +208,9 @@ public class HudGatherTests
             Hostile = new SideResult { Outcome = SideOutcome.Lose, Points = 10f, Score = 0.2f },
         });
         var ended = Assert.Single(h.Gather(12.0).Of<HrotExercise>());
-        Assert.Equal(("Ended", 1800.5, "Time is up"), (ended.Phase, ended.EndedAt, ended.Reason));
-        Assert.Equal(("Win", 40f, 0.9f), (ended.Friendly.Outcome, ended.Friendly.Points, ended.Friendly.Score));
-        Assert.Equal(("Lose", 10f, 0.2f, "None"), (ended.Opposing.Outcome, ended.Opposing.Points, ended.Opposing.Score, ended.Neutral.Outcome));
+        Assert.Equal((HrotExercisePhase.Ended, 1800.5, "Time is up"), (ended.Phase, ended.EndedAt, ended.Reason));
+        Assert.Equal((HrotSideOutcome.Win, 40f, 0.9f), (ended.Friendly.Outcome, ended.Friendly.Points, ended.Friendly.Score));
+        Assert.Equal((HrotSideOutcome.Lose, 10f, 0.2f, HrotSideOutcome.None), (ended.Opposing.Outcome, ended.Opposing.Points, ended.Opposing.Score, ended.Neutral.Outcome));
     }
 
     // ---- the HUD's words ------------------------------------------------------------------------------------------------------

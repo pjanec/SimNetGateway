@@ -141,17 +141,17 @@ public class RoundFlameGatherTests
         h.World.AddComponent(man, new EffectState { BurningUntil = new SimInstant(20.0) });
 
         var first = Assert.Single(h.Gather(10.0).Of<HrotPersonDetail>());
-        Assert.Equal((true, (byte)3, (byte)1, "Panic"), (first.Burning, first.Fear, first.Anger, first.CivilianMode));
+        Assert.Equal((true, (byte)3, (byte)1, HrotCivilianMode.Panic), (first.Burning, first.Fear, first.Anger, first.CivilianMode));
         Assert.Empty(h.Gather(11.0).Of<HrotPersonDetail>());   // nothing changed: nothing sent
 
         // the fire goes out with time alone
         var out_ = Assert.Single(h.Gather(25.0).Of<HrotPersonDetail>());
         Assert.False(out_.Burning);
-        Assert.Equal("Panic", out_.CivilianMode);
+        Assert.Equal(HrotCivilianMode.Panic, out_.CivilianMode);
 
         // a mood change alone (the mode, a quarter of fear, a quarter of anger)
         h.World.SetComponent(man, new Demeanour { Kind = GestureKind.None, Mode = Civ.CivilianMode.Riot, Fear = 3, Anger = 1 });
-        Assert.Equal("Riot", Assert.Single(h.Gather(26.0).Of<HrotPersonDetail>()).CivilianMode);
+        Assert.Equal(HrotCivilianMode.Riot, Assert.Single(h.Gather(26.0).Of<HrotPersonDetail>()).CivilianMode);
         h.World.SetComponent(man, new Demeanour { Kind = GestureKind.None, Mode = Civ.CivilianMode.Riot, Fear = 4, Anger = 1 });
         Assert.Equal((byte)4, Assert.Single(h.Gather(27.0).Of<HrotPersonDetail>()).Fear);
         h.World.SetComponent(man, new Demeanour { Kind = GestureKind.None, Mode = Civ.CivilianMode.Riot, Fear = 4, Anger = 2 });
@@ -159,10 +159,10 @@ public class RoundFlameGatherTests
 
         // the civilian mode "None" and a person with no demeanour at all send the empty name
         h.World.SetComponent(man, new Demeanour { Kind = GestureKind.None, Mode = Civ.CivilianMode.None, Fear = 0, Anger = 0 });
-        Assert.Equal(string.Empty, Assert.Single(h.Gather(29.0).Of<HrotPersonDetail>()).CivilianMode);
+        Assert.Equal(HrotCivilianMode.Unknown, Assert.Single(h.Gather(29.0).Of<HrotPersonDetail>()).CivilianMode);
         var plain = h.AddHrotEntity(1202, new Vector3(2, 2, 0), tkb: ManType);
         var detail = Assert.Single(h.Gather(30.0).Of<HrotPersonDetail>(), d => d.Id == 1202);
-        Assert.Equal((false, (byte)0, (byte)0, string.Empty), (detail.Burning, detail.Fear, detail.Anger, detail.CivilianMode));
+        Assert.Equal((false, (byte)0, (byte)0, HrotCivilianMode.Unknown), (detail.Burning, detail.Fear, detail.Anger, detail.CivilianMode));
         Assert.True(h.World.IsAlive(plain));
     }
 
@@ -242,7 +242,7 @@ public class RoundFlameGatherTests
         Assert.Equal(2, Hrot_DisKind(state.DisType));
         var look = Assert.Single(first.Of<HrotMunitionLook>());
         Assert.Equal((long)MunitionTkbCatalog.Tkb25mmApdsT, look.MunitionTkb);
-        Assert.Equal(nameof(MunitionShape.Shell), look.Shape);   // HROT's built-in look (this TKB carries no descriptor): by name
+        Assert.Equal(HrotMunitionShape.Shell, look.Shape);   // HROT's built-in look (this TKB carries no descriptor): by name
         Assert.True(look.Tracer);
         Assert.False(look.SmokeTrail);
         Assert.Equal(0.13f, look.Length);
@@ -343,9 +343,9 @@ public class RoundFlameGatherTests
         var fired = h.GatherEvents();
 
         var fire = Assert.Single(fired.Of<HrotFire>());
-        Assert.Equal(nameof(WeaponCategory.MachineGun), fire.WeaponCategory);   // the mount's own category, by name
+        Assert.Equal(HrotWeaponCategory.MachineGun, fire.WeaponCategory);   // the mount's own category, by name
         var look = Assert.Single(fired.Of<HrotMunitionLook>());
-        Assert.Equal(nameof(MunitionShape.Grenade), look.Shape);   // HROT's value 0: still named, not "none"
+        Assert.Equal(HrotMunitionShape.Grenade, look.Shape);   // HROT's value 0: still named, not "none"
         Assert.True(fired.All.IndexOf(look) < fired.All.IndexOf(fire));
 
         h.PublishForNextFrame(new WeaponFireNotification { Shooter = gun, Target = Entity.Null, WeaponIndex = 0, Quantity = 1, AmmoGuid = MunitionTkbCatalog.TkbM67Grenade });
@@ -354,7 +354,7 @@ public class RoundFlameGatherTests
         // a shooter with no weapon suite and a ball round (no look): an empty category, no look
         h.PublishForNextFrame(new WeaponFireNotification { Shooter = man, Target = Entity.Null, WeaponIndex = 0, Quantity = 1, AmmoGuid = 0x777 });
         var ball = h.GatherEvents();
-        Assert.Equal(string.Empty, Assert.Single(ball.Of<HrotFire>()).WeaponCategory);
+        Assert.Equal(HrotWeaponCategory.Unknown, Assert.Single(ball.Of<HrotFire>()).WeaponCategory);
         Assert.Empty(ball.Of<HrotMunitionLook>());
     }
 
@@ -504,11 +504,11 @@ public class RoundFlameGatherTests
         Assert.Equal(5001, sent.Id);
         Assert.Equal(2, sent.Marks.Count);
         var scorch = sent.Marks[0];
-        Assert.Equal(nameof(HeatMarkKind.BurnedArea), scorch.Kind);
-        Assert.Equal(nameof(HeatMarkEnd.Rear), scorch.HotEnd);
+        Assert.Equal(HrotHeatMarkKind.BurnedArea, scorch.Kind);
+        Assert.Equal(HrotHeatMarkEnd.Rear, scorch.HotEnd);
         Assert.Equal(new HrotVec3(5, 6, 0), scorch.Centre);   // z is 0: the host has no ground-height reader
         Assert.Equal((0.5f, 6f, 3f, 10.0, 20.0), (scorch.Heading, scorch.Length, scorch.Width, scorch.StandSince, scorch.LeftAt));
-        Assert.Equal(nameof(HeatMarkKind.VehicleStand), sent.Marks[1].Kind);
+        Assert.Equal(HrotHeatMarkKind.VehicleStand, sent.Marks[1].Kind);
         Assert.Empty(h.Gather(51.0).Of<HrotGroundMarks>());
 
         // another mark joins the cell: the set changes

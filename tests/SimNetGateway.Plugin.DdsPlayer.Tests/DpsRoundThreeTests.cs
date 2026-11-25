@@ -11,7 +11,7 @@ namespace SimNetGateway.Plugin.DdsPlayer.Tests;
 /// <summary>DPS round 3 in the plugin (DD-019 3.1, 3.2, 3.4, 3.5): the suggested view with its change detection and cuts, impacts, the round's launch and burn, airborne animals.</summary>
 public class DpsRoundThreeTests(ITestOutputHelper output)
 {
-    private static HrotView View(double simTime = 1.0, string source = "Director", string mode = "Shoulder", int target = 12, string shot = "Take 1", double x = 10, float distance = 2.2f,
+    private static HrotView View(double simTime = 1.0, HrotViewSource source = HrotViewSource.Director, HrotViewMode mode = HrotViewMode.Shoulder, int target = 12, string shot = "Take 1", double x = 10, float distance = 2.2f,
         HrotQuat? rotation = null, int cut = 0) =>
         new(source, mode, target, distance, -1f, new HrotVec3(x, 20, 3), rotation ?? HrotQuat.Identity, 60f, shot, simTime, cut);
 
@@ -51,7 +51,7 @@ public class DpsRoundThreeTests(ITestOutputHelper output)
         Assert.Equal((2u, "Take 2"), (views.Events[3].CutSeq, views.Events[3].Shot));
         rig.Send(View(simTime: 1.4, x: 12, rotation: Yaw(10), shot: "Take 2", target: 14));
         Assert.True(views.Until(w => w.Events.Count == 5));   // a state topic keeps one sample: wait for each before the next
-        rig.Send(View(simTime: 1.5, x: 12, rotation: Yaw(10), shot: "Take 2", target: 14, mode: "Chase"));
+        rig.Send(View(simTime: 1.5, x: 12, rotation: Yaw(10), shot: "Take 2", target: 14, mode: HrotViewMode.Chase));
         Assert.True(views.Until(w => w.Events.Count == 6));
         Assert.Equal(new[] { 3u, 4u }, new[] { views.Events[4].CutSeq, views.Events[5].CutSeq });
         Assert.Equal(D.ViewMode.ViewModeChase, views.Events[5].Mode);
@@ -91,7 +91,7 @@ public class DpsRoundThreeTests(ITestOutputHelper output)
         Assert.Equal([10.0, 15.0], views.Events.Select(e => e.SimTime).ToArray());
         Assert.All(views.Events, e => Assert.Equal(1u, e.CutSeq));
 
-        rig.Send(new HrotView("None", string.Empty, 0, 0f, 0f, HrotVec3.Zero, HrotQuat.Identity, 0f, string.Empty, 16.0));
+        rig.Send(new HrotView(HrotViewSource.None, HrotViewMode.Unknown, 0, 0f, 0f, HrotVec3.Zero, HrotQuat.Identity, 0f, string.Empty, 16.0));
         Assert.True(views.Until(w => w.Events.Count == 3));
         Assert.Equal(D.ViewSource.ViewSourceNone, views.Events[2].Source);
     }
@@ -104,7 +104,7 @@ public class DpsRoundThreeTests(ITestOutputHelper output)
         using var rig = new Rig(domain);
 
         rig.Send(View() with { Position = new HrotVec3(double.NaN, 0, 0) });
-        rig.Send(View(simTime: 2.0, shot: new string('s', 100), source: "Hologram", mode: "Teleport"));
+        rig.Send(View(simTime: 2.0, shot: new string('s', 100), source: HrotViewSource.None, mode: HrotViewMode.Unknown));
 
         Assert.True(views.Until(w => w.Events.Count == 1));
         Assert.Single(views.Events);
@@ -119,10 +119,10 @@ public class DpsRoundThreeTests(ITestOutputHelper output)
         using var impacts = new Watch.Watch<D.Impact>(domain, "station-1", i => "impact");
         using var rig = new Rig(domain);
 
-        rig.Send(new HrotImpact(5.5, new HrotVec3(1, 2, 3), new HrotVec3(0, 0, 1), "Building", "Stop", 6_000_000_001L, 2001, "Brick"));
-        rig.Send(new HrotImpact(5.6, new HrotVec3(1, 2, 3), HrotVec3.Zero, string.Empty, "Exit", 6_000_000_001L, 0, new string('m', 50)));
-        rig.Send(new HrotImpact(5.7, new HrotVec3(1, 2, 3), HrotVec3.Zero, "Ground", "Entry", 7, 0, string.Empty));
-        rig.Send(new HrotImpact(5.8, new HrotVec3(double.NaN, 2, 3), HrotVec3.Zero, "Ground", "Entry", 7, 0, string.Empty));   // not finite: dropped
+        rig.Send(new HrotImpact(5.5, new HrotVec3(1, 2, 3), new HrotVec3(0, 0, 1), HrotEffectSurface.Building, HrotImpactKind.Stopped, 6_000_000_001L, 2001, "Brick"));
+        rig.Send(new HrotImpact(5.6, new HrotVec3(1, 2, 3), HrotVec3.Zero, HrotEffectSurface.Unknown, HrotImpactKind.Left, 6_000_000_001L, 0, new string('m', 50)));
+        rig.Send(new HrotImpact(5.7, new HrotVec3(1, 2, 3), HrotVec3.Zero, HrotEffectSurface.Ground, HrotImpactKind.Entered, 7, 0, string.Empty));
+        rig.Send(new HrotImpact(5.8, new HrotVec3(double.NaN, 2, 3), HrotVec3.Zero, HrotEffectSurface.Ground, HrotImpactKind.Entered, 7, 0, string.Empty));   // not finite: dropped
 
         Assert.True(impacts.Until(w => w.Events.Count == 3));
         var stop = impacts.Events[0];
@@ -130,7 +130,6 @@ public class DpsRoundThreeTests(ITestOutputHelper output)
             (stop.SimTime, stop.Surface, stop.Kind, stop.MunitionTypeId, stop.ShooterId, stop.Material, stop.Normal.Z));
         Assert.Equal((D.EffectSurface.EffectSurfaceUnknown, D.ImpactKind.ImpactKindLeft, 32), (impacts.Events[1].Surface, impacts.Events[1].Kind, impacts.Events[1].Material.Length));
         Assert.Equal((D.EffectSurface.EffectSurfaceGround, D.ImpactKind.ImpactKindEntered), (impacts.Events[2].Surface, impacts.Events[2].Kind));
-        Assert.Equal(D.ImpactKind.ImpactKindUnknown, LookNames.ImpactKindOf("Ricochet"));
     }
 
     [Fact]
@@ -143,8 +142,8 @@ public class DpsRoundThreeTests(ITestOutputHelper output)
 
         rig.Send(new HrotRound(3001, 6_000_000_001L, 2001, new HrotVec3(1, 2, 3), false, -1f, false, 123.5, 5f));
         rig.Send(new HrotRound(3002, 6_000_000_002L, 0, new HrotVec3(1, 2, 3), false, -1f, false));   // from before round 3: no launch time, no motor
-        rig.Send(new HrotAnimal(4001, "Flee", 3, false, false, false, 12, 20, 777, "Flying", true));
-        rig.Send(new HrotAnimal(4002, "Calm", 0, false, false, false, 0, 0, 0, string.Empty));
+        rig.Send(new HrotAnimal(4001, HrotAnimalMode.Flee, 3, false, false, false, 12, 20, 777, HrotFlockMode.Flying, true));
+        rig.Send(new HrotAnimal(4002, HrotAnimalMode.Calm, 0, false, false, false, 0, 0, 0, HrotFlockMode.Unknown));
 
         Assert.True(rounds.Until(w => w.Alive.Count == 2));
         Assert.Equal((123.5, 5f), (rounds.Alive["3001"].LaunchedAt, rounds.Alive["3001"].BurnSeconds));
@@ -169,7 +168,7 @@ public class DpsRoundThreeTests(ITestOutputHelper output)
         {
             double t = k / Hz;
             var (position, rotation, fov) = path(t);
-            rig.Send(new HrotView("Director", "Free", 0, 0f, 0f, position, rotation, fov, "shot", t, cut?.Invoke(k) ?? 0));
+            rig.Send(new HrotView(HrotViewSource.Director, HrotViewMode.Free, 0, 0f, 0f, position, rotation, fov, "shot", t, cut?.Invoke(k) ?? 0));
             var last = sent[^1];
             double dt = t - last.SimTime;
             var p = new Vec3(last.Position.X, last.Position.Y, last.Position.Z);
@@ -236,14 +235,14 @@ public class DpsRoundThreeTests(ITestOutputHelper output)
         rig.Transport.View.Tap = sent.Add;
         for (int k = 0; k < 100; k++)
         {
-            rig.Send(new HrotView("Director", "Free", 0, 0f, 0f, new HrotVec3(10 + 30.0 * k / Hz, 0, 3), HrotQuat.Identity, 60f, "shot", k / Hz, 0));
+            rig.Send(new HrotView(HrotViewSource.Director, HrotViewMode.Free, 0, 0f, 0f, new HrotVec3(10 + 30.0 * k / Hz, 0, 3), HrotQuat.Identity, 60f, "shot", k / Hz, 0));
         }
 
         Assert.Equal(30.0, sent[^1].Velocity.X, 0.5);
         uint cutBefore = sent[^1].CutSeq;
         for (int k = 100; k < 130; k++)
         {
-            rig.Send(new HrotView("Director", "Free", 0, 0f, 0f, new HrotVec3(1000 + 1.0 * (k - 100) / Hz, 0, 3), HrotQuat.Identity, 60f, "shot", k / Hz, 1));
+            rig.Send(new HrotView(HrotViewSource.Director, HrotViewMode.Free, 0, 0f, 0f, new HrotVec3(1000 + 1.0 * (k - 100) / Hz, 0, 3), HrotQuat.Identity, 60f, "shot", k / Hz, 1));
         }
 
         var atCut = sent.First(v => v.CutSeq == cutBefore + 1);
@@ -262,18 +261,18 @@ public class DpsRoundThreeTests(ITestOutputHelper output)
         rig.Transport.View.Tap = sent.Add;
         for (int k = 0; k < 30; k++)
         {
-            rig.Send(new HrotView("Director", "Free", 0, 0f, 0f, new HrotVec3(10 + 5.0 * k / Hz, 0, 3), HrotQuat.Identity, 60f, "shot", k / Hz));
+            rig.Send(new HrotView(HrotViewSource.Director, HrotViewMode.Free, 0, 0f, 0f, new HrotVec3(10 + 5.0 * k / Hz, 0, 3), HrotQuat.Identity, 60f, "shot", k / Hz));
         }
 
         // paused: the pose stays and so does simulation time, more samples arrive
         for (int k = 0; k < 10; k++)
         {
-            rig.Send(new HrotView("Director", "Free", 0, 0f, 0f, new HrotVec3(10 + 5.0 * 29 / Hz, 0, 3), HrotQuat.Identity, 60f, "shot", 29 / Hz));
+            rig.Send(new HrotView(HrotViewSource.Director, HrotViewMode.Free, 0, 0f, 0f, new HrotVec3(10 + 5.0 * 29 / Hz, 0, 3), HrotQuat.Identity, 60f, "shot", 29 / Hz));
         }
 
         // nothing is sent while nothing moves on simulation time (the client's clock is held); a sample that goes out then (a binding value changed) says no motion
         int before = sent.Count;
-        rig.Send(new HrotView("Director", "Free", 0, 2f, 0f, new HrotVec3(10 + 5.0 * 29 / Hz, 0, 3), HrotQuat.Identity, 60f, "shot", 29 / Hz));
+        rig.Send(new HrotView(HrotViewSource.Director, HrotViewMode.Free, 0, 2f, 0f, new HrotVec3(10 + 5.0 * 29 / Hz, 0, 3), HrotQuat.Identity, 60f, "shot", 29 / Hz));
         Assert.Equal(before + 1, sent.Count);
         Assert.Equal((0f, 0f), (sent[^1].Velocity.X, sent[^1].Acceleration.X));
     }

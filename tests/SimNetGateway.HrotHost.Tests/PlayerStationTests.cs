@@ -579,10 +579,10 @@ public class PlayerStationTests
 
         var expected = Fdp.Toolkit.Behavior.Possession.OperatorUseActions.For(h.World, soldier, vehicle);
         var list = h.Station.Unit.Actions!;
-        Assert.Equal(expected.Select(a => a.Verb.ToString()), list.Select(a => a.Verb));
+        Assert.Equal(expected.Select(a => Enum.Parse<HrotUseVerb>(a.Verb.ToString())), list.Select(a => a.Verb));
         Assert.Equal(expected.Select(a => a.Available), list.Select(a => a.Available));
-        Assert.Equal(expected.Select(a => a.Reason.ToString()), list.Select(a => a.Reason));
-        Assert.Equal(["Drive", "Board"], list.Select(a => a.Verb));
+        Assert.Equal(expected.Select(a => Enum.Parse<HrotUseReason>(a.Reason.ToString())), list.Select(a => a.Reason));
+        Assert.Equal([HrotUseVerb.Drive, HrotUseVerb.Board], list.Select(a => a.Verb));
         Assert.StartsWith("Drive", list[0].Label);
 
         // the driver seat taken by someone else: the verb stays in the list, refused with HROT's reason
@@ -591,8 +591,8 @@ public class PlayerStationTests
         Assert.Equal(Fdp.Toolkit.Behavior.EmbarkResult.Applied, Fdp.Toolkit.Behavior.Embarkation.TryEmbark(h.World, other, vehicle, SeatRole.Driver));
         h.Steps(2);
         list = h.Station.Unit.Actions!;
-        Assert.Equal(("Board", true, "Ok"), (list[0].Verb, list[0].Available, list[0].Reason));   // HROT's order: the free seat goes first (O-4)
-        Assert.Equal(("Drive", false, "SeatTaken"), (list[1].Verb, list[1].Available, list[1].Reason));
+        Assert.Equal((HrotUseVerb.Board, true, HrotUseReason.Ok), (list[0].Verb, list[0].Available, list[0].Reason));   // HROT's order: the free seat goes first (O-4)
+        Assert.Equal((HrotUseVerb.Drive, false, HrotUseReason.SeatTaken), (list[1].Verb, list[1].Available, list[1].Reason));
     }
 
     [Fact]
@@ -784,22 +784,22 @@ public class PlayerStationTests
         var grenade = unit.Ammo[1];   // no loaded round: the mount's own
         Assert.Equal(("GRENADE", "M67 grenade", 6101L, 2, -1, -1), (grenade.Weapon, grenade.AmmoName, grenade.AmmoTypeId, grenade.Rounds, grenade.Magazine, grenade.LoadedRounds));
         Assert.False(grenade.Busy);
-        Assert.Equal("Lock", unit.FireMode);   // the selected weapon is the thrown one
+        Assert.Equal(HrotFireMode.Lock, unit.FireMode);   // the selected weapon is the thrown one
         Assert.Equal(Fdp.Toolkit.Combat.HitModel.Sigma(h.World, e, Fdp.Toolkit.Combat.CombatTkb.MountOf(h.World, e, 1), h.SimTime), unit.SpreadRad);
-        Assert.Equal((9, "Refused", "Locked"), ((int)unit.UseSeq, unit.UseOutcome, unit.UseReason));
-        Assert.Equal(("Tracked", 135f), (unit.RadarWarning, unit.RadarBearingDeg));
+        Assert.Equal((9, HrotUseOutcome.Refused, HrotUseReason.Locked), ((int)unit.UseSeq, unit.UseOutcome, unit.UseReason));
+        Assert.Equal((HrotRadarWarningLevel.Tracked, 135f), (unit.RadarWarning, unit.RadarBearingDeg));
         Assert.True(unit.MissileLaunch);
-        Assert.Equal((270f, "InfraRed"), (unit.MissileBearingDeg, unit.MissileSeeker));
+        Assert.Equal((270f, HrotMissileSeeker.InfraRed), (unit.MissileBearingDeg, unit.MissileSeeker));
         Assert.InRange(unit.MissileTimeToImpactS, 29f, 30f);
 
         // the rifle selected: sight; the missile warning runs out with its time to impact
         h.Station.Control(Frame() with { Mount = 0 });
         h.Steps(1);
-        Assert.Equal(((byte)0, "Sight"), (h.Station.Unit.ActiveMount, h.Station.Unit.FireMode));
+        Assert.Equal(((byte)0, HrotFireMode.Sight), (h.Station.Unit.ActiveMount, h.Station.Unit.FireMode));
         h.World.SetComponent(e, new MissileWarning { At = new SimInstant(h.SimTime - 40.0), BearingDeg = 270f, Seeker = Fdp.Toolkit.Tkb.Domain.GuidanceKind.InfraRed, TimeToImpactS = 30f });
         h.Steps(1);
         Assert.False(h.Station.Unit.MissileLaunch);
-        Assert.Equal((0f, string.Empty), (h.Station.Unit.MissileTimeToImpactS, h.Station.Unit.MissileSeeker));
+        Assert.Equal((0f, HrotMissileSeeker.Unknown), (h.Station.Unit.MissileTimeToImpactS, h.Station.Unit.MissileSeeker));
     }
 
     [Fact]
@@ -811,7 +811,7 @@ public class PlayerStationTests
 
         var unit = h.Station.Unit;
 
-        Assert.Equal((string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, false, 0f), (unit.UseLabel, unit.UseOutcome, unit.UseReason, unit.RadarWarning, unit.MissileSeeker,
+        Assert.Equal((string.Empty, HrotUseOutcome.None, HrotUseReason.Unknown, HrotRadarWarningLevel.None, HrotMissileSeeker.Unknown, false, 0f), (unit.UseLabel, unit.UseOutcome, unit.UseReason, unit.RadarWarning, unit.MissileSeeker,
             unit.MissileLaunch, unit.MissileTimeToImpactS));
         Assert.Equal((byte)0, unit.UseSeq);
         Assert.Empty(unit.Ammo);

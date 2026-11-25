@@ -80,7 +80,7 @@ public class CarriageGatherTests
 
         Assert.Equal(0, d.SeatIndex);
         Assert.False(d.SeatExposed);
-        Assert.Equal("Sit", d.SeatPose);
+        Assert.Equal(HrotSeatPose.Sit, d.SeatPose);
         Assert.Equal(2100, d.CarryOther);
         Assert.Equal(HrotCarryRole.None, d.CarryRole);
         Assert.Equal(0, d.Partner);
@@ -98,7 +98,7 @@ public class CarriageGatherTests
 
         Assert.Equal(1, d.SeatIndex);
         Assert.True(d.SeatExposed);
-        Assert.Equal("SitLegsOut", d.SeatPose);
+        Assert.Equal(HrotSeatPose.SitLegsOut, d.SeatPose);
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public class CarriageGatherTests
 
         Assert.Equal(2, d.SeatIndex);
         Assert.True(d.SeatExposed);
-        Assert.Equal("Ride", d.SeatPose);
+        Assert.Equal(HrotSeatPose.Ride, d.SeatPose);
     }
 
     [Fact]
@@ -128,12 +128,12 @@ public class CarriageGatherTests
         var c = Gather(h, 1.0);
 
         Assert.Equal(4, Detail(c, 2001).SeatIndex);
-        Assert.Equal(string.Empty, Detail(c, 2001).SeatPose);
+        Assert.Equal(HrotSeatPose.Unknown, Detail(c, 2001).SeatPose);
         var free = Detail(c, 2002);
         Assert.Equal(HrotPersonDetail.NoSeat, free.SeatIndex);
         Assert.Equal(255, free.SeatIndex);
         Assert.False(free.SeatExposed);
-        Assert.Equal(string.Empty, free.SeatPose);
+        Assert.Equal(HrotSeatPose.Unknown, free.SeatPose);
         Assert.Equal(HrotCarryRole.None, free.CarryRole);
         Assert.Equal(0, free.CarryOther);
         Assert.Equal(0, free.Partner);
@@ -248,6 +248,33 @@ public class CarriageGatherTests
 
         h.World.SetComponent(flyer, new Fdp.Toolkit.Motion.FlightState { Airborne = 1 });
         Assert.True(Assert.Single(Gather(h, 5.0).Of<HrotVehicleLook>()).Airborne);
+    }
+
+    /// <summary>
+    /// T-080 (hot path): a steady <c>VehicleLookGather</c> allocates nothing - the destruction kind is a cached name (<c>Enum.ToString</c> boxes) and the parts, crew and motions are compared by index.
+    /// Mutation: <c>destruction = kind.ToString()</c> again, or <c>SequenceEqual</c> over the interface lists, allocates per call and fails.
+    /// </summary>
+    [Fact]
+    public void A_steady_vehicle_look_gather_allocates_nothing()
+    {
+        using var h = Live();
+        var vehicle = h.AddHrotEntity(2100, Vector3.Zero, tkb: SeatedType);
+        var look = new VehicleLookGather();
+        Assert.True(look.TryGather(h.World, h.TestTkb, vehicle, 2100, 10.0, out var first));
+        Assert.Equal(HrotKillKind.None, first.Destruction);
+        for (int i = 0; i < 50; i++)
+        {
+            Assert.False(look.TryGather(h.World, h.TestTkb, vehicle, 2100, 10.0, out _));
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 100; i++)
+        {
+            look.TryGather(h.World, h.TestTkb, vehicle, 2100, 10.0, out _);
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.True(allocated == 0L, $"a steady look gather allocated {allocated} B in 100 calls");
     }
 
     [Fact]

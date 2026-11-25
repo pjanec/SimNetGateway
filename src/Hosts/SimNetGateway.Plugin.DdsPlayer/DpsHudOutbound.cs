@@ -35,9 +35,9 @@ public sealed class DpsHudOutbound : IGatewayModule
             VictimId = m.VictimId,
             SourceId = m.SourceId,
             OriginalSourceId = m.OriginalSourceId,
-            State = LookNames.ByName<D.Injury>("Injury", m.State),
+            State = (D.Injury)(byte)m.State,
             BodyPart = (byte)Math.Clamp(m.BodyPart, 0, 255),
-            Part = LookNames.ByName<D.BodyPart>("BodyPart", m.BodyPartName),
+            Part = (D.BodyPart)(byte)m.BodyPartName,
             VictimSide = (byte)Math.Clamp(m.VictimSide, 0, 255),
         }));
 
@@ -48,7 +48,7 @@ public sealed class DpsHudOutbound : IGatewayModule
         {
             MessageId = m.MessageId,
             OriginNode = m.OriginNode,
-            To = LookNames.ByName<D.MessageAddress>("MessageAddress", m.To),
+            To = (D.MessageAddress)(byte)m.To,
             ToValue = m.ToValue,
             Text = text.Length <= MaxText ? text : text[..MaxText],
             Seconds = m.Seconds,
@@ -64,9 +64,9 @@ public sealed class DpsHudOutbound : IGatewayModule
         _ports.Status.Send(new DpsItem<D.Status>(new D.Status
         {
             StatusId = m.Id,
-            Role = LookNames.ByName<D.ObjectiveRole>("ObjectiveRole", m.Role),
-            State = LookNames.ByName<D.ObjectiveState>("ObjectiveState", m.State),
-            TriggerState = LookNames.ByName<D.TriggerState>("TriggerState", m.TriggerState),
+            Role = (D.ObjectiveRole)(byte)m.Role,
+            State = (D.ObjectiveState)(byte)m.State,
+            TriggerState = (D.TriggerState)(byte)m.TriggerState,
             Closed = m.Closed,
             Owner = m.Owner,
             ProgressCur = m.ProgressCur,
@@ -112,7 +112,7 @@ public sealed class DpsHudOutbound : IGatewayModule
     private void OnExercise(in HrotExercise m, IngressContext ctx) =>
         _ports.Exercise.Send(new DpsItem<D.Exercise>(new D.Exercise
         {
-            Phase = LookNames.ByName<D.ExercisePhase>("ExercisePhase", m.Phase),
+            Phase = (D.ExercisePhase)(byte)m.Phase,
             EndedAt = m.EndedAt,
             Reason = Cut(m.Reason, 64),
             Friendly = Side(m.Friendly),
@@ -120,7 +120,7 @@ public sealed class DpsHudOutbound : IGatewayModule
             Neutral = Side(m.Neutral),
         }));
 
-    private static D.SideResult Side(HrotSideResult r) => new() { Outcome = LookNames.ByName<D.SideOutcome>("SideOutcome", r.Outcome), Points = r.Points, Score = r.Score };
+    private static D.SideResult Side(HrotSideResult r) => new() { Outcome = (D.SideOutcome)(byte)r.Outcome, Points = r.Points, Score = r.Score };
 
     private static string Cut(string? s, int max) => s is null ? string.Empty : s.Length <= max ? s : s[..max];
 }

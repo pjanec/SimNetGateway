@@ -193,6 +193,33 @@ public class TypeAnimalBankTests
         Assert.False(Assert.Single(animals, a => a.Id == 3102).Airborne);
     }
 
+    /// <summary>
+    /// T-080 (hot path): a steady <c>AnimalGather</c> allocates nothing - the mode and flock mode are pivot enums (they were <c>Enum.ToString()</c>, a string per call). Mutation: <c>state.Mode.ToString()</c> in the message allocates and fails.
+    /// </summary>
+    [Fact]
+    public void A_steady_animal_gather_allocates_nothing()
+    {
+        using var h = new Stage();
+        var cow = h.AddHrotEntity(3001, new Vector3(1, 1, 0), tkb: CowType);
+        h.World.AddComponent(cow, new AnimalState { Mode = AnimalMode.Alert });
+        var gather = new AnimalGather();
+        Assert.True(gather.TryGather(h.World, cow, 3001, out var first));
+        Assert.Equal(HrotAnimalMode.Alert, first.Mode);
+        for (int i = 0; i < 50; i++)
+        {
+            Assert.False(gather.TryGather(h.World, cow, 3001, out _));
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 100; i++)
+        {
+            gather.TryGather(h.World, cow, 3001, out _);
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.True(allocated == 0L, $"a steady animal gather allocated {allocated} B in 100 calls");
+    }
+
     [Fact]
     public void An_animal_is_published_with_its_state_and_a_flock_with_its_birds_and_no_person_detail()
     {
@@ -207,9 +234,9 @@ public class TypeAnimalBankTests
         var first = h.Gather(1.0);
 
         var a = Assert.Single(first.Of<HrotAnimal>(), x => x.Id == 3001);
-        Assert.Equal(("Alert", (byte)1, false, false, true, 0, 0, string.Empty), (a.Mode, a.FearBand, a.Bolting, a.Dangerous, a.Calling, a.FlockCount, a.FlockInitialCount, a.FlockMode));
+        Assert.Equal((HrotAnimalMode.Alert, (byte)1, false, false, true, 0, 0, HrotFlockMode.Unknown), (a.Mode, a.FearBand, a.Bolting, a.Dangerous, a.Calling, a.FlockCount, a.FlockInitialCount, a.FlockMode));
         var f = Assert.Single(first.Of<HrotAnimal>(), x => x.Id == 3002);
-        Assert.Equal(("Flee", (byte)3, true, true, false, 12, 20, 777u, "Flying"), (f.Mode, f.FearBand, f.Bolting, f.Dangerous, f.Calling, f.FlockCount, f.FlockInitialCount, f.FlockSeed, f.FlockMode));
+        Assert.Equal((HrotAnimalMode.Flee, (byte)3, true, true, false, 12, 20, 777u, HrotFlockMode.Flying), (f.Mode, f.FearBand, f.Bolting, f.Dangerous, f.Calling, f.FlockCount, f.FlockInitialCount, f.FlockSeed, f.FlockMode));
         Assert.True(f.Airborne);   // HROT's flock mode Flying is its flying state
         Assert.False(a.Airborne);   // a cow is on the ground: HROT's Airborne.Of says no
         Assert.Equal(2, first.Of<HrotAnimal>().Count);   // the man is no animal
@@ -220,10 +247,10 @@ public class TypeAnimalBankTests
 
         h.World.SetComponent(birds, new FlockState { Count = 11, InitialCount = 20, Seed = 777, Mode = FlockMode.Landed });   // a hit flock drops a bird and lands
         var changed = Assert.Single(h.Gather(3.0).Of<HrotAnimal>());
-        Assert.Equal((3002, 11, "Landed"), (changed.Id, changed.FlockCount, changed.FlockMode));
+        Assert.Equal((3002, 11, HrotFlockMode.Landed), (changed.Id, changed.FlockCount, changed.FlockMode));
         Assert.False(changed.Airborne);
         h.World.SetComponent(cow, new AnimalState { Mode = AnimalMode.Calm, FearBand = 1, Flags = AnimalFlags.Calling });   // the mode alone
-        Assert.Equal("Calm", Assert.Single(h.Gather(4.0).Of<HrotAnimal>()).Mode);
+        Assert.Equal(HrotAnimalMode.Calm, Assert.Single(h.Gather(4.0).Of<HrotAnimal>()).Mode);
 
         // the animal's entity is a DIS life form in the animal categories
         Assert.Equal(200, Fdp.Toolkit.Animals.Animals.IsAnimalDis(new DISEntityType { Kind = 3, Category = 200 }) ? 200 : 0);

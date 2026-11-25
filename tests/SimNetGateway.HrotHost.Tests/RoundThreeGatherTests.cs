@@ -121,7 +121,7 @@ public class RoundThreeGatherTests
     }
 
     private static HrotView View(string shot) =>
-        new("Director", "Fixed", 0, 0f, 0f, new HrotVec3(1, 2, 3), HrotQuat.Identity, 50f, shot, 7.0);
+        new(HrotViewSource.Director, HrotViewMode.Fixed, 0, 0f, 0f, new HrotVec3(1, 2, 3), HrotQuat.Identity, 50f, shot, 7.0);
 
     [Fact]
     public void The_host_sends_no_view_while_HROT_suggests_none_the_world_has_no_camera_suggestion()
@@ -153,7 +153,7 @@ public class RoundThreeGatherTests
         var views = sink.Of<HrotView>();
         Assert.Equal(3, views.Count);
         Assert.Equal(["A", "A", string.Empty], views.Select(v => v.Shot).ToArray());
-        Assert.Equal(("None", 4.0), (views[2].Source, views[2].SimTime));
+        Assert.Equal((HrotViewSource.None, 4.0), (views[2].Source, views[2].SimTime));
     }
 
     // ---- impacts (3.2) ----------------------------------------------------------------------------------------------------------------------
@@ -187,10 +187,10 @@ public class RoundThreeGatherTests
         Assert.NotEmpty(effects);   // the derived puff and mark still arrive as Effect
         Assert.Equal(3, impacts.Count);
         var byKind = impacts.ToDictionary(i => i.Kind);
-        Assert.Equal(("Ground", 2001, ammo, new HrotVec3(5, 6, 0.1), 10.1), (byKind["Stop"].Surface, byKind["Stop"].ShooterId, byKind["Stop"].MunitionTkb, byKind["Stop"].Position with { Z = 0.1 }, byKind["Stop"].SimTime));   // the puff, just off the face; HROT stamps ONLY the puff, the mark carries Impact 0 (CE-11030)
-        Assert.Equal(("Building", "Concrete"), (byKind["Entry"].Surface, byKind["Entry"].Material));
-        Assert.Equal(string.Empty, byKind["Stop"].Material);
-        Assert.Equal((0, new HrotVec3(0, 0, 1)), (byKind["Exit"].ShooterId, byKind["Exit"].Normal));   // no shooter; the normal is the notification's, through the cause (T-057)
+        Assert.Equal((HrotEffectSurface.Ground, 2001, ammo, new HrotVec3(5, 6, 0.1), 10.1), (byKind[HrotImpactKind.Stopped].Surface, byKind[HrotImpactKind.Stopped].ShooterId, byKind[HrotImpactKind.Stopped].MunitionTkb, byKind[HrotImpactKind.Stopped].Position with { Z = 0.1 }, byKind[HrotImpactKind.Stopped].SimTime));   // the puff, just off the face; HROT stamps ONLY the puff, the mark carries Impact 0 (CE-11030)
+        Assert.Equal((HrotEffectSurface.Building, "Concrete"), (byKind[HrotImpactKind.Entered].Surface, byKind[HrotImpactKind.Entered].Material));
+        Assert.Equal(string.Empty, byKind[HrotImpactKind.Stopped].Material);
+        Assert.Equal((0, new HrotVec3(0, 0, 1)), (byKind[HrotImpactKind.Left].ShooterId, byKind[HrotImpactKind.Left].Normal));   // no shooter; the normal is the notification's, through the cause (T-057)
         bool mark = false;
         foreach (var e in h.World.Query().With<Hrot.Map.Common.Components.EffectCause>().Build())
         {
@@ -377,13 +377,13 @@ public class RoundThreeGatherTests
         var got = h.GatherReplay(1.1);
         var effects = h.GatherEffects(1.1, replaying: true);
 
-        var boom = effects.Where(e => e.Kind == nameof(Fdp.Toolkit.Tkb.Domain.EffectKind.Explosion)).ToList();
+        var boom = effects.Where(e => e.Kind == HrotEffectKind.Explosion).ToList();
         Assert.NotEmpty(boom);
-        Assert.Equal(nameof(Hrot.Look.Effects.EffectSurface.Ground), boom[0].Surface);
+        Assert.Equal(HrotEffectSurface.Ground, boom[0].Surface);
         Assert.Equal(new HrotVec3(50, 20, 0.4f), boom[0].At);
         Assert.Equal(1.05, boom[0].StartedAt);
-        var muzzle = Assert.Single(effects, e => e.Kind == nameof(Fdp.Toolkit.Tkb.Domain.EffectKind.MuzzleFlash));
-        Assert.Equal((2001, nameof(Hrot.Look.Effects.EffectSurface.Air)), (muzzle.AnchorEntity, muzzle.Surface));
+        var muzzle = Assert.Single(effects, e => e.Kind == HrotEffectKind.MuzzleFlash);
+        Assert.Equal((2001, HrotEffectSurface.Air), (muzzle.AnchorEntity, muzzle.Surface));
         Assert.Single(got.Of<HrotDetonation>());   // the replay's fire and detonation still flow, from the recorded memory and flash
         Assert.Single(got.Of<HrotFire>());
         Assert.Empty(got.Of<HrotEffect>());   // and the replay path of fire and detonation makes no effect of its own
@@ -440,7 +440,7 @@ public class RoundThreeGatherTests
 
         var view = Assert.Single(h.Gather(33.5).Of<HrotView>());
 
-        Assert.Equal(("Director", "Fixed", 2001, 2.2f, -1f, 55f, "Take 3", 4, 33.5), (view.Source, view.Mode, view.TargetId, view.Distance, view.Side, view.FovDeg, view.Shot, view.Cut, view.SimTime));
+        Assert.Equal((HrotViewSource.Director, HrotViewMode.Fixed, 2001, 2.2f, -1f, 55f, "Take 3", 4, 33.5), (view.Source, view.Mode, view.TargetId, view.Distance, view.Side, view.FovDeg, view.Shot, view.Cut, view.SimTime));
         Assert.Equal(new HrotVec3(10, 20, 30), view.Position);
         Assert.Equal(new HrotQuat(0.1f, 0.2f, 0.3f, 0.9f), view.Orientation);
     }
@@ -454,7 +454,7 @@ public class RoundThreeGatherTests
 
         world.SetSingleton(Suggestion(Entity.Null, 77) with { Source = CameraSource.Follow, Mode = CameraMode.Shoulder });
         Assert.True(source.TryRead(world, out var view));
-        Assert.Equal(("Follow", "Shoulder", 77), (view.Source, view.Mode, view.TargetId));
+        Assert.Equal((HrotViewSource.Follow, HrotViewMode.Shoulder, 77), (view.Source, view.Mode, view.TargetId));
     }
 
 
@@ -473,7 +473,7 @@ public class RoundThreeGatherTests
         var effects = h.GatherEffects(1.1);
 
         Assert.NotEmpty(effects);
-        Assert.All(effects, e => Assert.Equal(nameof(Hrot.Look.Effects.EffectSurface.Vehicle), e.Surface));   // not the ground mark a burst with no known target gets
+        Assert.All(effects, e => Assert.Equal(HrotEffectSurface.Vehicle, e.Surface));   // not the ground mark a burst with no known target gets
         Assert.Equal((ulong)h.TestTkb.GetAll().First(t => (long)t.TkbType == ammo).DisType.Value, effects[0].MunitionDis);   // the munition comes from the cause's ammo
     }
 

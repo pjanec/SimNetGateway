@@ -36,13 +36,13 @@ public sealed class DpsTrafficOutbound : IGatewayModule
         _ports.Mover.Send(new DpsItem<D.Mover>(new D.Mover
         {
             MoverId = m.Id,
-            Kind = LookNames.ByName<D.MoverKind>("MoverKind", m.Kind),
+            Kind = (D.MoverKind)(byte)m.Kind,
             TypeId = m.TypeId,
             ColourRgba = m.Colour,
             Seed = m.Seed,
             Length = m.Length,
             Width = m.Width,
-            Source = LookNames.ByName<D.MoverSource>("MoverSource", m.Source),
+            Source = (D.MoverSource)(byte)m.Source,
         }));
     }
 
@@ -82,7 +82,7 @@ public sealed class DpsTrafficOutbound : IGatewayModule
             SignalId = m.SignalId,
             Position = new D.Vec3d { X = m.Position.X, Y = m.Position.Y, Z = m.Position.Z },
             HeadingDeg = m.HeadingDeg,
-            State = LookNames.ByName<D.TrafficLightState>("TrafficLightState", m.State),
+            State = (D.TrafficLightState)(byte)m.State,
         }));
     }
 

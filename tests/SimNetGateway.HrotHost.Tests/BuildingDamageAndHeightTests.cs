@@ -143,8 +143,8 @@ public class BuildingDamageAndHeightTests
         public HrotBreach Expect(WallBreach global, double at = 0d, Vector3 blast = default, BreachCause cause = BreachCause.Unknown, float kg = 0f, int actor = 0)
         {
             var centre = WallGroups.BreachCentre(Terrain, in global);
-            return new HrotBreach(BuildingPanelIndex.ToLocal(Terrain, global.Panel), global.From, global.To, global.Bottom, global.Top, global.Kind.ToString(), at, new HrotVec3(blast.X, blast.Y, blast.Z),
-                cause.ToString(), kg, actor, new HrotVec3(centre.X, centre.Y, centre.Z), NormalOf(global.Panel));
+            return new HrotBreach(BuildingPanelIndex.ToLocal(Terrain, global.Panel), global.From, global.To, global.Bottom, global.Top, Enum.Parse<HrotBreachKind>(global.Kind.ToString()), at, new HrotVec3(blast.X, blast.Y, blast.Z),
+                Enum.Parse<HrotBreachCause>(cause.ToString()), kg, actor, new HrotVec3(centre.X, centre.Y, centre.Z), NormalOf(global.Panel));
         }
 
         /// <summary>HROT's outward normal of a wall panel (global index) as the pivot carries it: horizontal, z 0.</summary>
@@ -445,7 +445,7 @@ public class BuildingDamageAndHeightTests
         var o = d.OriginOf(slotOfRam);
         d.SetOrigin(slotOfRam, o with { Cause = BreachCause.Blade });
         h.World.SetComponent(e, d);
-        Assert.Equal(nameof(BreachCause.Blade), Assert.Single(h.Gather(3.0).Of<HrotBuildingDamage>()).Breaches.Single(x => x.Actor == 4711).Cause);
+        Assert.Equal(HrotBreachCause.Blade, Assert.Single(h.Gather(3.0).Of<HrotBuildingDamage>()).Breaches.Single(x => x.Actor == 4711).Cause);
         d.SetOrigin(slotOfRam, o with { Cause = BreachCause.Blade, Actor = 4799 });
         h.World.SetComponent(e, d);
         Assert.Single(h.Gather(4.0).Of<HrotBuildingDamage>());
@@ -485,7 +485,7 @@ public class BuildingDamageAndHeightTests
         using var h = new Stage();
         var e = h.Origins((401.25, BreachCause.Detonation, new Vector3(61.5f, 22.25f, 4f), 250f), 1);
         var sent = Assert.Single(h.Gather().Of<HrotBuildingDamage>());
-        Assert.Equal((true, 401.25, nameof(BreachCause.Detonation), new HrotVec3(61.5, 22.25, 4), 250f), (sent.Collapsed, sent.CollapsedAt, sent.CollapseCause, sent.CollapseBlast, sent.CollapseKg));
+        Assert.Equal((true, 401.25, HrotBreachCause.Detonation, new HrotVec3(61.5, 22.25, 4), 250f), (sent.Collapsed, sent.CollapsedAt, sent.CollapseCause, sent.CollapseBlast, sent.CollapseKg));
         Assert.Empty(h.Gather(2.0).Of<HrotBuildingDamage>());
 
         var d = h.World.GetComponentRO<BuildingDamage>(e);
@@ -497,7 +497,7 @@ public class BuildingDamageAndHeightTests
         Assert.Equal(62.0, Assert.Single(h.Gather(4.0).Of<HrotBuildingDamage>()).CollapseBlast.X);
         d.SetCollapse(BreachCause.Unknown, new Vector3(62f, 22.25f, 4f), 300f);   // the cause alone
         h.World.SetComponent(e, d);
-        Assert.Equal(nameof(BreachCause.Unknown), Assert.Single(h.Gather(5.0).Of<HrotBuildingDamage>()).CollapseCause);
+        Assert.Equal(HrotBreachCause.Unknown, Assert.Single(h.Gather(5.0).Of<HrotBuildingDamage>()).CollapseCause);
         Assert.Empty(h.Gather(6.0).Of<HrotBuildingDamage>());
 
         // a building that is not collapsed: the record's stale collapse fields are not sent
@@ -507,13 +507,13 @@ public class BuildingDamageAndHeightTests
         stale.SetCollapse(BreachCause.Detonation, new Vector3(1, 2, 3), 99f);
         standing.World.SetComponent(s, stale);
         var one = Assert.Single(standing.Gather().Of<HrotBuildingDamage>());
-        Assert.Equal((false, nameof(BreachCause.Unknown), HrotVec3.Zero, 0f), (one.Collapsed, one.CollapseCause, one.CollapseBlast, one.CollapseKg));
+        Assert.Equal((false, HrotBreachCause.Unknown, HrotVec3.Zero, 0f), (one.Collapsed, one.CollapseCause, one.CollapseBlast, one.CollapseKg));
 
         // collapsed in a loaded save: time 0, blast 0, the cause and kg kept
         using var saved = new Stage();
         saved.Origins((0d, BreachCause.Detonation, default, 80f), 1);
         var loaded = Assert.Single(saved.Gather().Of<HrotBuildingDamage>());
-        Assert.Equal((true, 0d, nameof(BreachCause.Detonation), HrotVec3.Zero, 80f), (loaded.Collapsed, loaded.CollapsedAt, loaded.CollapseCause, loaded.CollapseBlast, loaded.CollapseKg));
+        Assert.Equal((true, 0d, HrotBreachCause.Detonation, HrotVec3.Zero, 80f), (loaded.Collapsed, loaded.CollapsedAt, loaded.CollapseCause, loaded.CollapseBlast, loaded.CollapseKg));
     }
 
     /// <summary>T-075 (D-2): a window's Centre is the middle of its opening on its panel (A + dir x (At + Width / 2), z = (Sill + Head) / 2, computed here independently from the panel) and its Normal is HROT's outward normal.</summary>
@@ -593,8 +593,8 @@ public class BuildingDamageAndHeightTests
 
         Assert.Equal("1,-1", sent.Cell);
         Assert.Equal(
-            [new HrotCrater(new HrotVec3(70, -10, 7.5), 3.5f, 0.75f, 0.25f, 312.4, "Large"), new HrotCrater(new HrotVec3(65, -20, 7.5), 2f, 0.75f, 0.25f, 100.0, "Small"),
-             new HrotCrater(new HrotVec3(66, -21, 7.5), 2f, 0.75f, 0.25f, 0d, "Small")], sent.Craters);
+            [new HrotCrater(new HrotVec3(70, -10, 7.5), 3.5f, 0.75f, 0.25f, 312.4, HrotCraterKind.Large), new HrotCrater(new HrotVec3(65, -20, 7.5), 2f, 0.75f, 0.25f, 100.0, HrotCraterKind.Small),
+             new HrotCrater(new HrotVec3(66, -21, 7.5), 2f, 0.75f, 0.25f, 0d, HrotCraterKind.Small)], sent.Craters);
         Assert.Empty(h.Gather(2.0).Of<HrotGroundDamage>());   // nothing changed: nothing sent
 
         var more = h.World.GetComponentRO<GroundDamage>(cell);
@@ -821,7 +821,7 @@ public class BuildingDamageAndHeightTests
                     union = [.. union.OrderBy(c => c.BornAt.Seconds)];   // distinct births: the content order is the birth order
                 }
 
-                result[GroundDamageKey(group.Key)] = [.. union.Select(c => new HrotCrater(new HrotVec3(c.Centre.X, c.Centre.Y, 7.5), c.Radius, c.Depth, c.Rim, c.BornAt.Seconds, c.Kind.ToString()))];
+                result[GroundDamageKey(group.Key)] = [.. union.Select(c => new HrotCrater(new HrotVec3(c.Centre.X, c.Centre.Y, 7.5), c.Radius, c.Depth, c.Rim, c.BornAt.Seconds, Enum.Parse<HrotCraterKind>(c.Kind.ToString())))];
             }
 
             return result;

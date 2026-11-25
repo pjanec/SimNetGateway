@@ -16,7 +16,7 @@ public class DpsBuildingTests
         using var rig = new Rig(domain);
 
         rig.Send(new HrotBuildingDamage("range/H2", true,
-            [new HrotBreach(0, 4f, 4.6f, 1.1f, 1.6f, "Hole"), new HrotBreach(2, 1f, 3f, 0f, 2.2f, "Passage"), new HrotBreach(3, 0f, 1f, 0f, 1f, "Crater")],
+            [new HrotBreach(0, 4f, 4.6f, 1.1f, 1.6f, HrotBreachKind.Hole), new HrotBreach(2, 1f, 3f, 0f, 2.2f, HrotBreachKind.Passage), new HrotBreach(3, 0f, 1f, 0f, 1f, HrotBreachKind.Unknown)],
             [new HrotWindowDamage(1, 0, 1, 40, 50, 60, 70), new HrotWindowDamage(3, 2, 3, 0, 0, 0, 0)]));
         rig.Send(new HrotBuildingDamage("range/H1", false, [], [new HrotWindowDamage(0, 0, 3, 0, 0, 0, 0)]));
 
@@ -52,10 +52,10 @@ public class DpsBuildingTests
         using var damage = new Watch.Watch<D.BuildingDamage>(domain, "station-1", b => b.Building);
         using var rig = new Rig(domain);
 
-        HrotBreach Breach(int panel, string cause, float kg, int actor) => new(panel, 1f, 2f, 0f, 2f, "Hole", 12.5, new HrotVec3(1, 2, 3), cause, kg, actor, new HrotVec3(60.25, 21.5, 1.0), new HrotVec3(0, -1, 0));
+        HrotBreach Breach(int panel, HrotBreachCause cause, float kg, int actor) => new(panel, 1f, 2f, 0f, 2f, HrotBreachKind.Hole, 12.5, new HrotVec3(1, 2, 3), cause, kg, actor, new HrotVec3(60.25, 21.5, 1.0), new HrotVec3(0, -1, 0));
         var window = new HrotWindowDamage(1, 0, 3, 0, 0, 0, 0, 9.5, new HrotVec3(63.5, 20.0, 1.5), new HrotVec3(0, -1, 0));
-        rig.Send(new HrotBuildingDamage("range/H2", true, [Breach(0, "Detonation", 12.5f, 0), Breach(1, "Ram", 0f, 4711), Breach(2, "Blade", 0f, 4712), Breach(3, "Push", 0f, 4713), Breach(4, "Unknown", 0f, 0), Breach(5, "Meteor", 0f, 0)], [window],
-            401.25, 0d, 0f, "Detonation", new HrotVec3(61.5, 22.25, 4), 250f));
+        rig.Send(new HrotBuildingDamage("range/H2", true, [Breach(0, HrotBreachCause.Detonation, 12.5f, 0), Breach(1, HrotBreachCause.Ram, 0f, 4711), Breach(2, HrotBreachCause.Blade, 0f, 4712), Breach(3, HrotBreachCause.Push, 0f, 4713), Breach(4, HrotBreachCause.Unknown, 0f, 0), Breach(5, HrotBreachCause.Unknown, 0f, 0)], [window],
+            401.25, 0d, 0f, HrotBreachCause.Detonation, new HrotVec3(61.5, 22.25, 4), 250f));
 
         Assert.True(damage.Until(w => w.Alive.Count == 1));
         var h2 = damage.Alive["range/H2"];
@@ -76,7 +76,7 @@ public class DpsBuildingTests
         Assert.Equal((D.BreachCause.BreachCauseUnknown, 0.0, 0f), (damage.Alive["range/H1"].CollapseCause, damage.Alive["range/H1"].CollapseBlast.X, damage.Alive["range/H1"].CollapseKg));
 
         // a new cause alone replaces the instance
-        rig.Send(new HrotBuildingDamage("range/H2", true, [Breach(0, "Ram", 12.5f, 0)], [window], 401.25, 0d, 0f, "Detonation", new HrotVec3(61.5, 22.25, 4), 250f));
+        rig.Send(new HrotBuildingDamage("range/H2", true, [Breach(0, HrotBreachCause.Ram, 12.5f, 0)], [window], 401.25, 0d, 0f, HrotBreachCause.Detonation, new HrotVec3(61.5, 22.25, 4), 250f));
         Assert.True(damage.Until(w => w.Alive["range/H2"].Breaches.Count == 1 && w.Alive["range/H2"].Breaches[0].Cause == D.BreachCause.BreachCauseRam));
     }
 
@@ -109,7 +109,7 @@ public class DpsBuildingTests
         string longKey = "range/" + new string('b', 300);
 
         rig.Send(new HrotBuildingDamage("range/Big", false,
-            [.. Enumerable.Range(0, 70).Select(i => new HrotBreach(i, 0f, 1f, 0f, 1f, "Hole"))],
+            [.. Enumerable.Range(0, 70).Select(i => new HrotBreach(i, 0f, 1f, 0f, 1f, HrotBreachKind.Hole))],
             [.. Enumerable.Range(0, 300).Select(i => new HrotWindowDamage(i % 20, i / 20, 3, 0, 0, 0, 0))]));
         rig.Send(new HrotBuildingDamage(longKey, true, [], []));
 
@@ -125,7 +125,7 @@ public class DpsBuildingTests
         uint domain = Watch.NewDomain();
         var log = new List<string>();
         using var rig = new Rig(domain, log: log.Add);
-        HrotBreach Breach(int i) => new(i, 0f, 1f, 0f, 1f, "Hole");
+        HrotBreach Breach(int i) => new(i, 0f, 1f, 0f, 1f, HrotBreachKind.Hole);
         HrotWindowDamage Window(int i) => new(i % 20, i / 20, 3, 0, 0, 0, 0);
 
         rig.Send(new HrotBuildingDamage("range/Fine", false, [.. Enumerable.Range(0, 64).Select(Breach)], [.. Enumerable.Range(0, 256).Select(Window)]));   // exactly at the bounds
@@ -141,11 +141,4 @@ public class DpsBuildingTests
         Assert.Contains("'range/Glass' has 0 breaches and 257 windows", warnings[1]);
     }
 
-    [Fact]
-    public void Breach_kinds_map_by_name()
-    {
-        Assert.Equal(D.BreachKind.BreachKindHole, LookNames.ByName<D.BreachKind>("BreachKind", "Hole"));
-        Assert.Equal(D.BreachKind.BreachKindPassage, LookNames.ByName<D.BreachKind>("BreachKind", "Passage"));
-        Assert.Equal(D.BreachKind.BreachKindUnknown, LookNames.ByName<D.BreachKind>("BreachKind", "Crater"));
-    }
 }

@@ -9,7 +9,7 @@ namespace SimNetGateway.Plugin.DdsPlayer.Tests;
 public class DpsDirectorPictureTests
 {
     private static HrotView View(double t, float fade = 0f, string subtitle = "", byte place = HrotView.NoSubtitlePosition, float alpha = 0f) =>
-        new("Director", "Free", 0, 0f, 0f, new HrotVec3(10, 20, 3), HrotQuat.Identity, 60f, "shot", t, 0, fade, subtitle, place, alpha);
+        new(HrotViewSource.Director, HrotViewMode.Free, 0, 0f, 0f, new HrotVec3(10, 20, 3), HrotQuat.Identity, 60f, "shot", t, 0, fade, subtitle, place, alpha);
 
     /// <summary>The mapping of HROT's place number to the contract's enum, pinned: 0 bottom, 1 top, 2 middle, anything else (incl. none stated) unknown.</summary>
     [Fact]
@@ -49,7 +49,7 @@ public class DpsDirectorPictureTests
         var sent = new List<D.View>();
         rig.Transport.View.Tap = sent.Add;
 
-        rig.Send(View(1.0) with { Source = "Follow" });
+        rig.Send(View(1.0) with { Source = HrotViewSource.Follow });
 
         var v = Assert.Single(sent);
         Assert.Equal((0f, string.Empty, D.SubtitlePosition.SubtitlePositionUnknown, 0f), (v.Fade, v.Subtitle, v.SubtitlePosition, v.SubtitleAlpha));

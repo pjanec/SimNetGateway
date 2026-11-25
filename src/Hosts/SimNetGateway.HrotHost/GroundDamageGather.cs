@@ -127,10 +127,7 @@ internal sealed class GroundDamageGather
     internal static string KeyOf((int X, int Y) cell) => string.Create(CultureInfo.InvariantCulture, $"{cell.X},{cell.Y}");
 
     private static HrotCrater CraterOf(Crater c, TerrainWorld? terrain) =>
-        new(new HrotVec3(c.Centre.X, c.Centre.Y, terrain?.BareGroundHeightAt(c.Centre.X, c.Centre.Y) ?? 0f), c.Radius, c.Depth, c.Rim, c.BornAt.Seconds, NameOf(c.Kind));
-
-    /// <summary>The kind's NAME without boxing it (<c>Enum.ToString()</c> boxes: a steady frame must allocate nothing); a kind HROT appends later is named the slow way.</summary>
-    private static string NameOf(CraterKind kind) => kind switch { CraterKind.Small => nameof(CraterKind.Small), CraterKind.Large => nameof(CraterKind.Large), _ => kind.ToString() };
+        new(new HrotVec3(c.Centre.X, c.Centre.Y, terrain?.BareGroundHeightAt(c.Centre.X, c.Centre.Y) ?? 0f), c.Radius, c.Depth, c.Rim, c.BornAt.Seconds, PivotEnum<HrotCraterKind>.Of(c.Kind));
 
     private static HrotGroundDamage Map((int X, int Y) cell, List<Crater> craters, TerrainWorld? terrain)
     {

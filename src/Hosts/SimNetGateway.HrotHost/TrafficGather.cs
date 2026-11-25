@@ -73,7 +73,7 @@ internal sealed class TrafficGather
             {
                 long type = TrafficReplicas.CarTypeOf(car);
                 types.Reference(type);
-                inbound.Enqueue(new HrotMover(car.NetworkId, "Car", type, ColourOf(car.Color), 0u, car.Length, car.Width, "Sumo"));
+                inbound.Enqueue(new HrotMover(car.NetworkId, HrotMoverKind.Car, type, ColourOf(car.Color), 0u, car.Length, car.Width, HrotMoverSource.Sumo));
                 _movers[car.NetworkId] = new Mover { Builder = new TrackBuilder(), Seen = true };
             }
 
@@ -93,7 +93,7 @@ internal sealed class TrafficGather
             {
                 long type = TrafficReplicas.PedestrianTypeOf(ped.NetworkId);
                 types.Reference(type);
-                inbound.Enqueue(new HrotMover(ped.NetworkId, "Pedestrian", type, 0u, (uint)ped.NetworkId, 0f, 0f, "Sumo"));
+                inbound.Enqueue(new HrotMover(ped.NetworkId, HrotMoverKind.Pedestrian, type, 0u, (uint)ped.NetworkId, 0f, 0f, HrotMoverSource.Sumo));
                 _movers[ped.NetworkId] = new Mover { Builder = new TrackBuilder(flat: true), Seen = true };
             }
 
@@ -202,7 +202,7 @@ internal sealed class TrafficGather
             {
                 int id = signal.LaneHandle;
                 _lightsSeen.Add(id);
-                string state = frame.Lights.TryGetValue(id, out byte lamp) ? LampName(TrafficFrame.LampOf(lamp)) : "Off";
+                var state = frame.Lights.TryGetValue(id, out byte lamp) ? LampState(TrafficFrame.LampOf(lamp)) : HrotTrafficLightState.Off;
                 if (_lights.TryGetValue(id, out var sent))
                 {
                     if (sent.State == state)
@@ -238,7 +238,7 @@ internal sealed class TrafficGather
         }
     }
 
-    internal static string LampName(int lamp) => lamp switch { 2 => "Green", 1 => "Yellow", 0 => "Red", _ => "Off" };
+    internal static HrotTrafficLightState LampState(int lamp) => lamp switch { 2 => HrotTrafficLightState.Green, 1 => HrotTrafficLightState.Yellow, 0 => HrotTrafficLightState.Red, _ => HrotTrafficLightState.Off };
 
     /// <summary>
     /// The direction of travel (degrees, 0 = +x, counter-clockwise, in terrain-local metres) of lane <paramref name="handle"/> at its downstream end, where its signal head

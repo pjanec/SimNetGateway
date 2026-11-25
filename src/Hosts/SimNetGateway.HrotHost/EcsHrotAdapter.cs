@@ -414,7 +414,8 @@ public sealed class EcsHrotAdapter
             }
 
             _types.Reference(f.AmmoGuid);
-            string category = CombatTkb.MountOf(world, f.Shooter, f.WeaponIndex)?.Category.ToString() ?? string.Empty;   // HROT's weapon category by name
+            var mountCategory = CombatTkb.MountOf(world, f.Shooter, f.WeaponIndex)?.Category;
+            var category = mountCategory is { } mc ? PivotEnum<HrotWeaponCategory>.Of(mc) : HrotWeaponCategory.Unknown;   // HROT's weapon category, by name
             inbound.Enqueue(new HrotFire(shooter, target, f.AmmoGuid, MunitionDis(tkb, f.AmmoGuid), V(origin), V(f.Velocity), Math.Max(1, f.Quantity), category,
                 f.BurstId, f.BurstRounds, BurstIndexOf(f.BurstId, f.BurstIndex)));
             Counters.FiresSent++;

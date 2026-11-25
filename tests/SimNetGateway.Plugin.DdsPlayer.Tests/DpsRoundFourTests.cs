@@ -115,7 +115,7 @@ public class DpsRoundFourTests
         using var looks = new Watch.Watch<D.VehicleLook>(domain, "station-1", l => l.EntityId.ToString());
         using var rig = new Rig(domain);
         rig.Send(new HrotEntityState(2001, 103, TankDis, "Heli", 1, 0, new HrotVec3(1, 2, 3), HrotQuat.Identity, HrotVec3.Zero, HrotVec3.Zero, 100, 100, 5.0));
-        rig.Send(new HrotVehicleLook(2001, "None", false, false, false, 0, [], [(3, 0.5f)], 0.25f, null, false, 1f, 0.6f, 4.0, 20f, [new HrotOpeningMotion(3, 1f, 4.5, 1.5f)]));
+        rig.Send(new HrotVehicleLook(2001, HrotKillKind.None, false, false, false, 0, [], [(3, 0.5f)], 0.25f, null, false, 1f, 0.6f, 4.0, 20f, [new HrotOpeningMotion(3, 1f, 4.5, 1.5f)]));
 
         Assert.True(looks.Until(w => w.Alive.ContainsKey("2001")));
         var l = looks.Alive["2001"];
@@ -162,20 +162,15 @@ public class DpsRoundFourTests
         // events are volatile: send until the reader has matched
         Assert.True(downed.Until(w =>
         {
-            rig.Send(new HrotManDowned(1.0, 3, 4, 4, "Dead", 6, 1, "Head"));
-            rig.Send(new HrotManDowned(1.0, 5, 4, 4, "Dead", 99, 1, "Tail"));
-            rig.Send(new HrotManDowned(1.0, 6, 4, 4, "Dead", 0, 1));
+            rig.Send(new HrotManDowned(1.0, 3, 4, 4, HrotInjury.Dead, 6, 1, HrotBodyPart.Head));
+            rig.Send(new HrotManDowned(1.0, 5, 4, 4, HrotInjury.Dead, 99, 1, HrotBodyPart.Unknown));
+            rig.Send(new HrotManDowned(1.0, 6, 4, 4, HrotInjury.Dead, 0, 1));
             return w.Events.Any(e => e.VictimId == 3) && w.Events.Any(e => e.VictimId == 5) && w.Events.Any(e => e.VictimId == 6);
         }));
         Assert.Equal(D.BodyPart.BodyPartHead, downed.Events.First(e => e.VictimId == 3).Part);
         Assert.Equal((byte)6, downed.Events.First(e => e.VictimId == 3).BodyPart);
         Assert.Equal(D.BodyPart.BodyPartUnknown, downed.Events.First(e => e.VictimId == 5).Part);
         Assert.Equal(D.BodyPart.BodyPartUnknown, downed.Events.First(e => e.VictimId == 6).Part);
-
-        Assert.Equal(D.UseVerb.UseVerbOpenDoor, LookNames.ByName<D.UseVerb>("UseVerb", "OpenDoor"));
-        Assert.Equal(D.UseVerb.UseVerbPickUpRound, LookNames.ByName<D.UseVerb>("UseVerb", "PickUpRound"));
-        Assert.Equal(D.UseVerb.UseVerbNone, LookNames.ByName<D.UseVerb>("UseVerb", "Levitate"));
-        Assert.Equal(D.UseVerb.UseVerbNone, LookNames.ByName<D.UseVerb>("UseVerb", "NoVerb"));
     }
 
     [Fact]
@@ -183,7 +178,7 @@ public class DpsRoundFourTests
     {
         uint domain = Watch.NewDomain();
         var station = new DpsInboundTests.RecordingStation { Slot = new PlayerSlotSnapshot(PlayerSlotState.Playing, 1201, 0.0, 1) };
-        station.Unit = new PlayerUnitStatus(80.0, 100.0, [], 3, 55, UseVerbName: "Drive");
+        station.Unit = new PlayerUnitStatus(80.0, 100.0, [], 3, 55, UseVerbKind: HrotUseVerb.Drive);
         using var units = new Watch.Watch<D.OwnUnit>(domain, "station-1", u => "unit");
         using var rig = new Rig(domain, station: station);
         DpsInboundTests.Frames(rig);

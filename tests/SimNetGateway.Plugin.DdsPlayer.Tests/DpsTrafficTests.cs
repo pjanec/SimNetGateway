@@ -19,9 +19,9 @@ public class DpsTrafficTests
         using var movers = new Watch.Watch<D.Mover>(domain, "station-1", m => Id(m.MoverId));
         using var rig = new Rig(domain);
 
-        rig.Send(new HrotMover(101, "Car", 8851, 0xB02A2AFF, 0, 4.5f, 1.8f, "Sumo"));
-        rig.Send(new HrotMover(205, "Pedestrian", 3002, 0, 205, 0f, 0f, "Sumo"));
-        rig.Send(new HrotMover(7, "Hovercraft", 1, 0, 0, 0f, 0f, "Elsewhere"));
+        rig.Send(new HrotMover(101, HrotMoverKind.Car, 8851, 0xB02A2AFF, 0, 4.5f, 1.8f, HrotMoverSource.Sumo));
+        rig.Send(new HrotMover(205, HrotMoverKind.Pedestrian, 3002, 0, 205, 0f, 0f, HrotMoverSource.Sumo));
+        rig.Send(new HrotMover(7, HrotMoverKind.Unknown, 1, 0, 0, 0f, 0f, HrotMoverSource.Unknown));
 
         Assert.True(movers.Until(w => w.Alive.Count == 3));
         var car = movers.Alive["101"];
@@ -68,15 +68,15 @@ public class DpsTrafficTests
         using var lights = new Watch.Watch<D.TrafficLights>(domain, "station-1", l => Id(l.SignalId));
         using var rig = new Rig(domain);
 
-        rig.Send(new HrotTrafficLight(4, new HrotVec3(100, -1.7, 5), 90f, "Red"));
-        rig.Send(new HrotTrafficLight(5, new HrotVec3(1, 2, 3), 0f, "Flashing"));
+        rig.Send(new HrotTrafficLight(4, new HrotVec3(100, -1.7, 5), 90f, HrotTrafficLightState.Red));
+        rig.Send(new HrotTrafficLight(5, new HrotVec3(1, 2, 3), 0f, HrotTrafficLightState.Off));
 
         Assert.True(lights.Until(w => w.Alive.Count == 2));
         var red = lights.Alive["4"];
         Assert.Equal((new D.Vec3d { X = 100, Y = -1.7, Z = 5 }, 90f, D.TrafficLightState.TrafficLightStateRed), (red.Position, red.HeadingDeg, red.State));
         Assert.Equal(D.TrafficLightState.TrafficLightStateOff, lights.Alive["5"].State);   // a lamp this contract does not have is off
 
-        rig.Send(new HrotTrafficLight(4, new HrotVec3(100, -1.7, 5), 90f, "Green"));
+        rig.Send(new HrotTrafficLight(4, new HrotVec3(100, -1.7, 5), 90f, HrotTrafficLightState.Green));
         Assert.True(lights.Until(w => w.Alive["4"].State == D.TrafficLightState.TrafficLightStateGreen));
         rig.Send(new HrotTrafficLightRemoved(4));
         Assert.True(lights.Until(w => w.Alive.Count == 1 && w.Alive.ContainsKey("5")));
@@ -89,8 +89,8 @@ public class DpsTrafficTests
         using var movers = new Watch.Watch<D.Mover>(domain, "station-1", m => Id(m.MoverId));
         using var lights = new Watch.Watch<D.TrafficLights>(domain, "station-1", l => Id(l.SignalId));
         var rig = new Rig(domain);
-        rig.Send(new HrotMover(101, "Car", 8851, 0xFF, 0, 4f, 2f, "Sumo"));
-        rig.Send(new HrotTrafficLight(4, default, 0f, "Red"));
+        rig.Send(new HrotMover(101, HrotMoverKind.Car, 8851, 0xFF, 0, 4f, 2f, HrotMoverSource.Sumo));
+        rig.Send(new HrotTrafficLight(4, default, 0f, HrotTrafficLightState.Red));
         Assert.True(movers.Until(w => w.Alive.Count == 1));
         Assert.True(lights.Until(w => w.Alive.Count == 1));
 
