@@ -242,28 +242,9 @@ internal sealed class BuildingDamageGather
             {
                 var within = x with { Panel = local };
                 slot.Saved.AddWindow(within);
-                slot.Stamps.AddWindow(within, w.HitAtOf(i).Seconds, WindowCentre(terrain.Panels[x.Panel], x.Opening), WallGroups.OutwardNormal(terrain, x.Panel));
+                slot.Stamps.AddWindow(within, w.HitAtOf(i).Seconds, (x.Opening < terrain.Panels[x.Panel].Openings.Count ? WallGroups.OpeningCentre(terrain, x.Panel, x.Opening) : default), WallGroups.OutwardNormal(terrain, x.Panel));
             }
         }
-    }
-
-    /// <summary>
-    /// The world centre of window <paramref name="opening"/> on <paramref name="panel"/>: A + dir x (At + Width / 2), z = (SillZ + HeadZ) / 2 (terrain-local metres). HROT has no ONE rule for this: its glass layer
-    /// (<c>TerrainWorld.BuildPaneLeaves</c>), <c>AimPoint</c> and <c>WindowDamage.PaneUv</c> each place an opening along its panel inline, so this is the gateway's own copy of that geometry (T-075, DD-034 section 9).
-    /// </summary>
-    private static Vector3 WindowCentre(TerrainWallPanel panel, int opening)
-    {
-        if ((uint)opening >= (uint)panel.Openings.Count)
-        {
-            return default;
-        }
-
-        var o = panel.Openings[opening];
-        var ab = panel.B - panel.A;
-        float len = ab.Length();
-        var dir = len > 1e-6f ? ab / len : Vector2.UnitX;
-        var at = panel.A + dir * (o.At + o.Width * 0.5f);
-        return new Vector3(at.X, at.Y, (o.SillZ + o.HeadZ) * 0.5f);
     }
 
     private static HrotVec3 Wire(Vector3 v) => new(v.X, v.Y, v.Z);
