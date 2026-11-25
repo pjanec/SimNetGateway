@@ -6,7 +6,7 @@ design docs and the client guide are the canon, this file is only the map.
 
 ## 00. ⭐ Current state, 2026-11-24 (read this first; §0 below is history)
 
-**Branches:** gateway `ccr-458b1360-afzl8f`; HROT `ui`. **The gateway builds against HROT `ui` `c6ed1c7e9`** (updated 2026-11-25; full suite green, T-069 allocation flakes aside) (the worktree
+**Branches:** gateway `ccr-458b1360-afzl8f`; HROT **`unreal-ig`** (moved from `ui` 2026-11-25 — user's decision: `ui` is the HROT ui lane again; this session and the Unreal session share `unreal-ig`, fetch-merge-push before every push, `NOTE_UiIntegration_To_UnrealIg_Shared_Branch.md`). **The gateway builds against HROT `7cd20f30d`** (on `unreal-ig`'s history; was `ui` `c6ed1c7e9`) (updated 2026-11-25; full suite green, T-069 allocation flakes aside) (the worktree
 `/home/user/hrot-c5f8c1971`, `HROT_ROOT`). Built since §0: T-061 .. T-074 (DD-021 .. DD-030: entity status, voice and bursts, ambience,
 remote drive and the verb list, damage times and craters), T-073 doors filtered out, **T-076 the held-weapon look (DD-031)**, T-077 carried entities (DD-032), T-078 building fire + clouds (DD-033), T-075 breach cause / kg / actor / world place (DD-034). **Open:**
 T-069 flaky steady-allocation rails (they rotate: AmbienceWeather, PersonHeldLook, EntityStatus ...). The client guide [DPS-Client-Guide.md](DPS-Client-Guide.md) is current as of this date.
