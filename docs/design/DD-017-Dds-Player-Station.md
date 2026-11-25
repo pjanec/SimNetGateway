@@ -41,6 +41,8 @@ animation contract that dictates clips (the renderer animates; the simulation st
 
 ### 1a. DPS and HROT's NED wire - why two (owner's question, `2026-11-21`)
 
+> **Revisited 2026-11-25 and parked (R-157):** HROT `docs/DESIGN_Ned_As_The_Client_Wire.md` (CE-11059) measured making NED the clients' wire for state (the editor can publish it; an independent review narrowed the gain to ~12 retained-state topics against real client-side costs). The owner kept DPS as the stable, NED-independent interface; this section's reasons stand.
+
 The owner: *"how much do we duplicate the HROT-NED network protocol with the DPS ... I'm looking for a good reason for keeping it separate."*
 
 | claim | code / reference | design |
