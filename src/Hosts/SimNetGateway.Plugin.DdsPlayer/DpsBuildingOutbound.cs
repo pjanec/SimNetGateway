@@ -29,6 +29,10 @@ public sealed class DpsBuildingOutbound : IGatewayModule
 
     public void Register(ModuleSetup setup) => setup.OnMessage<HrotBuildingDamage>(OnDamage);
 
+    private static D.Vec3d Vec3d(HrotVec3 v) => new() { X = v.X, Y = v.Y, Z = v.Z };
+
+    private static D.Vec3f Vec3f(HrotVec3 v) => new() { X = (float)v.X, Y = (float)v.Y, Z = (float)v.Z };
+
     private void OnDamage(in HrotBuildingDamage m, IngressContext ctx)
     {
         string key = m.Building is { Length: > MaxKey } k ? k[..MaxKey] : m.Building ?? string.Empty;
@@ -56,15 +60,19 @@ public sealed class DpsBuildingOutbound : IGatewayModule
             CollapsedAt = m.CollapsedAt,
             FireSince = m.FireSince,
             FireSeconds = m.FireSeconds,
+            CollapseCause = LookNames.ByName<D.BreachCause>("BreachCause", m.CollapseCause),
+            CollapseBlast = Vec3d(m.CollapseBlast),
+            CollapseKg = m.CollapseKg,
             Breaches =
             [
                 .. m.Breaches.Take(MaxBreaches).Select(b => new D.Breach
                 {
                     Panel = b.Panel, From = b.From, To = b.To, Bottom = b.Bottom, Top = b.Top, Kind = LookNames.ByName<D.BreachKind>("BreachKind", b.Kind),
-                    MadeAt = b.MadeAt, Blast = new D.Vec3d { X = b.Blast.X, Y = b.Blast.Y, Z = b.Blast.Z },
+                    MadeAt = b.MadeAt, Blast = Vec3d(b.Blast),
+                    Cause = LookNames.ByName<D.BreachCause>("BreachCause", b.Cause), ExplosiveKg = b.ExplosiveKg, Actor = b.Actor, Centre = Vec3d(b.Centre), Normal = Vec3f(b.Normal),
                 }),
             ],
-            Windows = [.. m.Windows.Take(MaxWindows).Select(w => new D.WindowDamage { Panel = w.Panel, Opening = w.Opening, Hits = w.Hits, U0 = w.U0, V0 = w.V0, U1 = w.U1, V1 = w.V1, HitAt = w.HitAt })],
+            Windows = [.. m.Windows.Take(MaxWindows).Select(w => new D.WindowDamage { Panel = w.Panel, Opening = w.Opening, Hits = w.Hits, U0 = w.U0, V0 = w.V0, U1 = w.U1, V1 = w.V1, HitAt = w.HitAt, Centre = Vec3d(w.Centre), Normal = Vec3f(w.Normal) })],
         }));
     }
 }

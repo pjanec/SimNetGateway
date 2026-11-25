@@ -81,4 +81,11 @@ Approved with the design (R-156).
 
 ## 9. As-built notes
 
-(to be filled by T-075)
+Built as designed (D-1..D-3, same files as T-074: `BuildingDamageGather`, `HrotMessages`, `DpsTopics` / `DpsTypes`, `DpsBuildingOutbound`). Deviations and facts worth knowing:
+
+- **Pivot shape.** The cause travels as the NAME of HROT's `BreachCause` (like `Kind`), the outbound maps it by name to the DPS enum, an unknown name to `Unknown`. `HrotBreach` / `HrotWindowDamage` / `HrotBuildingDamage` gained the fields as trailing defaulted members.
+- **Frame.** `Centre`, `Normal` and `CollapseBlast` are HROT's terrain-local metres, copied as `Blast` is (no conversion); `Normal` is `(x, y, 0)` from `WallGroups.OutwardNormal`, `Centre` is `WallGroups.BreachCentre` (both computed once per breach per gather, allocation-free).
+- **Merge across entities.** Cause and kg of one breach held by several damage entities merge by HROT's own `SavedBuildingDamage.Merge` (Detonation wins, larger kg; by arrival order, as HROT's save does); the actor follows HROT's `MergeOrigin` (the later-stamped entity's when it names one, else the other's). The collapse's blast point follows the entity with the latest `CollapsedAt`.
+- **Window centre is a DUPLICATE CANDIDATE.** HROT has no ONE rule that places an opening in the world: `TerrainWorld` pane leaves (`TerrainWorld.cs:329-340`), `AimPoint` (`Combat/AimPoint.cs:158-164`, `A + dir * (At + Width / 2)`) and `WindowDamage.PaneUv` (`WindowDamage.cs:183`, the inverse) each do it inline, and `TerrainOpening.At` is the opening's START along the panel. `BuildingDamageGather.WindowCentre` therefore computes `A + dir * (At + Width / 2)`, `z = (SillZ + HeadZ) / 2` itself (a test recomputes it independently). To fold into HROT: a `WallGroups.OpeningCentre(world, panel, opening)` beside `BreachCentre`, then call it here.
+- **Standing building.** `CollapseCause` / `CollapseBlast` / `CollapseKg` are sent only while `Collapsed` (a stale record value is not sent), as `CollapsedAt` is.
+- **Protocol version** stays 1.0 as for T-074 (appended fields, R-133); the IDL only gained lines (`IdlSnapshotTests` and the prefix test in `DpsTopicTests`).

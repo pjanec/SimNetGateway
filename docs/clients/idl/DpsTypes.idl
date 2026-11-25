@@ -471,6 +471,15 @@ module SimNetGateway {
             };
 
             @bit_bound(8)
+            enum BreachCause {
+                BreachCauseUnknown,
+                BreachCauseDetonation,
+                BreachCauseRam,
+                BreachCauseBlade,
+                BreachCausePush
+            };
+
+            @bit_bound(8)
             enum CraterKind {
                 CraterKindUnknown,
                 CraterKindSmall,

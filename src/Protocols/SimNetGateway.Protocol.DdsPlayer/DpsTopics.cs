@@ -517,6 +517,16 @@ public partial struct Breach
     public double MadeAt;
     /// <summary>The blast point that made (or last widened) the breach, in the simulation frame (a hull's ram or a blade: the hull's centre); debris flies away from it. Meaningless (zero) when <see cref="MadeAt"/> is 0. Appended (T-074).</summary>
     public Vec3d Blast;
+    /// <summary>What made (or last widened) the breach (the simulation's own record, DD-034): a Detonation scorches its rim and throws debris away from <see cref="Blast"/>, a Ram / Blade / Push pushes the wall in. A merged hole a blast widened is a Detonation. Kept for a breach from a loaded save. Appended (T-075).</summary>
+    public BreachCause Cause;
+    /// <summary>The explosive charge in kg the breach rule used (the larger one of a merged hole); 0 unless <see cref="Cause"/> is Detonation. Appended (T-075).</summary>
+    public float ExplosiveKg;
+    /// <summary>The entity id of the vehicle that rammed / cut / pushed the breach (the same id as <c>EntityState.EntityId</c>); 0 = none, a detonation, or a breach from a loaded save. Appended (T-075).</summary>
+    public int Actor;
+    /// <summary>The middle of the hole in the world, in the simulation frame of <see cref="Blast"/>: for a client with its OWN building geometry. Appended (T-075).</summary>
+    public Vec3d Centre;
+    /// <summary>The unit normal of the wall the hole is in, horizontal (z = 0), pointing away from the building (a free wall: its left-hand side), in the simulation frame. Appended (T-075).</summary>
+    public Vec3f Normal;
 }
 
 /// <summary>A hit window: <see cref="Hits"/> 1..2 = cracked with up to two crack points (bytes 0..255 across the pane), 3 = broken.</summary>
@@ -531,6 +541,10 @@ public partial struct WindowDamage
     public byte U0, V0, U1, V1;
     /// <summary>When the window was last hit (a crack or the break), simulation seconds; 0 = it was already damaged when the scenario was loaded (unknown age: draw, never animate). Appended (T-074).</summary>
     public double HitAt;
+    /// <summary>The middle of the opening in the world (simulation frame), for a client with its own building geometry. Appended (T-075).</summary>
+    public Vec3d Centre;
+    /// <summary>The unit normal of the window's wall, horizontal (z = 0), pointing away from the building, in the simulation frame. Appended (T-075).</summary>
+    public Vec3f Normal;
 }
 
 /// <summary>
@@ -554,6 +568,12 @@ public partial struct BuildingDamage
     public double FireSince;
     /// <summary>How long the fire burns from <see cref="FireSince"/>, seconds (several spots: to the latest end); 0 = it never burned. Appended (T-078).</summary>
     public float FireSeconds;
+    /// <summary>What collapsed the building (DD-034); Unknown while it stands or when collapsed in a save from before the cause was recorded. Appended (T-075).</summary>
+    public BreachCause CollapseCause;
+    /// <summary>The collapse's blast point in the simulation frame; zero while standing or collapsed in a loaded save. Appended (T-075).</summary>
+    public Vec3d CollapseBlast;
+    /// <summary>The collapsing charge's kg; 0 while standing or unknown. Appended (T-075).</summary>
+    public float CollapseKg;
 }
 
 /// <summary>

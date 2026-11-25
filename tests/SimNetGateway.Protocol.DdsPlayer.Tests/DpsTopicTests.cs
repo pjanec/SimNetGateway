@@ -480,6 +480,15 @@ public class DpsTopicTests
         }, "t74-building");
         Assert.Equal((401.25, 312.4, 10.5, -20.25, 3.75, 99.5), (damage.CollapsedAt, damage.Breaches[0].MadeAt, damage.Breaches[0].Blast.X, damage.Breaches[0].Blast.Y, damage.Breaches[0].Blast.Z, damage.Windows[0].HitAt));
 
+        var placed = RoundTrip(new BuildingDamage
+        {
+            Building = "range/H4", Collapsed = true, CollapseCause = BreachCause.BreachCauseDetonation, CollapseBlast = new Vec3d { X = 61.5, Y = 22.25, Z = 4 }, CollapseKg = 250f,
+            Breaches = [new Breach { Panel = 1, Kind = BreachKind.BreachKindPassage, Cause = BreachCause.BreachCauseRam, ExplosiveKg = 0f, Actor = 4711, Centre = new Vec3d { X = 60.25, Y = 21.5, Z = 1 }, Normal = new Vec3f { X = 0, Y = -1, Z = 0 } }],
+            Windows = [new WindowDamage { Panel = 2, Opening = 1, Hits = 3, Centre = new Vec3d { X = 63.5, Y = 20, Z = 1.5 }, Normal = new Vec3f { X = 1, Y = 0, Z = 0 } }],
+        }, "t75-building");
+        Assert.Equal((BreachCause.BreachCauseRam, 4711, 60.25, 21.5, 1.0, -1f), (placed.Breaches[0].Cause, placed.Breaches[0].Actor, placed.Breaches[0].Centre.X, placed.Breaches[0].Centre.Y, placed.Breaches[0].Centre.Z, placed.Breaches[0].Normal.Y));
+        Assert.Equal((63.5, 1.5, 1f, BreachCause.BreachCauseDetonation, 61.5, 4.0, 250f), (placed.Windows[0].Centre.X, placed.Windows[0].Centre.Z, placed.Windows[0].Normal.X, placed.CollapseCause, placed.CollapseBlast.X, placed.CollapseBlast.Z, placed.CollapseKg));
+
         var cell = RoundTrip(new GroundDamage
         {
             Cell = "-3,12",
@@ -510,9 +519,9 @@ public class DpsTopicTests
         }
 
         string old = $"int32 Panel;\nfloat From;\nfloat To;\nfloat Bottom;\nfloat Top;\n{P}BreachKind Kind;";
-        Assert.Equal(old + $"\ndouble MadeAt;\n{P}Vec3d Blast;", Body("Breach"));
-        Assert.Equal("int32 Panel;\nint32 Opening;\noctet Hits;\noctet U0;\noctet V0;\noctet U1;\noctet V1;\ndouble HitAt;", Body("WindowDamage"));
-        Assert.Equal($"@key string<256> Building;\nboolean Collapsed;\nsequence<{P}Breach, 64> Breaches;\nsequence<{P}WindowDamage, 256> Windows;\ndouble CollapsedAt;\ndouble FireSince;\nfloat FireSeconds;", Body("BuildingDamage"));   // + the fire fields (T-078, DD-033)
+        Assert.Equal(old + $"\ndouble MadeAt;\n{P}Vec3d Blast;\n{P}BreachCause Cause;\nfloat ExplosiveKg;\nint32 Actor;\n{P}Vec3d Centre;\n{P}Vec3f Normal;", Body("Breach"));   // + cause, kg, actor, place (T-075, DD-034)
+        Assert.Equal($"int32 Panel;\nint32 Opening;\noctet Hits;\noctet U0;\noctet V0;\noctet U1;\noctet V1;\ndouble HitAt;\n{P}Vec3d Centre;\n{P}Vec3f Normal;", Body("WindowDamage"));
+        Assert.Equal($"@key string<256> Building;\nboolean Collapsed;\nsequence<{P}Breach, 64> Breaches;\nsequence<{P}WindowDamage, 256> Windows;\ndouble CollapsedAt;\ndouble FireSince;\nfloat FireSeconds;\n{P}BreachCause CollapseCause;\n{P}Vec3d CollapseBlast;\nfloat CollapseKg;", Body("BuildingDamage"));   // + the fire fields (T-078, DD-033), the collapse fields (T-075, DD-034)
         Assert.Equal($"@key string<32> Cell;\nsequence<{P}Crater, 16> Craters;", Body("GroundDamage"));
         Assert.Equal($"{P}Vec3d Centre;\nfloat Radius;\nfloat Depth;\nfloat Rim;\ndouble BornAt;\n{P}CraterKind Kind;", Body("Crater"));
     }
@@ -552,7 +561,7 @@ public class DpsTopicTests
         }
 
         string P = "SimNetGateway::Protocol::DdsPlayer::";
-        Assert.EndsWith("double CollapsedAt;\ndouble FireSince;\nfloat FireSeconds;", Body("BuildingDamage"));
+        Assert.Contains("double CollapsedAt;\ndouble FireSince;\nfloat FireSeconds;\n", Body("BuildingDamage"));   // (the collapse fields follow it, T-075)
         Assert.Equal($"@key int32 CloudId;\n{P}CloudKind Kind;\ndouble SimTime;\n{P}Vec3d Centre;\n{P}Vec3f Drift;\nfloat Radius;\nfloat Height;\nfloat SightTransmittance;\ndouble BornAt;\nfloat Seconds;", Body("Cloud"));
     }
 
@@ -671,7 +680,7 @@ public class DpsTopicTests
 
         Assert.Contains("DPS_BuildingDamage", DpsProtocol.AllTopics);
         Assert.Contains("DPS_GroundDamage", DpsProtocol.AllTopics);
-        foreach (var enumerator in new[] { "BreachKindPassage", "CraterKindSmall", "CraterKindLarge", "CraterKindUnknown" })
+        foreach (var enumerator in new[] { "BreachKindPassage", "CraterKindSmall", "CraterKindLarge", "CraterKindUnknown", "BreachCauseUnknown", "BreachCauseDetonation", "BreachCauseRam", "BreachCauseBlade", "BreachCausePush" })
         {
             Assert.Contains(enumerator, idl);
         }

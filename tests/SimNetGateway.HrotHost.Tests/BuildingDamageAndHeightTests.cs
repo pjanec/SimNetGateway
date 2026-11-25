@@ -43,10 +43,10 @@ public class BuildingDamageAndHeightTests
     {
         private double _now = 1000;
 
-        public Stage(float ground = 7.5f, bool withTerrain = true)
+        public Stage(float ground = 7.5f, bool withTerrain = true, string? json = null)
             : base(dis: true)
         {
-            Terrain = TerrainWorldParser.Parse(TwoHouses, "range");
+            Terrain = TerrainWorldParser.Parse(json ?? TwoHouses, "range");
             if (withTerrain)
             {
                 Terrain = new TerrainWorld
@@ -118,6 +118,42 @@ public class BuildingDamageAndHeightTests
             return e;
         }
 
+        /// <summary>A damage entity whose breaches carry HROT's full origin (T-075): each is (breach, origin = time, blast, cause, kg, actor); the collapse, when given, is (time, cause, blast, kg).</summary>
+        public Entity Origins((double At, BreachCause Cause, Vector3 Blast, float Kg)? collapse, int building, params (WallBreach Breach, BreachOrigin Origin)[] breaches)
+        {
+            var d = new BuildingDamage { Building = building };
+            foreach (var (b, origin) in breaches)
+            {
+                BuildingDamages.Add(ref d, in b, null, in origin);
+            }
+
+            if (collapse is { } c)
+            {
+                d.Collapsed = 1;
+                d.CollapsedAt = c.At;
+                d.SetCollapse(c.Cause, c.Blast, c.Kg);
+            }
+
+            var e = World.CreateEntity();
+            World.AddComponent(e, d);
+            return e;
+        }
+
+        /// <summary>The pivot breach HROT's record and rules say <paramref name="global"/> (a breach with the GLOBAL panel) must become: the panel within the building, HROT's centre and outward normal, the origin's fields.</summary>
+        public HrotBreach Expect(WallBreach global, double at = 0d, Vector3 blast = default, BreachCause cause = BreachCause.Unknown, float kg = 0f, int actor = 0)
+        {
+            var centre = WallGroups.BreachCentre(Terrain, in global);
+            return new HrotBreach(BuildingPanelIndex.ToLocal(Terrain, global.Panel), global.From, global.To, global.Bottom, global.Top, global.Kind.ToString(), at, new HrotVec3(blast.X, blast.Y, blast.Z),
+                cause.ToString(), kg, actor, new HrotVec3(centre.X, centre.Y, centre.Z), NormalOf(global.Panel));
+        }
+
+        /// <summary>HROT's outward normal of a wall panel (global index) as the pivot carries it: horizontal, z 0.</summary>
+        public HrotVec3 NormalOf(int globalPanel)
+        {
+            var n = WallGroups.OutwardNormal(Terrain, globalPanel);
+            return new HrotVec3(n.X, n.Y, 0d);
+        }
+
         /// <summary>A window entity whose entries carry the times of their last hit.</summary>
         public Entity StampedWindows(int building, params (WindowEntry Window, double HitAt)[] windows)
         {
@@ -176,8 +212,9 @@ public class BuildingDamageAndHeightTests
 
         Assert.Equal("range/H2", sent.Building);
         Assert.False(sent.Collapsed);
-        Assert.Equal([new HrotBreach(0, 4f, 4.6f, 1.1f, 1.6f, "Hole"), new HrotBreach(2, 1f, 3f, 0f, 2.2f, "Passage")], sent.Breaches);   // within the building, sorted
-        Assert.Equal([new HrotWindowDamage(1, 0, 1, 40, 50, 0, 0), new HrotWindowDamage(3, 2, 3, 0, 0, 0, 0)], sent.Windows);
+        Assert.Equal([h.Expect(new WallBreach(h.Panel(1, 0), 4f, 4.6f, 1.1f, 1.6f, BreachKind.Hole)), h.Expect(new WallBreach(h.Panel(1, 2), 1f, 3f, 0f, 2.2f, BreachKind.Passage))], sent.Breaches);   // within the building, sorted
+        // (this world's panels have no openings, so no window centre: the normal is still the wall's)
+        Assert.Equal([new HrotWindowDamage(1, 0, 1, 40, 50, 0, 0, 0d, default, h.NormalOf(h.Panel(1, 1))), new HrotWindowDamage(3, 2, 3, 0, 0, 0, 0, 0d, default, h.NormalOf(h.Panel(1, 3)))], sent.Windows);
 
         // nothing changed: nothing sent
         Assert.Empty(h.Gather(2.0).Of<HrotBuildingDamage>());
@@ -196,10 +233,10 @@ public class BuildingDamageAndHeightTests
         var sent = h.Gather().Of<HrotBuildingDamage>().OrderBy(b => b.Building).ToList();
 
         Assert.Equal(["range/H1", "range/H2"], sent.Select(s => s.Building).ToArray());
-        Assert.Equal([new HrotBreach(1, 1f, 2f, 0f, 2f, "Hole")], sent[0].Breaches);
+        Assert.Equal([h.Expect(new WallBreach(h.Panel(0, 1), 1f, 2f, 0f, 2f, BreachKind.Hole))], sent[0].Breaches);
         Assert.Empty(sent[0].Windows);
-        Assert.Equal([new HrotBreach(0, 1f, 2f, 0f, 2f, "Hole"), new HrotBreach(3, 5f, 6f, 0f, 2f, "Passage")], sent[1].Breaches);   // distinct, from both entities
-        Assert.Equal([new HrotWindowDamage(1, 0, 3, 0, 0, 0, 0), new HrotWindowDamage(2, 1, 1, 9, 9, 0, 0)], sent[1].Windows);
+        Assert.Equal([h.Expect(new WallBreach(h.Panel(1, 0), 1f, 2f, 0f, 2f, BreachKind.Hole)), h.Expect(new WallBreach(h.Panel(1, 3), 5f, 6f, 0f, 2f, BreachKind.Passage))], sent[1].Breaches);   // distinct, from both entities
+        Assert.Equal([new HrotWindowDamage(1, 0, 3, 0, 0, 0, 0, 0d, default, h.NormalOf(h.Panel(1, 1))), new HrotWindowDamage(2, 1, 1, 9, 9, 0, 0, 0d, default, h.NormalOf(h.Panel(1, 2)))], sent[1].Windows);
     }
 
     [Fact]
@@ -291,10 +328,8 @@ public class BuildingDamageAndHeightTests
         var sent = Assert.Single(h.Gather().Of<HrotBuildingDamage>());
 
         Assert.Equal((true, 401.25), (sent.Collapsed, sent.CollapsedAt));
-        Assert.Equal(
-            [new HrotBreach(0, 4f, 4.6f, 1.1f, 1.6f, "Hole", 99.125, new HrotVec3(-1, 2, 3)), new HrotBreach(2, 1f, 3f, 0f, 2.2f, "Passage", 312.4, new HrotVec3(10.5, -20.25, 3.75)),
-             new HrotBreach(3, 0f, 1f, 0f, 1f, "Hole", 0d, HrotVec3.Zero)], sent.Breaches);
-        Assert.Equal([new HrotWindowDamage(1, 0, 1, 40, 50, 0, 0, 55.5), new HrotWindowDamage(3, 2, 3, 0, 0, 0, 0, 0d)], sent.Windows);
+        Assert.Equal([h.Expect(hole, 99.125, new Vector3(-1, 2, 3)), h.Expect(passage, 312.4, new Vector3(10.5f, -20.25f, 3.75f)), h.Expect(fromSave)], sent.Breaches);
+        Assert.Equal([new HrotWindowDamage(1, 0, 1, 40, 50, 0, 0, 55.5, default, h.NormalOf(h.Panel(1, 1))), new HrotWindowDamage(3, 2, 3, 0, 0, 0, 0, 0d, default, h.NormalOf(h.Panel(1, 3)))], sent.Windows);
         Assert.Empty(h.Gather(2.0).Of<HrotBuildingDamage>());   // nothing changed: nothing sent
     }
 
@@ -348,6 +383,200 @@ public class BuildingDamageAndHeightTests
         h.World.SetComponent(e, c);
         var second = Assert.Single(h.Gather(2.0).Of<HrotBuildingDamage>());
         Assert.Equal((true, 123.5), (second.Collapsed, second.CollapsedAt));
+    }
+
+    // ---- T-075 (DD-034): what made a breach, and where it is in the world ------------------------------------------------------------
+
+    private const string WindowHouse = """
+        { "type": "FeatureCollection", "features": [
+          { "type": "Feature", "properties": { "kind": "building", "label": "W1",
+              "building": { "footprint": [[0,0],[10,0],[10,8],[0,8]],
+                "storeys": [ { "height": 3, "walls": [
+                  { "from": [0,0], "to": [10,0], "thickness": 0.3, "material": "brick", "openings": [ { "kind": "window", "at": 3, "width": 1.4 }, { "kind": "window", "at": 6, "width": 1 } ] },
+                  { "from": [10,0], "to": [10,8], "thickness": 0.3, "material": "brick", "openings": [ { "kind": "window", "at": 2, "width": 2 } ] },
+                  { "from": [10,8], "to": [0,8], "thickness": 0.3, "material": "brick", "openings": [ { "kind": "window", "at": 1, "width": 1.5 } ] },
+                  { "from": [0,8], "to": [0,0], "thickness": 0.3, "material": "brick" } ] } ] } },
+            "geometry": { "type": "Point", "coordinates": [100, 20] } } ] }
+        """;
+
+    private static BreachOrigin Origin(double at, Vector3 blast, BreachCause cause, float kg = 0f, int actor = 0) => new(new SimInstant(at), blast, cause, kg, actor);
+
+    /// <summary>
+    /// T-075 (D-1): every breach's cause, kg and actor equal HROT's record on the same world - a blast (Detonation, kg, actor 0), a ram (Ram, the hull's id), a blade, a push, a breach from a save (cause kept,
+    /// actor 0); and its Centre / Normal equal HROT's ONE rules WallGroups.BreachCentre / OutwardNormal on the same panel; a new cause alone is a change that is sent, a steady gather sends nothing.
+    /// </summary>
+    [Fact]
+    public void Each_breach_carries_hrots_cause_kg_actor_and_hrots_own_centre_and_outward_normal()
+    {
+        using var h = new Stage();
+        var blast = new WallBreach(h.Panel(1, 0), 1f, 2f, 0f, 2f, BreachKind.Hole);
+        var ram = new WallBreach(h.Panel(1, 1), 1f, 3f, 0f, 2.2f, BreachKind.Passage);
+        var blade = new WallBreach(h.Panel(1, 2), 4f, 6f, 0f, 2.5f, BreachKind.Passage);
+        var push = new WallBreach(h.Panel(0, 3), 2f, 3f, 0.5f, 1.5f, BreachKind.Hole);
+        var save = new WallBreach(h.Panel(1, 3), 5f, 6f, 0f, 1f, BreachKind.Hole);
+        var e = h.Origins(null, 1, (blast, Origin(10.5, new Vector3(5, 6, 7), BreachCause.Detonation, 12.5f)), (ram, Origin(20.0, new Vector3(1, 2, 3), BreachCause.Ram, 0f, 4711)),
+            (blade, Origin(30.0, new Vector3(8, 8, 1), BreachCause.Blade, 0f, 4712)), (save, Origin(0d, default, BreachCause.Detonation, 3f)));
+        h.Origins(null, 0, (push, Origin(40.0, new Vector3(0, 0, 0), BreachCause.Push, 0f, 4713)));
+
+        var sent = h.Gather().Of<HrotBuildingDamage>().OrderBy(b => b.Building, StringComparer.Ordinal).ToList();
+
+        var h2 = sent.Single(b => b.Building == "range/H2").Breaches;
+        Assert.Equal([h.Expect(blast, 10.5, new Vector3(5, 6, 7), BreachCause.Detonation, 12.5f), h.Expect(ram, 20.0, new Vector3(1, 2, 3), BreachCause.Ram, 0f, 4711),
+                      h.Expect(blade, 30.0, new Vector3(8, 8, 1), BreachCause.Blade, 0f, 4712), h.Expect(save, 0d, default, BreachCause.Detonation, 3f)], h2);
+        Assert.Equal([h.Expect(push, 40.0, default, BreachCause.Push, 0f, 4713)], sent.Single(b => b.Building == "range/H1").Breaches);
+        // the property over every breach sent: Centre / Normal ARE HROT's rules, the normal is a unit horizontal vector pointing away from the house's centre, the centre lies on its wall panel
+        foreach (var b in sent.SelectMany(s => s.Breaches.Select(x => (s, x))))
+        {
+            int building = b.s.Building == "range/H1" ? 0 : 1;
+            int panel = h.Panel(building, b.x.Panel);
+            var centre = WallGroups.BreachCentre(h.Terrain, new WallBreach(panel, b.x.From, b.x.To, b.x.Bottom, b.x.Top, BreachKind.Hole));
+            Assert.Equal(new HrotVec3(centre.X, centre.Y, centre.Z), b.x.Centre);
+            Assert.Equal(0d, b.x.Normal.Z);
+            Assert.Equal(1.0, Math.Sqrt(b.x.Normal.X * b.x.Normal.X + b.x.Normal.Y * b.x.Normal.Y), 5);
+            var house = h.Terrain.Buildings[building].Position + new Vector2(5f, 4f);   // the footprint's middle (10 x 8 m from the position)
+            Assert.True((centre.X - house.X) * b.x.Normal.X + (centre.Y - house.Y) * b.x.Normal.Y > 0, "outward");
+        }
+
+        Assert.Empty(h.Gather(2.0).Of<HrotBuildingDamage>());   // steady: nothing
+
+        // a cause alone is a change: the ram is re-recorded as a blade (same time, blast, kg, actor) - sent again; and so is the actor alone, and the kg alone
+        var d = h.World.GetComponentRO<BuildingDamage>(e);
+        int slotOfRam = Enumerable.Range(0, d.Count).First(i => d.Get(i).Panel == ram.Panel);
+        var o = d.OriginOf(slotOfRam);
+        d.SetOrigin(slotOfRam, o with { Cause = BreachCause.Blade });
+        h.World.SetComponent(e, d);
+        Assert.Equal(nameof(BreachCause.Blade), Assert.Single(h.Gather(3.0).Of<HrotBuildingDamage>()).Breaches.Single(x => x.Actor == 4711).Cause);
+        d.SetOrigin(slotOfRam, o with { Cause = BreachCause.Blade, Actor = 4799 });
+        h.World.SetComponent(e, d);
+        Assert.Single(h.Gather(4.0).Of<HrotBuildingDamage>());
+        d.SetOrigin(slotOfRam, o with { Cause = BreachCause.Blade, Actor = 4799, ExplosiveKg = 1f });
+        h.World.SetComponent(e, d);
+        Assert.Single(h.Gather(5.0).Of<HrotBuildingDamage>());
+        Assert.Empty(h.Gather(6.0).Of<HrotBuildingDamage>());
+    }
+
+    /// <summary>T-075: HROT's merge reaches the pivot - a ram widened by a blast is one Detonation hole with the larger kg and the newest contact's actor; two entities holding one breach merge the same way.</summary>
+    [Fact]
+    public void A_ram_widened_by_a_blast_is_a_detonation_with_the_larger_kg_and_two_entities_merge_by_hrots_rule()
+    {
+        using var h = new Stage();
+        var rammed = new WallBreach(h.Panel(1, 0), 1f, 3f, 0f, 2f, BreachKind.Hole);
+        var blasted = new WallBreach(h.Panel(1, 0), 2.5f, 4f, 0f, 2f, BreachKind.Hole);
+        var d = new BuildingDamage { Building = 1 };
+        BuildingDamages.Add(ref d, in rammed, null, Origin(10.0, new Vector3(1, 1, 1), BreachCause.Ram, 0f, 4711));
+        BuildingDamages.Add(ref d, in blasted, null, Origin(20.0, new Vector3(2, 2, 2), BreachCause.Detonation, 8f));   // overlaps: ONE hole 1..4
+        var e = h.World.CreateEntity();
+        h.World.AddComponent(e, d);
+        var merged = new WallBreach(h.Panel(1, 0), 1f, 4f, 0f, 2f, BreachKind.Hole);
+
+        var sent = Assert.Single(h.Gather().Of<HrotBuildingDamage>());
+        Assert.Equal([h.Expect(merged, 20.0, new Vector3(2, 2, 2), BreachCause.Detonation, 8f, 4711)], sent.Breaches);   // HROT keeps the ram's actor (the newer names none)
+
+        // the same hole in a second entity, a bigger charge earlier: Detonation stays, the larger kg wins, the later time and its blast point stay
+        h.Origins(null, 1, (merged, Origin(5.0, new Vector3(9, 9, 9), BreachCause.Detonation, 30f)));
+        var both = Assert.Single(h.Gather(2.0).Of<HrotBuildingDamage>());
+        Assert.Equal([h.Expect(merged, 20.0, new Vector3(2, 2, 2), BreachCause.Detonation, 30f, 4711)], both.Breaches);
+    }
+
+    /// <summary>T-075 (D-3): a collapse carries HROT's cause, blast point and kg; a standing building sends Unknown / 0 whatever stale values the record holds; the collapse fields alone are a change; a loaded save keeps the cause with a zero blast.</summary>
+    [Fact]
+    public void A_collapse_carries_hrots_cause_blast_point_and_kg_and_a_standing_building_sends_none()
+    {
+        using var h = new Stage();
+        var e = h.Origins((401.25, BreachCause.Detonation, new Vector3(61.5f, 22.25f, 4f), 250f), 1);
+        var sent = Assert.Single(h.Gather().Of<HrotBuildingDamage>());
+        Assert.Equal((true, 401.25, nameof(BreachCause.Detonation), new HrotVec3(61.5, 22.25, 4), 250f), (sent.Collapsed, sent.CollapsedAt, sent.CollapseCause, sent.CollapseBlast, sent.CollapseKg));
+        Assert.Empty(h.Gather(2.0).Of<HrotBuildingDamage>());
+
+        var d = h.World.GetComponentRO<BuildingDamage>(e);
+        d.SetCollapse(BreachCause.Detonation, new Vector3(61.5f, 22.25f, 4f), 300f);   // the kg alone
+        h.World.SetComponent(e, d);
+        Assert.Equal(300f, Assert.Single(h.Gather(3.0).Of<HrotBuildingDamage>()).CollapseKg);
+        d.SetCollapse(BreachCause.Detonation, new Vector3(62f, 22.25f, 4f), 300f);   // the blast point alone
+        h.World.SetComponent(e, d);
+        Assert.Equal(62.0, Assert.Single(h.Gather(4.0).Of<HrotBuildingDamage>()).CollapseBlast.X);
+        d.SetCollapse(BreachCause.Unknown, new Vector3(62f, 22.25f, 4f), 300f);   // the cause alone
+        h.World.SetComponent(e, d);
+        Assert.Equal(nameof(BreachCause.Unknown), Assert.Single(h.Gather(5.0).Of<HrotBuildingDamage>()).CollapseCause);
+        Assert.Empty(h.Gather(6.0).Of<HrotBuildingDamage>());
+
+        // a building that is not collapsed: the record's stale collapse fields are not sent
+        using var standing = new Stage();
+        var s = standing.Origins(null, 0, (new WallBreach(standing.Panel(0, 1), 1f, 2f, 0f, 2f, BreachKind.Hole), Origin(1.0, default, BreachCause.Ram, 0f, 9)));
+        var stale = standing.World.GetComponentRO<BuildingDamage>(s);
+        stale.SetCollapse(BreachCause.Detonation, new Vector3(1, 2, 3), 99f);
+        standing.World.SetComponent(s, stale);
+        var one = Assert.Single(standing.Gather().Of<HrotBuildingDamage>());
+        Assert.Equal((false, nameof(BreachCause.Unknown), HrotVec3.Zero, 0f), (one.Collapsed, one.CollapseCause, one.CollapseBlast, one.CollapseKg));
+
+        // collapsed in a loaded save: time 0, blast 0, the cause and kg kept
+        using var saved = new Stage();
+        saved.Origins((0d, BreachCause.Detonation, default, 80f), 1);
+        var loaded = Assert.Single(saved.Gather().Of<HrotBuildingDamage>());
+        Assert.Equal((true, 0d, nameof(BreachCause.Detonation), HrotVec3.Zero, 80f), (loaded.Collapsed, loaded.CollapsedAt, loaded.CollapseCause, loaded.CollapseBlast, loaded.CollapseKg));
+    }
+
+    /// <summary>T-075 (D-2): a window's Centre is the middle of its opening on its panel (A + dir x (At + Width / 2), z = (Sill + Head) / 2, computed here independently from the panel) and its Normal is HROT's outward normal.</summary>
+    [Fact]
+    public void A_windows_centre_is_the_middle_of_its_opening_and_its_normal_is_the_walls_outward_normal()
+    {
+        using var h = new Stage(json: WindowHouse);
+        var windows = new List<(int Panel, int Opening)>();
+        for (int local = 0; local < 4; local++)
+        {
+            int panel = h.Panel(0, local);
+            for (int o = 0; o < h.Terrain.Panels[panel].Openings.Count; o++)
+            {
+                windows.Add((panel, o));
+            }
+        }
+
+        Assert.Equal(4, windows.Count);   // (the fixture is what the property runs over)
+        h.Windows(0, [.. windows.Select(w => new WindowEntry(w.Panel, (byte)w.Opening, 3, 0, 0, 0, 0))]);
+
+        var sent = Assert.Single(h.Gather().Of<HrotBuildingDamage>());
+
+        Assert.Equal(4, sent.Windows.Count);
+        foreach (var w in sent.Windows)
+        {
+            var p = h.Terrain.Panels[h.Panel(0, w.Panel)];
+            var o = p.Openings[w.Opening];
+            var dir = Vector2.Normalize(p.B - p.A);
+            var at = p.A + dir * (o.At + o.Width / 2f);
+            Assert.Equal(new HrotVec3(at.X, at.Y, (o.SillZ + o.HeadZ) / 2f), w.Centre);
+            Assert.Equal(h.NormalOf(h.Panel(0, w.Panel)), w.Normal);
+            var house = h.Terrain.Buildings[0].Position + new Vector2(5f, 4f);
+            Assert.True((at.X - house.X) * w.Normal.X + (at.Y - house.Y) * w.Normal.Y > 0, "outward");
+        }
+
+        Assert.Empty(h.Gather(2.0).Of<HrotBuildingDamage>());
+    }
+
+    /// <summary>T-075: the steady gather of a building with causes, actors, centres, windows and a collapse allocates nothing.</summary>
+    [Fact]
+    public void A_steady_gather_with_causes_centres_and_a_collapse_allocates_nothing()
+    {
+        using var h = new Stage(json: WindowHouse);
+        h.Origins((50.0, BreachCause.Detonation, new Vector3(1, 2, 3), 100f), 0, (new WallBreach(h.Panel(0, 0), 1f, 2f, 0f, 2f, BreachKind.Hole), Origin(10.0, new Vector3(1, 1, 1), BreachCause.Ram, 0f, 4711)),
+            (new WallBreach(h.Panel(0, 2), 1f, 3f, 0f, 2f, BreachKind.Passage), Origin(12.0, new Vector3(2, 2, 2), BreachCause.Detonation, 5f)));
+        h.Windows(0, new WindowEntry(h.Panel(0, 0), 1, 3, 0, 0, 0, 0));
+        var inbound = new InMemoryInbound(new SourceId(99), "steady");
+        var buildings = new BuildingDamageGather();
+        buildings.Gather(h.World, inbound);
+        Assert.Equal(1, inbound.Drain(new Capture(), int.MaxValue));
+        for (int i = 0; i < 50; i++)
+        {
+            buildings.Gather(h.World, inbound);
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 300; i++)
+        {
+            buildings.Gather(h.World, inbound);
+        }
+
+        Assert.Equal(0L, (GC.GetAllocatedBytesForCurrentThread() - before) / 300);
+        Assert.Equal(0, inbound.Drain(new Capture(), int.MaxValue));
     }
 
     private static Crater Hole(float x, float y, double born = 0d, CraterKind kind = CraterKind.Small, float radius = 2f) =>

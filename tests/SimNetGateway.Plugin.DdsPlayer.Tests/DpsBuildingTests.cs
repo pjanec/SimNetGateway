@@ -41,6 +41,45 @@ public class DpsBuildingTests
         Assert.Single(damage.Alive);
     }
 
+    /// <summary>
+    /// DD-034 (T-075): every appended field reaches the DPS sample exactly - the breach's cause (mapped BY NAME, an unknown name is Unknown), kg, actor, centre and normal, the window's centre and normal, the
+    /// collapse's cause, blast point and kg - and a cause alone, an actor alone or a normal alone is an instance replaced.
+    /// </summary>
+    [Fact]
+    public void A_breachs_cause_kg_actor_centre_and_normal_and_the_collapse_fields_are_copied_exactly()
+    {
+        uint domain = Watch.NewDomain();
+        using var damage = new Watch.Watch<D.BuildingDamage>(domain, "station-1", b => b.Building);
+        using var rig = new Rig(domain);
+
+        HrotBreach Breach(int panel, string cause, float kg, int actor) => new(panel, 1f, 2f, 0f, 2f, "Hole", 12.5, new HrotVec3(1, 2, 3), cause, kg, actor, new HrotVec3(60.25, 21.5, 1.0), new HrotVec3(0, -1, 0));
+        var window = new HrotWindowDamage(1, 0, 3, 0, 0, 0, 0, 9.5, new HrotVec3(63.5, 20.0, 1.5), new HrotVec3(0, -1, 0));
+        rig.Send(new HrotBuildingDamage("range/H2", true, [Breach(0, "Detonation", 12.5f, 0), Breach(1, "Ram", 0f, 4711), Breach(2, "Blade", 0f, 4712), Breach(3, "Push", 0f, 4713), Breach(4, "Unknown", 0f, 0), Breach(5, "Meteor", 0f, 0)], [window],
+            401.25, 0d, 0f, "Detonation", new HrotVec3(61.5, 22.25, 4), 250f));
+
+        Assert.True(damage.Until(w => w.Alive.Count == 1));
+        var h2 = damage.Alive["range/H2"];
+        Assert.Equal([(D.BreachCause.BreachCauseDetonation, 12.5f, 0), (D.BreachCause.BreachCauseRam, 0f, 4711), (D.BreachCause.BreachCauseBlade, 0f, 4712), (D.BreachCause.BreachCausePush, 0f, 4713),
+                      (D.BreachCause.BreachCauseUnknown, 0f, 0), (D.BreachCause.BreachCauseUnknown, 0f, 0)], h2.Breaches.Select(b => (b.Cause, b.ExplosiveKg, b.Actor)).ToArray());   // a cause HROT appends later is not another cause
+        Assert.All(h2.Breaches, b =>
+        {
+            Assert.Equal((60.25, 21.5, 1.0), (b.Centre.X, b.Centre.Y, b.Centre.Z));
+            Assert.Equal((0f, -1f, 0f), (b.Normal.X, b.Normal.Y, b.Normal.Z));
+            Assert.Equal((12.5, 1.0, 2.0, 3.0), (b.MadeAt, b.Blast.X, b.Blast.Y, b.Blast.Z));   // (the earlier fields are untouched)
+        });
+        Assert.Equal((63.5, 20.0, 1.5, 0f, -1f, 0f), (h2.Windows[0].Centre.X, h2.Windows[0].Centre.Y, h2.Windows[0].Centre.Z, h2.Windows[0].Normal.X, h2.Windows[0].Normal.Y, h2.Windows[0].Normal.Z));
+        Assert.Equal((D.BreachCause.BreachCauseDetonation, 61.5, 22.25, 4.0, 250f), (h2.CollapseCause, h2.CollapseBlast.X, h2.CollapseBlast.Y, h2.CollapseBlast.Z, h2.CollapseKg));
+
+        // a standing building: Unknown / zero
+        rig.Send(new HrotBuildingDamage("range/H1", false, [], [window]));
+        Assert.True(damage.Until(w => w.Alive.Count == 2));
+        Assert.Equal((D.BreachCause.BreachCauseUnknown, 0.0, 0f), (damage.Alive["range/H1"].CollapseCause, damage.Alive["range/H1"].CollapseBlast.X, damage.Alive["range/H1"].CollapseKg));
+
+        // a new cause alone replaces the instance
+        rig.Send(new HrotBuildingDamage("range/H2", true, [Breach(0, "Ram", 12.5f, 0)], [window], 401.25, 0d, 0f, "Detonation", new HrotVec3(61.5, 22.25, 4), 250f));
+        Assert.True(damage.Until(w => w.Alive["range/H2"].Breaches.Count == 1 && w.Alive["range/H2"].Breaches[0].Cause == D.BreachCause.BreachCauseRam));
+    }
+
     /// <summary>DD-033 (T-078): the fire fields are copied, a fire alone is a record that exists (no breaches, no windows), and its end disposes the instance.</summary>
     [Fact]
     public void A_buildings_fire_is_copied_and_a_fire_alone_is_damage()

@@ -352,6 +352,11 @@ module SimNetGateway {
                 SimNetGateway::Protocol::DdsPlayer::BreachKind Kind;
                 double MadeAt;
                 SimNetGateway::Protocol::DdsPlayer::Vec3d Blast;
+                SimNetGateway::Protocol::DdsPlayer::BreachCause Cause;
+                float ExplosiveKg;
+                int32 Actor;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d Centre;
+                SimNetGateway::Protocol::DdsPlayer::Vec3f Normal;
             };
 
             @appendable
@@ -364,6 +369,8 @@ module SimNetGateway {
                 octet U1;
                 octet V1;
                 double HitAt;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d Centre;
+                SimNetGateway::Protocol::DdsPlayer::Vec3f Normal;
             };
 
             @topic
@@ -376,6 +383,9 @@ module SimNetGateway {
                 double CollapsedAt;
                 double FireSince;
                 float FireSeconds;
+                SimNetGateway::Protocol::DdsPlayer::BreachCause CollapseCause;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d CollapseBlast;
+                float CollapseKg;
             };
 
             @topic

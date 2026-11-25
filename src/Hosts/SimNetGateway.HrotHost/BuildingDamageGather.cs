@@ -68,6 +68,9 @@ internal sealed class BuildingDamageGather
             Saved.Breaches.Clear();
             Saved.Windows.Clear();
             Saved.Collapsed = false;
+            Saved.Origins.Clear();
+            Saved.CollapseCause = BreachCause.Unknown;
+            Saved.CollapseKg = 0f;
             Stamps.Clear();
             Touched = false;
             FireSince = FireEnd = 0d;
@@ -180,8 +183,9 @@ internal sealed class BuildingDamageGather
                     if (local >= 0 && WallGroups.Of(terrain, b.Panel) == d.Building)
                     {
                         var within = b with { Panel = local };
-                        slot.Saved.AddDistinct(within);
-                        slot.Stamps.AddBreach(within, d.MadeAtOf(i).Seconds, d.BlastOf(i));
+                        var origin = d.OriginOf(i);
+                        slot.Saved.AddDistinct(within, origin.Cause, origin.ExplosiveKg);   // HROT's own merge of cause and kg (Detonation wins, the larger kg)
+                        slot.Stamps.AddBreach(within, origin.At.Seconds, origin.Blast, origin.Actor, WallGroups.BreachCentre(terrain, in b), WallGroups.OutwardNormal(terrain, b.Panel));
                     }
                 }
 
@@ -192,7 +196,14 @@ internal sealed class BuildingDamageGather
 
                 if (d.Collapsed != 0)
                 {
+                    // the collapse's blast point follows the entity that collapsed it latest (the first of equals), its cause and kg merge by HROT's rule
+                    if (!slot.Saved.Collapsed || d.CollapsedAt > slot.Stamps.CollapsedAt)
+                    {
+                        slot.Stamps.CollapseBlast = d.CollapseBlast;
+                    }
+
                     slot.Saved.Collapsed = true;
+                    (slot.Saved.CollapseCause, slot.Saved.CollapseKg) = SavedBuildingDamage.Merge(((BreachCause)d.CollapseCause, d.CollapseKg), (slot.Saved.CollapseCause, slot.Saved.CollapseKg));
                     slot.Stamps.CollapsedAt = Math.Max(slot.Stamps.CollapsedAt, d.CollapsedAt);
                 }
 
@@ -231,21 +242,56 @@ internal sealed class BuildingDamageGather
             {
                 var within = x with { Panel = local };
                 slot.Saved.AddWindow(within);
-                slot.Stamps.AddWindow(within, w.HitAtOf(i).Seconds);
+                slot.Stamps.AddWindow(within, w.HitAtOf(i).Seconds, WindowCentre(terrain.Panels[x.Panel], x.Opening), WallGroups.OutwardNormal(terrain, x.Panel));
             }
         }
     }
 
-    private static HrotBreach BreachOf(WallBreach b, Stamps t)
+    /// <summary>
+    /// The world centre of window <paramref name="opening"/> on <paramref name="panel"/>: A + dir x (At + Width / 2), z = (SillZ + HeadZ) / 2 (terrain-local metres). HROT has no ONE rule for this: its glass layer
+    /// (<c>TerrainWorld.BuildPaneLeaves</c>), <c>AimPoint</c> and <c>WindowDamage.PaneUv</c> each place an opening along its panel inline, so this is the gateway's own copy of that geometry (T-075, DD-034 section 9).
+    /// </summary>
+    private static Vector3 WindowCentre(TerrainWallPanel panel, int opening)
     {
-        var (at, blast) = t.Breach(b);
-        return new HrotBreach(b.Panel, b.From, b.To, b.Bottom, b.Top, KindName(b.Kind), at, new HrotVec3(blast.X, blast.Y, blast.Z));
+        if ((uint)opening >= (uint)panel.Openings.Count)
+        {
+            return default;
+        }
+
+        var o = panel.Openings[opening];
+        var ab = panel.B - panel.A;
+        float len = ab.Length();
+        var dir = len > 1e-6f ? ab / len : Vector2.UnitX;
+        var at = panel.A + dir * (o.At + o.Width * 0.5f);
+        return new Vector3(at.X, at.Y, (o.SillZ + o.HeadZ) * 0.5f);
+    }
+
+    private static HrotVec3 Wire(Vector3 v) => new(v.X, v.Y, v.Z);
+
+    private static HrotVec3 Wire(Vector2 v) => new(v.X, v.Y, 0d);
+
+    /// <summary>The cause's NAME without boxing; a cause HROT appends later is named the slow way (the outbound maps an unknown name to Unknown).</summary>
+    private static string CauseName(BreachCause c) => c switch
+    {
+        BreachCause.Unknown => nameof(BreachCause.Unknown), BreachCause.Detonation => nameof(BreachCause.Detonation), BreachCause.Ram => nameof(BreachCause.Ram),
+        BreachCause.Blade => nameof(BreachCause.Blade), BreachCause.Push => nameof(BreachCause.Push), _ => c.ToString(),
+    };
+
+    private static HrotBreach BreachOf(WallBreach b, Slot slot)
+    {
+        var t = slot.Stamps.Breach(b);
+        slot.Saved.Origins.TryGetValue(b, out var origin);
+        return new HrotBreach(b.Panel, b.From, b.To, b.Bottom, b.Top, KindName(b.Kind), t.At, Wire(t.Blast), CauseName(origin.Cause), origin.Kg, t.Actor, Wire(t.Centre), Wire(t.Normal));
     }
 
     /// <summary>The kind's NAME without boxing it (<c>Enum.ToString()</c> boxes: a steady frame must allocate nothing); a kind HROT appends later is named the slow way.</summary>
     private static string KindName(BreachKind kind) => kind switch { BreachKind.Hole => nameof(BreachKind.Hole), BreachKind.Passage => nameof(BreachKind.Passage), _ => kind.ToString() };
 
-    private static HrotWindowDamage WindowOf(WindowEntry w, Stamps t) => new(w.Panel, w.Opening, w.Hits, w.U0, w.V0, w.U1, w.V1, t.HitAt(w));
+    private static HrotWindowDamage WindowOf(WindowEntry w, Stamps t)
+    {
+        var (at, centre, normal) = t.Window(w);
+        return new(w.Panel, w.Opening, w.Hits, w.U0, w.V0, w.U1, w.V1, at, Wire(centre), Wire(normal));
+    }
 
     private static HrotBuildingDamage Map(Slot slot)
     {
@@ -253,7 +299,7 @@ internal sealed class BuildingDamageGather
         var breaches = new HrotBreach[saved.Breaches.Count];
         for (int i = 0; i < breaches.Length; i++)
         {
-            breaches[i] = BreachOf(saved.Breaches[i], slot.Stamps);
+            breaches[i] = BreachOf(saved.Breaches[i], slot);
         }
 
         var windows = new HrotWindowDamage[saved.Windows.Count];
@@ -262,21 +308,24 @@ internal sealed class BuildingDamageGather
             windows[i] = WindowOf(saved.Windows[i], slot.Stamps);
         }
 
-        return new HrotBuildingDamage(slot.Key, saved.Collapsed, breaches, windows, saved.Collapsed ? slot.Stamps.CollapsedAt : 0d, slot.SentFireSince, slot.SentFireSeconds);
+        return new HrotBuildingDamage(slot.Key, saved.Collapsed, breaches, windows, saved.Collapsed ? slot.Stamps.CollapsedAt : 0d, slot.SentFireSince, slot.SentFireSeconds,
+            saved.Collapsed ? CauseName(saved.CollapseCause) : nameof(BreachCause.Unknown), saved.Collapsed ? Wire(slot.Stamps.CollapseBlast) : default, saved.Collapsed ? saved.CollapseKg : 0f);
     }
 
     /// <summary>Whether what was sent is what this gather united - the same fields <see cref="Map"/> builds, compared without building them.</summary>
     private static bool Matches(in HrotBuildingDamage p, Slot slot)
     {
         var saved = slot.Saved;
-        if (p.Collapsed != saved.Collapsed || p.CollapsedAt != (saved.Collapsed ? slot.Stamps.CollapsedAt : 0d) || p.FireSince != slot.SentFireSince || p.FireSeconds != slot.SentFireSeconds || p.Breaches.Count != saved.Breaches.Count || p.Windows.Count != saved.Windows.Count)
+        if (p.Collapsed != saved.Collapsed || p.CollapsedAt != (saved.Collapsed ? slot.Stamps.CollapsedAt : 0d) || p.FireSince != slot.SentFireSince || p.FireSeconds != slot.SentFireSeconds
+            || p.CollapseCause != (saved.Collapsed ? CauseName(saved.CollapseCause) : nameof(BreachCause.Unknown)) || p.CollapseBlast != (saved.Collapsed ? Wire(slot.Stamps.CollapseBlast) : default) || p.CollapseKg != (saved.Collapsed ? saved.CollapseKg : 0f)
+            || p.Breaches.Count != saved.Breaches.Count || p.Windows.Count != saved.Windows.Count)
         {
             return false;
         }
 
         for (int i = 0; i < saved.Breaches.Count; i++)
         {
-            if (!p.Breaches[i].Equals(BreachOf(saved.Breaches[i], slot.Stamps)))
+            if (!p.Breaches[i].Equals(BreachOf(saved.Breaches[i], slot)))
             {
                 return false;
             }
@@ -293,43 +342,57 @@ internal sealed class BuildingDamageGather
         return true;
     }
 
-    /// <summary>HROT's stamps of one building's merged damage, keyed by what they stamp (the breach, or the window's panel and opening within the building).</summary>
+    /// <summary>HROT's stamps of one building's merged damage, keyed by what they stamp (the breach, or the window's panel and opening within the building), and the places its rules computed (DD-034).</summary>
     private sealed class Stamps
     {
-        private readonly Dictionary<WallBreach, (double At, Vector3 Blast)> _breaches = new();
-        private readonly Dictionary<(int Panel, int Opening), (byte Hits, double At)> _windows = new();
+        private readonly record struct BreachStamp(double At, Vector3 Blast, int Actor, Vector3 Centre, Vector2 Normal);
+
+        private readonly Dictionary<WallBreach, BreachStamp> _breaches = new();
+        private readonly Dictionary<(int Panel, int Opening), (byte Hits, double At, Vector3 Centre, Vector2 Normal)> _windows = new();
 
         public double CollapsedAt;
+        public Vector3 CollapseBlast;
 
         public void Clear()
         {
             _breaches.Clear();
             _windows.Clear();
             CollapsedAt = 0d;
+            CollapseBlast = default;
         }
 
-        /// <summary>The same breach in two damage entities keeps the later stamp (the one a widening moved).</summary>
-        public void AddBreach(in WallBreach b, double at, Vector3 blast)
+        /// <summary>The same breach in two damage entities keeps the later stamp (the one a widening moved); the actor is the newest contact's, as HROT's own merge keeps it (the newer's when it names one, else the older's).</summary>
+        public void AddBreach(in WallBreach b, double at, Vector3 blast, int actor, Vector3 centre, Vector2 normal)
         {
-            if (!_breaches.TryGetValue(b, out var have) || at > have.At)
+            var now = new BreachStamp(at, blast, actor, centre, normal);
+            if (!_breaches.TryGetValue(b, out var have))
             {
-                _breaches[b] = (at, blast);
+                _breaches[b] = now;
+            }
+            else if (at > have.At)
+            {
+                _breaches[b] = now with { Actor = actor != 0 ? actor : have.Actor };
+            }
+            else if (have.Actor == 0 && actor != 0)
+            {
+                _breaches[b] = have with { Actor = actor };
             }
         }
 
         /// <summary>The stamp follows the entry <see cref="SavedBuildingDamage.AddWindow"/> keeps: the one with more hits, the first of equals.</summary>
-        public void AddWindow(in WindowEntry w, double at)
+        public void AddWindow(in WindowEntry w, double at, Vector3 centre, Vector2 normal)
         {
             var key = (w.Panel, (int)w.Opening);
             if (!_windows.TryGetValue(key, out var have) || w.Hits > have.Hits)
             {
-                _windows[key] = (w.Hits, at);
+                _windows[key] = (w.Hits, at, centre, normal);
             }
         }
 
-        public (double At, Vector3 Blast) Breach(WallBreach b) => _breaches.TryGetValue(b, out var v) ? v : default;
+        public (double At, Vector3 Blast, int Actor, Vector3 Centre, Vector2 Normal) Breach(WallBreach b)
+            => _breaches.TryGetValue(b, out var v) ? (v.At, v.Blast, v.Actor, v.Centre, v.Normal) : default;
 
-        public double HitAt(WindowEntry w) => _windows.TryGetValue((w.Panel, (int)w.Opening), out var v) ? v.At : 0d;
+        public (double At, Vector3 Centre, Vector2 Normal) Window(WindowEntry w) => _windows.TryGetValue((w.Panel, (int)w.Opening), out var v) ? (v.At, v.Centre, v.Normal) : default;
     }
 
     private void Bind(EntityRepository world)

@@ -587,20 +587,27 @@ public readonly record struct HrotAnimal(
 /// <summary>
 /// One wall breach. <paramref name="Panel"/> is the panel's index WITHIN its building, <paramref name="Kind"/> the NAME of HROT's breach kind (Hole, Passage).
 /// <paramref name="MadeAt"/> is HROT's own record of when the breach was made or last widened (sim seconds; 0 = loaded from a save), <paramref name="Blast"/> the blast point
-/// that made it (HROT's local frame; meaningless when <paramref name="MadeAt"/> is 0) - copied, never stamped by the gateway (DD-030).
+/// that made it (HROT's local frame; meaningless when <paramref name="MadeAt"/> is 0) - copied, never stamped by the gateway (DD-030). DD-034: <paramref name="Cause"/> is the NAME of HROT's
+/// <c>BreachCause</c> (Unknown, Detonation, Ram, Blade, Push), <paramref name="ExplosiveKg"/> the charge its breach rule used (0 for contact), <paramref name="Actor"/> the network id of the vehicle
+/// that rammed / cut it (0 = none); <paramref name="Centre"/> the hole's middle and <paramref name="Normal"/> the wall's outward normal (z 0), both from HROT's own rules in the same local frame as
+/// <paramref name="Blast"/>.
 /// </summary>
-public readonly record struct HrotBreach(int Panel, float From, float To, float Bottom, float Top, string Kind, double MadeAt = 0d, HrotVec3 Blast = default);
+public readonly record struct HrotBreach(int Panel, float From, float To, float Bottom, float Top, string Kind, double MadeAt = 0d, HrotVec3 Blast = default,
+    string Cause = "Unknown", float ExplosiveKg = 0f, int Actor = 0, HrotVec3 Centre = default, HrotVec3 Normal = default);
 
-/// <summary>One hit window: <paramref name="Panel"/> within the building, hits 1..2 cracked (crack points as bytes 0..255), 3 broken. <paramref name="HitAt"/>: HROT's time of its last hit (sim seconds; 0 = from a save).</summary>
-public readonly record struct HrotWindowDamage(int Panel, int Opening, byte Hits, byte U0, byte V0, byte U1, byte V1, double HitAt = 0d);
+/// <summary>One hit window: <paramref name="Panel"/> within the building, hits 1..2 cracked (crack points as bytes 0..255), 3 broken. <paramref name="HitAt"/>: HROT's time of its last hit (sim seconds; 0 = from a save).
+/// DD-034: <paramref name="Centre"/> the opening's middle and <paramref name="Normal"/> its wall's outward normal (z 0), in HROT's local frame.</summary>
+public readonly record struct HrotWindowDamage(int Panel, int Opening, byte Hits, byte U0, byte V0, byte U1, byte V1, double HitAt = 0d, HrotVec3 Centre = default, HrotVec3 Normal = default);
 
 /// <summary>
 /// The damage of one building, all of HROT's damage entities of it merged, sent when it changes. <paramref name="Building"/> is the terrain object label
 /// "terrain/building label". Not collapsed and no breaches and no windows = the building has no damage any more (a reload). <paramref name="CollapsedAt"/>: HROT's time the
 /// building collapsed (sim seconds; 0 = not collapsed, or collapsed in a loaded save). <paramref name="FireSince"/> / <paramref name="FireSeconds"/> (DD-033): when HROT's fire on this
-/// building started and how long it burns (the record's <c>FireState</c> spot; several spots: the earliest start to the latest end); 0 = never burned.
+/// building started and how long it burns (the record's <c>FireState</c> spot; several spots: the earliest start to the latest end); 0 = never burned. DD-034: <paramref name="CollapseCause"/> the NAME of
+/// what collapsed it (Unknown while standing or from an old save), <paramref name="CollapseBlast"/> its blast point (local frame; 0 from a save), <paramref name="CollapseKg"/> the charge's kg.
 /// </summary>
-public readonly record struct HrotBuildingDamage(string Building, bool Collapsed, IReadOnlyList<HrotBreach> Breaches, IReadOnlyList<HrotWindowDamage> Windows, double CollapsedAt = 0d, double FireSince = 0d, float FireSeconds = 0f) : IHrotToGatewayMessage;
+public readonly record struct HrotBuildingDamage(string Building, bool Collapsed, IReadOnlyList<HrotBreach> Breaches, IReadOnlyList<HrotWindowDamage> Windows, double CollapsedAt = 0d, double FireSince = 0d, float FireSeconds = 0f,
+    string CollapseCause = "Unknown", HrotVec3 CollapseBlast = default, float CollapseKg = 0f) : IHrotToGatewayMessage;
 
 /// <summary>What a cloud is made of (HROT's cloud kind, in its order; DD-033).</summary>
 public enum HrotCloudKind : byte
