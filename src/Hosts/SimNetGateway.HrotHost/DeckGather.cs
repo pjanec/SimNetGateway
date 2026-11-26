@@ -19,14 +19,9 @@ internal sealed class DeckGather
 {
     private readonly record struct Inputs(long Type, Vector3 Position, float Yaw, float Length, float Width, float Height);
 
-    private sealed class Sent(Inputs inputs)
-    {
-        public Inputs Inputs = inputs;
-        public bool Seen = true;
-    }
+    private static readonly Func<int, HrotDeckEnded> Ended = id => new HrotDeckEnded(id);
 
-    private readonly Dictionary<int, Sent> _sent = new();
-    private readonly List<int> _gone = new();
+    private readonly PerEntitySent<Inputs> _sent = new();
 
     public void Clear() => _sent.Clear();
 
@@ -35,13 +30,7 @@ internal sealed class DeckGather
         world.IsComponentTypeRegistered<StaticObstacle>() && world.IsComponentTypeRegistered<ObstacleShape>() && world.HasComponent<StaticObstacle>(e) && world.HasComponent<ObstacleShape>(e)
         && world.GetComponentRO<StaticObstacle>(e).Kind == ObstacleKind.WalkableDeck;
 
-    public void Begin()
-    {
-        foreach (var s in _sent.Values)
-        {
-            s.Seen = false;
-        }
-    }
+    public void Begin() => _sent.Begin();
 
     public void Gather(EntityRepository world, Entity e, int id, InMemoryInbound inbound)
     {
@@ -49,19 +38,9 @@ internal sealed class DeckGather
         var shape = world.GetComponentRO<ObstacleShape>(e);
         long type = world.GetComponentRO<TkbIdentity>(e).TkbType.Value;
         var now = new Inputs(type, at.Position, TerrainObstacles.Yaw(at.Rotation), shape.Length, shape.Width, shape.Height);
-        if (_sent.TryGetValue(id, out var sent))
+        if (!_sent.Changed(id, in now))
         {
-            sent.Seen = true;
-            if (sent.Inputs == now)
-            {
-                return;
-            }
-
-            sent.Inputs = now;
-        }
-        else
-        {
-            _sent[id] = new Sent(now);
+            return;
         }
 
         var parts = TerrainObstacles.DeckParts(at.Position, now.Yaw, in shape);   // HROT's one rule; allocates, so only on a change
@@ -76,23 +55,7 @@ internal sealed class DeckGather
     }
 
     /// <summary>Bridges not seen this frame are gone: sent ended once.</summary>
-    public void End(InMemoryInbound inbound)
-    {
-        _gone.Clear();
-        foreach (var (id, s) in _sent)
-        {
-            if (!s.Seen)
-            {
-                _gone.Add(id);
-            }
-        }
-
-        foreach (int id in _gone)
-        {
-            _sent.Remove(id);
-            inbound.Enqueue(new HrotDeckEnded(id));
-        }
-    }
+    public void End(InMemoryInbound inbound) => _sent.End(inbound, Ended);
 
     private static HrotVec3 Corner((Vector2 At, float Above) c) => new(c.At.X, c.At.Y, c.Above);
 
