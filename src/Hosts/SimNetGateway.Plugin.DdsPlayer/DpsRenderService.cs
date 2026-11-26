@@ -385,11 +385,6 @@ internal sealed class DpsRenderService : IRenderGate
     {
         dir = string.Empty;
         sampleRate = DefaultSampleRate;
-        if (!client.Ready)
-        {
-            return $"the render client '{client.Name}' is not ready";
-        }
-
         if (string.IsNullOrWhiteSpace(_settings.RenderRoot))
         {
             return "dps.renderRoot is not configured: the render client and the gateway need a folder both reach";
@@ -748,7 +743,7 @@ internal sealed class DpsRenderService : IRenderGate
 
     // ---- helpers ----------------------------------------------------------------------------------------------------------------------
 
-    private void Refresh() => _canFilm = Pick() is { Ready: true };
+    private void Refresh() => _canFilm = Pick() is not null;   // T-085: a live client is enough, Ready (it has a world) no longer gates filming
 
     private ClientEntry? Pick() => _clients.Count > 0 ? _clients[0] : null;
 

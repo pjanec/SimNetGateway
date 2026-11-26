@@ -248,7 +248,8 @@ public sealed class DpsTransport : IDisposable
         _participant = new DdsParticipant((uint)settings.Domain, defaultPartition: WorldPartition);
         try
         {
-            // every world topic the gateway writes is held in a render job and counted for ClockStep.Samples (DD-022 D-B4 rev 6): SimClock, ClockStep and GizmoFrame are not
+            // every world topic the gateway writes is held in a render job and counted for ClockStep.Samples (DD-022 D-B4 rev 6): SimClock, ClockStep and GizmoFrame are not,
+            // and neither is Session (T-085): it is written at once, also in a job - the client needs the new world's Session to report ClientWorld Ready, which the host waits for before it steps (3g)
             Session = Add(new DpsChannel<Session>(_participant, prepare: s =>
             {
                 s.WorldEpoch = (uint)_epoch;
@@ -257,7 +258,7 @@ public sealed class DpsTransport : IDisposable
                 _hasSession = true;
                 _service?.MarkPublished(s.WorldEpoch);
                 return s;
-            }, hold: Hold<Session>(DpsCountKind.Keyless)));
+            }));
             EntityTopic = Add(new DpsChannel<Entity>(_participant, prepare: e =>
             {
                 e.Playable = IsOffered(e.EntityId);

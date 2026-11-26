@@ -83,6 +83,7 @@ internal sealed class FakeRenderClient : IDisposable
     private readonly DdsReader<D.RenderJob> _jobs;
     private readonly DdsReader<D.FrameRequest> _requests;
     private readonly DdsReader<D.ClockStep> _steps;
+    private readonly DdsReader<D.Session> _sessions;
     private readonly List<ICounter> _counters = new();
 
     public FakeRenderClient(uint domain, string partition, ulong clientId = 77)
@@ -97,7 +98,8 @@ internal sealed class FakeRenderClient : IDisposable
         _steps = new DdsReader<D.ClockStep>(_participant);
 
         // every topic the gateway writes into the world, counted as the contract says (SimClock, ClockStep and GizmoFrame are not)
-        Keyless<D.Session>();
+        // Session is NOT counted (T-085): the gateway writes it at once, also in a job; the client records it in Sessions
+        _sessions = new DdsReader<D.Session>(_participant);
         Keyed<D.Entity>(e => e.EntityId);
         Keyed<D.EntityState>(e => e.EntityId);
         Keyed<D.EntityStatus>(e => e.EntityId);
@@ -142,6 +144,9 @@ internal sealed class FakeRenderClient : IDisposable
     public List<D.FrameRequest> Requests { get; } = new();
 
     public List<D.ClockStep> Steps { get; } = new();
+
+    /// <summary>The Session samples received (not counted for ClockStep.Samples).</summary>
+    public List<D.Session> Sessions { get; } = new();
 
     /// <summary>The announcement a test may change before <see cref="Announce"/>: limits, readiness, formats.</summary>
     public D.RenderClient Sample { get; set; } = new()
@@ -224,6 +229,17 @@ internal sealed class FakeRenderClient : IDisposable
                 if (sample.IsValid)
                 {
                     Steps.Add(sample.Data);
+                }
+            }
+        }
+
+        using (var loan = _sessions.Take(256))
+        {
+            foreach (var sample in loan)
+            {
+                if (sample.IsValid)
+                {
+                    Sessions.Add(sample.Data);
                 }
             }
         }

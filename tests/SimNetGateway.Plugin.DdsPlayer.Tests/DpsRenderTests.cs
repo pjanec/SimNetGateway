@@ -348,6 +348,51 @@ public class DpsRenderTests
     }
 
     [Fact]
+    public void A_world_boundary_in_a_job_reaches_the_client_as_a_Session_at_once_without_any_ClockStep_and_is_not_counted_in_Samples()
+    {
+        using var rig = new RenderRig();
+        var t = rig.Station.Transport;
+        var service = rig.Service;
+        rig.Station.Send(new HrotSession(ClusterPhase.Live, true, 1.0, 5.0));
+        var spec = rig.Job();
+        rig.Begin(spec);
+        rig.Client.Sessions.Clear();
+        rig.Client.Reset();
+
+        // the world the director loads: a new epoch, announced a frame later; no step is released, the client waits for exactly this Session to report Ready
+        uint epoch = (uint)service.Epoch;
+        for (int round = 1; round <= 3; round++)
+        {
+            service.BeginWorld(Guid.NewGuid());
+            Assert.True(rig.Client.Until(() => rig.Client.Sessions.Count > 0 && rig.Client.Sessions[^1].WorldEpoch == epoch + (uint)round, rig.Station.Step),
+                $"round {round}: the new world's Session was held by the barrier");
+            Assert.Empty(rig.Client.Steps);
+            Assert.Equal(0, rig.Client.Counted);
+        }
+
+        // a Session the tick writes inside the job also goes out at once
+        rig.Client.Sessions.Clear();
+        rig.Station.Send(new HrotSession(ClusterPhase.Live, true, 2.0, 6.0));
+        Assert.True(rig.Client.Until(() => rig.Client.Sessions.Count > 0, rig.Station.Step), "a Session written in the job was held");
+        Assert.Empty(rig.Client.Steps);
+
+        // the other held topics still follow the barrier, and the released step does not count the Session
+        t.EntityState.Send(new DpsItem<D.EntityState>(new D.EntityState { EntityId = 3 }));
+        Assert.Equal(0, rig.Client.ArrivalsDuring(20));
+        var f0 = rig.Gate.Frame(Frame(spec, 0, 0));
+        Assert.True(rig.Client.Until(() => rig.Client.Requests.Count == 1, rig.Station.Step));
+        rig.Client.FrameDone(rig.Client.Requests[0]);
+        Assert.True(rig.Complete(f0));
+        rig.Station.Send(new HrotStep(70, 0.05f, 0.05, 1f, 1));
+        var f1 = rig.Gate.Frame(Frame(spec, 1, 1));
+        Assert.True(rig.Client.Until(() => rig.Client.Steps.Count == 1, rig.Station.Step));
+        Assert.Equal(1u, rig.Client.Steps[0].Samples);   // the EntityState only
+        Assert.True(rig.Client.Until(() => rig.Client.Counted >= 1));
+        rig.Client.FrameDone(rig.Client.Requests[^1]);
+        Assert.True(rig.Complete(f1));
+    }
+
+    [Fact]
     public void Writes_outside_a_job_go_out_at_once_and_a_job_ending_flushes_what_it_held_uncounted()
     {
         using var rig = new RenderRig();
@@ -457,7 +502,7 @@ public class DpsRenderTests
     }
 
     [Fact]
-    public void A_folder_outside_the_render_root_a_missing_root_and_a_client_that_is_not_ready_fault_the_job_at_once()
+    public void A_folder_outside_the_render_root_and_a_missing_root_fault_the_job_at_once_and_a_client_that_is_not_ready_films_T085()
     {
         using (var rig = new RenderRig())
         {
@@ -479,8 +524,12 @@ public class DpsRenderTests
         using (var rig = new RenderRig(connect: false))
         {
             rig.Client.Sample = rig.Client.Sample with { Ready = false };
-            rig.Client.AnnounceUntil(() => false, rig.Station.Step, timeoutMs: 300);
-            Assert.False(rig.Gate.CanFilm);   // announced but not ready (loading its world)
+            Assert.True(rig.Connect());
+            Assert.True(rig.Gate.CanFilm);   // T-085: announced but not ready (loading its world) still films: the job's warm-up and the host's linked load gate the world
+            var spec = rig.Job();
+            rig.Begin(spec);   // BeginJob does not fault for readiness
+            Assert.True(rig.Service.JobActive());
+            Assert.True(rig.Gate.CanFilm);
         }
     }
 
