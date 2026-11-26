@@ -26,3 +26,8 @@ type, tiled along `Length` for walls. `EntityState.Damage` going down: it sags /
 
 Terrain walls cut by a blade arrive as `BuildingDamage` `wall:<label>` (the note's §3). Our Unreal levels: to be measured on our side whether the terrain walls
 are in them at all — no ask yet.
+
+## 📌 Measured, 2026-11-26 (packaged client, gateway `079f8f2`, HROT unreal-ig `468019328`) — ask 1 is real
+
+`cp-ram-barrier` (local copy with six more roadblocks beside the road): all ten `Obstacle` samples arrived with their sizes and were drawn. The car rammed
+`Barrel 1` (1007): the entity was disposed, and the client never saw its `EntityState.Damage` leave Intact — so it vanished like a reset, not a breach.
