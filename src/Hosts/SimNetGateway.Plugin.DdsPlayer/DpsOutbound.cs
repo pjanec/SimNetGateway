@@ -447,6 +447,7 @@ public sealed class DpsOutbound : IGatewayModule
             LightMask = m.Lights,
             FlailActive = m.FlailActive,
             Airborne = m.Airborne,
+            BridgeLayer = (D.BridgeLayer)(byte)m.BridgeLayer,   // the pivot enum mirrors the contract's in order (a rail pins it)
             Parts = [.. m.Parts.Take(32).Select(p => new D.PartLook { PartId = p.Part, State = (D.PartCondition)Math.Min(p.State, (byte)2) })],
             RotorSpeed = float.IsFinite(m.RotorSpeed) ? Math.Clamp(m.RotorSpeed, 0f, 1f) : 0f,
             RotorTarget = Unit(m.RotorTarget),

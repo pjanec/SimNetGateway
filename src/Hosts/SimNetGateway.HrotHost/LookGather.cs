@@ -265,6 +265,7 @@ internal sealed class VehicleLookGather
         bool turret = VehicleLook.TurretThrown(world, e), burning = VehicleLook.Burning(world, e, now), smoking = VehicleLook.Smoking(world, e, now);
         uint lights = VehicleLook.Lights(world, e, now, _brakes);
         bool airborne = Airborne.Of(world, e);   // T-079: HROT's one flight-state rule (the same call the animal gather makes)
+        var bridgeLayer = PivotEnum<HrotBridgeLayer>.Of(Hrot.UI.Common.Map3D.BridgeLayerLook.Of(world, e));   // T-083: HROT's one rule for an engineer's span (NoSpan for every other vehicle)
         bool flail = Hrot.UI.Common.Map3D.FlailActivity.IsOn(world, e);   // HROT's own reader (the drum and the loop ask the same place)
 
         // the rotor / engine level spools at a constant rate: HROT's spool is sent as data (target, level at the change, when, seconds per full scale) and only a change of it
@@ -275,14 +276,14 @@ internal sealed class VehicleLookGather
         if (known && previous.Destruction == destruction && previous.TurretThrown == turret && previous.Burning == burning
             && previous.Smoking == smoking && previous.Lights == lights && SameParts(previous.Parts, _parts) && SameMotions(previous.OpeningMotions, _motions)
             && previous.RotorTarget == rotorTarget && previous.RotorFrom == rotorFrom && previous.RotorChangedAt == rotorAt && previous.RotorSpoolSeconds == rotorSeconds
-            && SameCrew(previous.CrewExposed, _crew) && previous.FlailActive == flail && previous.Airborne == airborne)
+            && SameCrew(previous.CrewExposed, _crew) && previous.FlailActive == flail && previous.Airborne == airborne && previous.BridgeLayer == bridgeLayer)
         {
             message = default;
             return false;   // the steady path allocates nothing
         }
 
         message = new HrotVehicleLook(id, destruction, turret, burning, smoking, lights, _parts.ToArray(), _openings.ToArray(), rotor, _crew.Count == 0 ? null : _crew.ToArray(), flail,
-            rotorTarget, rotorFrom, rotorAt, rotorSeconds, _motions.ToArray(), airborne);
+            rotorTarget, rotorFrom, rotorAt, rotorSeconds, _motions.ToArray(), airborne, bridgeLayer);
         _sent[id] = message;
         return true;
     }

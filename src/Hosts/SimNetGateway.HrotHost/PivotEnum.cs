@@ -147,6 +147,7 @@ internal static class PivotEnums
         [(typeof(HrotImpactKind), "Exit")] = nameof(HrotImpactKind.Left),
         [(typeof(HrotImpactKind), "Stop")] = nameof(HrotImpactKind.Stopped),
         [(typeof(HrotViewMode), "FixedKey")] = nameof(HrotViewMode.Fixed),                  // the contract's name for HROT's FixedKey
+        [(typeof(HrotDeckPartKind), "Slab")] = nameof(HrotDeckPartKind.Deck),               // HROT's TerrainWalkableKind names the deck slab Slab
         [(typeof(HrotEffectKind), "Decal")] = nameof(HrotEffectKind.GroundMark),
         [(typeof(HrotEffectKind), "Fire")] = nameof(HrotEffectKind.WreckFlame),
         [(typeof(HrotEffectKind), "Smoke")] = nameof(HrotEffectKind.WreckSmoke),

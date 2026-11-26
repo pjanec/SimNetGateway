@@ -337,6 +337,8 @@ public partial struct VehicleLook
     public float RotorSpoolSeconds;
     /// <summary>The producer's own flight state: a flyer (a dragon, a helicopter) airborne, false on the ground or for a ground vehicle (a dragon folds its wings when landed). Appended (T-079).</summary>
     public bool Airborne;
+    /// <summary>What a bridge-laying vehicle does with its span (DD-035): carrying it, laying it out, recovering it; NoSpan for every other vehicle and for an engineer whose span is laid (the laid span is the <see cref="Deck"/>). Appended (T-083).</summary>
+    public BridgeLayer BridgeLayer;
 }
 
 /// <summary>
@@ -620,6 +622,33 @@ public partial struct Cloud
     public float SightTransmittance;
     public double BornAt;
     public float Seconds;
+}
+
+/// <summary>One quad of a laid bridge's deck (DD-035): its four corners counter-clockwise along the bridge. X and Y are the simulation frame, Z is the height ABOVE THE GROUND under that corner (a ramp's foot is 0): the client adds its own terrain height there.</summary>
+[DdsStruct]
+public partial struct DeckPart
+{
+    public DeckPartKind Kind;
+    public Vec3d C0, C1, C2, C3;
+}
+
+/// <summary>
+/// A producer-specific extension, optional for a client (DD-035). A laid bridge's deck: the span of a bridge the simulation's engineers laid (or a scenario placed), as the simulation's terrain draws it and its units walk
+/// on it - <see cref="Parts"/> are the deck slab then a ramp at each end (3 parts, the simulation's one rule), centred on the entity along its heading; <see cref="Length"/> is the span between the deck ends,
+/// <see cref="Width"/> the deck width, <see cref="Height"/> the deck above the bank. The corners are GROUND-RELATIVE (see <see cref="DeckPart"/>): the client lays them on its own terrain, as the simulation does. The
+/// obstacle stays an <see cref="Entity"/> too (its type, its damage); a client draws it from this topic, not as a box. One instance per STANDING bridge, written when it appears and when its pose or shape changes,
+/// disposed when the obstacle goes: recovered, or fallen (a fall is told by the entity's <see cref="EntityState.Damage"/> destroyed before the dispose).
+/// </summary>
+[DpsRate(DpsRateClass.Discrete)]
+[DdsTopic(DpsProtocol.Deck)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+[DdsManaged]
+public partial struct Deck
+{
+    [DdsKey] public int EntityId;
+    public DeckKind Kind;
+    public float Length, Width, Height;
+    [DdsBound(3)] public List<DeckPart> Parts;
 }
 
 /// <summary>One crater: a bowl of <see cref="Depth"/> m at <see cref="Centre"/> rising to a rim <see cref="Rim"/> m above the ground at <see cref="Radius"/>, falling back to the ground at 1.4 x <see cref="Radius"/> (the simulation's profile).</summary>

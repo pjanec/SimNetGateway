@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | approved (R-158) - building 2026-11-26 (T-083) |
+| **Status** | approved (R-158) - built 2026-11-26 (T-083, review) |
 | **Tasks** | T-083 |
 | **Rulings honoured** | R-158, R-133 (append-only), R-135, R-146 (HROT gives the meaning, the client the look); one HROT rule per derived fact (R-157) |
 | **Related** | HROT `docs/designs/engineering/DESIGN_Bridge_Laying.md` §11 (the laid deck, CE-4692) and §12f (the engineer, CE-4693); HROT `NOTE_Backend_To_Ui_Bridge_Laying.md`; DD-018 (`VehicleLook`) |
@@ -94,4 +94,11 @@ Approved with the design (R-158).
 
 ## 9. As-built notes
 
-(to be filled by T-083)
+Built as designed (T-083), against HROT unreal-ig `76c4210b9` (`TerrainObstacles.DeckParts` extracted from `DeckOf`, CE-4692 rails green, HROT as-built BL-4a).
+
+- **Measured first.** The laid bridge is published today by `EcsHrotAdapter` as an ordinary `Entity` (the entity query takes `SimTransform` + `TkbIdentity` + `NetworkIdentity`, lifecycle Active only, so a **Constructing** obstacle is skipped until its bake commits: the design's edge case holds by construction). A bridge is told from a solid obstacle by `StaticObstacle.Kind == ObstacleKind.WalkableDeck` (HROT's component, derived from the TKB). Which bridge it is (assault / floating) HROT has **no field for**: the gateway compares the TKB type with HROT's named constants `TkbEntityTypes.Obstacle_AssaultBridge` / `Obstacle_FloatingBridge` (no number of ours; another deck type is `Unknown`). The heading is `TerrainObstacles.Yaw(SimTransform.Rotation)` and the size is `ObstacleShape`, the very values the bake feeds the rule.
+- **Contract.** `Deck` (`[DdsKey] EntityId`, `DeckKind`, `Length/Width/Height`, `[DdsBound(3)] List<DeckPart>`), `DeckPart` (`DeckPartKind`, `C0..C3` as `Vec3d`), enums `DeckKind` (Unknown, Assault, Floating), `DeckPartKind` (Deck, Ramp), `BridgeLayer` (NoSpan, Carried, Laying, Recovering); `VehicleLook.BridgeLayer` appended. `AllTopics` 56; the IDL only gained lines. Pivot: `HrotDeck`, `HrotDeckPart`, `HrotDeckEnded`, `HrotDeckKind`, `HrotDeckPartKind`, `HrotBridgeLayer` (T-080 pattern: `PivotEnum` tables by member name; the one rename row is `TerrainWalkableKind.Slab` to `Deck`; mirror and reverse-mapper rails extended).
+- **Host.** `DeckGather` (new, `HrotHost`) keeps the last inputs per bridge (type, position, yaw, length, width, height) and calls `DeckParts` only when one changed (it allocates the three parts); a steady bridge sends nothing and allocates 0 B (rail). A bridge not seen in a frame is sent `HrotDeckEnded` once. `VehicleLookGather` reads `BridgeLayerLook.Of` through `PivotEnum<HrotBridgeLayer>` and a change alone sends the look.
+- **Plugin.** `DpsDeckOutbound` (new): one `Deck` per standing bridge, disposed on `HrotDeckEnded` (never for an instance it did not write). The fall-vs-recovery rule needs no extra code: the host sends the entity's own state (Damage destroyed) in the frame the obstacle is last seen and the dispose after it; a recovery has no destroyed state.
+- **Deviations.** None to the decisions. The design's `DeckKind { DeckKindAssault ... }` gained a leading `DeckKindUnknown = 0` (the contract's enums start with their unknown / none value).
+- **Rails.** `DeckGatherTests` (deck equals `DeckParts` on the same world for 8825 and 8826 incl. the entity still published; steady sends nothing; move / reshape one new deck; dispose once, Constructing held; solid obstacle none; bridge layer equals `BridgeLayerLook.Of` for every state), `DpsDeckTests`, `DpsTopicTests.A_deck_round_trips...`, the pivot enum mirror rails. Mutations caught: corners from the wrong end, deck dispose dropped (host and plugin), layer state not copied, kind not copied.

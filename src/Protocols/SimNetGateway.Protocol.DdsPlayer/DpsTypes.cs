@@ -28,6 +28,15 @@ public enum HeldMarking : byte { HeldMarkingNone = 0, HeldMarkingToy, HeldMarkin
 /// <summary>What a cloud is made of: tear gas irritates every person inside and thins sight, smoke blocks sight and is harmless.</summary>
 public enum CloudKind : byte { CloudKindNone = 0, CloudKindTearGas, CloudKindSmoke }
 
+/// <summary>Which laid bridge a <see cref="Deck"/> is (DD-035): the assault span a bridge layer launches, or the floating span (pontoon bays); Unknown = a deck of a type this contract does not name.</summary>
+public enum DeckKind : byte { DeckKindUnknown = 0, DeckKindAssault, DeckKindFloating }
+
+/// <summary>One quad of a laid bridge's deck (DD-035): the slab you drive on, or a ramp down to the ground at one end.</summary>
+public enum DeckPartKind : byte { DeckPartKindDeck = 0, DeckPartKindRamp }
+
+/// <summary>What a bridge-laying vehicle does with its span (DD-035): none (every other vehicle, and an engineer whose span is laid), carrying it, laying it out, recovering it.</summary>
+public enum BridgeLayer : byte { BridgeLayerNoSpan = 0, BridgeLayerCarried, BridgeLayerLaying, BridgeLayerRecovering }
+
 public enum Gesture : byte
 {
     GestureNone = 0, GestureHandsUp, GestureFistRaised, GestureHoldSign, GestureWaving, GestureThrowing, GestureWarning,

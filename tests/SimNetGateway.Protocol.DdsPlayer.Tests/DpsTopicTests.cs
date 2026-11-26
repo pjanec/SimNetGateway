@@ -255,11 +255,12 @@ public class DpsTopicTests
         Assert.Equal((byte)4, person.Anger);
         Assert.Equal(CivilianMode.CivilianModeArmedHostile, person.CivilianMode);
 
-        var look = RoundTrip(new VehicleLook { EntityId = 11, RotorSpeed = 0.55f, FlailActive = true, Airborne = true, Parts = [], Openings = [new OpeningLook { OpeningId = 9, Progress = 1f, CrewExposed = true }] }, "t2-vlook");
+        var look = RoundTrip(new VehicleLook { EntityId = 11, RotorSpeed = 0.55f, FlailActive = true, Airborne = true, BridgeLayer = BridgeLayer.BridgeLayerLaying, Parts = [], Openings = [new OpeningLook { OpeningId = 9, Progress = 1f, CrewExposed = true }] }, "t2-vlook");
         Assert.Equal(0.55f, look.RotorSpeed);
         Assert.True(look.Openings[0].CrewExposed);
         Assert.True(look.FlailActive);
         Assert.True(look.Airborne);
+        Assert.Equal(BridgeLayer.BridgeLayerLaying, look.BridgeLayer);   // T-083, appended
 
         var fire = RoundTrip(new Fire { ShooterId = 12, MunitionTypeId = 7_000_000_077L, WeaponCategory = WeaponCategory.WeaponCategoryMachineGun }, "t2-fire");
         Assert.Equal(7_000_000_077L, fire.MunitionTypeId);
@@ -566,6 +567,32 @@ public class DpsTopicTests
         Assert.Equal($"@key int32 CloudId;\n{P}CloudKind Kind;\ndouble SimTime;\n{P}Vec3d Centre;\n{P}Vec3f Drift;\nfloat Radius;\nfloat Height;\nfloat SightTransmittance;\ndouble BornAt;\nfloat Seconds;", Body("Cloud"));
     }
 
+    /// <summary>T-083 (DD-035): a deck survives the wire (its three parts, ground-relative corners), is a late-join state keyed by the obstacle entity, and the IDL only gained lines (a new topic; VehicleLook's last member).</summary>
+    [Fact]
+    public void A_deck_round_trips_is_a_late_join_state_and_its_idl_is_a_pure_addition()
+    {
+        static Vec3d V(double x, double y, double z) => new() { X = x, Y = y, Z = z };
+        var deck = RoundTrip(new Deck
+        {
+            EntityId = 8001, Kind = DeckKind.DeckKindFloating, Length = 22f, Width = 3.2f, Height = 0.6f,
+            Parts = [new DeckPart { Kind = DeckPartKind.DeckPartKindDeck, C0 = V(1, 2, 0.6), C1 = V(3, 2, 0.6), C2 = V(3, 5, 0.6), C3 = V(1, 5, 0.6) }, new DeckPart { Kind = DeckPartKind.DeckPartKindRamp, C0 = V(-4, 2, 0), C1 = V(1, 2, 0.6), C2 = V(1, 5, 0.6), C3 = V(-4, 5, 0) }],
+        }, "t83-deck");
+        Assert.Equal((8001, DeckKind.DeckKindFloating, 22f, 3.2f, 0.6f, 2), (deck.EntityId, deck.Kind, deck.Length, deck.Width, deck.Height, deck.Parts.Count));
+        Assert.Equal((DeckPartKind.DeckPartKindRamp, -4.0, 0.0, 5.0), (deck.Parts[1].Kind, deck.Parts[1].C0.X, deck.Parts[1].C0.Z, deck.Parts[1].C3.Y));
+        Assert.Equal(8001, LateJoin(new Deck { EntityId = 8001, Parts = [] }, "t83-late-deck").EntityId);
+
+        string idl = string.Concat(Directory.EnumerateFiles(AppContext.BaseDirectory, "DpsTopics.idl").Select(File.ReadAllText)).Replace("\r", "");
+        string Body(string name)
+        {
+            int at = idl.IndexOf($"struct {name} {{", StringComparison.Ordinal);
+            Assert.True(at >= 0, name);
+            return string.Join("\n", idl[(at + $"struct {name} {{".Length)..idl.IndexOf("};", at, StringComparison.Ordinal)].Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0));
+        }
+
+        Assert.Contains("@key int32 EntityId;", Body("Deck"));
+        Assert.EndsWith("boolean Airborne;\nSimNetGateway::Protocol::DdsPlayer::BridgeLayer BridgeLayer;", Body("VehicleLook"));   // appended after the member it followed
+    }
+
     [Fact]
     public void The_traffic_topics_round_trip_with_the_compact_knot_units()
     {
@@ -666,7 +693,8 @@ public class DpsTopicTests
             var type = topic["DPS_".Length..];
             Assert.Contains($"struct {type} ", idl);
         }
-        Assert.Equal(55, DpsProtocol.AllTopics.Count);   // + Utterance, Report, Order, Ambience, Weather (DD-026, DD-028), GroundDamage (DD-030), Carried (DD-032), Cloud (DD-033)
+        Assert.Equal(56, DpsProtocol.AllTopics.Count);   // + Utterance, Report, Order, Ambience, Weather (DD-026, DD-028), GroundDamage (DD-030), Carried (DD-032), Cloud (DD-033), Deck (DD-035)
+        Assert.Contains("DPS_Deck", DpsProtocol.AllTopics);
         Assert.Contains("DPS_Cloud", DpsProtocol.AllTopics);
         Assert.Contains("DPS_Carried", DpsProtocol.AllTopics);
         foreach (var name in new[] { "Mover", "MoverTracks", "TrafficLights" })

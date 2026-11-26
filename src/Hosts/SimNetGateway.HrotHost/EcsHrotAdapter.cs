@@ -70,6 +70,7 @@ public sealed class EcsHrotAdapter
     private readonly GroundDamageGather _craters = new();
     private readonly CarriedGather _carried = new();
     private readonly CloudGather _clouds = new();
+    private readonly DeckGather _decks = new();
     private readonly TrafficGather _traffic = new();
     private readonly TkbGather _types = new();
     private readonly AnimalGather _animals = new();
@@ -173,6 +174,7 @@ public sealed class EcsHrotAdapter
 
         var tkb = _services.Tkb();
         _clouds.Begin();
+        _decks.Begin();
         foreach (var e in _hrotQuery!)
         {
             int id = world.GetComponentRO<NetworkIdentity>(e).Value;
@@ -223,6 +225,11 @@ public sealed class EcsHrotAdapter
             }
 
             _types.Reference(state.TkbType);
+            if (DeckGather.IsDeck(world, e))
+            {
+                _decks.Gather(world, e, id, inbound);   // DD-035: a laid bridge also has its deck (the obstacle stays an entity: its type, its damage)
+            }
+
             ReferenceLoadedAmmo(world, e, isNew);
             if (!lifeForm)
             {
@@ -273,6 +280,7 @@ public sealed class EcsHrotAdapter
         }
 
         _clouds.End(inbound);
+        _decks.End(inbound);
 
         _scratch.Clear();
         foreach (var (id, s) in _sent)
@@ -945,6 +953,7 @@ public sealed class EcsHrotAdapter
         _craters.Clear();
         _carried.Clear();
         _clouds.Clear();
+        _decks.Clear();
         _traffic.Clear();
         _types.Clear();
         _animals.Clear();

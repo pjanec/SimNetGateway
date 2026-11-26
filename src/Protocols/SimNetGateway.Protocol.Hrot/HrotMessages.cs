@@ -477,6 +477,7 @@ public readonly record struct HrotPersonAppearance(
 /// <paramref name="RotorSpeed"/> is HROT's rotor / engine level 0..1 (sent on a change of 0.05 and on reaching 0 or 1); <paramref name="CrewExposed"/> lists the ids of the
 /// openings a crewman's head is out of (null = none). <paramref name="FlailActive"/> is a mine clearer's flail turning (HROT's terrain mine-clearing state, DD-018 3.5c).
 /// T-079: <paramref name="Airborne"/> is HROT's own flight state (<c>Hrot.Look.Airborne.Of</c>: a flyer airborne - a dragon, a helicopter - false on the ground or for a ground vehicle).
+/// T-083 (DD-035): <paramref name="BridgeLayer"/> is HROT's <c>BridgeLayerLook.Of</c> (NoSpan for every vehicle that is no bridge engineer).
 /// DD-020 3.2: <paramref name="RotorTarget"/>, <paramref name="RotorFrom"/>, <paramref name="RotorChangedAt"/> and <paramref name="RotorSpoolSeconds"/> are HROT's spool rule as data (the speed it moves to, the speed at the change, the sim time of the change and seconds per full scale),
 /// <paramref name="OpeningMotions"/> the same per opening; a new message is sent when one of them changes, not as the value moves (<paramref name="RotorSpeed"/> and the progress are the values at the time of sending).
 /// </summary>
@@ -484,7 +485,7 @@ public readonly record struct HrotVehicleLook(
     int Id, HrotKillKind Destruction, bool TurretThrown, bool Burning, bool Smoking, uint Lights, IReadOnlyList<(byte Part, byte State)> Parts,
     IReadOnlyList<(byte Opening, float Progress)> Openings, float RotorSpeed = 0f, IReadOnlyList<byte>? CrewExposed = null, bool FlailActive = false,
     float RotorTarget = 0f, float RotorFrom = 0f, double RotorChangedAt = 0.0, float RotorSpoolSeconds = 0f, IReadOnlyList<HrotOpeningMotion>? OpeningMotions = null,
-    bool Airborne = false) : IHrotToGatewayMessage;
+    bool Airborne = false, HrotBridgeLayer BridgeLayer = HrotBridgeLayer.NoSpan) : IHrotToGatewayMessage;
 
 /// <summary>One opening's timed motion (DD-020 3.2): it moves at a constant rate to <paramref name="Target"/> (1 open, 0 closed) from the other end, starting at sim time <paramref name="ChangedAt"/> and taking <paramref name="Seconds"/> for the whole way (0 = instant).</summary>
 public readonly record struct HrotOpeningMotion(byte Opening, float Target, double ChangedAt, float Seconds);
@@ -610,6 +611,18 @@ public readonly record struct HrotWindowDamage(int Panel, int Opening, byte Hits
 /// </summary>
 public readonly record struct HrotBuildingDamage(string Building, bool Collapsed, IReadOnlyList<HrotBreach> Breaches, IReadOnlyList<HrotWindowDamage> Windows, double CollapsedAt = 0d, double FireSince = 0d, float FireSeconds = 0f,
     HrotBreachCause CollapseCause = HrotBreachCause.Unknown, HrotVec3 CollapseBlast = default, float CollapseKg = 0f) : IHrotToGatewayMessage;
+
+/// <summary>One quad of a laid bridge's deck (DD-035): its corners counter-clockwise along the bridge, x and y the local frame and Z the height ABOVE THE GROUND under the corner.</summary>
+public readonly record struct HrotDeckPart(HrotDeckPartKind Kind, HrotVec3 C0, HrotVec3 C1, HrotVec3 C2, HrotVec3 C3);
+
+/// <summary>
+/// A laid bridge's deck (DD-035) of the obstacle entity <paramref name="Id"/>: HROT's one rule <c>TerrainObstacles.DeckParts</c> of the entity's position, heading and shape (<paramref name="Length"/> the span between the deck ends,
+/// <paramref name="Width"/>, <paramref name="Height"/> above the bank). Sent when the bridge stands and when its pose or shape changes.
+/// </summary>
+public readonly record struct HrotDeck(int Id, HrotDeckKind Kind, float Length, float Width, float Height, IReadOnlyList<HrotDeckPart> Parts) : IHrotToGatewayMessage;
+
+/// <summary>The bridge is gone (DD-035: recovered, or fallen): the side disposes its deck.</summary>
+public readonly record struct HrotDeckEnded(int Id) : IHrotToGatewayMessage;
 
 /// <summary>What a cloud is made of (HROT's cloud kind, in its order; DD-033).</summary>
 public enum HrotCloudKind : byte

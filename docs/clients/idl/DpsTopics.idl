@@ -235,6 +235,7 @@ module SimNetGateway {
                 double RotorChangedAt;
                 float RotorSpoolSeconds;
                 boolean Airborne;
+                SimNetGateway::Protocol::DdsPlayer::BridgeLayer BridgeLayer;
             };
 
             @topic
@@ -411,6 +412,26 @@ module SimNetGateway {
                 float SightTransmittance;
                 double BornAt;
                 float Seconds;
+            };
+
+            @appendable
+            struct DeckPart {
+                SimNetGateway::Protocol::DdsPlayer::DeckPartKind Kind;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d C0;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d C1;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d C2;
+                SimNetGateway::Protocol::DdsPlayer::Vec3d C3;
+            };
+
+            @topic
+            @appendable
+            struct Deck {
+                @key int32 EntityId;
+                SimNetGateway::Protocol::DdsPlayer::DeckKind Kind;
+                float Length;
+                float Width;
+                float Height;
+                sequence<SimNetGateway::Protocol::DdsPlayer::DeckPart, 3> Parts;
             };
 
             @appendable

@@ -294,6 +294,7 @@ public sealed class DpsTransport : IDisposable
             GroundDamage = Add(new DpsChannel<GroundDamage>(_participant, hold: Hold<GroundDamage>(DpsCountKind.Keyed, key: g => KeyOf(g.Cell))));   // DD-030: state once on the world partition
             Carried = Add(new DpsChannel<Carried>(_participant, hold: Hold<Carried>(DpsCountKind.Keyed, key: c => c.EntityId)));   // DD-032
             Cloud = Add(new DpsChannel<Cloud>(_participant, hold: Hold<Cloud>(DpsCountKind.Keyed, key: c => c.CloudId)));   // DD-033
+            Deck = Add(new DpsChannel<Deck>(_participant, hold: Hold<Deck>(DpsCountKind.Keyed, key: d => d.EntityId)));   // DD-035
             Mover = Add(new DpsChannel<Mover>(_participant, hold: Hold<Mover>(DpsCountKind.Keyed, key: m => m.MoverId)));
             MoverTracks = Add(new DpsChannel<MoverTracks>(_participant, hold: Hold<MoverTracks>(DpsCountKind.Event, 16)));
             TrafficLights = Add(new DpsChannel<TrafficLights>(_participant, hold: Hold<TrafficLights>(DpsCountKind.Keyed, key: t => t.SignalId)));
@@ -432,6 +433,7 @@ public sealed class DpsTransport : IDisposable
     internal DpsChannel<Carried> Carried { get; } = null!;
 
     internal DpsChannel<Cloud> Cloud { get; } = null!;
+    internal DpsChannel<Deck> Deck { get; } = null!;
 
     internal DpsChannel<Mover> Mover { get; } = null!;
 

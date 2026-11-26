@@ -390,6 +390,17 @@ In HROT one mechanism covers all of these: a person is held by a holder. The hol
 - **The mine clearer** is an engineer tank whose flail drum spins while it clears (HROT's `FlailActivity`, 4 rev/s after a 1 s spool). DD-018 §3.5c (built) sends a flail flag (FlailActive) in `VehicleLook` so Unreal knows when to spin it.
 - **Marking signs** on a marked field are a possible later addition, if a physically marked field should look marked to everyone near it.
 
+## Bridges: laid spans and the bridge layer (DD-035)
+
+HROT's engineers lay and recover bridges during play. A **laid span is a static obstacle entity**: TKB type **8825** (assault bridge) or **8826** (floating bridge), DIS kind 5; a scenario can place one the same way. It stays a plain `Entity` (its type, its health, its `EntityState.Damage`), but **do not draw it as a box**: draw it from its `Deck`. The two vehicles that lay them are TKB **118** (an M104 Wolverine, assault spans) and **119** (an Improved Ribbon Bridge transporter, floating spans).
+
+- **`Deck`** (Discrete, keyed by the obstacle's `EntityId`, reliable, `TransientLocal`, keep-last 1): `Kind` (`DeckKindAssault` / `DeckKindFloating`, from the obstacle's TKB type), `Length` (the span between the deck ends), `Width`, `Height` (the deck above the bank), and `Parts`: **three quads**, the deck slab then a ramp at each end (`DeckPartKind` Deck / Ramp), each with four corners `C0..C3` counter-clockwise along the bridge. The corners come from one HROT rule, [`TerrainObstacles.DeckParts`](https://github.com/pjanec/HROT/blob/unreal-ig/FDP/Toolkits/Fdp.Toolkits/Terrain/StaticObstacles.cs), the same one HROT's terrain and its units use, so the gateway has no copy of it (ramps are 1 : 4, never shorter than 4.8 m).
+- **Corners are ground-relative.** `X` and `Y` are the simulation frame; **`Z` is the height above the ground under that corner** (a ramp's foot is 0, a slab corner is `Height`). Add **your own terrain height** at (X, Y), exactly as HROT does with its ground.
+- **One instance per standing bridge.** It is written when the bridge stands (an obstacle under construction is held until HROT's terrain has baked it) and again when its pose or shape changes; it is **disposed when the obstacle goes**: recovered by an engineer, or fallen. **A fall is told by the entity's `EntityState.Damage` = destroyed, which arrives before the dispose;** a recovery has no such sample. Units on a fallen span fall with it (their own samples).
+- **`VehicleLook.BridgeLayer`** (appended): `BridgeLayerCarried` (the span is on board), `BridgeLayerLaying` (the vehicle is launching it), `BridgeLayerRecovering` (taking it back), `BridgeLayerNoSpan` for every other vehicle and for an engineer whose span is laid (the laid span is the `Deck`). It is HROT's own rule [`BridgeLayerLook.Of`](https://github.com/pjanec/HROT/blob/unreal-ig/Hrot/Engine/Hrot.Look/Vehicles/BridgeLayerLook.cs); there is no progress value in v1: start and stop your own animation on the state change.
+
+Scenarios to watch it with (HROT `scenarios/demos/engineering/`): `bl-placed-bridge` (a bridge placed by the scenario, the same `Deck`), `bl-assault-crossing` (an engineer lays a span, units cross), `bl-recover` (the span is taken back: `Deck` disposed, no destroyed state), `bl-blow-the-bridge` (a charge drops it: destroyed, then disposed).
+
 ## Ambient traffic (SUMO cars and pedestrians)
 
 Unreal receives traffic as world-space movers: positions with altitude, headings, a short smooth track per mover. There is no road network and no SUMO code involved. The design is [DD-018 §3.6b](https://github.com/pjanec/SimNetGateway/blob/ccr-458b1360-afzl8f/docs/design/DD-018-Dps-Round-2.md), built; the reference client's MoverPlayback is a working example of the delayed playback.
@@ -516,7 +527,7 @@ Every topic belongs to one rate class, stated on its C# type by the `[DpsRate]` 
 | Class | Changes | Topics | What a client does |
 | --- | --- | --- | --- |
 | Fixed | once per instance or type | `Entity`, `Appearance`, `TkbType`, `MunitionLook`, `Mover` | Cache; never expect a re-send unless the thing itself changed |
-| Discrete | on events | `Session`, `EntityStatus`, `PersonState`, `VehicleLook`, `Animal`, `Round`, `Status`, `Exercise`, `BuildingDamage`, `GroundDamage`, `Carried`, `Cloud`, `FireSpots`, `GroundMarks`, `OwnUnit`, `PlayerSlot`, `TrafficLights`, `View`, `JoinRequest`, `Leave`, `GizmoView` | No continuous field: a value that moves over time is a start time + target + duration; animate it yourself |
+| Discrete | on events | `Session`, `EntityStatus`, `PersonState`, `VehicleLook`, `Animal`, `Round`, `Status`, `Exercise`, `BuildingDamage`, `GroundDamage`, `Carried`, `Cloud`, `Deck`, `FireSpots`, `GroundMarks`, `OwnUnit`, `PlayerSlot`, `TrafficLights`, `View`, `JoinRequest`, `Leave`, `GizmoView` | No continuous field: a value that moves over time is a start time + target + duration; animate it yourself |
 | Continuous | by threshold plus a heartbeat | `EntityState`, `Articulation`, `PersonAim`, `MoverTracks`, `FlameJet`, `ControlFrame`, `GizmoFrame` | Small samples; extrapolate between them |
 | Event | as they happen | `Fire`, `Detonation`, `Effect`, `Impact`, `ManDowned`, `PlayerMessage` | A reader keeps up to 1024 samples |
 

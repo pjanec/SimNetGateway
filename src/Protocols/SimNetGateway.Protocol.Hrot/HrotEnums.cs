@@ -195,6 +195,24 @@ public enum HrotUseReason : byte
     Unknown = 0, Ok, OutOfReach, Locked, DoorRefuses, NotDown, SeatTaken, Unfit, Carrying, NothingToDo, Failed, OtherSide,
 }
 
+/// <summary>Mirrors the DPS <c>BridgeLayer</c> (T-083): HROT's <c>BridgeLayerState</c> in its order.</summary>
+public enum HrotBridgeLayer : byte
+{
+    NoSpan = 0, Carried, Laying, Recovering,
+}
+
+/// <summary>Mirrors the DPS <c>DeckKind</c> (T-083): which laid bridge a deck is, from its TKB type (HROT has no enum for it).</summary>
+public enum HrotDeckKind : byte
+{
+    Unknown = 0, Assault, Floating,
+}
+
+/// <summary>Mirrors the DPS <c>DeckPartKind</c> (T-083): HROT's <c>TerrainWalkableKind</c> (Slab is the Deck, see <c>PivotEnums.Renames</c>).</summary>
+public enum HrotDeckPartKind : byte
+{
+    Deck = 0, Ramp,
+}
+
 /// <summary>Mirrors the DPS <c>RadarWarningLevel</c> (T-080).</summary>
 public enum HrotRadarWarningLevel : byte
 {

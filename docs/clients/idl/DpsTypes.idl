@@ -77,6 +77,27 @@ module SimNetGateway {
             };
 
             @bit_bound(8)
+            enum DeckKind {
+                DeckKindUnknown,
+                DeckKindAssault,
+                DeckKindFloating
+            };
+
+            @bit_bound(8)
+            enum DeckPartKind {
+                DeckPartKindDeck,
+                DeckPartKindRamp
+            };
+
+            @bit_bound(8)
+            enum BridgeLayer {
+                BridgeLayerNoSpan,
+                BridgeLayerCarried,
+                BridgeLayerLaying,
+                BridgeLayerRecovering
+            };
+
+            @bit_bound(8)
             enum Gesture {
                 GestureNone,
                 GestureHandsUp,

@@ -41,6 +41,8 @@ public class PivotEnumTests
         (typeof(Fdp.Toolkit.Combat.OperatorFireMode), typeof(HrotFireMode)),
         (typeof(Fdp.Toolkit.Perception.Radar.RadarWarningLevel), typeof(HrotRadarWarningLevel)),
         (typeof(Fdp.Toolkit.Tkb.Domain.GuidanceKind), typeof(HrotMissileSeeker)),
+        (typeof(Hrot.UI.Common.Map3D.BridgeLayerState), typeof(HrotBridgeLayer)),
+        (typeof(Fdp.Toolkit.Terrain.TerrainWalkableKind), typeof(HrotDeckPartKind)),
     ];
 
     /// <summary>The same rows as <c>PivotEnums.Renames</c>, restated here independently so a change of one is noticed.</summary>
@@ -51,6 +53,7 @@ public class PivotEnumTests
         [(nameof(HrotImpactKind), "Exit")] = "Left",
         [(nameof(HrotImpactKind), "Stop")] = "Stopped",
         [(nameof(HrotViewMode), "FixedKey")] = "Fixed",
+        [(nameof(HrotDeckPartKind), "Slab")] = "Deck",
         [(nameof(HrotEffectKind), "Decal")] = "GroundMark",
         [(nameof(HrotEffectKind), "Fire")] = "WreckFlame",
         [(nameof(HrotEffectKind), "Smoke")] = "WreckSmoke",
@@ -138,7 +141,7 @@ public class PivotEnumTests
                 string name = value.ToString()!;
                 var back = Reverse(hrot, pivot, value);
                 bool has = (bool)hasMethod.MakeGenericType(hrot).GetMethod("Has")!.MakeGenericMethod(pivot).Invoke(null, [value])!;
-                var sources = Enum.GetValues(hrot).Cast<object>().Where(h => Map(hrot, pivot, h).ToString() == name && !(Equals(Map(hrot, pivot, h), Enum.ToObject(pivot, 0)) && h.ToString() != name)).ToList();
+                var sources = Enum.GetValues(hrot).Cast<object>().Where(h => Map(hrot, pivot, h).ToString() == name && !(Equals(Map(hrot, pivot, h), Enum.ToObject(pivot, 0)) && h.ToString() != name && !Renames.ContainsKey((pivot.Name, h.ToString()!)))).ToList();
                 Assert.Equal(sources.Count > 0, has);
                 if (has)
                 {
