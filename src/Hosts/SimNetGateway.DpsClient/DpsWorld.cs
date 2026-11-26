@@ -235,6 +235,9 @@ public sealed class DpsWorld : IDisposable
     /// <summary>The laid bridges' decks by obstacle entity id (DD-035).</summary>
     public Dictionary<int, D.Deck> Decks { get; } = new();
 
+    /// <summary>The sizes of the standing static obstacles by entity id (DD-035).</summary>
+    public Dictionary<int, D.Obstacle> Obstacles { get; } = new();
+
     /// <summary>The rule statuses by id.</summary>
     public Dictionary<int, D.Status> Statuses { get; } = new();
 
@@ -290,6 +293,7 @@ public sealed class DpsWorld : IDisposable
         Keep(DpsProtocol.Carried, Carried, (D.Carried c) => c.EntityId);
         Keep(DpsProtocol.Cloud, Clouds, (D.Cloud c) => c.CloudId);
         Keep(DpsProtocol.Deck, Decks, (D.Deck d) => d.EntityId);
+        Keep(DpsProtocol.Obstacle, Obstacles, (D.Obstacle o) => o.EntityId);
         Keep(DpsProtocol.GroundDamage, GroundDamage, (D.GroundDamage g) => g.Cell ?? string.Empty);
         Keep(DpsProtocol.Status, Statuses, (D.Status s) => s.StatusId);
         Keep(DpsProtocol.TrafficLights, TrafficLights, (D.TrafficLights l) => l.SignalId);

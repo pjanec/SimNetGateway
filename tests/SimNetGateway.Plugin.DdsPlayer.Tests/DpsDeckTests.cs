@@ -81,4 +81,22 @@ public class DpsDeckTests
             Assert.True(looks.Until(w => w.Alive.TryGetValue("2001", out var l) && l.BridgeLayer == (D.BridgeLayer)(byte)layer), layer.ToString());
         }
     }
+
+    /// <summary>T-084: an obstacle's size is copied, a changed size is a new sample, the end disposes it (never a dispose of an instance not written).</summary>
+    [Fact]
+    public void An_obstacles_size_is_copied_a_change_is_a_sample_and_the_end_disposes_it()
+    {
+        uint domain = Watch.NewDomain();
+        using var watch = new Watch.Watch<D.Obstacle>(domain, "station-1", e => Id(e.EntityId));
+        using var rig = new Rig(domain);
+        rig.Send(new HrotObstacle(8101, 3f, 0.6f, 1.2f));
+        Assert.True(watch.Until(w => w.Alive.ContainsKey("8101")));
+        var o = watch.Alive["8101"];
+        Assert.Equal((3f, 0.6f, 1.2f), (o.Length, o.Width, o.Height));
+        rig.Send(new HrotObstacle(8101, 9f, 0.6f, 1.2f));
+        Assert.True(watch.Until(w => w.Alive["8101"].Length == 9f));
+        rig.Send(new HrotObstacleEnded(8101));
+        Assert.True(watch.Until(w => !w.Alive.ContainsKey("8101")));
+        rig.Send(new HrotObstacleEnded(8101));
+    }
 }

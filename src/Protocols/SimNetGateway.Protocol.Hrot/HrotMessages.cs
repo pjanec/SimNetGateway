@@ -624,6 +624,12 @@ public readonly record struct HrotDeck(int Id, HrotDeckKind Kind, float Length, 
 /// <summary>The bridge is gone (DD-035: recovered, or fallen): the side disposes its deck.</summary>
 public readonly record struct HrotDeckEnded(int Id) : IHrotToGatewayMessage;
 
+/// <summary>The size of a standing static obstacle (DD-035): HROT's per-instance <c>ObstacleShape</c>, a box centred on the entity in plan, its base at the entity's Z. Sent when it stands and when its size changes.</summary>
+public readonly record struct HrotObstacle(int Id, float Length, float Width, float Height) : IHrotToGatewayMessage;
+
+/// <summary>The obstacle is gone (DD-035): the side disposes its size.</summary>
+public readonly record struct HrotObstacleEnded(int Id) : IHrotToGatewayMessage;
+
 /// <summary>What a cloud is made of (HROT's cloud kind, in its order; DD-033).</summary>
 public enum HrotCloudKind : byte
 {

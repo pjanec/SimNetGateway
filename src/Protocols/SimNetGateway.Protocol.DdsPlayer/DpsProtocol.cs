@@ -36,6 +36,7 @@ public static class DpsProtocol
     public const string Carried = "DPS_Carried";
     public const string Cloud = "DPS_Cloud";
     public const string Deck = "DPS_Deck";
+    public const string Obstacle = "DPS_Obstacle";
     public const string TkbType = "DPS_TkbType";
     public const string ManDowned = "DPS_ManDowned";
     public const string PlayerMessage = "DPS_PlayerMessage";
@@ -75,7 +76,7 @@ public static class DpsProtocol
         ManDowned, PlayerMessage, Status, Exercise, View,
         PlayerSlot, OwnUnit, JoinRequest, ControlFrame, Leave, GizmoView, GizmoFrame,
         SimClock, ClockProbe, ClockEcho, ClockStep, StepAck, ClientWorld, RenderClient, RenderJob, FrameRequest, FrameDone, RenderJobResult,
-        Utterance, Report, Order, Ambience, Weather, GroundDamage, Carried, Cloud, Deck,
+        Utterance, Report, Order, Ambience, Weather, GroundDamage, Carried, Cloud, Deck, Obstacle,
     ];
 }
 

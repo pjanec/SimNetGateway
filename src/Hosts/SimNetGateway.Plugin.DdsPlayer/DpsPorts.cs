@@ -35,6 +35,7 @@ internal sealed class DpsPorts
         Carried = b.RequireOutbound<DpsItem<Carried>>("dps.Carried");
         Cloud = b.RequireOutbound<DpsItem<Cloud>>("dps.Cloud");
         Deck = b.RequireOutbound<DpsItem<Deck>>("dps.Deck");
+        Obstacle = b.RequireOutbound<DpsItem<Obstacle>>("dps.Obstacle");
         Mover = b.RequireOutbound<DpsItem<Mover>>("dps.Mover");
         MoverTracks = b.RequireOutbound<DpsItem<MoverTracks>>("dps.MoverTracks");
         TrafficLights = b.RequireOutbound<DpsItem<TrafficLights>>("dps.TrafficLights");
@@ -99,6 +100,7 @@ internal sealed class DpsPorts
 
     public IOutboundChannel<DpsItem<Cloud>> Cloud { get; }
     public IOutboundChannel<DpsItem<Deck>> Deck { get; }
+    public IOutboundChannel<DpsItem<Obstacle>> Obstacle { get; }
 
     public IOutboundChannel<DpsItem<Mover>> Mover { get; }
 
@@ -162,6 +164,7 @@ internal sealed class DpsPorts
         b.BindOutbound<DpsItem<Carried>>("dps.Carried", t.Carried);
         b.BindOutbound<DpsItem<Cloud>>("dps.Cloud", t.Cloud);
         b.BindOutbound<DpsItem<Deck>>("dps.Deck", t.Deck);
+        b.BindOutbound<DpsItem<Obstacle>>("dps.Obstacle", t.Obstacle);
         b.BindOutbound<DpsItem<Mover>>("dps.Mover", t.Mover);
         b.BindOutbound<DpsItem<MoverTracks>>("dps.MoverTracks", t.MoverTracks);
         b.BindOutbound<DpsItem<TrafficLights>>("dps.TrafficLights", t.TrafficLights);

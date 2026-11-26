@@ -593,6 +593,20 @@ public class DpsTopicTests
         Assert.EndsWith("boolean Airborne;\nSimNetGateway::Protocol::DdsPlayer::BridgeLayer BridgeLayer;", Body("VehicleLook"));   // appended after the member it followed
     }
 
+    /// <summary>T-084 (DD-035): an obstacle's size survives the wire, is a late-join state keyed by the entity, and its IDL is a whole addition.</summary>
+    [Fact]
+    public void An_obstacle_round_trips_is_a_late_join_state_and_its_idl_is_a_pure_addition()
+    {
+        var o = RoundTrip(new Obstacle { EntityId = 8101, Length = 3f, Width = 0.6f, Height = 1.2f }, "t84-obstacle");
+        Assert.Equal((8101, 3f, 0.6f, 1.2f), (o.EntityId, o.Length, o.Width, o.Height));
+        Assert.Equal(8101, LateJoin(new Obstacle { EntityId = 8101 }, "t84-late-obstacle").EntityId);
+        string idl = string.Concat(Directory.EnumerateFiles(AppContext.BaseDirectory, "DpsTopics.idl").Select(File.ReadAllText)).Replace("\r", "");
+        int at = idl.IndexOf("struct Obstacle {", StringComparison.Ordinal);
+        Assert.True(at >= 0);
+        Assert.Equal("@key int32 EntityId;\nfloat Length;\nfloat Width;\nfloat Height;", string.Join("\n", idl[(at + "struct Obstacle {".Length)..idl.IndexOf("};", at, StringComparison.Ordinal)].Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0)));
+        Assert.Contains("DPS_Obstacle", DpsProtocol.AllTopics);
+    }
+
     [Fact]
     public void The_traffic_topics_round_trip_with_the_compact_knot_units()
     {
@@ -693,7 +707,7 @@ public class DpsTopicTests
             var type = topic["DPS_".Length..];
             Assert.Contains($"struct {type} ", idl);
         }
-        Assert.Equal(56, DpsProtocol.AllTopics.Count);   // + Utterance, Report, Order, Ambience, Weather (DD-026, DD-028), GroundDamage (DD-030), Carried (DD-032), Cloud (DD-033), Deck (DD-035)
+        Assert.Equal(57, DpsProtocol.AllTopics.Count);   // + Utterance, Report, Order, Ambience, Weather (DD-026, DD-028), GroundDamage (DD-030), Carried (DD-032), Cloud (DD-033), Deck, Obstacle (DD-035)
         Assert.Contains("DPS_Deck", DpsProtocol.AllTopics);
         Assert.Contains("DPS_Cloud", DpsProtocol.AllTopics);
         Assert.Contains("DPS_Carried", DpsProtocol.AllTopics);

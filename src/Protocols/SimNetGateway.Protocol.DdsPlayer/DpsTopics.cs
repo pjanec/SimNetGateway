@@ -651,6 +651,22 @@ public partial struct Deck
     [DdsBound(3)] public List<DeckPart> Parts;
 }
 
+/// <summary>
+/// A producer-specific extension, optional for a client (DD-035). The size of a STANDING static obstacle (a sandbag wall, a concrete block, a jersey barrier, a barrel, a crate, a parked car, a guard booth: a roadblock) as
+/// the simulation has it for THIS instance - a scenario may stretch a wall, so the type's default (<see cref="TkbType"/>) is not enough. The obstacle itself is an <see cref="Entity"/> with its <see cref="EntityState"/>; this adds
+/// the box: <see cref="Length"/> along the entity's heading x <see cref="Width"/> across it, the box CENTRED on the entity's position in plan (the simulation's own prism), its base at the entity's Z and <see cref="Height"/> above it.
+/// A laid bridge is not an obstacle box: it has <see cref="Deck"/>. One instance per standing obstacle, written when it stands and when its size changes, disposed when the obstacle goes (a destructible one drops its health when
+/// pushed or blasted, <see cref="EntityState.Damage"/>, and the entity is removed at zero: a breached roadblock disappears).
+/// </summary>
+[DpsRate(DpsRateClass.Discrete)]
+[DdsTopic(DpsProtocol.Obstacle)]
+[DdsQos(Reliability = DdsReliability.Reliable, Durability = DdsDurability.TransientLocal, HistoryKind = DdsHistoryKind.KeepLast, HistoryDepth = 1)]
+public partial struct Obstacle
+{
+    [DdsKey] public int EntityId;
+    public float Length, Width, Height;
+}
+
 /// <summary>One crater: a bowl of <see cref="Depth"/> m at <see cref="Centre"/> rising to a rim <see cref="Rim"/> m above the ground at <see cref="Radius"/>, falling back to the ground at 1.4 x <see cref="Radius"/> (the simulation's profile).</summary>
 [DdsStruct]
 public partial struct Crater

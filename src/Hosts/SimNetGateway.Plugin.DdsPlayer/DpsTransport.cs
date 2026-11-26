@@ -295,6 +295,7 @@ public sealed class DpsTransport : IDisposable
             Carried = Add(new DpsChannel<Carried>(_participant, hold: Hold<Carried>(DpsCountKind.Keyed, key: c => c.EntityId)));   // DD-032
             Cloud = Add(new DpsChannel<Cloud>(_participant, hold: Hold<Cloud>(DpsCountKind.Keyed, key: c => c.CloudId)));   // DD-033
             Deck = Add(new DpsChannel<Deck>(_participant, hold: Hold<Deck>(DpsCountKind.Keyed, key: d => d.EntityId)));   // DD-035
+            Obstacle = Add(new DpsChannel<Obstacle>(_participant, hold: Hold<Obstacle>(DpsCountKind.Keyed, key: o => o.EntityId)));   // DD-035
             Mover = Add(new DpsChannel<Mover>(_participant, hold: Hold<Mover>(DpsCountKind.Keyed, key: m => m.MoverId)));
             MoverTracks = Add(new DpsChannel<MoverTracks>(_participant, hold: Hold<MoverTracks>(DpsCountKind.Event, 16)));
             TrafficLights = Add(new DpsChannel<TrafficLights>(_participant, hold: Hold<TrafficLights>(DpsCountKind.Keyed, key: t => t.SignalId)));
@@ -434,6 +435,7 @@ public sealed class DpsTransport : IDisposable
 
     internal DpsChannel<Cloud> Cloud { get; } = null!;
     internal DpsChannel<Deck> Deck { get; } = null!;
+    internal DpsChannel<Obstacle> Obstacle { get; } = null!;
 
     internal DpsChannel<Mover> Mover { get; } = null!;
 

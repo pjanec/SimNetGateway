@@ -121,6 +121,7 @@ internal sealed class FakeRenderClient : IDisposable
         Keyed<D.Carried>(c => c.EntityId);
         Keyed<D.Cloud>(c => c.CloudId);
         Keyed<D.Deck>(d => d.EntityId);
+        Keyed<D.Obstacle>(o => o.EntityId);
         Keyed<D.Mover>(m => m.MoverId);
         Event<D.MoverTracks>();
         Keyed<D.TrafficLights>(t => t.SignalId);

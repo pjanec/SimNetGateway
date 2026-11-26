@@ -226,4 +226,88 @@ public class DeckGatherTests
 
         Assert.Equal(BridgeLayerState.NoSpan, BridgeLayerLook.Of(h.World, plain));
     }
+
+    // ---- T-084: the size of a roadblock -----------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// <c>HrotObstacle</c> equals the entity's own <c>ObstacleShape</c> (a per-instance size that differs from the type's default is the one sent: two walls of one type, two sizes), a bridge has none, a steady obstacle sends nothing,
+    /// an edited size is one new sample. Mutations: size not copied (a constant) fails the equality; a bridge not excluded fails the no-Obstacle row.
+    /// </summary>
+    [Fact]
+    public void An_obstacle_sends_its_own_per_instance_size_never_a_bridges_and_a_change_is_one_new_sample()
+    {
+        using var h = new Stage();
+        var shortWall = h.Bridge(8101, TkbEntityTypes.Obstacle_SandbagWall, new Vector3(5, 5, 1), 0.3f, 3f, 0.6f, 1.0f, ObstacleKind.Solid);
+        var longWall = h.Bridge(8102, TkbEntityTypes.Obstacle_SandbagWall, new Vector3(9, 5, 1), 0f, 12f, 0.6f, 1.4f, ObstacleKind.Solid);   // the same type, stretched by the scenario
+        h.Bridge(8103, TkbEntityTypes.Obstacle_AssaultBridge, new Vector3(50, 5, 0), 0f, 34f, 4f, 1.5f);
+
+        var all = h.Gather();
+        foreach (var (id, wall) in new[] { (8101, shortWall), (8102, longWall) })
+        {
+            var shape = h.World.GetComponentRO<ObstacleShape>(wall);
+            var o = Assert.Single(all.Of<HrotObstacle>(), x => x.Id == id);
+            Assert.Equal((shape.Length, shape.Width, shape.Height), (o.Length, o.Width, o.Height));
+            Assert.Single(all.Of<HrotEntityState>(), st => st.Id == id);   // still an entity
+        }
+
+        Assert.NotEqual(Assert.Single(all.Of<HrotObstacle>(), x => x.Id == 8101).Length, Assert.Single(all.Of<HrotObstacle>(), x => x.Id == 8102).Length);
+        Assert.DoesNotContain(all.Of<HrotObstacle>(), x => x.Id == 8103);   // a bridge keeps its Deck
+        Assert.Single(all.Of<HrotDeck>(), d => d.Id == 8103);
+        for (int i = 0; i < 20; i++)
+        {
+            Assert.Empty(h.Gather().Of<HrotObstacle>());
+        }
+
+        h.World.SetComponent(shortWall, new ObstacleShape { Length = 5f, Width = 0.6f, Height = 1.0f });   // edited
+        var edited = Assert.Single(h.Gather().Of<HrotObstacle>());
+        Assert.Equal((8101, 5f), (edited.Id, edited.Length));
+        Assert.Empty(h.Gather().Of<HrotObstacle>());
+    }
+
+    [Fact]
+    public void A_bulldozed_obstacle_is_disposed_once_when_it_is_removed_at_zero_health()
+    {
+        using var h = new Stage();
+        var wall = h.Bridge(8101, TkbEntityTypes.Obstacle_SandbagWall, new Vector3(5, 5, 1), 0f, 3f, 0.6f, 1.0f, ObstacleKind.Solid);
+        Assert.Single(h.Gather().Of<HrotObstacle>());
+        h.World.SetComponent(wall, new Fdp.Toolkit.Combat.Components.Health { Current = 0f, Max = 100f });   // pushed down (ObstacleDamage)
+        Assert.Empty(h.Gather().Of<HrotObstacleEnded>());                                                     // not gone until its owner removes it
+        h.RemoveHrotEntity(wall);                                                                             // ObstacleRemovalSystem
+        var gone = h.Gather();
+        Assert.Equal(8101, Assert.Single(gone.Of<HrotObstacleEnded>()).Id);
+        Assert.Single(gone.Of<HrotEntityRemoved>());
+        Assert.Empty(h.Gather().Of<HrotObstacleEnded>());
+    }
+
+    [Fact]
+    public void The_obstacle_gather_steady_path_allocates_nothing()
+    {
+        using var h = new Stage();
+        var wall = h.Bridge(8101, TkbEntityTypes.Obstacle_SandbagWall, new Vector3(5, 5, 1), 0f, 3f, 0.6f, 1.0f, ObstacleKind.Solid);
+        var gather = new ObstacleGather();
+        var inbound = new InMemoryInbound(new SourceId(99), "obstacle");
+        void Pass()
+        {
+            gather.Begin();
+            gather.Gather(h.World, wall, 8101, inbound);
+            gather.End(inbound);
+        }
+
+        Pass();
+        Assert.Equal(1, inbound.Drain(new Capture(), int.MaxValue));
+        for (int i = 0; i < 50; i++)
+        {
+            Pass();
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 300; i++)
+        {
+            Pass();
+        }
+
+        long bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(0, inbound.Drain(new Capture(), int.MaxValue));
+        Assert.Equal(0L, bytes);
+    }
 }

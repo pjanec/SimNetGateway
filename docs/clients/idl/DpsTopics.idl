@@ -434,6 +434,15 @@ module SimNetGateway {
                 sequence<SimNetGateway::Protocol::DdsPlayer::DeckPart, 3> Parts;
             };
 
+            @topic
+            @appendable
+            struct Obstacle {
+                @key int32 EntityId;
+                float Length;
+                float Width;
+                float Height;
+            };
+
             @appendable
             struct Crater {
                 SimNetGateway::Protocol::DdsPlayer::Vec3d Centre;

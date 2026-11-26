@@ -71,6 +71,7 @@ public sealed class EcsHrotAdapter
     private readonly CarriedGather _carried = new();
     private readonly CloudGather _clouds = new();
     private readonly DeckGather _decks = new();
+    private readonly ObstacleGather _obstacles = new();
     private readonly TrafficGather _traffic = new();
     private readonly TkbGather _types = new();
     private readonly AnimalGather _animals = new();
@@ -175,6 +176,7 @@ public sealed class EcsHrotAdapter
         var tkb = _services.Tkb();
         _clouds.Begin();
         _decks.Begin();
+        _obstacles.Begin();
         foreach (var e in _hrotQuery!)
         {
             int id = world.GetComponentRO<NetworkIdentity>(e).Value;
@@ -229,6 +231,10 @@ public sealed class EcsHrotAdapter
             {
                 _decks.Gather(world, e, id, inbound);   // DD-035: a laid bridge also has its deck (the obstacle stays an entity: its type, its damage)
             }
+            else if (ObstacleGather.IsSolid(world, e))
+            {
+                _obstacles.Gather(world, e, id, inbound);   // DD-035 (T-084): a roadblock's own size (the type's default is not enough)
+            }
 
             ReferenceLoadedAmmo(world, e, isNew);
             if (!lifeForm)
@@ -281,6 +287,7 @@ public sealed class EcsHrotAdapter
 
         _clouds.End(inbound);
         _decks.End(inbound);
+        _obstacles.End(inbound);
 
         _scratch.Clear();
         foreach (var (id, s) in _sent)
@@ -954,6 +961,7 @@ public sealed class EcsHrotAdapter
         _carried.Clear();
         _clouds.Clear();
         _decks.Clear();
+        _obstacles.Clear();
         _traffic.Clear();
         _types.Clear();
         _animals.Clear();

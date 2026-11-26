@@ -401,6 +401,14 @@ HROT's engineers lay and recover bridges during play. A **laid span is a static 
 
 Scenarios to watch it with (HROT `scenarios/demos/engineering/`): `bl-placed-bridge` (a bridge placed by the scenario, the same `Deck`), `bl-assault-crossing` (an engineer lays a span, units cross), `bl-recover` (the span is taken back: `Deck` disposed, no destroyed state), `bl-blow-the-bridge` (a charge drops it: destroyed, then disposed).
 
+### Obstacles and roadblocks (T-084)
+
+Sandbag walls, concrete blocks, jersey barriers, barrels, crates, a parked car, a guard booth: HROT's **static obstacles** (TKB types **8806 to 8824**, e.g. sandbag wall 8807, concrete block 8808, jersey barrier 8821) are entities like any other (`Entity` + `EntityState`), but their **size is per instance** (a scenario may stretch a wall) and the type's default in `TkbType` is not enough. The size is the **`Obstacle`** topic.
+
+- **`Obstacle`** (Discrete, keyed by the entity's `EntityId`, reliable, `TransientLocal`, keep-last 1): `Length`, `Width`, `Height` in metres. It is HROT's own `ObstacleShape`, read as HROT's terrain prism reads it ([`TerrainObstacles.PrismOf`](https://github.com/pjanec/HROT/blob/unreal-ig/FDP/Toolkits/Fdp.Toolkits/Terrain/StaticObstacles.cs)): the box is **centred on the entity's position in plan**, `Length` runs **along the entity's heading** (its `EntityState.Orientation`), `Width` across it, and it stands **from the entity's Z up by `Height`** (the entity's origin is the base, not the middle). One instance per standing obstacle, written when it stands and when its size changes, disposed when the obstacle goes. A laid bridge is not a box: it has a `Deck` (above) and no `Obstacle`.
+- **Breaching it.** A destructible obstacle has health. A bulldozer pushing it (or a blast) drains that health: you see **`EntityState.Damage`** go Damaged, then Destroyed; HROT removes the entity at zero, so you get the `Entity` dispose and the **`Obstacle` dispose with it: remove the box**. An indestructible one never changes.
+- **Terrain walls are different.** A wall that is part of the terrain (not an obstacle entity) has no entity or `Obstacle`: its breaches arrive as `BuildingDamage` keyed `wall:<label>` ([Building damage](#building-damage-breaches-and-collapse)).
+
 ## Ambient traffic (SUMO cars and pedestrians)
 
 Unreal receives traffic as world-space movers: positions with altitude, headings, a short smooth track per mover. There is no road network and no SUMO code involved. The design is [DD-018 §3.6b](https://github.com/pjanec/SimNetGateway/blob/ccr-458b1360-afzl8f/docs/design/DD-018-Dps-Round-2.md), built; the reference client's MoverPlayback is a working example of the delayed playback.
@@ -527,7 +535,7 @@ Every topic belongs to one rate class, stated on its C# type by the `[DpsRate]` 
 | Class | Changes | Topics | What a client does |
 | --- | --- | --- | --- |
 | Fixed | once per instance or type | `Entity`, `Appearance`, `TkbType`, `MunitionLook`, `Mover` | Cache; never expect a re-send unless the thing itself changed |
-| Discrete | on events | `Session`, `EntityStatus`, `PersonState`, `VehicleLook`, `Animal`, `Round`, `Status`, `Exercise`, `BuildingDamage`, `GroundDamage`, `Carried`, `Cloud`, `Deck`, `FireSpots`, `GroundMarks`, `OwnUnit`, `PlayerSlot`, `TrafficLights`, `View`, `JoinRequest`, `Leave`, `GizmoView` | No continuous field: a value that moves over time is a start time + target + duration; animate it yourself |
+| Discrete | on events | `Session`, `EntityStatus`, `PersonState`, `VehicleLook`, `Animal`, `Round`, `Status`, `Exercise`, `BuildingDamage`, `GroundDamage`, `Carried`, `Cloud`, `Deck`, `Obstacle`, `FireSpots`, `GroundMarks`, `OwnUnit`, `PlayerSlot`, `TrafficLights`, `View`, `JoinRequest`, `Leave`, `GizmoView` | No continuous field: a value that moves over time is a start time + target + duration; animate it yourself |
 | Continuous | by threshold plus a heartbeat | `EntityState`, `Articulation`, `PersonAim`, `MoverTracks`, `FlameJet`, `ControlFrame`, `GizmoFrame` | Small samples; extrapolate between them |
 | Event | as they happen | `Fire`, `Detonation`, `Effect`, `Impact`, `ManDowned`, `PlayerMessage` | A reader keeps up to 1024 samples |
 

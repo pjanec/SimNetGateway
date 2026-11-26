@@ -133,6 +133,8 @@ public class ProfileTests
             new HrotCloudEnded(1),
             new HrotDeck(1, HrotDeckKind.Assault, 34f, 4f, 1.5f, []),
             new HrotDeckEnded(1),
+            new HrotObstacle(1, 2f, 1f, 1f),
+            new HrotObstacleEnded(1),
             new HrotMover(1, HrotMoverKind.Car, 8851, 0xFF, 0, 4f, 2f, HrotMoverSource.Sumo),
             new HrotMoverRemoved(1),
             new HrotMoverTracks(1.0, []),
@@ -190,6 +192,8 @@ public class ProfileTests
                 case HrotCloudEnded m: h.HrotStep(m); break;
                 case HrotDeck m: h.HrotStep(m); break;
                 case HrotDeckEnded m: h.HrotStep(m); break;
+                case HrotObstacle m: h.HrotStep(m); break;
+                case HrotObstacleEnded m: h.HrotStep(m); break;
                 case HrotMover m: h.HrotStep(m); break;
                 case HrotMoverRemoved m: h.HrotStep(m); break;
                 case HrotMoverTracks m: h.HrotStep(m); break;
