@@ -23,7 +23,14 @@ public sealed class DdsPlayerPlugin : IGatewayPlugin
     /// <summary>The wall clock the render timeouts (180 s warm-up, 30 s a frame) run on: the host's own monotonic clock unless a test sets one (never simulation time).</summary>
     public IClock WallClock { get; set; } = new StopwatchClock();
 
-    public IHostService? CreateHostService(object settings, PluginHostContext context) => new DpsHostService((DpsSettings)settings, WallClock, context.Log);
+    public IHostService? CreateHostService(object settings, PluginHostContext context) => CreateService((DpsSettings)settings, context);
+
+    private DpsHostService CreateService(DpsSettings settings, PluginHostContext context)
+    {
+        // the base partition the station will use (T-086): the explicit one, else the node's default as the host knows it - so the render clients can be listened to before any world exists
+        string partition = settings.Partition.Length > 0 ? settings.Partition : context.StationPartition ?? string.Empty;
+        return new DpsHostService(settings, WallClock, context.Log, partition);
+    }
 
     /// <summary>One seat per configured player (DD-023): the host offers that many player stations.</summary>
     public int PlayerSeats(object settings) => ((DpsSettings)settings).Seats;
@@ -109,9 +116,10 @@ public sealed class DpsHostService : IHostService, IClientWorldGate, IRenderGate
 
     /// <param name="settings">The "dps" settings (the render root and seat).</param>
     /// <param name="clock">The wall clock of the render timeouts.</param>
-    public DpsHostService(DpsSettings? settings = null, IClock? clock = null, Action<string>? log = null)
+    /// <param name="basePartition">The station's base partition (empty = unknown): with it the service listens for render clients for the host's whole life, also while no world is loaded (T-086).</param>
+    public DpsHostService(DpsSettings? settings = null, IClock? clock = null, Action<string>? log = null, string basePartition = "")
     {
-        Render = new DpsRenderService(clock ?? new StopwatchClock(), settings ?? new DpsSettings(), log);
+        Render = new DpsRenderService(clock ?? new StopwatchClock(), settings ?? new DpsSettings(), log, basePartition);
     }
 
     /// <summary>What the clients said about their world.</summary>

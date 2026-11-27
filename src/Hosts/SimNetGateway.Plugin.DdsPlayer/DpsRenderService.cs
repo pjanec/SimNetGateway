@@ -58,6 +58,9 @@ internal sealed class DpsRenderService : IRenderGate
         public TaskCompletionSource Tcs { get; }
 
         public double Deadline { get; set; }
+
+        /// <summary>The request as written (T-086: written again on a new endpoint).</summary>
+        public D.FrameRequest Wire { get; set; }
     }
 
     private sealed class Job
@@ -102,15 +105,20 @@ internal sealed class DpsRenderService : IRenderGate
     private readonly List<ClientEntry> _clients = new();
     private readonly Dictionary<long, ulong> _byWriter = new();
     private DpsRenderEndpoint? _endpoint;
+    private readonly DpsRenderClientWatcher? _watcher;
     private Job? _job;
     private volatile bool _canFilm;
     private bool _rootWarned;
 
-    public DpsRenderService(IClock clock, DpsSettings settings, Action<string>? log = null)
+    public DpsRenderService(IClock clock, DpsSettings settings, Action<string>? log = null, string basePartition = "")
     {
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _log = log ?? (_ => { });
+        if (basePartition.Length > 0)
+        {
+            _watcher = new DpsRenderClientWatcher(settings, basePartition, this);
+        }
     }
 
     /// <summary>The barrier that holds the counted writes in a job.</summary>
@@ -159,6 +167,13 @@ internal sealed class DpsRenderService : IRenderGate
         {
             // a world boundary rebuilt the runtime in the middle of a job: the new writers say the job's state again and the frames that waited go out
             endpoint.WriteJob(job.Wire);
+            if (job.Outstanding is { } outstanding)
+            {
+                // T-086 (G-5): the frame written on the old endpoint may have been lost with it (or its FrameDone): repeat it exactly (same JobId, FrameIndex, StepSeq); the deadline restarts
+                endpoint.WriteFrame(outstanding.Wire);
+                outstanding.Deadline = _clock.Now + FrameSeconds;
+            }
+
             Advance();
         }
     }
@@ -279,6 +294,7 @@ internal sealed class DpsRenderService : IRenderGate
     /// <summary>Once per frame, on the gateway's main thread: queued calls are done, deadlines checked, waiting frames sent.</summary>
     public void Pump()
     {
+        _watcher?.Pump();
         while (_commands.TryDequeue(out var command))
         {
             try
@@ -508,6 +524,7 @@ internal sealed class DpsRenderService : IRenderGate
 
             job.Frames.Dequeue();
             job.Outstanding = next;
+            next.Wire = wire;
             next.Deadline = _clock.Now + FrameSeconds;
             _endpoint.WriteFrame(wire);
         }
@@ -729,6 +746,7 @@ internal sealed class DpsRenderService : IRenderGate
     /// <summary>The host ends: whatever a task of the director waits for fails (nothing is left pending), and the barrier opens.</summary>
     internal void Shutdown()
     {
+        _watcher?.Dispose();
         while (_commands.TryDequeue(out _))
         {
         }

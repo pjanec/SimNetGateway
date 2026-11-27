@@ -89,7 +89,7 @@ public sealed class HostServices : IDisposable
                     continue;
                 }
 
-                var service = found.Plugin.CreateHostService(settings, new PluginHostContext(log, string.IsNullOrEmpty(found.Folder) ? null : found.Folder));
+                var service = found.Plugin.CreateHostService(settings, new PluginHostContext(log, string.IsNullOrEmpty(found.Folder) ? null : found.Folder, $"station-{config.Shared.Site}-{config.Shared.Application}"));
                 if (service is not null)
                 {
                     _services.Add((key, service));

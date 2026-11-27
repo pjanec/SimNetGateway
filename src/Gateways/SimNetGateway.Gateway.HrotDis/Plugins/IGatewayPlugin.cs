@@ -46,7 +46,7 @@ public interface IGatewayPlugin
 /// <summary>What a plugin knows about its host when it creates its host service.</summary>
 /// <param name="Log">One line to the host's log (stderr by default).</param>
 /// <param name="Folder">The folder the plugin was loaded from; null when it was not loaded from a folder (tests).</param>
-public sealed record PluginHostContext(Action<string> Log, string? Folder = null);
+public sealed record PluginHostContext(Action<string> Log, string? Folder = null, string? StationPartition = null);
 
 /// <summary>An object owned by the host for its whole life; <see cref="IDisposable.Dispose"/> ends it (after every gateway runtime is closed).</summary>
 public interface IHostService : IDisposable

@@ -89,6 +89,7 @@ public class DpsRenderTests
         {
             Client.Dispose();
             Station.Dispose();
+            Service.Dispose();
         }
     }
 
@@ -390,6 +391,182 @@ public class DpsRenderTests
         Assert.True(rig.Client.Until(() => rig.Client.Counted >= 1));
         rig.Client.FrameDone(rig.Client.Requests[^1]);
         Assert.True(rig.Complete(f1));
+    }
+
+    // ---- T-086: the client is known before any world and across world boundaries; a frame in flight survives the endpoint rebuild --------------------------------
+
+    /// <summary>The host service alone (no gateway runtime yet) and a fake client on the render seat's partition.</summary>
+    private sealed class HostOnly : IDisposable
+    {
+        public HostOnly()
+        {
+            Clock = new ManualClock();
+            Plugin = new DdsPlayerPlugin { WallClock = Clock };
+            Domain = Watch.NewDomain();
+            Settings = new DpsSettings { Domain = (int)Domain, Partition = "station-1", RenderRoot = Root, LeaseSeconds = 2.0 };
+            Service = (DpsHostService)Plugin.CreateHostService(Settings, new PluginHostContext(_ => { }))!;
+            Client = new FakeRenderClient(Domain, "station-1");
+        }
+
+        public ManualClock Clock { get; }
+
+        public DdsPlayerPlugin Plugin { get; }
+
+        public uint Domain { get; }
+
+        public DpsSettings Settings { get; }
+
+        public DpsHostService Service { get; }
+
+        public FakeRenderClient Client { get; }
+
+        /// <summary>Announces and pumps the service (no runtime) until <paramref name="seen"/> holds.</summary>
+        public bool Until(Func<bool> seen) => Client.AnnounceUntil(seen, Service.Pump);
+
+        public Rig Bind(string partition = "station-1") => new(Domain, partition, plugin: Plugin, service: Service, renderRoot: Root);
+
+        public void Dispose()
+        {
+            Client.Dispose();
+            Service.Dispose();
+        }
+    }
+
+    [Fact]
+    public void An_announced_client_can_film_before_any_world_exists_and_is_dropped_when_its_liveliness_is_lost_with_no_endpoint()
+    {
+        using var host = new HostOnly();
+        Assert.False(host.Service.CanFilm);
+        Assert.True(host.Until(() => host.Service.CanFilm), "the client was not known before the first world");
+
+        host.Client.Vanish();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (host.Service.CanFilm && sw.ElapsedMilliseconds < 8000)
+        {
+            host.Service.Pump();
+            Thread.Sleep(10);
+        }
+
+        Assert.False(host.Service.CanFilm);   // lost while no endpoint exists
+    }
+
+    [Fact]
+    public void CanFilm_holds_across_a_world_boundary_and_a_client_lost_between_two_runtimes_is_dropped()
+    {
+        using var host = new HostOnly();
+        Assert.True(host.Until(() => host.Service.CanFilm));
+        var first = host.Bind();
+        for (int i = 0; i < 5; i++)
+        {
+            first.Step();
+        }
+
+        Assert.True(host.Service.CanFilm);
+        first.Dispose();   // the boundary: the runtime and its endpoint go
+        for (int i = 0; i < 5; i++)
+        {
+            host.Service.Pump();
+            Assert.True(host.Service.CanFilm);
+        }
+
+        using var second = host.Bind();
+        second.Step();
+        Assert.True(host.Service.CanFilm);
+
+        second.Dispose();
+        host.Client.Vanish();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (host.Service.CanFilm && sw.ElapsedMilliseconds < 8000)
+        {
+            host.Service.Pump();
+            Thread.Sleep(10);
+        }
+
+        Assert.False(host.Service.CanFilm);
+    }
+
+    [Fact]
+    public void A_job_begun_with_no_world_loaded_goes_to_the_client_when_the_first_runtime_attaches()
+    {
+        using var host = new HostOnly();
+        Assert.True(host.Until(() => host.Service.CanFilm));
+        var spec = new RenderJobSpec(Guid.NewGuid(), true, "no world yet", 30, 1920, 1080, 2, Path.Combine(Root, "job-t086"), false);
+        var begin = host.Service.BeginJob(spec);
+        host.Service.Pump();
+        Assert.False(begin.IsCompleted);   // no fault: the client is there, the world is not
+        Assert.True(host.Service.Render.JobActive);
+
+        using var station = host.Bind();
+        string id = spec.JobId.ToString("N");
+        Assert.True(host.Client.Until(() => host.Client.Jobs.Any(j => j.JobId == id && j.State == D.RenderState.RenderStateStarting), station.Step), "the RenderJob never reached the client");
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (!begin.IsCompleted && sw.ElapsedMilliseconds < 6000)
+        {
+            host.Client.Announce(id);
+            station.Step();
+            host.Client.Poll();
+            Thread.Sleep(2);
+        }
+
+        Assert.True(begin.IsCompletedSuccessfully);
+    }
+
+    [Fact]
+    public void A_frame_outstanding_across_a_world_boundary_is_repeated_once_exactly_and_the_job_goes_on_with_a_duplicate_FrameDone_ignored()
+    {
+        using var rig = new RenderRig();
+        var spec = rig.Job();
+        rig.Begin(spec);
+        var f0 = rig.Gate.Frame(Frame(spec, 0, 0));
+        Assert.True(rig.Client.Until(() => rig.Client.Requests.Count == 1, rig.Station.Step));
+        var original = rig.Client.Requests[0];
+        rig.Clock.Advance(20);
+
+        // the boundary: the runtime goes, a new one attaches while the frame is still being rendered
+        rig.Station.Dispose();
+        using var next = new Rig(rig.Station.Domain, plugin: rig.Plugin, service: rig.Service, renderRoot: Root);
+        Assert.True(rig.Client.Until(() => rig.Client.Requests.Count >= 2, next.Step), "the outstanding frame was not repeated on the new endpoint");
+        Assert.Equal(2, rig.Client.Requests.Count);   // once
+        Assert.Equal((original.JobId, original.FrameIndex, original.StepSeq), (rig.Client.Requests[1].JobId, rig.Client.Requests[1].FrameIndex, rig.Client.Requests[1].StepSeq));
+        Assert.False(f0.IsCompleted);
+
+        // the deadline restarted from the re-send: 20 s + 20 s is more than 30 s but no fault
+        rig.Clock.Advance(20);
+        next.Step();
+        Assert.False(f0.IsCompleted);
+        Assert.False(f0.IsFaulted);
+
+        // the client answers the repeat; a second FrameDone for the same frame changes nothing
+        rig.Client.FrameDone(rig.Client.Requests[1]);
+        rig.Client.FrameDone(rig.Client.Requests[1]);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (!f0.IsCompleted && sw.ElapsedMilliseconds < 6000)
+        {
+            next.Step();
+            rig.Client.Poll();
+            Thread.Sleep(2);
+        }
+
+        Assert.True(f0.IsCompletedSuccessfully);
+
+        // the frames after it continue in order, and the late duplicate does not touch the next one
+        var f1 = rig.Gate.Frame(Frame(spec, 1, 0));
+        Assert.True(rig.Client.Until(() => rig.Client.Requests.Count == 3, next.Step));
+        Assert.Equal(1, rig.Client.Requests[2].FrameIndex);
+        rig.Client.FrameDone(rig.Client.Requests[0]);   // a repeated answer for frame 0
+        rig.Client.Until(() => false, next.Step, timeoutMs: 100);   // let the duplicate arrive
+        Assert.False(f1.IsCompleted);
+        rig.Client.FrameDone(rig.Client.Requests[2]);
+        sw.Restart();
+        while (!f1.IsCompleted && sw.ElapsedMilliseconds < 6000)
+        {
+            next.Step();
+            rig.Client.Poll();
+            Thread.Sleep(2);
+        }
+
+        Assert.True(f1.IsCompletedSuccessfully);
+        Assert.Equal(3, rig.Client.Requests.Count);   // nothing was repeated again
     }
 
     [Fact]
